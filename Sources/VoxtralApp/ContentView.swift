@@ -75,6 +75,17 @@ struct HeaderView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            } else if let error = manager.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                    .lineLimit(2)
+                Button("Retry") {
+                    manager.errorMessage = nil
+                    Task { await manager.loadModel() }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             } else {
                 Button("Load Model") {
                     Task { await manager.loadModel() }

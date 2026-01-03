@@ -14,9 +14,16 @@ public typealias DownloadProgressCallback = (Double, String) -> Void
 /// Model downloader with HuggingFace Hub integration
 public class ModelDownloader {
 
-    /// Default Hub API instance (uses system cache directory)
+    /// Default Hub API instance (uses system cache directory, forces online mode)
     private static var hubApi: HubApi = {
-        HubApi(downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first)
+        // Disable network monitor that can incorrectly trigger offline mode
+        // This happens when connection is detected as "constrained" or "expensive"
+        setenv("CI_DISABLE_NETWORK_MONITOR", "1", 1)
+
+        return HubApi(
+            downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            useOfflineMode: false
+        )
     }()
 
     /// Default models directory (in user's home)
@@ -48,7 +55,20 @@ public class ModelDownloader {
     }
 
     /// Get the HuggingFace Hub cache path for a model
+    /// Checks both the new Library/Caches location and the legacy ~/.cache/huggingface location
     public static func hubCachePath(for model: VoxtralModelInfo) -> URL? {
+        // First check the new location: ~/Library/Caches/models/{org}/{repo}
+        if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let newPath = cacheDir
+                .appendingPathComponent("models")
+                .appendingPathComponent(model.repoId)
+
+            if FileManager.default.fileExists(atPath: newPath.appendingPathComponent("config.json").path) {
+                return newPath
+            }
+        }
+
+        // Then check the legacy location: ~/.cache/huggingface/hub/models--{org}--{repo}/snapshots/...
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         let hubCache = homeDir
             .appendingPathComponent(".cache")

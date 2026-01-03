@@ -74,13 +74,18 @@ class TranscriptionManager: ObservableObject {
     // MARK: - Model Loading
 
     func loadModel() async {
-        guard !isLoading else { return }
-
-        // If same model already loaded, skip
-        if isModelLoaded && currentLoadedModelId == selectedModelId {
+        guard !isLoading else {
+            print("[VoxtralApp] loadModel: already loading, skipping")
             return
         }
 
+        // If same model already loaded, skip
+        if isModelLoaded && currentLoadedModelId == selectedModelId {
+            print("[VoxtralApp] loadModel: model \(selectedModelId) already loaded")
+            return
+        }
+
+        print("[VoxtralApp] loadModel: starting to load \(selectedModelId)")
         isLoading = true
         isModelLoaded = false
         errorMessage = nil
@@ -88,21 +93,26 @@ class TranscriptionManager: ObservableObject {
 
         do {
             // Resolve model path (downloads if needed)
+            print("[VoxtralApp] Resolving model path...")
             loadingStatus = "Downloading model if needed..."
             let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { progress, message in
                 Task { @MainActor in
                     self.loadingStatus = message
                 }
             }
+            print("[VoxtralApp] Model path resolved: \(modelPath.path)")
 
             loadingStatus = "Loading model weights..."
+            print("[VoxtralApp] Loading model weights...")
 
             let path = modelPath.path
             let (loadedModel, _) = try await Task.detached(priority: .userInitiated) {
                 try loadVoxtralStandardModel(modelPath: path, dtype: .float16)
             }.value
+            print("[VoxtralApp] Model weights loaded")
 
             loadingStatus = "Initializing processor..."
+            print("[VoxtralApp] Initializing processor...")
 
             let wrapper = VoxtralForConditionalGeneration(standardModel: loadedModel)
             let loadedProcessor = try VoxtralProcessor.fromPretrained(path)
@@ -114,10 +124,13 @@ class TranscriptionManager: ObservableObject {
             self.currentLoadedModelId = selectedModelId
             self.loadingStatus = ""
 
+            print("[VoxtralApp] Model loaded successfully!")
+
             // Refresh downloaded models list
             refreshDownloadedModels()
 
         } catch {
+            print("[VoxtralApp] Error loading model: \(error)")
             self.errorMessage = error.localizedDescription
             self.loadingStatus = ""
         }
