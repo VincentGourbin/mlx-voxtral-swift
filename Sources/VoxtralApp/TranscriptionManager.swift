@@ -34,6 +34,11 @@ class TranscriptionManager: ObservableObject {
     @Published var lastGenerationStats: GenerationStats?
     @Published var currentTokenCount = 0
 
+    // Profiling
+    @Published var lastProfileSummary: ProfileSummary?
+    @Published var profilingEnabled = true
+    private var profiler = VoxtralProfiler()
+
     // Mode and settings
     @Published var mode: VoxtralMode = .transcription
     @Published var selectedAudioPath: String?
@@ -233,26 +238,64 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = true
         transcription = ""
         lastGenerationStats = nil
+        lastProfileSummary = nil
         currentTokenCount = 0
+
+        // Start profiling
+        if profilingEnabled {
+            profiler.start()
+        }
 
         let startTime = Date()
 
         do {
-            let inputs = try processor.applyTranscritionRequest(
-                audio: audioPath,
-                language: "en",
-                samplingRate: 16000
-            )
+            // Profile audio processing
+            let inputs: ProcessedInputs
+            if profilingEnabled {
+                inputs = try profiler.profile("Audio Processing") {
+                    try processor.applyTranscritionRequest(
+                        audio: audioPath,
+                        language: "en",
+                        samplingRate: 16000
+                    )
+                }
+            } else {
+                inputs = try processor.applyTranscritionRequest(
+                    audio: audioPath,
+                    language: "en",
+                    samplingRate: 16000
+                )
+            }
 
-            let streamResults = try model.generateStream(
-                inputIds: inputs.inputIds,
-                inputFeatures: inputs.inputFeatures,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: temperature,
-                topP: 1.0,
-                repetitionPenalty: 1.1
-            )
+            // Profile generation setup
+            let streamResults: [(MLXArray, Any?)]
+            if profilingEnabled {
+                streamResults = try profiler.profile("Generation Setup") {
+                    try model.generateStream(
+                        inputIds: inputs.inputIds,
+                        inputFeatures: inputs.inputFeatures,
+                        attentionMask: nil,
+                        maxNewTokens: maxTokens,
+                        temperature: temperature,
+                        topP: 1.0,
+                        repetitionPenalty: 1.1
+                    )
+                }
+            } else {
+                streamResults = try model.generateStream(
+                    inputIds: inputs.inputIds,
+                    inputFeatures: inputs.inputFeatures,
+                    attentionMask: nil,
+                    maxNewTokens: maxTokens,
+                    temperature: temperature,
+                    topP: 1.0,
+                    repetitionPenalty: 1.1
+                )
+            }
+
+            // Token generation (profile as single step)
+            let genStartMemory = profilingEnabled ? VoxtralProfiler.snapshot() : nil
+            let genStartTime = Date()
 
             for (token, _) in streamResults {
                 let tokenId = token.item(Int.self)
@@ -266,8 +309,27 @@ class TranscriptionManager: ObservableObject {
                 await Task.yield()
             }
 
+            // Record generation step
+            if profilingEnabled, let startMem = genStartMemory {
+                let endMem = VoxtralProfiler.snapshot()
+                let step = ProfiledStep(
+                    name: "Token Generation",
+                    startMemory: startMem,
+                    endMemory: endMem,
+                    duration: Date().timeIntervalSince(genStartTime)
+                )
+                // Add to profiler manually since we can't wrap the streaming loop
+                profiler.steps.append(step)
+            }
+
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)
+
+            // Get profile summary
+            if profilingEnabled {
+                lastProfileSummary = profiler.summary()
+                print(lastProfileSummary!.description)
+            }
 
         } catch {
             transcription = "Error: \(error.localizedDescription)"
@@ -286,7 +348,13 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = true
         transcription = ""
         lastGenerationStats = nil
+        lastProfileSummary = nil
         currentTokenCount = 0
+
+        // Start profiling
+        if profilingEnabled {
+            profiler.start()
+        }
 
         let startTime = Date()
 
@@ -302,26 +370,63 @@ class TranscriptionManager: ObservableObject {
                 ]
             ]
 
-            let chatResult = try processor.applyChatTemplate(
-                conversation: conversation,
-                tokenize: true,
-                returnTensors: "mlx"
-            ) as! [String: MLXArray]
+            // Profile chat template processing
+            let inputs: ProcessedInputs
+            if profilingEnabled {
+                inputs = try profiler.profile("Chat Template") {
+                    let chatResult = try processor.applyChatTemplate(
+                        conversation: conversation,
+                        tokenize: true,
+                        returnTensors: "mlx"
+                    ) as! [String: MLXArray]
 
-            let inputs = ProcessedInputs(
-                inputIds: chatResult["input_ids"]!,
-                inputFeatures: chatResult["input_features"]!
-            )
+                    return ProcessedInputs(
+                        inputIds: chatResult["input_ids"]!,
+                        inputFeatures: chatResult["input_features"]!
+                    )
+                }
+            } else {
+                let chatResult = try processor.applyChatTemplate(
+                    conversation: conversation,
+                    tokenize: true,
+                    returnTensors: "mlx"
+                ) as! [String: MLXArray]
 
-            let streamResults = try model.generateStream(
-                inputIds: inputs.inputIds,
-                inputFeatures: inputs.inputFeatures,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: temperature,
-                topP: 1.0,
-                repetitionPenalty: 1.1
-            )
+                inputs = ProcessedInputs(
+                    inputIds: chatResult["input_ids"]!,
+                    inputFeatures: chatResult["input_features"]!
+                )
+            }
+
+            // Profile generation setup
+            let streamResults: [(MLXArray, Any?)]
+            if profilingEnabled {
+                streamResults = try profiler.profile("Generation Setup") {
+                    try model.generateStream(
+                        inputIds: inputs.inputIds,
+                        inputFeatures: inputs.inputFeatures,
+                        attentionMask: nil,
+                        maxNewTokens: maxTokens,
+                        temperature: temperature,
+                        topP: 1.0,
+                        repetitionPenalty: 1.1
+                    )
+                }
+            } else {
+                streamResults = try model.generateStream(
+                    inputIds: inputs.inputIds,
+                    inputFeatures: inputs.inputFeatures,
+                    attentionMask: nil,
+                    maxNewTokens: maxTokens,
+                    temperature: temperature,
+                    topP: 1.0,
+                    repetitionPenalty: 1.1
+                )
+            }
+
+            // Token generation (profile as single step)
+            let genStartMemory = profilingEnabled ? VoxtralProfiler.snapshot() : nil
+            let genStartTime = Date()
 
             for (token, _) in streamResults {
                 let tokenId = token.item(Int.self)
@@ -335,8 +440,26 @@ class TranscriptionManager: ObservableObject {
                 await Task.yield()
             }
 
+            // Record generation step
+            if profilingEnabled, let startMem = genStartMemory {
+                let endMem = VoxtralProfiler.snapshot()
+                let step = ProfiledStep(
+                    name: "Token Generation",
+                    startMemory: startMem,
+                    endMemory: endMem,
+                    duration: Date().timeIntervalSince(genStartTime)
+                )
+                profiler.steps.append(step)
+            }
+
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)
+
+            // Get profile summary
+            if profilingEnabled {
+                lastProfileSummary = profiler.summary()
+                print(lastProfileSummary!.description)
+            }
 
         } catch {
             transcription = "Error: \(error.localizedDescription)"
