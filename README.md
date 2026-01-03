@@ -4,6 +4,12 @@ A native Swift implementation of [Voxtral](https://huggingface.co/mistralai/Voxt
 
 This is a Swift port of the excellent Python implementation by [@mzbac](https://github.com/mzbac): **[mlx.voxtral](https://github.com/mzbac/mlx.voxtral)**
 
+## Screenshots
+
+| Transcription Mode | Chat Mode |
+|:--:|:--:|
+| ![Transcription](screenshots/voxtral-transcribe.png) | ![Chat](screenshots/voxtral-chat.png) |
+
 ## Features
 
 - **Native Swift** - Pure Swift implementation, no Python dependencies at runtime
