@@ -197,4 +197,72 @@ public class ModelDownloader {
         // Try as a direct HuggingFace repo ID
         return try await downloadByRepoId(identifier, progress: progress)
     }
+
+    /// Get the size of a downloaded model in bytes
+    public static func modelSize(for model: VoxtralModelInfo) -> Int64? {
+        guard let path = findModelPath(for: model) else { return nil }
+        return directorySize(at: path)
+    }
+
+    /// Calculate directory size recursively
+    private static func directorySize(at url: URL) -> Int64 {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) else {
+            return 0
+        }
+
+        var totalSize: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                totalSize += Int64(fileSize)
+            }
+        }
+        return totalSize
+    }
+
+    /// Format bytes as human-readable string
+    public static func formatSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    /// Delete a downloaded model
+    public static func deleteModel(_ model: VoxtralModelInfo) throws {
+        guard let path = findModelPath(for: model) else {
+            throw ModelDownloaderError.modelNotFound
+        }
+
+        // Determine if it's in Hub cache (need to delete parent folder) or local directory
+        let pathString = path.path
+
+        if pathString.contains("/.cache/huggingface/hub/") {
+            // Legacy Hub cache: delete the models--org--repo folder
+            // path is .../snapshots/hash, so go up 2 levels
+            let modelFolder = path.deletingLastPathComponent().deletingLastPathComponent()
+            try FileManager.default.removeItem(at: modelFolder)
+        } else if pathString.contains("/Library/Caches/models/") {
+            // New Hub cache: delete the repo folder
+            try FileManager.default.removeItem(at: path)
+        } else {
+            // Local directory
+            try FileManager.default.removeItem(at: path)
+        }
+    }
+}
+
+/// Errors for model downloading
+public enum ModelDownloaderError: LocalizedError {
+    case modelNotFound
+    case downloadFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .modelNotFound:
+            return "Model not found locally"
+        case .downloadFailed(let reason):
+            return "Download failed: \(reason)"
+        }
+    }
 }

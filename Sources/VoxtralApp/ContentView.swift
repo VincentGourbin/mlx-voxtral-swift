@@ -21,19 +21,39 @@ enum VoxtralMode: String, CaseIterable {
     }
 }
 
+// MARK: - App Tab Enum
+
+enum AppTab: String, CaseIterable {
+    case main = "Main"
+    case models = "Models"
+
+    var icon: String {
+        switch self {
+        case .main: return "waveform.circle"
+        case .models: return "square.stack.3d.down.right"
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var manager = TranscriptionManager()
+    @State private var selectedTab: AppTab = .main
 
     var body: some View {
         VStack(spacing: 0) {
-            HeaderView(manager: manager)
+            HeaderView(manager: manager, selectedTab: $selectedTab)
             Divider()
 
-            HStack(spacing: 0) {
-                ControlPanelView(manager: manager)
-                    .frame(width: 300)
-                Divider()
-                OutputPanelView(manager: manager)
+            switch selectedTab {
+            case .main:
+                HStack(spacing: 0) {
+                    ControlPanelView(manager: manager)
+                        .frame(width: 300)
+                    Divider()
+                    OutputPanelView(manager: manager)
+                }
+            case .models:
+                ModelsManagementView(manager: manager)
             }
         }
         .frame(minWidth: 800, minHeight: 550)
@@ -44,55 +64,76 @@ struct ContentView: View {
 
 struct HeaderView: View {
     @ObservedObject var manager: TranscriptionManager
+    @Binding var selectedTab: AppTab
 
     var body: some View {
-        HStack {
-            Image(systemName: "waveform.circle.fill")
-                .font(.title)
-                .foregroundStyle(.blue)
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(.blue)
 
-            Text("Voxtral")
-                .font(.title2.bold())
+                Text("Voxtral")
+                    .font(.title2.bold())
 
-            Text(manager.mode.rawValue)
-                .font(.title3)
-                .foregroundStyle(.secondary)
+                // Tab picker
+                Picker("", selection: $selectedTab) {
+                    ForEach(AppTab.allCases, id: \.self) { tab in
+                        Label(tab.rawValue, systemImage: tab.icon).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
 
-            Spacer()
+                Spacer()
 
-            if manager.isModelLoaded {
-                if let model = manager.selectedModel {
-                    Text(model.name)
+                if manager.isModelLoaded {
+                    if let model = manager.selectedModel {
+                        Text(model.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Label("Ready", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else if manager.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text(manager.loadingStatus.isEmpty ? "Loading..." : manager.loadingStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if let error = manager.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Button("Retry") {
+                        manager.errorMessage = nil
+                        Task { await manager.loadModel() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                } else {
+                    Button("Load Model") {
+                        Task { await manager.loadModel() }
+                    }
+                }
+            }
+            .padding()
+
+            // Download progress bar
+            if manager.isDownloading {
+                VStack(spacing: 4) {
+                    ProgressView(value: manager.downloadProgress)
+                        .progressViewStyle(.linear)
+                    Text(manager.downloadMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Label("Ready", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            } else if manager.isLoading {
-                ProgressView()
-                    .scaleEffect(0.8)
-                Text(manager.loadingStatus.isEmpty ? "Loading..." : manager.loadingStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else if let error = manager.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .font(.caption)
-                    .lineLimit(2)
-                Button("Retry") {
-                    manager.errorMessage = nil
-                    Task { await manager.loadModel() }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            } else {
-                Button("Load Model") {
-                    Task { await manager.loadModel() }
-                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
         }
-        .padding()
         .background(.ultraThinMaterial)
     }
 }
@@ -446,6 +487,192 @@ struct GenerationStats {
     let tokenCount: Int
     let duration: Double
     var tokensPerSecond: Double { Double(tokenCount) / max(duration, 0.001) }
+}
+
+// MARK: - Models Management View
+
+struct ModelsManagementView: View {
+    @ObservedObject var manager: TranscriptionManager
+    @State private var modelToDelete: VoxtralModelInfo?
+    @State private var showDeleteConfirmation = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack {
+                Text("Downloaded Models")
+                    .font(.headline)
+                Spacer()
+                Button(action: { manager.refreshDownloadedModels() }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh")
+            }
+            .padding()
+
+            Divider()
+
+            if manager.downloadedModels.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "square.stack.3d.down.right")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                    Text("No models downloaded")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("Download models from the Main tab to get started")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(manager.availableModels.filter { manager.downloadedModels.contains($0.id) }, id: \.id) { model in
+                        ModelRowView(
+                            model: model,
+                            size: manager.modelSizes[model.id],
+                            isLoaded: manager.currentLoadedModelId == model.id,
+                            onDelete: {
+                                modelToDelete = model
+                                showDeleteConfirmation = true
+                            },
+                            onLoad: {
+                                manager.selectedModelId = model.id
+                                Task { await manager.loadModel() }
+                            }
+                        )
+                    }
+                }
+                .listStyle(.inset)
+            }
+
+            Divider()
+
+            // Available models section
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Available Models")
+                    .font(.headline)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(manager.availableModels.filter { !manager.downloadedModels.contains($0.id) }, id: \.id) { model in
+                            AvailableModelCard(model: model, manager: manager)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+        }
+        .alert("Delete Model", isPresented: $showDeleteConfirmation, presenting: modelToDelete) { model in
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                Task {
+                    try? await manager.deleteModel(model.id)
+                }
+            }
+        } message: { model in
+            Text("Are you sure you want to delete \(model.name)? This cannot be undone.")
+        }
+    }
+}
+
+struct ModelRowView: View {
+    let model: VoxtralModelInfo
+    let size: Int64?
+    let isLoaded: Bool
+    let onDelete: () -> Void
+    let onLoad: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.name)
+                        .font(.headline)
+                    if isLoaded {
+                        Text("Loaded")
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.green.opacity(0.2))
+                            .foregroundStyle(.green)
+                            .cornerRadius(4)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(model.quantization)
+                    Text("•")
+                    Text(model.parameters)
+                    if let size = size {
+                        Text("•")
+                        Text(ModelDownloader.formatSize(size))
+                            .foregroundStyle(.blue)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if !isLoaded {
+                Button("Load") {
+                    onLoad()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoaded)
+            .help(isLoaded ? "Unload model first" : "Delete model")
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct AvailableModelCard: View {
+    let model: VoxtralModelInfo
+    @ObservedObject var manager: TranscriptionManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.name)
+                .font(.caption.bold())
+                .lineLimit(1)
+
+            HStack(spacing: 4) {
+                Text(model.size)
+                Text("•")
+                Text(model.quantization)
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            Button(action: {
+                Task { await manager.downloadModel(model.id) }
+            }) {
+                HStack {
+                    Image(systemName: "arrow.down.circle")
+                    Text("Download")
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(manager.isDownloading)
+        }
+        .padding(10)
+        .frame(width: 140)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(8)
+    }
 }
 
 #Preview {

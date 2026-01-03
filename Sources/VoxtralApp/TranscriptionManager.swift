@@ -17,10 +17,16 @@ class TranscriptionManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var loadingStatus: String = ""
 
+    // Download progress
+    @Published var isDownloading = false
+    @Published var downloadProgress: Double = 0.0
+    @Published var downloadMessage: String = ""
+
     // Model selection
     @Published var selectedModelId: String = "mini-3b-8bit"
     @Published var availableModels: [VoxtralModelInfo] = ModelRegistry.models
     @Published var downloadedModels: Set<String> = []
+    @Published var modelSizes: [String: Int64] = [:]
 
     // Processing state
     @Published var isTranscribing = false
@@ -39,7 +45,7 @@ class TranscriptionManager: ObservableObject {
     private var model: VoxtralForConditionalGeneration?
     private var standardModel: VoxtralStandardModel?
     private var processor: VoxtralProcessor?
-    private var currentLoadedModelId: String?
+    @Published private(set) var currentLoadedModelId: String?
 
     var canRun: Bool {
         isModelLoaded && selectedAudioPath != nil && !isTranscribing
@@ -62,6 +68,15 @@ class TranscriptionManager: ObservableObject {
     func refreshDownloadedModels() {
         let downloaded = ModelDownloader.listDownloadedModels()
         downloadedModels = Set(downloaded.map { $0.id })
+
+        // Also refresh model sizes
+        var sizes: [String: Int64] = [:]
+        for model in downloaded {
+            if let size = ModelDownloader.modelSize(for: model) {
+                sizes[model.id] = size
+            }
+        }
+        modelSizes = sizes
     }
 
     func isModelDownloaded(_ modelId: String) -> Bool {
@@ -69,6 +84,43 @@ class TranscriptionManager: ObservableObject {
             return ModelDownloader.findModelPath(for: model) != nil
         }
         return false
+    }
+
+    func deleteModel(_ modelId: String) async throws {
+        guard let model = ModelRegistry.model(withId: modelId) else { return }
+
+        // Unload if currently loaded
+        if currentLoadedModelId == modelId {
+            unloadModel()
+        }
+
+        try ModelDownloader.deleteModel(model)
+        refreshDownloadedModels()
+    }
+
+    func downloadModel(_ modelId: String) async {
+        guard let model = ModelRegistry.model(withId: modelId) else { return }
+        guard !isDownloading else { return }
+
+        isDownloading = true
+        downloadProgress = 0.0
+        downloadMessage = "Starting download..."
+        errorMessage = nil
+
+        do {
+            _ = try await ModelDownloader.download(model) { progress, message in
+                Task { @MainActor in
+                    self.downloadProgress = progress
+                    self.downloadMessage = message
+                }
+            }
+            downloadMessage = "Download complete!"
+            refreshDownloadedModels()
+        } catch {
+            errorMessage = "Download failed: \(error.localizedDescription)"
+        }
+
+        isDownloading = false
     }
 
     // MARK: - Model Loading
@@ -94,12 +146,26 @@ class TranscriptionManager: ObservableObject {
         do {
             // Resolve model path (downloads if needed)
             print("[VoxtralApp] Resolving model path...")
-            loadingStatus = "Downloading model if needed..."
+            loadingStatus = "Checking model..."
+
+            // Check if download is needed
+            let needsDownload = !isModelDownloaded(selectedModelId)
+            if needsDownload {
+                isDownloading = true
+                downloadProgress = 0.0
+            }
+
             let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { progress, message in
                 Task { @MainActor in
                     self.loadingStatus = message
+                    if needsDownload {
+                        self.downloadProgress = progress
+                        self.downloadMessage = message
+                    }
                 }
             }
+
+            isDownloading = false
             print("[VoxtralApp] Model path resolved: \(modelPath.path)")
 
             loadingStatus = "Loading model weights..."
