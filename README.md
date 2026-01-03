@@ -52,16 +52,36 @@ cd mlx-voxtral-swift
 swift build
 ```
 
+## Available Models
+
+| Model ID | Size | Description |
+|----------|------|-------------|
+| `mini-3b` | ~6 GB | Official Mistral model (float16) |
+| `mini-3b-8bit` | ~3.5 GB | **Recommended** - Best quality/size balance |
+| `mini-3b-4bit` | ~2 GB | Smallest footprint |
+| `small-24b` | ~48 GB | Official large model (float16) |
+| `small-24b-8bit` | ~25 GB | Large model, better quality |
+| `small-4bit` | ~12 GB | Memory efficient large model |
+
 ## Model Download
 
-Download a quantized Voxtral model from HuggingFace:
+The CLI can automatically download models from HuggingFace:
 
 ```bash
-# Recommended: 8-bit quantized (best quality/size balance)
-huggingface-cli download mzbac/voxtral-mini-3b-8bit --local-dir ./voxtral_models/voxtral-mini-3b-8bit
+# List available models
+./.build/debug/VoxtralCLI list
 
-# Alternative: 4-bit quantized (smaller, slightly lower quality)
-huggingface-cli download mzbac/voxtral-mini-3b-4bit --local-dir ./voxtral_models/voxtral-mini-3b-4bit
+# Download the recommended model
+./.build/debug/VoxtralCLI download mini-3b-8bit
+
+# Download by HuggingFace repo ID
+./.build/debug/VoxtralCLI download mzbac/voxtral-mini-3b-8bit
+```
+
+Or use `huggingface-cli` directly:
+
+```bash
+huggingface-cli download mzbac/voxtral-mini-3b-8bit
 ```
 
 ## Usage
@@ -84,9 +104,25 @@ The app provides:
 
 ### Command Line Interface
 
+Build and use the CLI:
+
 ```bash
 swift build --product VoxtralCLI
-./.build/debug/VoxtralCLI
+
+# List available models
+./.build/debug/VoxtralCLI list
+
+# Download a model
+./.build/debug/VoxtralCLI download mini-3b-8bit
+
+# Transcribe audio
+./.build/debug/VoxtralCLI transcribe /path/to/audio.mp3 --model mini-3b-8bit
+
+# Chat mode - ask questions about audio
+./.build/debug/VoxtralCLI chat /path/to/audio.mp3 "What language is being spoken?"
+
+# Get help
+./.build/debug/VoxtralCLI --help
 ```
 
 ### Library Integration

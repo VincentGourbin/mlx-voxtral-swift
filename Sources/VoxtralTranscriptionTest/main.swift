@@ -1,138 +1,328 @@
 /**
- * VoxtralTranscriptionTest - E2E Audio Transcription Test
- * Tests the complete audio-to-text pipeline with a real audio file
+ * VoxtralCLI - Command-line interface for Voxtral speech-to-text
+ *
+ * Features:
+ * - List available models
+ * - Download models from HuggingFace
+ * - Transcribe audio files
+ * - Chat mode (ask questions about audio)
  */
 
 import Foundation
 import MLX
 import VoxtralCore
 import MLXLMCommon
+import ArgumentParser
 
-// Configuration
-let modelPath = "/Users/vincent/Developpements/convertvoxtral/voxtral_models/voxtral-mini-3b-8bit"
-let audioPath = "/Users/vincent/Developpements/convertvoxtral/podcast_45s.mp3"
-
-func main() throws {
-    print("=" * 60)
-    print("VOXTRAL E2E TRANSCRIPTION TEST")
-    print("=" * 60)
-
-    // Step 1: Load model
-    print("\n[1/4] Loading model...")
-    let startLoad = Date()
-    let (standardModel, config) = try loadVoxtralStandardModel(modelPath: modelPath, dtype: .float16)
-    let model = VoxtralForConditionalGeneration(standardModel: standardModel)
-    let processor = try VoxtralProcessor.fromPretrained(modelPath)
-    let loadTime = Date().timeIntervalSince(startLoad)
-    print("  Model loaded in \(String(format: "%.2f", loadTime))s")
-    print("  Model type: \(config.modelType)")
-    print("  Audio encoder: \(config.audioConfig.hiddenLayers) layers, \(config.audioConfig.hiddenSize) hidden")
-
-    // Step 2: Load and process audio
-    print("\n[2/4] Processing audio...")
-    guard FileManager.default.fileExists(atPath: audioPath) else {
-        print("  ERROR: Audio file not found at \(audioPath)")
-        return
-    }
-
-    let startAudio = Date()
-    let inputs = try processor.applyTranscritionRequest(
-        audio: audioPath,
-        language: "en",
-        samplingRate: 16000
+@main
+struct VoxtralCLI: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "voxtral",
+        abstract: "Voxtral speech-to-text for Apple Silicon",
+        version: "1.0.0",
+        subcommands: [
+            ListModels.self,
+            Download.self,
+            Transcribe.self,
+            Chat.self
+        ],
+        defaultSubcommand: Transcribe.self
     )
-    let audioTime = Date().timeIntervalSince(startAudio)
+}
 
-    print("  Audio processed in \(String(format: "%.2f", audioTime))s")
-    print("  Input IDs shape: \(inputs.inputIds.shape)")
-    print("  Input features shape: \(inputs.inputFeatures.shape)")
+// MARK: - List Models Command
 
-    // Debug: Print first 20 input IDs
-    var first20Ids: [Int] = []
-    for i in 0..<min(20, inputs.inputIds.shape[1]) {
-        first20Ids.append(inputs.inputIds[0, i].item(Int.self))
+struct ListModels: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "list",
+        abstract: "List available Voxtral models"
+    )
+
+    @Flag(name: .shortAndLong, help: "Show only downloaded models")
+    var downloaded = false
+
+    func run() throws {
+        if downloaded {
+            let downloadedModels = ModelDownloader.listDownloadedModels()
+            if downloadedModels.isEmpty {
+                print("\nNo models downloaded yet.")
+                print("Use 'voxtral download <model-id>' to download a model.")
+                print("Use 'voxtral list' to see available models.")
+            } else {
+                print("\n" + String(repeating: "=", count: 60))
+                print("DOWNLOADED MODELS")
+                print(String(repeating: "=", count: 60))
+                for model in downloadedModels {
+                    if let path = ModelDownloader.findModelPath(for: model) {
+                        print("\n  \(model.id): \(model.name)")
+                        print("    Path: \(path.path)")
+                    }
+                }
+            }
+        } else {
+            ModelRegistry.printAvailableModels()
+
+            // Also show downloaded status
+            print("\nDownload status:")
+            for model in ModelRegistry.models {
+                let status = ModelDownloader.findModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+                print("  \(model.id): \(status)")
+            }
+        }
     }
-    print("  First 20 input_ids: \(first20Ids)")
-    print("  Python ref: [1, 3, 25, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24]")
+}
 
-    let numChunks = inputs.inputFeatures.shape[0]
-    let audioDuration = Float(numChunks) * 30.0  // 30 seconds per chunk
-    print("  Audio duration: ~\(Int(audioDuration))s (\(numChunks) chunks)")
+// MARK: - Download Command
 
-    // Step 3: Generate transcription
-    print("\n[3/4] Generating transcription...")
-    let startGen = Date()
+struct Download: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "download",
+        abstract: "Download a model from HuggingFace"
+    )
 
-    var generatedTokens: [Int] = []
-    var fullText = ""
+    @Argument(help: "Model ID (e.g., 'mini-3b-8bit') or HuggingFace repo (e.g., 'mzbac/voxtral-mini-3b-8bit')")
+    var model: String
 
-    do {
-        let streamResults = try model.generateStream(
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL MODEL DOWNLOAD")
+        print(String(repeating: "=", count: 60))
+
+        let modelPath = try await ModelDownloader.resolveModel(model) { progress, message in
+            print("[\(Int(progress * 100))%] \(message)")
+        }
+
+        print("\n" + String(repeating: "=", count: 60))
+        print("Download complete!")
+        print("Model path: \(modelPath.path)")
+        print("\nTo transcribe audio:")
+        print("  voxtral transcribe --model \(model) <audio-file>")
+        print(String(repeating: "=", count: 60))
+    }
+}
+
+// MARK: - Transcribe Command
+
+struct Transcribe: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "transcribe",
+        abstract: "Transcribe an audio file"
+    )
+
+    @Argument(help: "Path to audio file (MP3, WAV, M4A, etc.)")
+    var audioFile: String
+
+    @Option(name: .shortAndLong, help: "Model ID or path (default: mini-3b-8bit)")
+    var model: String = "mini-3b-8bit"
+
+    @Option(name: .long, help: "Maximum tokens to generate")
+    var maxTokens: Int = 500
+
+    @Option(name: [.customShort("l"), .long], help: "Language code (e.g., 'en', 'fr')")
+    var language: String = "en"
+
+    @Flag(name: .shortAndLong, help: "Show verbose output")
+    var verbose = false
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL TRANSCRIPTION")
+        print(String(repeating: "=", count: 60))
+
+        // Validate audio file
+        guard FileManager.default.fileExists(atPath: audioFile) else {
+            throw ValidationError("Audio file not found: \(audioFile)")
+        }
+
+        // Resolve model path
+        print("\n[1/4] Resolving model...")
+        let modelPath = try await ModelDownloader.resolveModel(model)
+        print("  Using model: \(modelPath.path)")
+
+        // Load model
+        print("\n[2/4] Loading model...")
+        let startLoad = Date()
+        let (standardModel, config) = try loadVoxtralStandardModel(
+            modelPath: modelPath.path,
+            dtype: .float16
+        )
+        let voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
+        let processor = try VoxtralProcessor.fromPretrained(modelPath.path)
+        let loadTime = Date().timeIntervalSince(startLoad)
+
+        if verbose {
+            print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+            print("  Model type: \(config.modelType)")
+            print("  Audio encoder: \(config.audioConfig.hiddenLayers) layers")
+        } else {
+            print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+        }
+
+        // Process audio
+        print("\n[3/4] Processing audio: \(audioFile)")
+        let startAudio = Date()
+        let inputs = try processor.applyTranscritionRequest(
+            audio: audioFile,
+            language: language,
+            samplingRate: 16000
+        )
+        let audioTime = Date().timeIntervalSince(startAudio)
+
+        let numChunks = inputs.inputFeatures.shape[0]
+        let audioDuration = Float(numChunks) * 30.0
+        print("  Audio processed in \(String(format: "%.2f", audioTime))s (~\(Int(audioDuration))s audio)")
+
+        // Generate transcription
+        print("\n[4/4] Generating transcription...")
+        let startGen = Date()
+
+        var tokenCount = 0
+        var transcription = ""
+
+        let streamResults = try voxtralModel.generateStream(
             inputIds: inputs.inputIds,
             inputFeatures: inputs.inputFeatures,
             attentionMask: nil,
-            maxNewTokens: 200,  // Quick test
-            temperature: 0.0,   // Greedy for transcription
+            maxNewTokens: maxTokens,
+            temperature: 0.0,
             topP: 1.0,
             repetitionPenalty: 1.1
         )
 
-        print("  Generating tokens...")
-
-        for (i, (token, _)) in streamResults.enumerated() {
+        print("\n" + String(repeating: "-", count: 60))
+        for (token, _) in streamResults {
             let tokenId = token.item(Int.self)
-            generatedTokens.append(tokenId)
+            tokenCount += 1
 
-            // Decode incrementally
-            let tokenText = (try? processor.decode([tokenId])) ?? ""
-            fullText += tokenText
-
-            // Progress indicator every 100 tokens
-            if (i + 1) % 100 == 0 {
-                print("  ... \(i + 1) tokens generated")
+            if let text = try? processor.decode([tokenId]) {
+                transcription += text
+                print(text, terminator: "")
+                fflush(stdout)
             }
         }
+        print("\n" + String(repeating: "-", count: 60))
 
-    } catch {
-        print("  ERROR during generation: \(error)")
-        return
-    }
+        let genTime = Date().timeIntervalSince(startGen)
+        let tokensPerSecond = Double(tokenCount) / genTime
 
-    let genTime = Date().timeIntervalSince(startGen)
+        print("\nStatistics:")
+        print("  Tokens: \(tokenCount)")
+        print("  Time: \(String(format: "%.2f", genTime))s")
+        print("  Speed: \(String(format: "%.1f", tokensPerSecond)) tokens/s")
+        print("  RTF: \(String(format: "%.2fx", audioDuration / Float(genTime)))")
 
-    // Step 4: Display results
-    print("\n[4/4] Transcription complete!")
-    print("=" * 60)
-    print("\nTRANSCRIPTION:")
-    print("-" * 40)
-    print(fullText)
-    print("-" * 40)
-
-    // Statistics
-    let tokensPerSecond = Double(generatedTokens.count) / genTime
-    print("\nSTATISTICS:")
-    print("  Total tokens: \(generatedTokens.count)")
-    print("  Generation time: \(String(format: "%.2f", genTime))s")
-    print("  Speed: \(String(format: "%.1f", tokensPerSecond)) tokens/s")
-    print("  Audio duration: ~\(Int(audioDuration))s")
-    print("  Real-time factor: \(String(format: "%.2fx", audioDuration / Float(genTime)))")
-
-    print("\n" + "=" * 60)
-    print("TEST COMPLETE")
-    print("=" * 60)
-}
-
-// String multiplication helper
-extension String {
-    static func * (string: String, count: Int) -> String {
-        return String(repeating: string, count: count)
+        print("\n" + String(repeating: "=", count: 60))
     }
 }
 
-// Run the test
-print("🚀🚀🚀 TOP LEVEL CODE STARTS 🚀🚀🚀")
-do {
-    try main()
-} catch {
-    print("FATAL ERROR: \(error)")
+// MARK: - Chat Command
+
+struct Chat: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "chat",
+        abstract: "Ask a question about an audio file"
+    )
+
+    @Argument(help: "Path to audio file")
+    var audioFile: String
+
+    @Argument(help: "Question or prompt about the audio")
+    var prompt: String
+
+    @Option(name: .shortAndLong, help: "Model ID or path (default: mini-3b-8bit)")
+    var model: String = "mini-3b-8bit"
+
+    @Option(name: .long, help: "Maximum tokens to generate")
+    var maxTokens: Int = 500
+
+    @Option(name: [.customShort("t"), .long], help: "Temperature for generation (0.0 = deterministic)")
+    var temperature: Float = 0.7
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL CHAT")
+        print(String(repeating: "=", count: 60))
+
+        // Validate audio file
+        guard FileManager.default.fileExists(atPath: audioFile) else {
+            throw ValidationError("Audio file not found: \(audioFile)")
+        }
+
+        // Resolve model path
+        print("\n[1/4] Resolving model...")
+        let modelPath = try await ModelDownloader.resolveModel(model)
+        print("  Using model: \(modelPath.path)")
+
+        // Load model
+        print("\n[2/4] Loading model...")
+        let startLoad = Date()
+        let (standardModel, _) = try loadVoxtralStandardModel(
+            modelPath: modelPath.path,
+            dtype: .float16
+        )
+        let voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
+        let processor = try VoxtralProcessor.fromPretrained(modelPath.path)
+        print("  Model loaded in \(String(format: "%.2f", Date().timeIntervalSince(startLoad)))s")
+
+        // Process audio with chat template
+        print("\n[3/4] Processing audio and prompt...")
+        print("  Audio: \(audioFile)")
+        print("  Prompt: \(prompt)")
+
+        let conversation: [[String: Any]] = [
+            [
+                "role": "user",
+                "content": [
+                    ["type": "audio", "audio": audioFile],
+                    ["type": "text", "text": prompt]
+                ]
+            ]
+        ]
+
+        let chatResult = try processor.applyChatTemplate(
+            conversation: conversation,
+            tokenize: true,
+            returnTensors: "mlx"
+        ) as! [String: MLXArray]
+
+        let inputs = ProcessedInputs(
+            inputIds: chatResult["input_ids"]!,
+            inputFeatures: chatResult["input_features"]!
+        )
+
+        // Generate response
+        print("\n[4/4] Generating response...")
+        let startGen = Date()
+
+        var tokenCount = 0
+        var response = ""
+
+        let streamResults = try voxtralModel.generateStream(
+            inputIds: inputs.inputIds,
+            inputFeatures: inputs.inputFeatures,
+            attentionMask: nil,
+            maxNewTokens: maxTokens,
+            temperature: temperature,
+            topP: 0.9,
+            repetitionPenalty: 1.1
+        )
+
+        print("\n" + String(repeating: "-", count: 60))
+        for (token, _) in streamResults {
+            let tokenId = token.item(Int.self)
+            tokenCount += 1
+
+            if let text = try? processor.decode([tokenId]) {
+                response += text
+                print(text, terminator: "")
+                fflush(stdout)
+            }
+        }
+        print("\n" + String(repeating: "-", count: 60))
+
+        let genTime = Date().timeIntervalSince(startGen)
+        print("\nGenerated \(tokenCount) tokens in \(String(format: "%.2f", genTime))s")
+
+        print("\n" + String(repeating: "=", count: 60))
+    }
 }
