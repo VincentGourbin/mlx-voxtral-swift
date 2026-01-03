@@ -95,16 +95,23 @@ public class ModelDownloader {
     }
 
     /// Find a model path (checks Hub cache first, then local directory)
+    /// Only returns paths for complete downloads (all sharded files present)
     public static func findModelPath(for model: VoxtralModelInfo) -> URL? {
         // Check Hub cache first
         if let hubPath = hubCachePath(for: model) {
-            return hubPath
+            let verification = verifyShardedModel(at: hubPath)
+            if verification.complete {
+                return hubPath
+            }
         }
 
         // Check local models directory
         let localDir = localPath(for: model)
         if FileManager.default.fileExists(atPath: localDir.appendingPathComponent("config.json").path) {
-            return localDir
+            let verification = verifyShardedModel(at: localDir)
+            if verification.complete {
+                return localDir
+            }
         }
 
         // Check project voxtral_models directory
@@ -112,10 +119,39 @@ public class ModelDownloader {
             .appendingPathComponent("voxtral_models")
             .appendingPathComponent(model.repoId.split(separator: "/").last.map(String.init) ?? model.id)
         if FileManager.default.fileExists(atPath: projectModelsDir.appendingPathComponent("config.json").path) {
-            return projectModelsDir
+            let verification = verifyShardedModel(at: projectModelsDir)
+            if verification.complete {
+                return projectModelsDir
+            }
         }
 
         return nil
+    }
+
+    /// Verify that a sharded model has all required safetensors files
+    public static func verifyShardedModel(at path: URL) -> (complete: Bool, missing: [String]) {
+        let indexPath = path.appendingPathComponent("model.safetensors.index.json")
+
+        // If no index file, it's either a single-file model or not sharded
+        guard FileManager.default.fileExists(atPath: indexPath.path),
+              let data = try? Data(contentsOf: indexPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let weightMap = json["weight_map"] as? [String: String] else {
+            return (true, [])
+        }
+
+        // Get unique safetensors files from the weight map
+        let requiredFiles = Set(weightMap.values)
+        var missingFiles: [String] = []
+
+        for filename in requiredFiles {
+            let filePath = path.appendingPathComponent(filename)
+            if !FileManager.default.fileExists(atPath: filePath.path) {
+                missingFiles.append(filename)
+            }
+        }
+
+        return (missingFiles.isEmpty, missingFiles)
     }
 
     /// Download a model using Hub API
@@ -123,10 +159,16 @@ public class ModelDownloader {
         _ model: VoxtralModelInfo,
         progress: DownloadProgressCallback? = nil
     ) async throws -> URL {
-        // Check if already downloaded
+        // Check if already downloaded and complete
         if let existingPath = findModelPath(for: model) {
-            progress?(1.0, "Model already downloaded")
-            return existingPath
+            let verification = verifyShardedModel(at: existingPath)
+            if verification.complete {
+                progress?(1.0, "Model already downloaded")
+                return existingPath
+            } else {
+                print("Warning: Incomplete download detected. Missing files: \(verification.missing)")
+                print("Re-downloading...")
+            }
         }
 
         progress?(0.0, "Starting download of \(model.name)...")
@@ -141,6 +183,13 @@ public class ModelDownloader {
             from: model.repoId,
             matching: ["*.json", "*.safetensors"]
         )
+
+        // Verify the download is complete
+        let verification = verifyShardedModel(at: modelUrl)
+        if !verification.complete {
+            print("\nWarning: Download may be incomplete. Missing files: \(verification.missing)")
+            print("You may need to manually download these files or re-run the download.")
+        }
 
         progress?(1.0, "Download complete!")
         print("\nDownload complete: \(modelUrl.path)")
