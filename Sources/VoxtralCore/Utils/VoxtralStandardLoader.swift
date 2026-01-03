@@ -1094,11 +1094,12 @@ private func detectQuantizedModules(weights: [String: MLXArray], config: Voxtral
         }
     }
 
-    VoxtralDebug.log("Quantization: group_size=\(defaultGroupSize), bits=\(defaultBits)")
+    VoxtralDebug.log("Quantization defaults: group_size=\(defaultGroupSize), bits=\(defaultBits)")
 
     // Step 2: Build per-layer quantization map from config
+    // Store both the full path and just the layer suffix for flexible matching
     var perLayerConfig: [String: (groupSize: Int, bits: Int)] = [:]
-    var bitsDistribution: [Int: Int] = [:]  // bits -> count for debug
+    var notQuantizedLayers: Set<String> = []
 
     if let quantConfig = config?.quantization {
         for (layerName, value) in quantConfig {
@@ -1114,36 +1115,37 @@ private func detectQuantizedModules(weights: [String: MLXArray], config: Voxtral
             case .config(let layerConfig):
                 // Per-layer specific config (mixed quantization)
                 perLayerConfig[layerName] = (groupSize: layerConfig.groupSize, bits: layerConfig.bits)
-            case .bool(false), .int(_):
-                // Not quantized or invalid - skip
+            case .bool(false):
+                // Explicitly not quantized
+                notQuantizedLayers.insert(layerName)
+            case .int(_):
                 break
             }
         }
     }
+
+    // Debug: Log unique bit configurations found
+    var bitConfigs: [Int: Int] = [:]
+    for (_, cfg) in perLayerConfig {
+        bitConfigs[cfg.bits, default: 0] += 1
+    }
+    VoxtralDebug.log("Quantization config: \(perLayerConfig.count) layer configs, bits distribution: \(bitConfigs)")
 
     // Step 3: Look for .scales keys in weights and match with config
     for (key, _) in weights {
         if key.hasSuffix(".scales") {
             // Extract Python-style module path: "audio_tower.layers.0.fc1.scales" -> "audio_tower.layers.0.fc1"
             var pythonModulePath = String(key.dropLast(".scales".count))
+            let originalPythonPath = pythonModulePath
 
             // CRITICAL FIX: Handle the structural difference between weight keys and model paths
-            // Weight keys: language_model.embed_tokens, language_model.model.layers...
-            // Model structure: languageModel.model.embedTokens (LanguageModelContainer has model: LlamaStandardModel)
-            // So language_model.embed_tokens -> languageModel.model.embedTokens (NOT languageModel.embedTokens)
             if pythonModulePath.hasPrefix("language_model.") && !pythonModulePath.hasPrefix("language_model.model.") {
-                // For top-level language_model components, insert "model" before the component name
                 let suffix = String(pythonModulePath.dropFirst("language_model.".count))
                 pythonModulePath = "language_model.model.\(suffix)"
             }
-            // Also handle the bare "embed_tokens" case (for tied embeddings at root level)
             if pythonModulePath == "embed_tokens" {
                 pythonModulePath = "language_model.model.embed_tokens"
             }
-
-            // CRITICAL FIX: Handle lm_head at root level -> needs to map to language_model.lm_head
-            // In safetensors: lm_head.weight, lm_head.scales, lm_head.biases
-            // In Swift model: languageModel.lmHead (LanguageModelContainer.lmHead)
             if pythonModulePath == "lm_head" {
                 pythonModulePath = "language_model.lm_head"
             }
@@ -1151,19 +1153,55 @@ private func detectQuantizedModules(weights: [String: MLXArray], config: Voxtral
             // Convert to Swift camelCase for the quantizedModules dict
             let swiftModulePath = convertSnakeCaseToCamelCase(pythonModulePath)
 
-            // Look up config using Python-style path (config uses snake_case)
-            if let layerConfig = perLayerConfig[pythonModulePath] {
+            // Try multiple matching strategies for config lookup:
+            // 1. Exact match with original path from weights
+            // 2. Exact match with modified path
+            // 3. Suffix match (for paths that might have different prefixes)
+            var foundConfig: (groupSize: Int, bits: Int)? = nil
+
+            // Strategy 1: Direct lookup with original path
+            if let cfg = perLayerConfig[originalPythonPath] {
+                foundConfig = cfg
+            }
+            // Strategy 2: Direct lookup with modified path
+            else if let cfg = perLayerConfig[pythonModulePath] {
+                foundConfig = cfg
+            }
+            // Strategy 3: Find config entry that matches as suffix
+            else {
+                for (configPath, cfg) in perLayerConfig {
+                    if originalPythonPath.hasSuffix(configPath) || configPath.hasSuffix(originalPythonPath) {
+                        foundConfig = cfg
+                        break
+                    }
+                }
+            }
+
+            // Check if layer is explicitly not quantized
+            let isNotQuantized = notQuantizedLayers.contains(originalPythonPath) ||
+                                 notQuantizedLayers.contains { originalPythonPath.hasSuffix($0) }
+
+            if isNotQuantized {
+                // Skip - this layer should not be quantized
+                continue
+            }
+
+            if let layerConfig = foundConfig {
                 quantizedModules[swiftModulePath] = layerConfig
-                bitsDistribution[layerConfig.bits, default: 0] += 1
             } else {
                 // Fallback to global defaults if no per-layer config found
                 quantizedModules[swiftModulePath] = (groupSize: defaultGroupSize, bits: defaultBits)
-                bitsDistribution[defaultBits, default: 0] += 1
             }
         }
     }
 
-    VoxtralDebug.log("Quantization: \(quantizedModules.count) modules detected")
+    // Debug: Log final quantization summary
+    var finalBitDistribution: [Int: Int] = [:]
+    for (_, cfg) in quantizedModules {
+        finalBitDistribution[cfg.bits, default: 0] += 1
+    }
+    VoxtralDebug.log("Quantization applied: \(quantizedModules.count) modules, bits distribution: \(finalBitDistribution)")
+
     return quantizedModules
 }
 

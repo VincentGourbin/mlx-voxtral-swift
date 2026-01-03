@@ -107,6 +107,14 @@ public class ModelDownloader {
             return localDir
         }
 
+        // Check project voxtral_models directory
+        let projectModelsDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("voxtral_models")
+            .appendingPathComponent(model.repoId.split(separator: "/").last.map(String.init) ?? model.id)
+        if FileManager.default.fileExists(atPath: projectModelsDir.appendingPathComponent("config.json").path) {
+            return projectModelsDir
+        }
+
         return nil
     }
 
