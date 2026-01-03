@@ -61,13 +61,20 @@ struct HeaderView: View {
             Spacer()
 
             if manager.isModelLoaded {
-                Label("Model Ready", systemImage: "checkmark.circle.fill")
+                if let model = manager.selectedModel {
+                    Text(model.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Label("Ready", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else if manager.isLoading {
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("Loading model...")
+                Text(manager.loadingStatus.isEmpty ? "Loading..." : manager.loadingStatus)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             } else {
                 Button("Load Model") {
                     Task { await manager.loadModel() }
@@ -151,6 +158,47 @@ struct ControlPanelView: View {
                         Text("Ask a question about the audio")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                Divider()
+
+                // Model selector
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Model")
+                        .font(.headline)
+
+                    Picker("", selection: $manager.selectedModelId) {
+                        ForEach(manager.availableModels, id: \.id) { model in
+                            HStack {
+                                Text(model.name)
+                                if manager.downloadedModels.contains(model.id) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            .tag(model.id)
+                        }
+                    }
+                    .labelsHidden()
+
+                    if let model = manager.selectedModel {
+                        HStack(spacing: 4) {
+                            Text(model.size)
+                            Text("•")
+                            Text(model.quantization)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        if !manager.isCurrentModelLoaded && manager.isModelLoaded {
+                            Button("Switch Model") {
+                                manager.unloadModel()
+                                Task { await manager.loadModel() }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
                     }
                 }
 

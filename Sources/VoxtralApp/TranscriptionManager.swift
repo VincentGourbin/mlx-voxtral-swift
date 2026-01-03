@@ -1,6 +1,7 @@
 /**
  * TranscriptionManager - Handles model loading and audio processing for the app
  * Supports both transcription and chat modes with real-time streaming
+ * Now with model selection and automatic downloading
  */
 
 import Foundation
@@ -14,6 +15,12 @@ class TranscriptionManager: ObservableObject {
     @Published var isLoading = false
     @Published var isModelLoaded = false
     @Published var errorMessage: String?
+    @Published var loadingStatus: String = ""
+
+    // Model selection
+    @Published var selectedModelId: String = "mini-3b-8bit"
+    @Published var availableModels: [VoxtralModelInfo] = ModelRegistry.models
+    @Published var downloadedModels: Set<String> = []
 
     // Processing state
     @Published var isTranscribing = false
@@ -28,32 +35,74 @@ class TranscriptionManager: ObservableObject {
     @Published var maxTokens: Int = 500
     @Published var temperature: Float = 0.0
 
-    // Model path - configurable
-    var modelPath = "/Users/vincent/Developpements/convertvoxtral/voxtral_models/voxtral-mini-3b-8bit"
-
     // Private model references
     private var model: VoxtralForConditionalGeneration?
     private var standardModel: VoxtralStandardModel?
     private var processor: VoxtralProcessor?
+    private var currentLoadedModelId: String?
 
     var canRun: Bool {
         isModelLoaded && selectedAudioPath != nil && !isTranscribing
     }
 
+    var selectedModel: VoxtralModelInfo? {
+        ModelRegistry.model(withId: selectedModelId)
+    }
+
+    var isCurrentModelLoaded: Bool {
+        isModelLoaded && currentLoadedModelId == selectedModelId
+    }
+
+    init() {
+        refreshDownloadedModels()
+    }
+
+    // MARK: - Model Management
+
+    func refreshDownloadedModels() {
+        let downloaded = ModelDownloader.listDownloadedModels()
+        downloadedModels = Set(downloaded.map { $0.id })
+    }
+
+    func isModelDownloaded(_ modelId: String) -> Bool {
+        if let model = ModelRegistry.model(withId: modelId) {
+            return ModelDownloader.findModelPath(for: model) != nil
+        }
+        return false
+    }
+
     // MARK: - Model Loading
 
     func loadModel() async {
-        guard !isLoading && !isModelLoaded else { return }
+        guard !isLoading else { return }
+
+        // If same model already loaded, skip
+        if isModelLoaded && currentLoadedModelId == selectedModelId {
+            return
+        }
 
         isLoading = true
+        isModelLoaded = false
         errorMessage = nil
-
-        let path = modelPath
+        loadingStatus = "Resolving model..."
 
         do {
+            // Resolve model path (downloads if needed)
+            loadingStatus = "Downloading model if needed..."
+            let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { progress, message in
+                Task { @MainActor in
+                    self.loadingStatus = message
+                }
+            }
+
+            loadingStatus = "Loading model weights..."
+
+            let path = modelPath.path
             let (loadedModel, _) = try await Task.detached(priority: .userInitiated) {
                 try loadVoxtralStandardModel(modelPath: path, dtype: .float16)
             }.value
+
+            loadingStatus = "Initializing processor..."
 
             let wrapper = VoxtralForConditionalGeneration(standardModel: loadedModel)
             let loadedProcessor = try VoxtralProcessor.fromPretrained(path)
@@ -62,12 +111,26 @@ class TranscriptionManager: ObservableObject {
             self.model = wrapper
             self.processor = loadedProcessor
             self.isModelLoaded = true
+            self.currentLoadedModelId = selectedModelId
+            self.loadingStatus = ""
+
+            // Refresh downloaded models list
+            refreshDownloadedModels()
 
         } catch {
             self.errorMessage = error.localizedDescription
+            self.loadingStatus = ""
         }
 
         isLoading = false
+    }
+
+    func unloadModel() {
+        model = nil
+        standardModel = nil
+        processor = nil
+        isModelLoaded = false
+        currentLoadedModelId = nil
     }
 
     // MARK: - Run (dispatch to appropriate mode)
