@@ -95,6 +95,17 @@ struct HeaderView: View {
                     }
                     Label("Ready", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+
+                    // Unload button in main header
+                    Button(action: {
+                        manager.unloadModel()
+                    }) {
+                        Label("Unload", systemImage: "xmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.orange)
+                    .help("Unload model to free GPU memory")
                 } else if manager.isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -679,7 +690,19 @@ struct ModelsManagementView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(manager.memoryStats.cache == 0)
-                .help("Clear MLX GPU cache to free memory")
+                .help("Clear MLX recyclable cache")
+
+                Button(action: {
+                    manager.unloadModel()
+                    memoryRefreshTrigger.toggle()
+                }) {
+                    Label("Unload Model", systemImage: "xmark.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.orange)
+                .disabled(!manager.isModelLoaded)
+                .help("Unload model to free all GPU memory")
             }
             .padding(.horizontal)
             .padding(.vertical, 8)

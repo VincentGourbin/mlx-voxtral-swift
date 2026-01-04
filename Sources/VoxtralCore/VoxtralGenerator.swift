@@ -207,35 +207,26 @@ public class VoxtralGenerator {
             print(String(repeating: "=", count: 50))
         }
         
-        var generatedTokens: [Int] = []
-        var numTokens = 0
-        
-        // Python: for token, _ in model.generate_stream(**mlx_inputs, max_new_tokens=args.max_token, temperature=args.temperature, top_p=args.top_p):
-        let streamResults = try model.generateStream(
+        // 🚀 generateStream now returns [Int] directly
+        let generatedTokens = try model.generateStream(
             inputIds: inputs.inputIds,
             inputFeatures: inputs.inputFeatures,
             maxNewTokens: parameters.maxTokens,
             temperature: parameters.temperature,
             topP: parameters.topP
         )
-        
-        for (token, _) in streamResults {
-            // Python: token_id = token.item()
-            let tokenId = token.item(Int.self)
-            generatedTokens.append(tokenId)
-            
-            // Python: text = processor.decode([token_id], skip_special_tokens=False)
+
+        // Print tokens as they would appear (for CLI streaming effect)
+        for tokenId in generatedTokens {
             let text = try processor.decode([tokenId], skipSpecialTokens: false)
-            
-            // Python: if token_id not in [processor.tokenizer.eos_token_id, processor.tokenizer.pad_token_id]:
+
             if tokenId != processor.tokenizer?.eosTokenIdValue && tokenId != processor.tokenizer?.padTokenIdValue {
-                // Python: print(text, end='', flush=True)
                 print(text, terminator: "")
                 fflush(stdout)
             }
-            
-            numTokens += 1
         }
+
+        let numTokens = generatedTokens.count
         
         print() // New line after streaming output
         

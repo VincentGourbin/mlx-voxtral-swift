@@ -1093,9 +1093,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Python equivalent: calls generate_stream and concatenates results
         var generated = inputIds
         
-        // Python: for token, _ in self.generate_stream(...)
+        // 🚀 generateStream now returns [Int] directly
         do {
-            let streamResults = try generateStream(
+            let tokenIds = try generateStream(
                 inputIds: inputIds,
                 inputFeatures: inputFeatures,
                 attentionMask: attentionMask,
@@ -1104,12 +1104,11 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 topP: topP,
                 repetitionPenalty: repetitionPenalty
             )
-            
-            // Python: generated = mx.concatenate([generated, token[None, None]], axis=1)
-            for (token, _) in streamResults {
-                // Reshape token to [1, 1] and concatenate
-                let reshapedToken = token.reshaped([1, 1])
-                generated = concatenated([generated, reshapedToken], axis: 1)
+
+            // Append all generated tokens at once
+            if !tokenIds.isEmpty {
+                let tokenArray = MLXArray(tokenIds.map { Int32($0) }).reshaped([1, -1])
+                generated = concatenated([generated, tokenArray], axis: 1)
             }
         } catch {
             VoxtralDebug.always("Generation failed: \(error)")
@@ -1119,7 +1118,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     }
     
     /**
-     * Direct Python equivalent: def generate_stream(self, **kwargs) -> Iterator[Tuple[MLXArray, Optional[Any]]]
+     * Generate tokens from input - returns token IDs directly
+     * 🚀 OPTIMIZED: Returns [Int] instead of [(MLXArray, Any?)] to avoid keeping GPU references
      */
     public func generateStream(
         inputIds: MLXArray,
@@ -1129,9 +1129,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         repetitionPenalty: Float = 1.2
-    ) throws -> [(MLXArray, Any?)] {
+    ) throws -> [Int] {
 
-        var results: [(MLXArray, Any?)] = []
+        var tokenIds: [Int] = []
 
         guard inputIds.size > 0 else {
             throw VoxtralError.invalidInput("input_ids must be provided")
@@ -1150,7 +1150,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         }
 
         var generated = inputIds
-        var generatedTokens: [MLXArray] = []
+        var recentTokenIds: [Int] = []  // Keep only Int IDs for repetition penalty
         var currentAttentionMask = attentionMask
 
         for _ in 0..<maxNewTokens {
@@ -1182,51 +1182,46 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             var processedLogits = lastTokenLogits
 
-            if repetitionPenalty != 1.0 && !generatedTokens.isEmpty {
-                let recentTokens = Array(generatedTokens.suffix(20))
-                let tokens = recentTokens.map { $0.item(Int.self) }
+            if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
+                let tokens = Array(recentTokenIds.suffix(20))
                 processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
             }
 
             let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
 
+            // Extract token ID immediately to avoid keeping MLXArray references
+            let currentTokenId = nextToken.squeezed().item(Int.self)
+            tokenIds.append(currentTokenId)
+            recentTokenIds.append(currentTokenId)
+
             // Python: generated = mx.concatenate([generated, next_tokens], axis=1)
             generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
 
-            // Python: current_token = next_tokens[0, 0]
-            let currentToken = nextToken.squeezed()  // Remove any singleton dimensions
-            generatedTokens.append(currentToken)
-
-            // Python: logprobs = next_token_logits - mx.logsumexp(next_token_logits, axis=-1, keepdims=True)
-            let logprobs = processedLogits - logSumExp(processedLogits, axes: [-1], keepDims: true)
-
-            // Python: if attention_mask is not None: attention_mask = mx.concatenate([attention_mask, mx.ones((batch_size, 1), dtype=attention_mask.dtype)], axis=1)
+            // Python: if attention_mask is not None
             if currentAttentionMask != nil {
                 let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
                 currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
             }
-
-            // Python: yield current_token, logprobs.squeeze(0)
-            results.append((currentToken, logprobs.squeezed(axis: 0)))
-
-            // Python: current_token_id = current_token.item() if hasattr(current_token, 'item') else int(current_token)
-            let currentTokenId = currentToken.item(Int.self)
 
             // Python: if current_token_id in stop_tokens: break
             if stopTokens.contains(currentTokenId) {
                 break
             }
 
-            // Python-style repetition detection (simplified version of consecutive_repeats logic)
-            if generatedTokens.count >= 10 {
-                let last10 = generatedTokens.suffix(10).map { $0.item(Int.self) }
+            // Repetition detection
+            if recentTokenIds.count >= 10 {
+                let last10 = recentTokenIds.suffix(10)
                 if last10.allSatisfy({ $0 == currentTokenId }) {
                     break
                 }
             }
         }
 
-        return results
+        // 🧹 Clear KV cache and intermediate tensors
+        cache = nil
+        GPU.clearCache()
+
+        return tokenIds
     }
     
     // Helper function for sampling - Python equivalent

@@ -180,37 +180,26 @@ private func generateStreaming(
         print(String(repeating: "=", count: 50))
     }
     
-    // Python: generated_tokens = []
-    var generatedTokens: [Int] = []
-    // Python: num_tokens = 0
-    var numTokens = 0
-    
-    // Python: for token, _ in model.generate_stream(**mlx_inputs, max_new_tokens=args.max_token, temperature=args.temperature, top_p=args.top_p)
-    for (token, _) in try model.generateStream(
+    // 🚀 generateStream now returns [Int] directly
+    let generatedTokens = try model.generateStream(
         inputIds: mlxInputs["input_ids"]!,
         inputFeatures: mlxInputs["input_features"]!,
         maxNewTokens: maxTokens,
         temperature: temperature,
         topP: topP
-    ) {
-        // Python: token_id = token.item()
-        let tokenId: Int = token.item()
-        // Python: generated_tokens.append(token_id)
-        generatedTokens.append(tokenId)
-        
-        // Python: text = processor.decode([token_id], skip_special_tokens=False)
+    )
+
+    let numTokens = generatedTokens.count
+
+    // Print tokens for streaming effect
+    for tokenId in generatedTokens {
         let text = try processor.decode([tokenId], skipSpecialTokens: false)
-        
-        // Python: if token_id not in [processor.tokenizer.eos_token_id, processor.tokenizer.pad_token_id]:
+
         if let tokenizer = processor.tokenizer,
            tokenId != tokenizer.eosTokenIdValue && tokenId != tokenizer.padTokenIdValue {
-            // Python: print(text, end='', flush=True)
             print(text, terminator: "")
             fflush(stdout)
         }
-        
-        // Python: num_tokens += 1
-        numTokens += 1
     }
     
     // Python: print()

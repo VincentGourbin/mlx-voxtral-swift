@@ -176,10 +176,8 @@ struct Transcribe: AsyncParsableCommand {
         print("\n[4/4] Generating transcription...")
         let startGen = Date()
 
-        var tokenCount = 0
-        var transcription = ""
-
-        let streamResults = try voxtralModel.generateStream(
+        // 🚀 generateStream now returns [Int] directly
+        let tokenIds = try voxtralModel.generateStream(
             inputIds: inputs.inputIds,
             inputFeatures: inputs.inputFeatures,
             attentionMask: nil,
@@ -189,11 +187,11 @@ struct Transcribe: AsyncParsableCommand {
             repetitionPenalty: 1.1
         )
 
-        print("\n" + String(repeating: "-", count: 60))
-        for (token, _) in streamResults {
-            let tokenId = token.item(Int.self)
-            tokenCount += 1
+        let tokenCount = tokenIds.count
+        var transcription = ""
 
+        print("\n" + String(repeating: "-", count: 60))
+        for tokenId in tokenIds {
             if let text = try? processor.decode([tokenId]) {
                 transcription += text
                 print(text, terminator: "")
@@ -294,10 +292,8 @@ struct Chat: AsyncParsableCommand {
         print("\n[4/4] Generating response...")
         let startGen = Date()
 
-        var tokenCount = 0
-        var response = ""
-
-        let streamResults = try voxtralModel.generateStream(
+        // 🚀 generateStream now returns [Int] directly
+        let tokenIds = try voxtralModel.generateStream(
             inputIds: inputs.inputIds,
             inputFeatures: inputs.inputFeatures,
             attentionMask: nil,
@@ -307,11 +303,11 @@ struct Chat: AsyncParsableCommand {
             repetitionPenalty: 1.1
         )
 
-        print("\n" + String(repeating: "-", count: 60))
-        for (token, _) in streamResults {
-            let tokenId = token.item(Int.self)
-            tokenCount += 1
+        let tokenCount = tokenIds.count
+        var response = ""
 
+        print("\n" + String(repeating: "-", count: 60))
+        for tokenId in tokenIds {
             if let text = try? processor.decode([tokenId]) {
                 response += text
                 print(text, terminator: "")
