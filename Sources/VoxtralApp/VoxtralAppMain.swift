@@ -4,9 +4,15 @@
 
 import SwiftUI
 import AppKit
+import MLX
 
 @main
 struct VoxtralAppMain: App {
+    init() {
+        // Suppress MLX Metal shader compilation warnings
+        // These are internal to the MLX framework and not actionable
+        setenv("MTL_SHADER_VALIDATION", "0", 1)
+    }
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {

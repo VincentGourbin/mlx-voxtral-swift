@@ -726,17 +726,16 @@ public func loadQuantizedVoxtral(
     // Python: nn.quantize(model, group_size=..., bits=..., class_predicate=...)
     let globalGroupSize = quantization["group_size"] as! Int
     let globalBits = quantization["bits"] as! Int
-    
-    MLXNN.quantize(model: model) { path, module in
-        // Use our classPredicate to determine if this module should be quantized
-        if let quantParams = classPredicate(path: path, module: module) {
-            let groupSize = quantParams["group_size"] as? Int ?? globalGroupSize
-            let bits = quantParams["bits"] as? Int ?? globalBits
-            return (groupSize: groupSize, bits: bits)
-        } else {
-            return nil  // Don't quantize this module
+
+    // Use the new 4-argument quantize API
+    MLXNN.quantize(
+        model: model,
+        groupSize: globalGroupSize,
+        bits: globalBits,
+        filter: { path, module in
+            classPredicate(path: path, module: module) != nil
         }
-    }
-    
+    )
+
     return model
 }

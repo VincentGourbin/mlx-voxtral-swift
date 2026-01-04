@@ -1229,23 +1229,29 @@ func loadQuantizedVoxtral(
     let quantizedModules = detectQuantizedModules(weights: weights, config: config)
 
     // Step 2: Apply quantization using MLX Swift standard function
-    // This is the equivalent of MLXLMCommon approach and avoids @ModuleInfo wrapper issues
-    var quantizedCount = 0
-    var checkedPaths: [String] = []
-    MLXNN.quantize(model: model) { modulePath, module in
-        // Debug: track all paths for lmHead
-        if modulePath.contains("lmHead") || modulePath.contains("lm") {
-            checkedPaths.append(modulePath)
+    // Get default quantization params from config
+    var defaultGroupSize = 64
+    var defaultBits = 4
+    if let quantConfig = config.quantization {
+        if case .int(let gs) = quantConfig["group_size"] {
+            defaultGroupSize = gs
         }
-
-        // Check if this module should be quantized
-        if let quantConfig = quantizedModules[modulePath] {
-            quantizedCount += 1
-            return (quantConfig.groupSize, quantConfig.bits)
+        if case .int(let b) = quantConfig["bits"] {
+            defaultBits = b
         }
-        return nil
     }
-    VoxtralDebug.log("Quantization applied to \(quantizedCount) modules")
+
+    // Use the new 4-argument quantize API with filter
+    MLXNN.quantize(
+        model: model,
+        groupSize: defaultGroupSize,
+        bits: defaultBits,
+        filter: { modulePath, module in
+            // Check if this module should be quantized based on detected weights
+            quantizedModules[modulePath] != nil
+        }
+    )
+    VoxtralDebug.log("Quantization applied to \(quantizedModules.count) modules")
 
     return model
 }

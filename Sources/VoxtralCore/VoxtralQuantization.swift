@@ -48,24 +48,24 @@ private func hasQuantizationScales(_ param: MLXArray) -> Bool {
  */
 public func quantizeModel<T: Module>(_ model: T, groupSize: Int = 64, bits: Int = 4, classPredicate: ((String, Module) -> Bool)? = nil) throws {
     // Python: mlx_lm.utils.quantize_model() equivalent
-    // Swift MLX: quantize(model:filter:apply:) from MLXNN
+    // Swift MLX: quantize(model:groupSize:bits:filter:apply:) from MLXNN
     print("Quantizing model with group_size=\(groupSize), bits=\(bits)")
-    
-    // Use MLX Swift's built-in quantize function
-    quantize(model: model) { path, module in
-        if let predicate = classPredicate {
-            // Use custom predicate if provided
-            if predicate(path, module) {
-                return (groupSize: groupSize, bits: bits)
-            }
-        } else {
-            // Python: Default quantization - quantize all Linear and Embedding layers
-            if module is Linear || module is Embedding {
-                return (groupSize: groupSize, bits: bits)
+
+    // Use MLX Swift's built-in quantize function with the new 4-argument API
+    quantize(
+        model: model,
+        groupSize: groupSize,
+        bits: bits,
+        filter: { path, module in
+            if let predicate = classPredicate {
+                // Use custom predicate if provided
+                return predicate(path, module)
+            } else {
+                // Python: Default quantization - quantize all Linear and Embedding layers
+                return module is Linear || module is Embedding
             }
         }
-        return nil
-    }
+    )
 }
 
 
