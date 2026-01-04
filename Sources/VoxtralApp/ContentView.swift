@@ -279,6 +279,10 @@ struct ControlPanelView: View {
                             .frame(width: 30)
                             .foregroundStyle(.secondary)
                     }
+
+                    Toggle("Detailed profiling", isOn: $manager.profilingEnabled)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 20)
@@ -427,7 +431,7 @@ struct OutputPanelView: View {
             // Stats bar - show live during generation, final stats after
             if manager.isTranscribing {
                 Divider()
-                LiveStatsBarView(tokenCount: manager.currentTokenCount)
+                LiveStatsBarView(tokenCount: manager.currentTokenCount, currentStep: manager.currentStep)
             } else if let stats = manager.lastGenerationStats {
                 Divider()
                 StatsBarView(stats: stats, profileSummary: manager.lastProfileSummary)
@@ -445,17 +449,31 @@ struct OutputPanelView: View {
 
 struct LiveStatsBarView: View {
     let tokenCount: Int
+    let currentStep: TranscriptionManager.ProcessingStep
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(0.7)
-            Label("\(tokenCount) tokens", systemImage: "number")
-            Text("Generating...")
+
+            if !currentStep.icon.isEmpty {
+                Image(systemName: currentStep.icon)
+                    .foregroundStyle(.blue)
+            }
+
+            Text(currentStep == .generating ? "\(currentStep.rawValue) (\(tokenCount) tokens)..." : currentStep.rawValue)
                 .foregroundStyle(.blue)
+                .fontWeight(.medium)
+
+            Spacer()
+
+            if currentStep == .settingUpGeneration {
+                Text("This may take a moment...")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .font(.caption)
-        .foregroundStyle(.secondary)
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
@@ -630,9 +648,46 @@ struct ModelsManagementView: View {
     @ObservedObject var manager: TranscriptionManager
     @State private var modelToDelete: VoxtralModelInfo?
     @State private var showDeleteConfirmation = false
+    @State private var memoryRefreshTrigger = false
 
     var body: some View {
         VStack(spacing: 0) {
+            // Memory status bar
+            HStack(spacing: 16) {
+                Label("MLX Memory", systemImage: "memorychip")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Text("Active: \(TranscriptionManager.formatBytes(manager.memoryStats.active))")
+                    Text("Cache: \(TranscriptionManager.formatBytes(manager.memoryStats.cache))")
+                        .foregroundStyle(manager.memoryStats.cache > 0 ? .orange : .secondary)
+                    Text("Peak: \(TranscriptionManager.formatBytes(manager.memoryStats.peak))")
+                        .foregroundStyle(.blue)
+                }
+                .font(.caption.monospaced())
+
+                Spacer()
+
+                Button(action: {
+                    manager.clearCache()
+                    GPU.resetPeakMemory()
+                    memoryRefreshTrigger.toggle()
+                }) {
+                    Label("Clear Cache", systemImage: "trash.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(manager.memoryStats.cache == 0)
+                .help("Clear MLX GPU cache to free memory")
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .id(memoryRefreshTrigger)  // Force refresh
+
+            Divider()
+
             // Toolbar
             HStack {
                 Text("Downloaded Models")

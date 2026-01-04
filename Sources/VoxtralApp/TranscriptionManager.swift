@@ -33,10 +33,27 @@ class TranscriptionManager: ObservableObject {
     @Published var transcription = ""
     @Published var lastGenerationStats: GenerationStats?
     @Published var currentTokenCount = 0
+    @Published var currentStep: ProcessingStep = .idle
+
+    enum ProcessingStep: String {
+        case idle = ""
+        case processingAudio = "Processing audio..."
+        case settingUpGeneration = "Setting up generation..."
+        case generating = "Generating"
+
+        var icon: String {
+            switch self {
+            case .idle: return ""
+            case .processingAudio: return "waveform"
+            case .settingUpGeneration: return "gearshape.2"
+            case .generating: return "text.cursor"
+            }
+        }
+    }
 
     // Profiling
     @Published var lastProfileSummary: ProfileSummary?
-    @Published var profilingEnabled = true
+    @Published var profilingEnabled = true  // Enable profiling by default
     private var profiler = VoxtralProfiler()
 
     // Mode and settings
@@ -142,6 +159,12 @@ class TranscriptionManager: ObservableObject {
             return
         }
 
+        // Unload previous model to free memory before loading new one
+        if isModelLoaded {
+            print("[VoxtralApp] Unloading previous model to free memory...")
+            unloadModel()
+        }
+
         print("[VoxtralApp] loadModel: starting to load \(selectedModelId)")
         isLoading = true
         isModelLoaded = false
@@ -215,6 +238,35 @@ class TranscriptionManager: ObservableObject {
         processor = nil
         isModelLoaded = false
         currentLoadedModelId = nil
+
+        // Clear GPU cache to release memory
+        GPU.clearCache()
+        GPU.resetPeakMemory()
+    }
+
+    // MARK: - Memory Management
+
+    /// Clear MLX GPU cache to free memory
+    func clearCache() {
+        GPU.clearCache()
+    }
+
+    /// Get current MLX memory stats
+    var memoryStats: (active: Int, cache: Int, peak: Int) {
+        (GPU.activeMemory, GPU.cacheMemory, GPU.peakMemory)
+    }
+
+    /// Format bytes as human-readable string
+    static func formatBytes(_ bytes: Int) -> String {
+        let absBytes = abs(bytes)
+        if absBytes >= 1024 * 1024 * 1024 {
+            return String(format: "%.2f GB", Double(bytes) / (1024 * 1024 * 1024))
+        } else if absBytes >= 1024 * 1024 {
+            return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
+        } else if absBytes >= 1024 {
+            return String(format: "%.1f KB", Double(bytes) / 1024)
+        }
+        return "\(bytes) B"
     }
 
     // MARK: - Run (dispatch to appropriate mode)
@@ -240,6 +292,7 @@ class TranscriptionManager: ObservableObject {
         lastGenerationStats = nil
         lastProfileSummary = nil
         currentTokenCount = 0
+        currentStep = .processingAudio
 
         // Start profiling
         if profilingEnabled {
@@ -249,7 +302,10 @@ class TranscriptionManager: ObservableObject {
         let startTime = Date()
 
         do {
-            // Profile audio processing
+            // Step 1: Process audio
+            currentStep = .processingAudio
+            await Task.yield()  // Allow UI to update
+
             let inputs: ProcessedInputs
             if profilingEnabled {
                 inputs = try profiler.profile("Audio Processing") {
@@ -267,7 +323,10 @@ class TranscriptionManager: ObservableObject {
                 )
             }
 
-            // Profile generation setup
+            // Step 2: Setup generation
+            currentStep = .settingUpGeneration
+            await Task.yield()  // Allow UI to update
+
             let streamResults: [(MLXArray, Any?)]
             if profilingEnabled {
                 streamResults = try profiler.profile("Generation Setup") {
@@ -293,20 +352,34 @@ class TranscriptionManager: ObservableObject {
                 )
             }
 
-            // Token generation (profile as single step)
+            // Step 3: Generate tokens
+            currentStep = .generating
+            await Task.yield()
+
             let genStartMemory = profilingEnabled ? VoxtralProfiler.snapshot() : nil
             let genStartTime = Date()
+
+            // Optimized token generation loop - batch UI updates every 10 tokens
+            var pendingText = ""
+            let updateInterval = 10
 
             for (token, _) in streamResults {
                 let tokenId = token.item(Int.self)
                 currentTokenCount += 1
 
                 if let tokenText = try? processor.decode([tokenId]) {
-                    transcription += tokenText
+                    pendingText += tokenText
                 }
 
-                // Yield to allow UI to update - this is the key for streaming!
-                await Task.yield()
+                if currentTokenCount % updateInterval == 0 {
+                    transcription += pendingText
+                    pendingText = ""
+                    await Task.yield()
+                }
+            }
+
+            if !pendingText.isEmpty {
+                transcription += pendingText
             }
 
             // Record generation step
@@ -335,7 +408,11 @@ class TranscriptionManager: ObservableObject {
             transcription = "Error: \(error.localizedDescription)"
         }
 
+        currentStep = .idle
         isTranscribing = false
+
+        // Clear KV cache to release memory after generation
+        GPU.clearCache()
     }
 
     // MARK: - Chat Mode
@@ -350,6 +427,7 @@ class TranscriptionManager: ObservableObject {
         lastGenerationStats = nil
         lastProfileSummary = nil
         currentTokenCount = 0
+        currentStep = .processingAudio
 
         // Start profiling
         if profilingEnabled {
@@ -359,6 +437,10 @@ class TranscriptionManager: ObservableObject {
         let startTime = Date()
 
         do {
+            // Step 1: Process audio and build chat template
+            currentStep = .processingAudio
+            await Task.yield()
+
             // Build chat conversation with audio and prompt
             let conversation: [[String: Any]] = [
                 [
@@ -370,7 +452,6 @@ class TranscriptionManager: ObservableObject {
                 ]
             ]
 
-            // Profile chat template processing
             let inputs: ProcessedInputs
             if profilingEnabled {
                 inputs = try profiler.profile("Chat Template") {
@@ -398,7 +479,10 @@ class TranscriptionManager: ObservableObject {
                 )
             }
 
-            // Profile generation setup
+            // Step 2: Setup generation
+            currentStep = .settingUpGeneration
+            await Task.yield()
+
             let streamResults: [(MLXArray, Any?)]
             if profilingEnabled {
                 streamResults = try profiler.profile("Generation Setup") {
@@ -424,20 +508,34 @@ class TranscriptionManager: ObservableObject {
                 )
             }
 
-            // Token generation (profile as single step)
+            // Step 3: Generate tokens
+            currentStep = .generating
+            await Task.yield()
+
             let genStartMemory = profilingEnabled ? VoxtralProfiler.snapshot() : nil
             let genStartTime = Date()
+
+            // Optimized token generation loop - batch UI updates every 10 tokens
+            var pendingText = ""
+            let updateInterval = 10
 
             for (token, _) in streamResults {
                 let tokenId = token.item(Int.self)
                 currentTokenCount += 1
 
                 if let tokenText = try? processor.decode([tokenId]) {
-                    transcription += tokenText
+                    pendingText += tokenText
                 }
 
-                // Yield to allow UI to update - this is the key for streaming!
-                await Task.yield()
+                if currentTokenCount % updateInterval == 0 {
+                    transcription += pendingText
+                    pendingText = ""
+                    await Task.yield()
+                }
+            }
+
+            if !pendingText.isEmpty {
+                transcription += pendingText
             }
 
             // Record generation step
@@ -465,6 +563,10 @@ class TranscriptionManager: ObservableObject {
             transcription = "Error: \(error.localizedDescription)"
         }
 
+        currentStep = .idle
         isTranscribing = false
+
+        // Clear KV cache to release memory after generation
+        GPU.clearCache()
     }
 }
