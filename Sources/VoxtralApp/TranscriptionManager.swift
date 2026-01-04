@@ -62,6 +62,7 @@ class TranscriptionManager: ObservableObject {
     @Published var chatPrompt: String = "What is being said in this audio?"
     @Published var maxTokens: Int = 500
     @Published var temperature: Float = 0.0
+    @Published var contextSize: Int = 8192  // KV cache size limit (1024-32768), default 8k balanced
 
     // Private model references
     private var model: VoxtralForConditionalGeneration?
@@ -353,7 +354,8 @@ class TranscriptionManager: ObservableObject {
                         maxNewTokens: maxTokens,
                         temperature: temperature,
                         topP: 1.0,
-                        repetitionPenalty: 1.1
+                        repetitionPenalty: 1.1,
+                        contextSize: contextSize
                     )
                 }
             } else {
@@ -364,7 +366,8 @@ class TranscriptionManager: ObservableObject {
                     maxNewTokens: maxTokens,
                     temperature: temperature,
                     topP: 1.0,
-                    repetitionPenalty: 1.1
+                    repetitionPenalty: 1.1,
+                    contextSize: contextSize
                 )
             }
 
@@ -476,7 +479,8 @@ class TranscriptionManager: ObservableObject {
                         maxNewTokens: maxTokens,
                         temperature: temperature,
                         topP: 1.0,
-                        repetitionPenalty: 1.1
+                        repetitionPenalty: 1.1,
+                        contextSize: contextSize
                     )
                 }
             } else {
@@ -487,7 +491,8 @@ class TranscriptionManager: ObservableObject {
                     maxNewTokens: maxTokens,
                     temperature: temperature,
                     topP: 1.0,
-                    repetitionPenalty: 1.1
+                    repetitionPenalty: 1.1,
+                    contextSize: contextSize
                 )
             }
 

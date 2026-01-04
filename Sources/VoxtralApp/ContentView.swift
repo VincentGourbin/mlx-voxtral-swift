@@ -291,6 +291,28 @@ struct ControlPanelView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    // Context Size control for memory management
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Context Size:")
+                            Spacer()
+                            Text("\(manager.contextSize / 1024)k")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { Double(manager.contextSize) },
+                                set: { manager.contextSize = Int($0) }
+                            ),
+                            in: 1024...32768,
+                            step: 1024
+                        )
+                        Text("Lower = less GPU memory")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Toggle("Detailed profiling", isOn: $manager.profilingEnabled)
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -1120,6 +1120,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Generate tokens from input - returns token IDs directly
      * 🚀 OPTIMIZED: Returns [Int] instead of [(MLXArray, Any?)] to avoid keeping GPU references
+     * 📦 MEMORY: contextSize parameter controls KV cache limit (nil = unlimited)
      */
     public func generateStream(
         inputIds: MLXArray,
@@ -1128,7 +1129,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         maxNewTokens: Int = 100,
         temperature: Float = 1.0,
         topP: Float = 0.95,
-        repetitionPenalty: Float = 1.2
+        repetitionPenalty: Float = 1.2,
+        contextSize: Int? = nil  // nil = unlimited (KVCacheSimple), set value = limited (RotatingKVCache)
     ) throws -> [Int] {
 
         var tokenIds: [Int] = []
@@ -1144,9 +1146,22 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Python: batch_size = input_ids.shape[0]
         let batchSize = inputIds.shape[0]
 
+        // Create KV cache - with or without size limit
+        let numLayers = getLanguageModelLayerCount()
         var cache: [any KVCache]? = []
-        for _ in 0..<getLanguageModelLayerCount() {
-            cache!.append(KVCacheSimple())
+
+        if let maxContext = contextSize {
+            // RotatingKVCache: limits memory by discarding old tokens when exceeding maxSize
+            // keep: 4 = preserve first 4 tokens (BOS + critical prompt tokens)
+            for _ in 0..<numLayers {
+                cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+            }
+            VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
+        } else {
+            // KVCacheSimple: unlimited growth (original behavior)
+            for _ in 0..<numLayers {
+                cache!.append(KVCacheSimple())
+            }
         }
 
         var generated = inputIds
