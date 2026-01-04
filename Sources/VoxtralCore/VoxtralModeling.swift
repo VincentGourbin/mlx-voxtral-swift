@@ -952,7 +952,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         let audioTokenMask = equal(ids, MLXArray(config.audio_token_id))
 
         // 🚀 VECTORIZED MERGE: Replace CPU loops with GPU operations
-        print("🚀 [OPTIMIZED] mergeInputEmbeddings using vectorized MLX operations")
         //
         // The key insight:
         // - audioTokenMask[i,j] = true if position j should have audio
