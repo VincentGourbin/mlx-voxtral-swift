@@ -674,7 +674,9 @@ extension Module {
                 writeDebugToDump("✅ Projector linear_1 is still QuantizedLinear after update()\n")
                 writeDebugToDump("  - weight shape: \(qLinear1.weight.shape), dtype: \(qLinear1.weight.dtype)\n")
                 writeDebugToDump("  - scales shape: \(qLinear1.scales.shape), dtype: \(qLinear1.scales.dtype)\n")
-                writeDebugToDump("  - biases shape: \(qLinear1.biases.shape), dtype: \(qLinear1.biases.dtype)\n")
+                if let biases = qLinear1.biases {
+                    writeDebugToDump("  - biases shape: \(biases.shape), dtype: \(biases.dtype)\n")
+                }
             } else {
                 writeDebugToDump("❌ CRITICAL: Projector linear_1 is NO LONGER QuantizedLinear after update()!\n")
                 writeDebugToDump("  - Type is now: \(type(of: proj1))\n")

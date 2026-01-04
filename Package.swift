@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 // MLX Voxtral Swift - Speech-to-Text with Apple Silicon acceleration
 // Based on the Python implementation: https://github.com/mzbac/mlx.voxtral
 
@@ -27,10 +27,10 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.21.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.29.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "0.1.17"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-examples", branch: "main")
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.29.0")
     ],
     targets: [
         // Core library containing all Voxtral model implementations
@@ -43,8 +43,8 @@ let package = Package(
                 .product(name: "MLXRandom", package: "mlx-swift"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Transformers", package: "swift-transformers"),
-                .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
-                .product(name: "MLXLLM", package: "mlx-swift-examples")
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm")
             ]
         ),
         // SwiftUI macOS application

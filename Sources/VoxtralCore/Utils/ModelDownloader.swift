@@ -9,13 +9,15 @@ import Foundation
 import Hub
 
 /// Progress callback for download updates
-public typealias DownloadProgressCallback = (Double, String) -> Void
+/// Swift 6: @Sendable for safe cross-isolation usage
+public typealias DownloadProgressCallback = @Sendable (Double, String) -> Void
 
 /// Model downloader with HuggingFace Hub integration
 public class ModelDownloader {
 
     /// Default Hub API instance (uses system cache directory, forces online mode)
-    private static var hubApi: HubApi = {
+    // Swift 6: nonisolated(unsafe) for lazy-initialized singleton
+    nonisolated(unsafe) private static var hubApi: HubApi = {
         // Disable network monitor that can incorrectly trigger offline mode
         // This happens when connection is detected as "constrained" or "expensive"
         setenv("CI_DISABLE_NETWORK_MONITOR", "1", 1)

@@ -18,8 +18,9 @@ import MLXLMCommon
 /**
  * Standard MLX Swift Configuration Pattern
  * Follows Codable pattern used by all MLX Swift projects
+ * Swift 6: Sendable because all properties are immutable Codable values
  */
-public struct VoxtralStandardConfiguration: Codable {
+public struct VoxtralStandardConfiguration: Codable, Sendable {
     public let modelType: String
     public let textConfig: TextConfiguration
     public let audioConfig: AudioConfiguration
@@ -27,7 +28,7 @@ public struct VoxtralStandardConfiguration: Codable {
     public let projectorHiddenAct: String
     public let quantization: [String: QuantizationValue]?
     
-    public struct TextConfiguration: Codable {
+    public struct TextConfiguration: Codable, Sendable {
         public let vocabularySize: Int
         public let hiddenSize: Int
         public let intermediateSize: Int
@@ -59,7 +60,7 @@ public struct VoxtralStandardConfiguration: Codable {
         }
     }
     
-    public struct AudioConfiguration: Codable {
+    public struct AudioConfiguration: Codable, Sendable {
         public let hiddenSize: Int
         public let intermediateSize: Int
         public let hiddenLayers: Int
@@ -83,12 +84,12 @@ public struct VoxtralStandardConfiguration: Codable {
         }
     }
     
-    public enum QuantizationValue: Codable {
+    public enum QuantizationValue: Codable, Sendable {
         case bool(Bool)
         case int(Int)
         case config(QuantizationConfig)
 
-        public struct QuantizationConfig: Codable {
+        public struct QuantizationConfig: Codable, Sendable {
             public let groupSize: Int
             public let bits: Int
 
@@ -237,7 +238,8 @@ public class LanguageModelContainer: Module {
     }
 }
 
-public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvider {
+/// Swift 6: @unchecked Sendable for ML models - caller ensures single-threaded access
+public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvider, @unchecked Sendable {
     // Structure matching real parameter names in safetensors
     public let languageModel: LanguageModelContainer
     public let audioTower: VoxtralStandardEncoder
@@ -958,7 +960,11 @@ public class VoxtralStandardProjector: Module {
         self._linear2.wrappedValue = Linear(hiddenSize, hiddenSize, bias: false)   // 3072 → 3072
 
         // Use specified activation (gelu for Voxtral)
-        self.act = hiddenAct == "gelu" ? gelu : { silu($0) }
+        if hiddenAct == "gelu" {
+            self.act = MLXNN.gelu
+        } else {
+            self.act = { silu($0) }
+        }
 
         super.init()
     }

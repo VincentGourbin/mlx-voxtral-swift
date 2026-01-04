@@ -7,7 +7,8 @@
 import Foundation
 
 /// Represents a Voxtral model available for download
-public struct VoxtralModelInfo: Identifiable, Codable {
+/// Swift 6: Sendable because all properties are immutable value types
+public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
     public let id: String
     public let repoId: String
     public let name: String

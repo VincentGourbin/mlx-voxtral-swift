@@ -253,7 +253,8 @@ func melFilterBankSlaney(sr: Int, nFft: Int, nMels: Int, fmin: Float = 0.0, fmax
 }
 
 // Python: _mel_filters_cache = {}
-var _melFiltersCache: [Int: MLXArray] = [:]
+// Swift 6: nonisolated(unsafe) for cache - worst case is computing twice
+nonisolated(unsafe) var _melFiltersCache: [Int: MLXArray] = [:]
 
 /**
  * Direct Python equivalent: def get_mel_filters(n_mels: int = N_MELS) -> mx.array

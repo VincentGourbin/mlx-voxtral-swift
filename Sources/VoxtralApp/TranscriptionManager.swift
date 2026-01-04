@@ -131,10 +131,10 @@ class TranscriptionManager: ObservableObject {
         errorMessage = nil
 
         do {
-            _ = try await ModelDownloader.download(model) { progress, message in
+            _ = try await ModelDownloader.download(model) { @Sendable [weak self] progress, message in
                 Task { @MainActor in
-                    self.downloadProgress = progress
-                    self.downloadMessage = message
+                    self?.downloadProgress = progress
+                    self?.downloadMessage = message
                 }
             }
             downloadMessage = "Download complete!"
@@ -184,12 +184,12 @@ class TranscriptionManager: ObservableObject {
                 downloadProgress = 0.0
             }
 
-            let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { progress, message in
+            let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { @Sendable [weak self] progress, message in
                 Task { @MainActor in
-                    self.loadingStatus = message
+                    self?.loadingStatus = message
                     if needsDownload {
-                        self.downloadProgress = progress
-                        self.downloadMessage = message
+                        self?.downloadProgress = progress
+                        self?.downloadMessage = message
                     }
                 }
             }

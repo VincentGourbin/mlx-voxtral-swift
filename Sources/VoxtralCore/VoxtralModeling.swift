@@ -14,7 +14,8 @@ import MLXLLM       // For official LlamaModel
 import MLXRandom
 
 // Global debug dump function - can be set by VoxtralTest2
-public var writeDebugToDump: (String) -> Void = { message in
+// Swift 6: nonisolated(unsafe) for debug callback
+nonisolated(unsafe) public var writeDebugToDump: (String) -> Void = { message in
     // Default: write to a temporary file
     let debugFile = "/tmp/swift_debug_generation.txt"
     let fileManager = FileManager.default
@@ -655,7 +656,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             weightsDebug += "Projector linear_1 is QuantizedLinear:\n"
             weightsDebug += "  - weight shape: \(qLinear1.weight.shape), dtype: \(qLinear1.weight.dtype)\n"
             weightsDebug += "  - scales shape: \(qLinear1.scales.shape)\n"
-            weightsDebug += "  - biases shape: \(qLinear1.biases.shape)\n"
+            if let biases1 = qLinear1.biases {
+                weightsDebug += "  - biases shape: \(biases1.shape)\n"
+            }
             weightsDebug += "  - groupSize: \(qLinear1.groupSize), bits: \(qLinear1.bits)\n"
         } else {
             let proj1Weight = proj1.weight
@@ -669,7 +672,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             weightsDebug += "Projector linear_2 is QuantizedLinear:\n"
             weightsDebug += "  - weight shape: \(qLinear2.weight.shape), dtype: \(qLinear2.weight.dtype)\n"
             weightsDebug += "  - scales shape: \(qLinear2.scales.shape)\n"
-            weightsDebug += "  - biases shape: \(qLinear2.biases.shape)\n"
+            if let biases2 = qLinear2.biases {
+                weightsDebug += "  - biases shape: \(biases2.shape)\n"
+            }
             weightsDebug += "  - groupSize: \(qLinear2.groupSize), bits: \(qLinear2.bits)\n"
         } else {
             let proj2Weight = proj2.weight
@@ -890,7 +895,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Before: O(seqLength) CPU loops with .item() calls → ~25 seconds
      * After: O(1) GPU operations with cumsum/takeAlong/where → <1 second expected
      */
-    private static var _mergeCallCount = 0
+    // Swift 6: nonisolated(unsafe) for debug counter
+    nonisolated(unsafe) private static var _mergeCallCount = 0
     private func mergeInputEmbeddings(
         inputIds: MLXArray? = nil,
         inputFeatures: MLXArray? = nil,
