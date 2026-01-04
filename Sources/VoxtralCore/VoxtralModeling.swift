@@ -704,62 +704,45 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     
     /**
      * Direct Python equivalent: def get_audio_embeds(self, input_features: mx.array) -> mx.array
+     *
+     * 🚀 OPTIMIZED: Process all audio chunks in a single batch instead of looping
+     * Before: O(numChunks) separate forward passes through audio tower
+     * After: O(1) single batched forward pass - better GPU utilization
+     *
+     * Input shape: [numChunks, 128, 3000]
+     * Output shape: [1, numChunks * 375, hidden_size]
      */
     public func getAudioEmbeds(_ inputFeatures: MLXArray) -> MLXArray {
 
-        // Python: num_chunks = input_features.shape[0]
-        let numChunks = inputFeatures.shape[0]
-
-        // Python: all_audio_embeds = []
-        var allAudioEmbeds: [MLXArray] = []
-
-        // Python: for i in range(num_chunks):
-        for i in 0..<numChunks {
-            // Python: chunk_features = input_features[i : i + 1]  # [1, 128, 3000]
-            let chunkFeatures = inputFeatures[i..<(i+1)]
-
-            // CRITICAL: Use standardModel's loaded audio components if available
-            let audioHiddenStates: MLXArray
-            if let stdModel = standardModel {
-                // Use VoxtralStandardEncoder with loaded weights
-                audioHiddenStates = stdModel.audioTower(chunkFeatures)
-            } else {
-                // Fallback to empty VoxtralEncoder (for non-standard init paths)
-                let (hiddenStates, _, _) = audio_tower(chunkFeatures, outputAttentions: false, outputHiddenStates: false)
-                audioHiddenStates = hiddenStates
-            }
-
-            // Python: audio_hidden_states = audio_outputs[0]  # [1, 1500, 1280]
-            // OPTIMIZED: Combine two reshapes into one
-            // Python equivalent: [1, 1500, 1280] -> [1, 375, 5120] -> [375, 5120]
-            // Direct: [1, 1500, 1280] -> [375, 5120] (same total elements: 1*1500*1280 = 375*5120)
-            let audioHiddenStatesProcessed = reshaped(audioHiddenStates, [-1, config.audio_config.intermediate_size])
-
-            // Python: # Project to language model space
-            // Python: chunk_embeds = self.multi_modal_projector(audio_hidden_states)  # [375, hidden_size]
-
-            // CRITICAL: Use standardModel's loaded projector if available
-            let chunkEmbeds: MLXArray
-            if let stdModel = standardModel {
-                chunkEmbeds = stdModel.multiModalProjector(audioHiddenStatesProcessed)
-            } else {
-                chunkEmbeds = multi_modal_projector(audioHiddenStatesProcessed)
-            }
-
-            allAudioEmbeds.append(chunkEmbeds)
+        // Process ALL chunks through audio tower at once (batched)
+        // [numChunks, 128, 3000] -> [numChunks, 1500, 1280]
+        let audioHiddenStates: MLXArray
+        if let stdModel = standardModel {
+            // VoxtralStandardEncoder supports batched input [batch, n_mels, seq_len]
+            audioHiddenStates = stdModel.audioTower(inputFeatures)
+        } else {
+            // Fallback to empty VoxtralEncoder (for non-standard init paths)
+            let (hiddenStates, _, _) = audio_tower(inputFeatures, outputAttentions: false, outputHiddenStates: false)
+            audioHiddenStates = hiddenStates
         }
-        
-        // Python: # Concatenate all chunks
-        // Python: # List of [375, hidden_size] -> [num_chunks * 375, hidden_size]
-        // Python: audio_embeds = mx.concatenate(all_audio_embeds, axis=0)
-        // ✅ CRITICAL FIX: NO dtype conversion - preserve numerical accuracy
-        let audioEmbeds = concatenated(allAudioEmbeds, axis: 0)
-        
-        // Python: # [num_chunks * 375, hidden_size] -> [1, num_chunks * 375, hidden_size]
-        // Python: audio_embeds = audio_embeds[None, :, :]
+
+        // Reshape all chunks at once: [numChunks, 1500, 1280] -> [numChunks * 375, 5120]
+        // Math: numChunks * 1500 * 1280 / 5120 = numChunks * 375
+        let audioHiddenStatesProcessed = reshaped(audioHiddenStates, [-1, config.audio_config.intermediate_size])
+
+        // Project ALL through multi_modal_projector at once
+        // [numChunks * 375, 5120] -> [numChunks * 375, hidden_size]
+        let audioEmbeds: MLXArray
+        if let stdModel = standardModel {
+            audioEmbeds = stdModel.multiModalProjector(audioHiddenStatesProcessed)
+        } else {
+            audioEmbeds = multi_modal_projector(audioHiddenStatesProcessed)
+        }
+
+        // Add batch dimension: [numChunks * 375, hidden_size] -> [1, numChunks * 375, hidden_size]
         let finalEmbeds = expandedDimensions(audioEmbeds, axis: 0)
 
-        // 🔍 DEBUG: Compare with Python reference values
+        // Force evaluation to materialize results
         MLX.eval(finalEmbeds)
 
         if VoxtralDebug.enabled {
