@@ -63,11 +63,16 @@ class TranscriptionManager: ObservableObject {
     @Published var maxTokens: Int = 500
     @Published var temperature: Float = 0.0
     @Published var contextSize: Int = 8192  // KV cache size limit (1024-32768), default 8k balanced
+    @Published var useHybridBackend: Bool = false  // Core ML encoder + MLX decoder
+
+    // Hybrid encoder status (updated after model load)
+    @Published var hybridEncoderAvailable: Bool = false
 
     // Private model references
     private var model: VoxtralForConditionalGeneration?
     private var standardModel: VoxtralStandardModel?
     private var processor: VoxtralProcessor?
+    private var hybridEncoder: VoxtralHybridEncoder?
     @Published private(set) var currentLoadedModelId: String?
 
     var canRun: Bool {
@@ -219,6 +224,19 @@ class TranscriptionManager: ObservableObject {
             self.currentLoadedModelId = selectedModelId
             self.loadingStatus = ""
 
+            // Initialize hybrid encoder if available (Core ML + MLX)
+            if #available(macOS 13.0, iOS 16.0, *) {
+                self.hybridEncoder = wrapper.createHybridEncoder(preferredBackend: .auto)
+                self.hybridEncoderAvailable = self.hybridEncoder?.status.coreMLAvailable ?? false
+                if self.hybridEncoderAvailable {
+                    print("[VoxtralApp] Hybrid encoder initialized (Core ML available)")
+                } else {
+                    print("[VoxtralApp] Hybrid encoder: Core ML not available, will use MLX only")
+                }
+            } else {
+                self.hybridEncoderAvailable = false
+            }
+
             print("[VoxtralApp] Model loaded successfully!")
 
             // Refresh downloaded models list
@@ -237,6 +255,8 @@ class TranscriptionManager: ObservableObject {
         model = nil
         standardModel = nil
         processor = nil
+        hybridEncoder = nil
+        hybridEncoderAvailable = false
         isModelLoaded = false
         currentLoadedModelId = nil
 
@@ -344,10 +364,54 @@ class TranscriptionManager: ObservableObject {
             await Task.yield()  // Allow UI to update
 
             // 🚀 generateStream now returns [Int] directly - no GPU references to clean
+            // Use hybrid encoder (Core ML + MLX) if available and enabled
             var tokenIds: [Int]
-            if profilingEnabled {
-                tokenIds = try profiler.profile("Generation") {
-                    try model.generateStream(
+            if #available(macOS 13.0, iOS 16.0, *), useHybridBackend, let hybrid = hybridEncoder {
+                // Hybrid path: Core ML encoder + MLX decoder
+                if profilingEnabled {
+                    tokenIds = try profiler.profile("Generation (Hybrid)") {
+                        let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+                        return try model.generateStreamWithAudioEmbeds(
+                            inputIds: inputs.inputIds,
+                            audioEmbeds: audioEmbeds,
+                            attentionMask: nil,
+                            maxNewTokens: maxTokens,
+                            temperature: temperature,
+                            topP: 1.0,
+                            repetitionPenalty: 1.1,
+                            contextSize: contextSize
+                        )
+                    }
+                } else {
+                    let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+                    tokenIds = try model.generateStreamWithAudioEmbeds(
+                        inputIds: inputs.inputIds,
+                        audioEmbeds: audioEmbeds,
+                        attentionMask: nil,
+                        maxNewTokens: maxTokens,
+                        temperature: temperature,
+                        topP: 1.0,
+                        repetitionPenalty: 1.1,
+                        contextSize: contextSize
+                    )
+                }
+            } else {
+                // Full MLX path
+                if profilingEnabled {
+                    tokenIds = try profiler.profile("Generation") {
+                        try model.generateStream(
+                            inputIds: inputs.inputIds,
+                            inputFeatures: inputs.inputFeatures,
+                            attentionMask: nil,
+                            maxNewTokens: maxTokens,
+                            temperature: temperature,
+                            topP: 1.0,
+                            repetitionPenalty: 1.1,
+                            contextSize: contextSize
+                        )
+                    }
+                } else {
+                    tokenIds = try model.generateStream(
                         inputIds: inputs.inputIds,
                         inputFeatures: inputs.inputFeatures,
                         attentionMask: nil,
@@ -358,17 +422,6 @@ class TranscriptionManager: ObservableObject {
                         contextSize: contextSize
                     )
                 }
-            } else {
-                tokenIds = try model.generateStream(
-                    inputIds: inputs.inputIds,
-                    inputFeatures: inputs.inputFeatures,
-                    attentionMask: nil,
-                    maxNewTokens: maxTokens,
-                    temperature: temperature,
-                    topP: 1.0,
-                    repetitionPenalty: 1.1,
-                    contextSize: contextSize
-                )
             }
 
             // Step 3: Decode tokens to text
@@ -469,10 +522,54 @@ class TranscriptionManager: ObservableObject {
             await Task.yield()
 
             // 🚀 generateStream now returns [Int] directly - no GPU references to clean
+            // Use hybrid encoder (Core ML + MLX) if available and enabled
             var tokenIds: [Int]
-            if profilingEnabled {
-                tokenIds = try profiler.profile("Generation") {
-                    try model.generateStream(
+            if #available(macOS 13.0, iOS 16.0, *), useHybridBackend, let hybrid = hybridEncoder {
+                // Hybrid path: Core ML encoder + MLX decoder
+                if profilingEnabled {
+                    tokenIds = try profiler.profile("Generation (Hybrid)") {
+                        let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+                        return try model.generateStreamWithAudioEmbeds(
+                            inputIds: inputs.inputIds,
+                            audioEmbeds: audioEmbeds,
+                            attentionMask: nil,
+                            maxNewTokens: maxTokens,
+                            temperature: temperature,
+                            topP: 1.0,
+                            repetitionPenalty: 1.1,
+                            contextSize: contextSize
+                        )
+                    }
+                } else {
+                    let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+                    tokenIds = try model.generateStreamWithAudioEmbeds(
+                        inputIds: inputs.inputIds,
+                        audioEmbeds: audioEmbeds,
+                        attentionMask: nil,
+                        maxNewTokens: maxTokens,
+                        temperature: temperature,
+                        topP: 1.0,
+                        repetitionPenalty: 1.1,
+                        contextSize: contextSize
+                    )
+                }
+            } else {
+                // Full MLX path
+                if profilingEnabled {
+                    tokenIds = try profiler.profile("Generation") {
+                        try model.generateStream(
+                            inputIds: inputs.inputIds,
+                            inputFeatures: inputs.inputFeatures,
+                            attentionMask: nil,
+                            maxNewTokens: maxTokens,
+                            temperature: temperature,
+                            topP: 1.0,
+                            repetitionPenalty: 1.1,
+                            contextSize: contextSize
+                        )
+                    }
+                } else {
+                    tokenIds = try model.generateStream(
                         inputIds: inputs.inputIds,
                         inputFeatures: inputs.inputFeatures,
                         attentionMask: nil,
@@ -483,17 +580,6 @@ class TranscriptionManager: ObservableObject {
                         contextSize: contextSize
                     )
                 }
-            } else {
-                tokenIds = try model.generateStream(
-                    inputIds: inputs.inputIds,
-                    inputFeatures: inputs.inputFeatures,
-                    attentionMask: nil,
-                    maxNewTokens: maxTokens,
-                    temperature: temperature,
-                    topP: 1.0,
-                    repetitionPenalty: 1.1,
-                    contextSize: contextSize
-                )
             }
 
             // Step 3: Decode tokens to text

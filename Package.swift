@@ -53,7 +53,10 @@ let package = Package(
             dependencies: [
                 "VoxtralCore"
             ],
-            exclude: ["Resources"]
+            exclude: ["Resources/Info.plist"],
+            resources: [
+                .copy("Resources/VoxtralEncoderFull.mlmodelc")
+            ]
         ),
         // CLI transcription tool
         .executableTarget(

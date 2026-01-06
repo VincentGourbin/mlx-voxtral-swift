@@ -37,6 +37,18 @@ voxtral_models/
 *.pth
 *.onnx
 
+# Core ML models (too large for git - generate with Scripts/CoreMLConversion/convert.sh)
+*.mlmodelc/
+*.mlpackage/
+Resources/VoxtralEncoder*.mlmodelc/
+Resources/VoxtralEncoder*.mlpackage/
+Sources/VoxtralApp/Resources/VoxtralEncoder*.mlmodelc/
+Sources/VoxtralApp/Resources/VoxtralEncoder*.mlpackage/
+
+# Downloaded HuggingFace models for conversion
+Scripts/CoreMLConversion/voxtral-mini-3b/
+Scripts/CoreMLConversion/output/
+
 # Audio/Media files (for testing - not committed)
 *.mp3
 *.wav
@@ -62,7 +74,7 @@ mistral-common/
 # Temp files and logs
 *.tmp
 *.log
-*.txt
+# *.txt files are allowed (for requirements.txt, etc.)
 !LICENSE.txt
 *.dump
 *.csv

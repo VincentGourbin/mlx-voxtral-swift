@@ -316,6 +316,34 @@ struct ControlPanelView: View {
                     Toggle("Detailed profiling", isOn: $manager.profilingEnabled)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    // Hybrid backend toggle (Core ML encoder + MLX decoder)
+                    if #available(macOS 13.0, *) {
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Toggle("Hybrid mode (Core ML + MLX)", isOn: $manager.useHybridBackend)
+                                .disabled(!manager.hybridEncoderAvailable)
+
+                            if manager.hybridEncoderAvailable {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                    Text("Core ML encoder available")
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("Core ML encoder not found")
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 Spacer(minLength: 20)

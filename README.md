@@ -244,12 +244,77 @@ mlx-voxtral-swift/
 - FLAC
 - And any format supported by AVFoundation
 
-## Performance
+## Performance Benchmarks
 
-On Apple Silicon (M1/M2/M3):
+### Comparison: Swift vs Python
+
+Benchmark on a ~7 minute podcast (8000 tokens max) on Apple M3 Max:
+
+| Implementation | Time | Speedup | Peak Memory | Final Memory |
+|----------------|------|---------|-------------|--------------|
+| **Python** (mlx-voxtral) | 131s | baseline | - | - |
+| **Swift MLX** | 85.6s | **1.53x faster** | 10.79 GB | 4.66 GB |
+| **Swift Hybrid** (Core ML + MLX) | 81.9s | **1.60x faster** | 10.20 GB | 4.00 GB |
+
+**Key Findings:**
+- Swift implementation is **~53% faster** than Python
+- Hybrid mode (Core ML encoder + MLX decoder) provides **~4.5% additional speedup** and **660 MB less memory**
+- For longer audio files, hybrid mode benefits increase
+
+### General Performance
+
+On Apple Silicon (M1/M2/M3/M4):
 - **Model loading**: ~5-10 seconds (8-bit quantized)
 - **Transcription speed**: ~15-25 tokens/second
 - **Memory usage**: ~4GB (8-bit) / ~2GB (4-bit)
+
+## Hybrid Mode (Core ML + MLX)
+
+The hybrid mode uses Apple's Core ML for the audio encoder (running on GPU or ANE) while keeping the LLM decoder on MLX. This provides:
+
+- **Faster encoding** for long audio files
+- **Lower memory usage** (~660 MB less)
+- **Better thermal performance** for sustained workloads
+
+### Enabling Hybrid Mode
+
+**CLI:**
+```bash
+# Use --backend hybrid flag
+./.build/debug/VoxtralCLI transcribe --backend hybrid /path/to/audio.mp3
+```
+
+**App:**
+Enable "Hybrid mode (Core ML + MLX)" toggle in Settings.
+
+### Building the Core ML Encoder
+
+The Core ML model (~1.2 GB) is not included in the repository. Generate it with:
+
+```bash
+cd Scripts/CoreMLConversion
+chmod +x convert.sh
+./convert.sh
+```
+
+This script will:
+1. Create a Python virtual environment
+2. Download the Voxtral model from HuggingFace
+3. Extract encoder weights
+4. Convert to Core ML format
+5. Compile to `.mlmodelc`
+
+Then copy the output to the app:
+
+```bash
+cp -r Scripts/CoreMLConversion/output/VoxtralEncoderFull.mlmodelc Sources/VoxtralApp/Resources/
+swift build
+```
+
+**Requirements:**
+- Python 3.10+
+- ~10 GB disk space
+- macOS 13.0+ (for Core ML compilation)
 
 ## Acknowledgments
 

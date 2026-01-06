@@ -1244,7 +1244,165 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
         return tokenIds
     }
-    
+
+    /**
+     * Generate tokens using pre-computed audio embeddings (for hybrid Core ML + MLX mode)
+     * This bypasses the audio encoder and uses embeddings computed externally (e.g., via Core ML)
+     */
+    public func generateStreamWithAudioEmbeds(
+        inputIds: MLXArray,
+        audioEmbeds: MLXArray,
+        attentionMask: MLXArray? = nil,
+        maxNewTokens: Int = 100,
+        temperature: Float = 1.0,
+        topP: Float = 0.95,
+        repetitionPenalty: Float = 1.2,
+        contextSize: Int? = nil
+    ) throws -> [Int] {
+
+        var tokenIds: [Int] = []
+
+        guard inputIds.size > 0 else {
+            throw VoxtralError.invalidInput("input_ids must be provided")
+        }
+
+        let stopTokens = [2, 4, 32000]
+
+        // Merge token embeddings with pre-computed audio embeddings
+        let inputsEmbeds = mergeInputEmbeddingsWithAudioEmbeds(inputIds: inputIds, audioEmbeds: audioEmbeds)
+
+        let batchSize = inputIds.shape[0]
+
+        // Create KV cache
+        let numLayers = getLanguageModelLayerCount()
+        var cache: [any KVCache]? = []
+
+        if let maxContext = contextSize {
+            for _ in 0..<numLayers {
+                cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+            }
+            VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
+        } else {
+            for _ in 0..<numLayers {
+                cache!.append(KVCacheSimple())
+            }
+        }
+
+        var generated = inputIds
+        var recentTokenIds: [Int] = []
+        var currentAttentionMask = attentionMask
+
+        for _ in 0..<maxNewTokens {
+            let modelOutput: VoxtralModelOutput
+
+            if cache![0].offset == 0 {
+                modelOutput = self.callAsFunction(
+                    inputIds: nil,
+                    attentionMask: currentAttentionMask,
+                    inputFeatures: nil,
+                    inputsEmbeds: inputsEmbeds,
+                    pastKeyValues: cache
+                )
+            } else {
+                let seqLen = generated.shape[1]
+                let lastToken = generated[0..., (seqLen-1)..<seqLen]
+                modelOutput = self.callAsFunction(
+                    inputIds: lastToken,
+                    attentionMask: currentAttentionMask,
+                    inputFeatures: nil,
+                    inputsEmbeds: nil,
+                    pastKeyValues: cache
+                )
+            }
+
+            let logits = modelOutput.logits
+            let seqLen = logits.shape[1]
+            let lastTokenLogits = logits[0..., seqLen-1, 0...]
+
+            var processedLogits = lastTokenLogits
+
+            if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
+                let tokens = Array(recentTokenIds.suffix(20))
+                processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
+            }
+
+            let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
+
+            let currentTokenId = nextToken.squeezed().item(Int.self)
+            tokenIds.append(currentTokenId)
+            recentTokenIds.append(currentTokenId)
+
+            generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
+
+            if currentAttentionMask != nil {
+                let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
+                currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
+            }
+
+            if stopTokens.contains(currentTokenId) {
+                break
+            }
+
+            if recentTokenIds.count >= 10 {
+                let last10 = recentTokenIds.suffix(10)
+                if last10.allSatisfy({ $0 == currentTokenId }) {
+                    break
+                }
+            }
+        }
+
+        cache = nil
+        GPU.clearCache()
+
+        return tokenIds
+    }
+
+    /**
+     * Merge input embeddings with pre-computed audio embeddings (for hybrid mode)
+     */
+    private func mergeInputEmbeddingsWithAudioEmbeds(
+        inputIds: MLXArray,
+        audioEmbeds: MLXArray
+    ) -> MLXArray {
+        // Get token embeddings
+        var embeddings: MLXArray
+        if let llamaModel = language_model as? LlamaModel {
+            embeddings = llamaModel.embed_tokens(inputIds)
+        } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
+            if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
+                embeddings = quantizedEmbedding(inputIds)
+            } else {
+                embeddings = llamaModelWrapper.embed_tokens(inputIds)
+            }
+        } else if let llamaStandardModel = language_model as? LlamaStandardModel {
+            embeddings = llamaStandardModel.embedTokens(inputIds)
+        } else {
+            fatalError("Unsupported language_model type: \(type(of: language_model))")
+        }
+
+        // Create audio token mask
+        let audioTokenMask = equal(inputIds, MLXArray(config.audio_token_id))
+
+        // Same vectorized merge logic as mergeInputEmbeddings
+        let numAudioTokens = audioEmbeds.shape[1]
+
+        let audioMaskInt = audioTokenMask.asType(.int32)
+        let cumAudioIdx = cumsum(audioMaskInt, axis: 1) - 1
+        let audioIdxClipped = clip(cumAudioIdx, min: 0, max: numAudioTokens - 1)
+
+        let audioEmbedsFlat = audioEmbeds.squeezed(axis: 0)
+        let indicesFlat = audioIdxClipped.squeezed(axis: 0)
+        let audioEmbedsGathered2D = take(audioEmbedsFlat, indicesFlat, axis: 0)
+        let audioEmbedsGathered = expandedDimensions(audioEmbedsGathered2D, axis: 0)
+
+        let maskExpanded = expandedDimensions(audioTokenMask, axis: -1)
+        let finalEmbeddings = which(maskExpanded, audioEmbedsGathered, embeddings)
+
+        eval(finalEmbeddings)
+
+        return finalEmbeddings
+    }
+
     // Helper function for sampling - Python equivalent
     private func sample(logits: MLXArray, temperature: Float, topP: Float) throws -> MLXArray {
         // Squeeze middle dimension if shape is [1, 1, vocab_size]
