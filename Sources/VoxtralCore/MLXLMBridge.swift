@@ -223,8 +223,8 @@ public extension VoxtralForConditionalGeneration {
         
         // Debug loaded model structure BEFORE copying
         writeDebugToDump("🔍 LOADED MODEL STRUCTURE (before copying to self):\n")
-        let loadedProj1 = loadedModel.multi_modal_projector.linear_1
-        let loadedProj2 = loadedModel.multi_modal_projector.linear_2
+        let loadedProj1 = loadedModel.multiModalProjector.linear1
+        let loadedProj2 = loadedModel.multiModalProjector.linear2
         writeDebugToDump("  Loaded projector linear_1 type: \(type(of: loadedProj1))\n")
         writeDebugToDump("  Loaded projector linear_1 weight shape: \(loadedProj1.weight.shape)\n")
         writeDebugToDump("  Loaded projector linear_2 type: \(type(of: loadedProj2))\n")
@@ -241,7 +241,7 @@ public extension VoxtralForConditionalGeneration {
         
         // Check what happened to our structure
         writeDebugToDump("🔍 POST-UPDATE CHECK: Verifying if QuantizedLinear structure survived\n")
-        let postUpdateProj1 = self.multi_modal_projector.linear_1
+        let postUpdateProj1 = self.multiModalProjector.linear1
         writeDebugToDump("After update() - projector linear_1 type: \(type(of: postUpdateProj1))\n")
         
         if String(describing: type(of: postUpdateProj1)).contains("QuantizedLinear") {
@@ -253,8 +253,8 @@ public extension VoxtralForConditionalGeneration {
         
         // Debug SELF structure AFTER copying
         writeDebugToDump("🔍 SELF MODEL STRUCTURE (after copying from loaded):\n")
-        let selfProj1 = self.multi_modal_projector.linear_1
-        let selfProj2 = self.multi_modal_projector.linear_2
+        let selfProj1 = self.multiModalProjector.linear1
+        let selfProj2 = self.multiModalProjector.linear2
         writeDebugToDump("  Self projector linear_1 type: \(type(of: selfProj1))\n")
         writeDebugToDump("  Self projector linear_1 weight shape: \(selfProj1.weight.shape)\n")
         writeDebugToDump("  Self projector linear_2 type: \(type(of: selfProj2))\n")
@@ -292,9 +292,9 @@ public extension VoxtralForConditionalGeneration {
         writeDebugToDump("🎯 WEIGHT TRANSFORMATION AUDIT: Raw Safetensors → Final Model\n")
         writeDebugToDump("============================================================\n")
         
-        // Focus on multi_modal_projector.linear_1 weight transformation
-        let proj1 = self.multi_modal_projector.linear_1
-        writeDebugToDump("\n📊 FINAL MODEL - multi_modal_projector.linear_1:\n")
+        // Focus on multiModalProjector.linear1 weight transformation
+        let proj1 = self.multiModalProjector.linear1
+        writeDebugToDump("\n📊 FINAL MODEL - multiModalProjector.linear1:\n")
         writeDebugToDump("   Type: \(type(of: proj1))\n")
         writeDebugToDump("   Weight shape: \(proj1.weight.shape), dtype: \(proj1.weight.dtype)\n")
         
@@ -450,7 +450,7 @@ public extension VoxtralForConditionalGeneration {
             writeDebugToDump("  Output: \(rawWeights.count) raw weight tensors\n")
             
             // Inspecter les valeurs brutes
-            let key1 = "multi_modal_projector.linear_1.weight"
+            let key1 = "multiModalProjector.linear1.weight"
             if let rawTensor = rawWeights[key1] {
                 let rawFirst3 = extractFirst3Values(from: rawTensor)
                 writeDebugToDump("  Raw tensor '\(key1)':\n")
@@ -458,7 +458,7 @@ public extension VoxtralForConditionalGeneration {
                 writeDebugToDump("    First 3 values: \(rawFirst3)\n")
             }
             
-            let key2 = "multi_modal_projector.linear_1.scales"
+            let key2 = "multiModalProjector.linear1.scales"
             if let rawTensor = rawWeights[key2] {
                 let rawFirst3 = extractFirst3Values(from: rawTensor)
                 writeDebugToDump("  Raw tensor '\(key2)':\n")
@@ -641,7 +641,7 @@ public func voxtralMixedQuantizationPredicate(
     }
     
     // Python: Audio encoder and projector - always higher precision  
-    if path.contains("audio_tower.") || path.contains("multi_modal_projector.") {
+    if path.contains("audio_tower.") || path.contains("multiModalProjector.") {
         return [
             "group_size": groupSize,
             "bits": min(8, defaultBits + 2)

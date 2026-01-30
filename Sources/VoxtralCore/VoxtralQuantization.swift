@@ -294,9 +294,9 @@ public func voxtralMixedQuantizationPredicate(
     }
     
     // Python: # Audio encoder and projector - always higher precision
-    //         if any(x in path for x in ["audio_tower.", "multi_modal_projector."]):
+    //         if any(x in path for x in ["audio_tower.", "multiModalProjector."]):
     //             return {"group_size": group_size, "bits":  min(8, default_bits + 2)}
-    let audioTowerPaths = ["audio_tower.", "multi_modal_projector."]
+    let audioTowerPaths = ["audio_tower.", "multiModalProjector."]
     if audioTowerPaths.contains(where: { path.contains($0) }) {
         return [
             "group_size": groupSize,
@@ -407,8 +407,8 @@ public func loadQuantizedVoxtral(
     // DEBUG: Check model structure before quantization
     writeDebugToDump("\n🔍 SWIFT MODEL BEFORE QUANTIZATION:\n")
     if let voxtralModel = model as? VoxtralForConditionalGeneration {
-        let proj1 = voxtralModel.multi_modal_projector.linear_1
-        let proj2 = voxtralModel.multi_modal_projector.linear_2
+        let proj1 = voxtralModel.multiModalProjector.linear1
+        let proj2 = voxtralModel.multiModalProjector.linear2
         writeDebugToDump("  Projector linear_1 type: \(type(of: proj1)), weight shape: \(proj1.weight.shape)\n")
         writeDebugToDump("  Projector linear_2 type: \(type(of: proj2)), weight shape: \(proj2.weight.shape)\n")
     }
@@ -437,8 +437,8 @@ public func loadQuantizedVoxtral(
     // DEBUG: Check model structure after quantization
     writeDebugToDump("\n🔍 SWIFT MODEL AFTER QUANTIZATION:\n")
     if let voxtralModel = model as? VoxtralForConditionalGeneration {
-        let proj1 = voxtralModel.multi_modal_projector.linear_1
-        let proj2 = voxtralModel.multi_modal_projector.linear_2
+        let proj1 = voxtralModel.multiModalProjector.linear1
+        let proj2 = voxtralModel.multiModalProjector.linear2
         writeDebugToDump("  Projector linear_1 type: \(type(of: proj1)), weight shape: \(proj1.weight.shape)\n")
         writeDebugToDump("  Projector linear_2 type: \(type(of: proj2)), weight shape: \(proj2.weight.shape)\n")
         

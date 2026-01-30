@@ -15,15 +15,15 @@ extension VoxtralForConditionalGeneration {
      * Replace ALL quantized linear modules with new instances containing the correct weights
      * 
      * Python debug shows 3 quantized modules:
-     * 1. multi_modal_projector.linear_1 (6-bit) ✅ 
-     * 2. multi_modal_projector.linear_2 (6-bit) ✅
+     * 1. multiModalProjector.linear1 (6-bit) ✅ 
+     * 2. multiModalProjector.linear2 (6-bit) ✅
      * 3. lm_head (6-bit) ❓ <- This was missing!
      */
     public func replaceAllQuantizedLinearWithWeights(_ moduleWeights: [String: [(String, MLXArray)]]) {
         writeDebugToDump("🔧 REPLACING ALL QUANTIZED LINEAR MODULES (including lm_head)\n")
         
         // Replace multi_modal_projector modules (already working)
-        multi_modal_projector.replaceQuantizedLinearWithWeights(moduleWeights)
+        multiModalProjector.replaceQuantizedLinearWithWeights(moduleWeights)
         
         // 🎯 NEW: Replace lm_head if it's quantized
         if let lmHeadWeights = moduleWeights["lm_head"],
@@ -91,8 +91,8 @@ extension VoxtralMultiModalProjector {
         writeDebugToDump("🔧 REPLACING QUANTIZED LINEAR MODULES WITH CORRECT WEIGHTS\n")
         
         // Process linear_1 if it's quantized
-        if let linear1Weights = moduleWeights["multi_modal_projector.linear_1"],
-           let currentQL1 = self.linear_1 as? QuantizedLinear {
+        if let linear1Weights = moduleWeights["multiModalProjector.linear1"],
+           let currentQL1 = self.linear1 as? QuantizedLinear {
             
             writeDebugToDump("  📝 Replacing linear_1 QuantizedLinear\n")
             
@@ -138,8 +138,8 @@ extension VoxtralMultiModalProjector {
         }
         
         // Process linear_2 if it's quantized
-        if let linear2Weights = moduleWeights["multi_modal_projector.linear_2"],
-           let currentQL2 = self.linear_2 as? QuantizedLinear {
+        if let linear2Weights = moduleWeights["multiModalProjector.linear2"],
+           let currentQL2 = self.linear2 as? QuantizedLinear {
             
             writeDebugToDump("  📝 Replacing linear_2 QuantizedLinear\n")
             

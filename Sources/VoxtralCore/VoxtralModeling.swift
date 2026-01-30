@@ -65,12 +65,12 @@ public class VoxtralAttention: Module {
     let headDim: Int
     let scaling: Float
     
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var q_proj: Linear
-    public var k_proj: Linear
-    public var v_proj: Linear
-    public var out_proj: Linear
-    
+    // @ModuleInfo required for quantization support
+    @ModuleInfo(key: "q_proj") public var qProj: Linear
+    @ModuleInfo(key: "k_proj") public var kProj: Linear
+    @ModuleInfo(key: "v_proj") public var vProj: Linear
+    @ModuleInfo(key: "out_proj") public var outProj: Linear
+
     public init(embedDim: Int, numHeads: Int, bias: Bool = false) {
         // Python: self.embed_dim = embed_dim
         self.embedDim = embedDim
@@ -82,17 +82,17 @@ public class VoxtralAttention: Module {
         self.headDim = embedDim / numHeads
         // Python: self.scaling = (embed_dim // num_heads) ** -0.5
         self.scaling = Float(pow(Double(embedDim / numHeads), -0.5))
-        
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+
+        // Initialize with @ModuleInfo wrapper
         // Python: self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        self.q_proj = Linear(embedDim, embedDim, bias: bias)
+        self._qProj.wrappedValue = Linear(embedDim, embedDim, bias: bias)
         // Python: self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)  // NO BIAS for k_proj!
-        self.k_proj = Linear(embedDim, embedDim, bias: false)
+        self._kProj.wrappedValue = Linear(embedDim, embedDim, bias: false)
         // Python: self.v_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        self.v_proj = Linear(embedDim, embedDim, bias: bias)
+        self._vProj.wrappedValue = Linear(embedDim, embedDim, bias: bias)
         // Python: self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        self.out_proj = Linear(embedDim, embedDim, bias: bias)
-        
+        self._outProj.wrappedValue = Linear(embedDim, embedDim, bias: bias)
+
         super.init()
     }
     
@@ -105,11 +105,11 @@ public class VoxtralAttention: Module {
         let seqLen = hiddenStates.shape[1]
         
         // Python: query = self.q_proj(hidden_states)
-        let query = q_proj(hiddenStates)
+        let query = qProj(hiddenStates)
         // Python: key = self.k_proj(hidden_states)
-        let key = k_proj(hiddenStates)
+        let key = kProj(hiddenStates)
         // Python: value = self.v_proj(hidden_states)
-        let value = v_proj(hiddenStates)
+        let value = vProj(hiddenStates)
         
         // Python: query = query.reshape(batch_size, seq_len, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
         let queryReshaped = reshaped(query, [batchSize, seqLen, numHeads, headDim])
@@ -137,7 +137,7 @@ public class VoxtralAttention: Module {
         let outputReshaped = reshaped(outputTransposed, [batchSize, seqLen, embedDim])
         
         // Python: attn_output = self.out_proj(attn_output)
-        let finalOutput = out_proj(outputReshaped)
+        let finalOutput = outProj(outputReshaped)
         
         // Python: return attn_output, None
         return (finalOutput, nil)
@@ -148,27 +148,27 @@ public class VoxtralAttention: Module {
  * Direct Python equivalent: class VoxtralEncoderLayer(nn.Module)
  */
 public class VoxtralEncoderLayer: Module {
-    
+
     // Python: def __init__(self, config: VoxtralEncoderConfig)
     let embedDim: Int
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var self_attn: VoxtralAttention
+    // @ModuleInfo required for quantization support
+    @ModuleInfo(key: "self_attn") public var selfAttn: VoxtralAttention
     let self_attn_layer_norm: LayerNorm
-    public var fc1: Linear
-    public var fc2: Linear
+    @ModuleInfo public var fc1: Linear
+    @ModuleInfo public var fc2: Linear
     let final_layer_norm: LayerNorm
     let activation: (MLXArray) -> MLXArray
-    
+
     public init(config: VoxtralEncoderConfig) {
         // Python: self.embed_dim = config.hidden_size
         self.embedDim = config.hidden_size
-        
+
         // Python: self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, eps=1e-5)
         self.self_attn_layer_norm = LayerNorm(dimensions: embedDim, eps: 1e-5)
-        
+
         // Python: self.final_layer_norm = nn.LayerNorm(self.embed_dim, eps=1e-5)
         self.final_layer_norm = LayerNorm(dimensions: embedDim, eps: 1e-5)
-        
+
         // Python: activation based on config.activation_function
         switch config.activation_function {
         case "gelu":
@@ -180,21 +180,21 @@ public class VoxtralEncoderLayer: Module {
         default:
             self.activation = gelu // Default to GELU
         }
-        
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+
+        // Initialize with @ModuleInfo wrapper
         // Python: self.self_attn = VoxtralAttention(...)
-        self.self_attn = VoxtralAttention(
+        self._selfAttn.wrappedValue = VoxtralAttention(
             embedDim: config.hidden_size,
             numHeads: config.num_attention_heads,
             bias: true
         )
-        
+
         // Python: self.fc1 = nn.Linear(self.embed_dim, config.intermediate_size, bias=True)
-        self.fc1 = Linear(embedDim, config.intermediate_size, bias: true)
-        
+        self._fc1.wrappedValue = Linear(embedDim, config.intermediate_size, bias: true)
+
         // Python: self.fc2 = nn.Linear(config.intermediate_size, self.embed_dim, bias=True)
-        self.fc2 = Linear(config.intermediate_size, embedDim, bias: true)
-        
+        self._fc2.wrappedValue = Linear(config.intermediate_size, embedDim, bias: true)
+
         super.init()
     }
     
@@ -209,7 +209,7 @@ public class VoxtralEncoderLayer: Module {
         let normalizedStates = self_attn_layer_norm(hiddenStates)
         
         // Python: hidden_states, attn_weights = self.self_attn(hidden_states=hidden_states, attention_mask=attention_mask, output_attentions=output_attentions)
-        let (attnOutput, attnWeights) = self_attn(normalizedStates, attentionMask: attentionMask, outputAttentions: outputAttentions)
+        let (attnOutput, attnWeights) = selfAttn(normalizedStates, attentionMask: attentionMask, outputAttentions: outputAttentions)
         
         // Python: hidden_states = residual + hidden_states
         let afterAttnResidual = residual + attnOutput
@@ -400,39 +400,37 @@ public class VoxtralEncoder: Module {
  * Direct Python equivalent: class VoxtralMultiModalProjector(nn.Module)
  */
 public class VoxtralMultiModalProjector: Module {
-    
-    // Python: self.linear_1 = nn.Linear(config.audio_config.intermediate_size, config.text_config.hidden_size, bias=False)
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var linear_1: Linear
+
+    // @ModuleInfo required for quantization support
+    @ModuleInfo(key: "linear_1") public var linear1: Linear
     // Python: self.act = nn.GELU()
     let act: (MLXArray) -> MLXArray
-    // Python: self.linear_2 = nn.Linear(config.text_config.hidden_size, config.text_config.hidden_size, bias=False)
-    public var linear_2: Linear
-    
+    @ModuleInfo(key: "linear_2") public var linear2: Linear
+
     public init(config: VoxtralConfig) {
         // Python: self.act = nn.GELU()
         self.act = gelu
-        
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
-        // Python: self.linear_1 = nn.Linear(config.audio_config.intermediate_size, config.text_config.hidden_size, bias=False)
-        self.linear_1 = Linear(config.audio_config.intermediate_size, config.text_config.hiddenSize, bias: false)
-        
-        // Python: self.linear_2 = nn.Linear(config.text_config.hidden_size, config.text_config.hidden_size, bias=False)
-        self.linear_2 = Linear(config.text_config.hiddenSize, config.text_config.hiddenSize, bias: false)
-        
+
+        // Initialize with @ModuleInfo wrapper
+        // Python: self.linear1 = nn.Linear(config.audio_config.intermediate_size, config.text_config.hidden_size, bias=False)
+        self._linear1.wrappedValue = Linear(config.audio_config.intermediate_size, config.text_config.hiddenSize, bias: false)
+
+        // Python: self.linear2 = nn.Linear(config.text_config.hidden_size, config.text_config.hidden_size, bias=False)
+        self._linear2.wrappedValue = Linear(config.text_config.hiddenSize, config.text_config.hiddenSize, bias: false)
+
         super.init()
     }
-    
+
     /**
      * Direct Python equivalent: def __call__(self, audio_features: mx.array) -> mx.array
      */
     public func callAsFunction(_ audioFeatures: MLXArray) -> MLXArray {
-        // Python: hidden_states = self.linear_1(audio_features)
-        let hiddenStates = linear_1(audioFeatures)
+        // Python: hidden_states = self.linear1(audio_features)
+        let hiddenStates = linear1(audioFeatures)
         // Python: hidden_states = self.act(hidden_states)
         let activatedStates = act(hiddenStates)
-        // Python: hidden_states = self.linear_2(hidden_states)
-        return linear_2(activatedStates)
+        // Python: hidden_states = self.linear2(hidden_states)
+        return linear2(activatedStates)
     }
 }
 
@@ -444,11 +442,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     public let config: VoxtralConfig
     public let textConfig: VoxtralConfig.TextConfig
 
-    // Python: self.audio_tower = VoxtralEncoder(config.audio_config)
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (matching Python pattern)
-    public var audio_tower: VoxtralEncoder
-    // Python: self.multi_modal_projector = VoxtralMultiModalProjector(config)
-    public var multi_modal_projector: VoxtralMultiModalProjector
+    // @ModuleInfo required for quantization support
+    @ModuleInfo(key: "audio_tower") public var audioTower: VoxtralEncoder
+    @ModuleInfo(key: "multi_modal_projector") public var multiModalProjector: VoxtralMultiModalProjector
 
     // CRITICAL: Store reference to standardModel for using loaded audio components
     // Internal access needed for VoxtralHybridEncoder extension to use loaded audio tower
@@ -489,7 +485,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         )
         self.language_model = LlamaModel(config: llamaConfig)
         
-        // Python: self.audio_tower = VoxtralEncoder(config.audio_config) - SECOND
+        // Python: self._audioTower.wrappedValue = VoxtralEncoder(config.audio_config) - SECOND
         // Create VoxtralEncoderConfig from AudioConfig
         let encoderConfig = VoxtralEncoderConfig(
             hidden_size: config.audioConfig.hiddenSize,
@@ -497,10 +493,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             num_hidden_layers: config.audioConfig.numLayers,
             num_attention_heads: config.audioConfig.numAttentionHeads
         )
-        self.audio_tower = VoxtralEncoder(config: encoderConfig)
+        self._audioTower.wrappedValue = VoxtralEncoder(config: encoderConfig)
         
-        // Python: self.multi_modal_projector = VoxtralMultiModalProjector(config) - THIRD  
-        self.multi_modal_projector = VoxtralMultiModalProjector(config: config)
+        // Python: self._multiModalProjector.wrappedValue = VoxtralMultiModalProjector(config) - THIRD  
+        self._multiModalProjector.wrappedValue = VoxtralMultiModalProjector(config: config)
         
         // Python: self.lm_head = nn.Linear(...) - LAST!
         self.lm_head = Linear(textConfig.hiddenSize, textConfig.vocabularySize, bias: false)
@@ -579,8 +575,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             num_key_value_heads: standardModel.configuration.audioConfig.kvHeads
         )
 
-        self.audio_tower = VoxtralEncoder(config: encoderConfig)
-        self.multi_modal_projector = VoxtralMultiModalProjector(config: self.config)
+        self._audioTower.wrappedValue = VoxtralEncoder(config: encoderConfig)
+        self._multiModalProjector.wrappedValue = VoxtralMultiModalProjector(config: self.config)
 
         // CRITICAL: Store reference to use loaded audio components
         self.standardModel = standardModel
@@ -634,8 +630,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             num_key_value_heads: config.audioConfig.kvHeads
         )
 
-        self.audio_tower = VoxtralEncoder(config: encoderConfig)
-        self.multi_modal_projector = VoxtralMultiModalProjector(config: self.config)
+        self._audioTower.wrappedValue = VoxtralEncoder(config: encoderConfig)
+        self._multiModalProjector.wrappedValue = VoxtralMultiModalProjector(config: self.config)
 
         super.init()
         VoxtralDebug.log("✅ VoxtralForConditionalGeneration created with official Llama")
@@ -661,10 +657,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         var weightsDebug = "\n🔍 MODEL WEIGHTS DEBUG:\n"
         
         // Check audio tower weights
-        weightsDebug += "Audio tower layers count: \(audio_tower.layers.count)\n"
+        weightsDebug += "Audio tower layers count: \(audioTower.layers.count)\n"
         
         // Check multi-modal projector weights - handle both Linear and QuantizedLinear
-        let proj1 = multi_modal_projector.linear_1
+        let proj1 = multiModalProjector.linear1
         if let qLinear1 = proj1 as? QuantizedLinear {
             weightsDebug += "Projector linear_1 is QuantizedLinear:\n"
             weightsDebug += "  - weight shape: \(qLinear1.weight.shape), dtype: \(qLinear1.weight.dtype)\n"
@@ -680,7 +676,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         }
         
         // Check projector linear_2
-        let proj2 = multi_modal_projector.linear_2
+        let proj2 = multiModalProjector.linear2
         if let qLinear2 = proj2 as? QuantizedLinear {
             weightsDebug += "Projector linear_2 is QuantizedLinear:\n"
             weightsDebug += "  - weight shape: \(qLinear2.weight.shape), dtype: \(qLinear2.weight.dtype)\n"
@@ -740,7 +736,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             audioHiddenStates = stdModel.audioTower(inputFeatures)
         } else {
             // Fallback to empty VoxtralEncoder (for non-standard init paths)
-            let (hiddenStates, _, _) = audio_tower(inputFeatures, outputAttentions: false, outputHiddenStates: false)
+            let (hiddenStates, _, _) = audioTower(inputFeatures, outputAttentions: false, outputHiddenStates: false)
             audioHiddenStates = hiddenStates
         }
 
@@ -754,7 +750,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         if let stdModel = standardModel {
             audioEmbeds = stdModel.multiModalProjector(audioHiddenStatesProcessed)
         } else {
-            audioEmbeds = multi_modal_projector(audioHiddenStatesProcessed)
+            audioEmbeds = multiModalProjector(audioHiddenStatesProcessed)
         }
 
         // Add batch dimension: [numChunks * 375, hidden_size] -> [1, numChunks * 375, hidden_size]

@@ -669,7 +669,7 @@ extension Module {
         // Final verification: Check that QuantizedLinear structure is preserved
         writeDebugToDump("🔍 FINAL VERIFICATION - Checking model structure after update(parameters:)\n")
         if let voxtralModel = self as? VoxtralForConditionalGeneration {
-            let proj1 = voxtralModel.multi_modal_projector.linear_1
+            let proj1 = voxtralModel.multiModalProjector.linear1
             if let qLinear1 = proj1 as? QuantizedLinear {
                 writeDebugToDump("✅ Projector linear_1 is still QuantizedLinear after update()\n")
                 writeDebugToDump("  - weight shape: \(qLinear1.weight.shape), dtype: \(qLinear1.weight.dtype)\n")

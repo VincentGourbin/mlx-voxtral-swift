@@ -80,7 +80,7 @@ extension VoxtralForConditionalGeneration {
         var moduleWeights: [String: [(String, MLXArray)]] = [:]
         
         for (key, value) in weights {
-            // Extract module prefix (e.g., "multi_modal_projector.linear_1" from "multi_modal_projector.linear_1.weight")
+            // Extract module prefix (e.g., "multiModalProjector.linear1" from "multiModalProjector.linear1.weight")
             let components = key.split(separator: ".")
             
             if key.hasPrefix("lm_head.") {
@@ -90,7 +90,7 @@ extension VoxtralForConditionalGeneration {
                 }
                 moduleWeights["lm_head"]?.append((key, value))
             } else if components.count >= 3 {
-                // For nested modules like multi_modal_projector.linear_1
+                // For nested modules like multiModalProjector.linear1
                 let modulePrefix = components.prefix(2).joined(separator: ".")
                 if moduleWeights[modulePrefix] == nil {
                     moduleWeights[modulePrefix] = []
@@ -106,12 +106,12 @@ extension VoxtralForConditionalGeneration {
         }
         
         // For quantized modules, we need to REPLACE them entirely with new instances
-        // Python debug shows 3 quantized modules: multi_modal_projector.linear_1, linear_2, and lm_head
-        writeDebugToDump("  🎯 Python shows 3 quantized modules: multi_modal_projector.linear_1, linear_2, lm_head\n")
+        // Python debug shows 3 quantized modules: multiModalProjector.linear1, linear_2, and lm_head
+        writeDebugToDump("  🎯 Python shows 3 quantized modules: multiModalProjector.linear1, linear_2, lm_head\n")
         
         // Check for ANY quantized modules in the model
-        let hasQuantizedModules = (multi_modal_projector.linear_1 is QuantizedLinear || 
-                                  multi_modal_projector.linear_2 is QuantizedLinear ||
+        let hasQuantizedModules = (multiModalProjector.linear1 is QuantizedLinear || 
+                                  multiModalProjector.linear2 is QuantizedLinear ||
                                   self.lm_head is QuantizedLinear)
         
         if hasQuantizedModules {
@@ -120,19 +120,19 @@ extension VoxtralForConditionalGeneration {
         } else {
             writeDebugToDump("  ℹ️ No quantized modules detected - using standard loading\n")
             // For non-quantized modules, use standard loading
-            if let projectorWeights = moduleWeights["multi_modal_projector.linear_1"] {
-                writeDebugToDump("  🎯 Loading weights for multi_modal_projector.linear_1 (Linear)\n")
-                try multi_modal_projector.linear_1.loadWeights(projectorWeights, strict: false)
+            if let projectorWeights = moduleWeights["multiModalProjector.linear1"] {
+                writeDebugToDump("  🎯 Loading weights for multiModalProjector.linear1 (Linear)\n")
+                try multiModalProjector.linear1.loadWeights(projectorWeights, strict: false)
             }
             
-            if let projectorWeights = moduleWeights["multi_modal_projector.linear_2"] {
-                writeDebugToDump("  🎯 Loading weights for multi_modal_projector.linear_2 (Linear)\n")
-                try multi_modal_projector.linear_2.loadWeights(projectorWeights, strict: false)
+            if let projectorWeights = moduleWeights["multiModalProjector.linear2"] {
+                writeDebugToDump("  🎯 Loading weights for multiModalProjector.linear2 (Linear)\n")
+                try multiModalProjector.linear2.loadWeights(projectorWeights, strict: false)
             }
         }
         
         // Remove handled weights from the list (including lm_head)
-        let handledPrefixes = ["multi_modal_projector.linear_1", "multi_modal_projector.linear_2", "lm_head"]
+        let handledPrefixes = ["multiModalProjector.linear1", "multiModalProjector.linear2", "lm_head"]
         let remainingWeights = weights.filter { weight in
             !handledPrefixes.contains { prefix in
                 weight.0.hasPrefix(prefix + ".") || weight.0 == prefix || weight.0.hasPrefix(prefix + ".")

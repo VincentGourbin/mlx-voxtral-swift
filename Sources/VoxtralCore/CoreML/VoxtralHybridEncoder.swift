@@ -493,7 +493,7 @@ extension VoxtralForConditionalGeneration {
         )
 
         // Set the MLX projector for fallback (empty - not recommended)
-        hybridEncoder.setMLXProjector(multi_modal_projector)
+        hybridEncoder.setMLXProjector(multiModalProjector)
 
         // Set the standard encoder and projector with loaded weights for MLX fallback
         if let stdModel = standardModel {
@@ -535,7 +535,7 @@ extension VoxtralForConditionalGeneration {
         )
 
         // Set the MLX projector for fallback
-        hybridEncoder.setMLXProjector(multi_modal_projector)
+        hybridEncoder.setMLXProjector(multiModalProjector)
 
         // Set the standard encoder and projector with loaded weights for MLX fallback
         if let stdModel = standardModel {
