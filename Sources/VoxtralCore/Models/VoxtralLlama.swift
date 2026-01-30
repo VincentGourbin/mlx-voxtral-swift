@@ -208,14 +208,14 @@ public class LlamaMLP: Module {
  * Llama decoder layer.
  */
 public class LlamaDecoderLayer: Module {
-    
+
     let hiddenSize: Int
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var self_attn: LlamaAttention
-    public var mlp: LlamaMLP
-    public var input_layernorm: RMSNorm
-    public var post_attention_layernorm: RMSNorm
-    
+    // @ModuleInfo required for weight loading
+    @ModuleInfo(key: "self_attn") public var selfAttn: LlamaAttention
+    @ModuleInfo public var mlp: LlamaMLP
+    @ModuleInfo(key: "input_layernorm") public var inputLayernorm: RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") public var postAttentionLayernorm: RMSNorm
+
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
@@ -224,19 +224,19 @@ public class LlamaDecoderLayer: Module {
         // Python: self.hidden_size = config.hidden_size
         self.hiddenSize = config.hiddenSize
 
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+        // Initialize with @ModuleInfo wrapper
         // Python: self.self_attn = LlamaAttention(config)
-        self.self_attn = LlamaAttention(config: config)
+        self._selfAttn.wrappedValue = LlamaAttention(config: config)
         // Python: self.mlp = LlamaMLP(config)
-        self.mlp = LlamaMLP(config: config)
+        self._mlp.wrappedValue = LlamaMLP(config: config)
         // Python: self.input_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.input_layernorm = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+        self._inputLayernorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
         // Python: self.post_attention_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        
+        self._postAttentionLayernorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+
         super.init()
     }
-    
+
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, cache: Optional[KVCache] = None) -> mx.array:
      */
@@ -246,11 +246,11 @@ public class LlamaDecoderLayer: Module {
         cache: (any KVCache)? = nil
     ) -> MLXArray {
         // Python: r = self.self_attn(self.input_layernorm(hidden_states), attention_mask, cache)
-        let r = self_attn(input_layernorm(hiddenStates), attentionMask: attentionMask, cache: cache)
+        let r = selfAttn(inputLayernorm(hiddenStates), attentionMask: attentionMask, cache: cache)
         // Python: h = hidden_states + r
         let h = hiddenStates + r
         // Python: r = self.mlp(self.post_attention_layernorm(h))
-        let r2 = mlp(post_attention_layernorm(h))
+        let r2 = mlp(postAttentionLayernorm(h))
         // Python: out = h + r
         let out = h + r2
         // Python: return out
@@ -267,11 +267,11 @@ public class LlamaModel: Module {
     let config: LlamaConfig
     let paddingIdx: Int?
     let vocabSize: Int
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var embed_tokens: Embedding
-    public var layers: [LlamaDecoderLayer]
-    public var norm: RMSNorm
-    
+    // @ModuleInfo required for weight loading
+    @ModuleInfo(key: "embed_tokens") public var embedTokens: Embedding
+    @ModuleInfo public var layers: [LlamaDecoderLayer]
+    @ModuleInfo public var norm: RMSNorm
+
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
@@ -284,18 +284,18 @@ public class LlamaModel: Module {
         // Python: self.vocab_size = config.vocab_size
         self.vocabSize = config.vocabSize
 
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+        // Initialize with @ModuleInfo wrapper
         // Python: self.norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.norm = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
-        
+        self._norm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
+
         // Python: self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.embed_tokens = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
-        
+        self._embedTokens.wrappedValue = Embedding(embeddingCount: config.vocabSize, dimensions: config.hiddenSize)
+
         // Python: self.layers = [LlamaDecoderLayer(config) for _ in range(config.num_hidden_layers)]
-        self.layers = (0..<config.numHiddenLayers).map { _ in
+        self._layers.wrappedValue = (0..<config.numHiddenLayers).map { _ in
             LlamaDecoderLayer(config: config)
         }
-        
+
         super.init()
     }
     
@@ -316,7 +316,7 @@ public class LlamaModel: Module {
             h = inputsEmbeds
         } else {
             // Python: h = self.embed_tokens(inputs)
-            h = embed_tokens(inputs!)
+            h = embedTokens(inputs!)
         }
 
         var attentionMask = mask

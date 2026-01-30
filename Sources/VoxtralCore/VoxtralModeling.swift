@@ -251,19 +251,12 @@ public class VoxtralEncoder: Module {
     // Python: self.embed_scale = math.sqrt(embed_dim) if config.scale_embedding else 1.0
     let embedScale: Float
     
-    // Python: self.conv1 = nn.Conv1d(self.num_mel_bins, embed_dim, kernel_size=3, padding=1)
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var conv1: Conv1d
-    // Python: self.conv2 = nn.Conv1d(embed_dim, embed_dim, kernel_size=3, stride=2, padding=1) 
-    public var conv2: Conv1d
-    
-    // Python: self.embed_positions = nn.Embedding(self.max_source_positions, embed_dim)
-    public var embed_positions: Embedding
-    
-    // Python: self.layers = [VoxtralEncoderLayer(config) for _ in range(config.num_hidden_layers)]
-    public var layers: [VoxtralEncoderLayer]
-    // Python: self.layer_norm = nn.LayerNorm(embed_dim)
-    public var layer_norm: LayerNorm
+    // @ModuleInfo required for weight loading
+    @ModuleInfo public var conv1: Conv1d
+    @ModuleInfo public var conv2: Conv1d
+    @ModuleInfo(key: "embed_positions") public var embedPositions: Embedding
+    @ModuleInfo public var layers: [VoxtralEncoderLayer]
+    @ModuleInfo(key: "layer_norm") public var layerNorm: LayerNorm
     
     public init(config: VoxtralEncoderConfig) {
         // Python: embed_dim = config.hidden_size
@@ -277,35 +270,35 @@ public class VoxtralEncoder: Module {
         // Python: self.embed_scale = math.sqrt(embed_dim) if config.scale_embedding else 1.0
         self.embedScale = config.scale_embedding ? sqrt(Float(embedDim)) : 1.0
         
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+        // Initialize with @ModuleInfo wrapper
         // Python: self.conv1 = nn.Conv1d(self.num_mel_bins, embed_dim, kernel_size=3, padding=1)
-        self.conv1 = Conv1d(
+        self._conv1.wrappedValue = Conv1d(
             inputChannels: numMelBins,
             outputChannels: embedDim,
             kernelSize: 3,
             padding: 1
         )
-        
+
         // Python: self.conv2 = nn.Conv1d(embed_dim, embed_dim, kernel_size=3, stride=2, padding=1)
-        self.conv2 = Conv1d(
+        self._conv2.wrappedValue = Conv1d(
             inputChannels: embedDim,
             outputChannels: embedDim,
             kernelSize: 3,
             stride: 2,
             padding: 1
         )
-        
-        // Python: self.embed_positions = nn.Embedding(self.max_source_positions, embed_dim)
-        self.embed_positions = Embedding(embeddingCount: maxSourcePositions, dimensions: embedDim)
-        
-        // Python: self.layer_norm = nn.LayerNorm(embed_dim)
-        self.layer_norm = LayerNorm(dimensions: embedDim)
-        
+
+        // Python: self.embedPositions = nn.Embedding(self.max_source_positions, embed_dim)
+        self._embedPositions.wrappedValue = Embedding(embeddingCount: maxSourcePositions, dimensions: embedDim)
+
+        // Python: self.layerNorm = nn.LayerNorm(embed_dim)
+        self._layerNorm.wrappedValue = LayerNorm(dimensions: embedDim)
+
         // Python: self.layers = [VoxtralEncoderLayer(config) for _ in range(config.num_hidden_layers)]
-        self.layers = (0..<config.num_hidden_layers).map { _ in
+        self._layers.wrappedValue = (0..<config.num_hidden_layers).map { _ in
             VoxtralEncoderLayer(config: config)
         }
-        
+
         super.init()
     }
     
@@ -349,8 +342,8 @@ public class VoxtralEncoder: Module {
         
         // Python: seq_len = hidden_states.shape[1]
         let seqLen = hiddenStates.shape[1]
-        // Python: embed_pos = self.embed_positions.weight[:seq_len]
-        let embedPos = self.embed_positions.weight[0..<seqLen]
+        // Python: embed_pos = self.embedPositions.weight[:seq_len]
+        let embedPos = self.embedPositions.weight[0..<seqLen]
         // Python: hidden_states = hidden_states + embed_pos
         hiddenStates = hiddenStates + embedPos
         
@@ -383,8 +376,8 @@ public class VoxtralEncoder: Module {
             }
         }
         
-        // Python: hidden_states = self.layer_norm(hidden_states)
-        hiddenStates = self.layer_norm(hiddenStates)
+        // Python: hidden_states = self.layerNorm(hidden_states)
+        hiddenStates = self.layerNorm(hiddenStates)
         
         // Python: if output_hidden_states: all_hidden_states += (hidden_states,)
         if outputHiddenStates {
@@ -694,7 +687,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Check language model weights (first layer) - handle both types
         if let llamaModel = language_model as? LlamaModel, !llamaModel.layers.isEmpty {
             let firstLayer = llamaModel.layers[0]
-            let attnQWeight = firstLayer.self_attn.qProj.weight
+            let attnQWeight = firstLayer.selfAttn.qProj.weight
             let attnQStats = "min=\(attnQWeight.min().item(Float.self)), max=\(attnQWeight.max().item(Float.self)), mean=\(attnQWeight.mean().item(Float.self))"
             weightsDebug += "Language model layer 0 q_proj weight shape: \(attnQWeight.shape), stats: \(attnQStats)\n"
         }
@@ -923,7 +916,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             }
             // Python: inputs_embeds = self.embed_tokens(input_ids)
             if let llamaModel = language_model as? LlamaModel {
-                embeddings = llamaModel.embed_tokens(ids)
+                embeddings = llamaModel.embedTokens(ids)
             } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
                 if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
                     embeddings = quantizedEmbedding(ids)
@@ -1426,7 +1419,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Get token embeddings
         var embeddings: MLXArray
         if let llamaModel = language_model as? LlamaModel {
-            embeddings = llamaModel.embed_tokens(inputIds)
+            embeddings = llamaModel.embedTokens(inputIds)
         } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
             if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
                 embeddings = quantizedEmbedding(inputIds)
@@ -1595,7 +1588,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Text-only case: use text embeddings directly
             // Use language_model.embed_tokens instead of self.embed_tokens
             if let llamaModel = language_model as? LlamaModel {
-                mergedEmbeddings = llamaModel.embed_tokens(input.text.tokens)
+                mergedEmbeddings = llamaModel.embedTokens(input.text.tokens)
             } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
                 if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
                     mergedEmbeddings = quantizedEmbedding(input.text.tokens)
