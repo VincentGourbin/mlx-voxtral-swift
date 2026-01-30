@@ -191,8 +191,9 @@ dependencies: [
 |-----|----------|---------------|
 | `VoxtralTranscriptionManager` | Simple transcription/chat | @MainActor |
 | `VoxtralPipeline` | Custom configuration, backend selection | @unchecked Sendable |
-| `ModelDownloader` | Model download/management | Thread-safe |
+| `ModelDownloader` | MLX model download/management | Thread-safe |
 | `ModelRegistry` | Model discovery | Thread-safe |
+| `VoxtralCoreMLEncoder.downloadFromHuggingFace()` | Core ML encoder download | async |
 
 ### ❌ Do NOT access directly
 
