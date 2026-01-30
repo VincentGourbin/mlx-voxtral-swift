@@ -222,7 +222,7 @@ public class TekkenTokenizer {
 
         // Read version
         guard cacheData.count >= 4 else { return false }
-        let version = cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) }
+        let version = cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) }
         offset += 4
 
         guard version == cacheVersion else {
@@ -232,12 +232,12 @@ public class TekkenTokenizer {
 
         // Read numSpecialTokens
         guard cacheData.count >= offset + 4 else { return false }
-        numSpecialTokens = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) })
+        numSpecialTokens = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) })
         offset += 4
 
         // Read regex pattern length and string
         guard cacheData.count >= offset + 4 else { return false }
-        let patternLength = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) })
+        let patternLength = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) })
         offset += 4
 
         guard cacheData.count >= offset + patternLength else { return false }
@@ -248,7 +248,7 @@ public class TekkenTokenizer {
 
         // Read vocabulary count
         guard cacheData.count >= offset + 4 else { return false }
-        let vocabCount = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) })
+        let vocabCount = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) })
         offset += 4
 
         progress?(0.3, "Loading \(vocabCount) tokens...")
@@ -260,7 +260,7 @@ public class TekkenTokenizer {
         // Read each entry: [keyLength: UInt16][keyData: Data][rank: Int32][strLength: UInt16][strData: Data]
         for i in 0..<vocabCount {
             guard cacheData.count >= offset + 2 else { return false }
-            let keyLength = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt16.self) })
+            let keyLength = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self) })
             offset += 2
 
             guard cacheData.count >= offset + keyLength else { return false }
@@ -268,11 +268,11 @@ public class TekkenTokenizer {
             offset += keyLength
 
             guard cacheData.count >= offset + 4 else { return false }
-            let rank = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: Int32.self) })
+            let rank = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Int32.self) })
             offset += 4
 
             guard cacheData.count >= offset + 2 else { return false }
-            let strLength = Int(cacheData.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt16.self) })
+            let strLength = Int(cacheData.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self) })
             offset += 2
 
             var tokenString: String? = nil
@@ -666,7 +666,7 @@ public class AudioEncoder {
         
         for i in stride(from: 0, to: audioBytes.count - 1, by: 2) {
             let sample16 = audioBytes.withUnsafeBytes { bytes in
-                bytes.load(fromByteOffset: i, as: Int16.self)
+                bytes.loadUnaligned(fromByteOffset: i, as: Int16.self)
             }
             
             let sampleFloat = Float(sample16) / 32768.0
