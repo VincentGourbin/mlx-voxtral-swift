@@ -166,7 +166,7 @@ let config = MemoryOptimizationConfig(
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.4")
+    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.5")
 ]
 ```
 
@@ -185,6 +185,7 @@ dependencies: [
 
 ## Version History
 
+- v1.0.5 - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
 - v1.0.4 - Tokenizer loading optimization (10-100x faster with binary cache)
 - v1.0.3 - Complete @ModuleInfo coverage for all quantized models
 - v1.0.2 - Fixed LlamaAttention/LlamaMLP quantization
