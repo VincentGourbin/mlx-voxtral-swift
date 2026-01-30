@@ -166,7 +166,7 @@ let config = MemoryOptimizationConfig(
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.5")
+    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.8")
 ]
 ```
 
@@ -183,11 +183,47 @@ dependencies: [
 - `Sources/VoxtralCore/Models/VoxtralLlama.swift` - Llama decoder (LlamaAttention, LlamaMLP)
 - `Sources/VoxtralCore/CoreML/VoxtralHybridEncoder.swift` - Hybrid Core ML + MLX encoder
 
+## Important: API Usage Guidelines
+
+### ✅ Supported APIs (use these)
+
+| API | Use Case | Thread Safety |
+|-----|----------|---------------|
+| `VoxtralTranscriptionManager` | Simple transcription/chat | @MainActor |
+| `VoxtralPipeline` | Custom configuration, backend selection | @unchecked Sendable |
+| `ModelDownloader` | Model download/management | Thread-safe |
+| `ModelRegistry` | Model discovery | Thread-safe |
+
+### ❌ Do NOT access directly
+
+- `VoxtralForConditionalGeneration` - Internal model class
+- `loadVoxtralModel()` - Internal loading function
+- Model weight keys (e.g., `language_model.embed_tokens.weight`)
+- Direct parameter access via `model.parameters()`
+
+**Why?** The internal weight loading uses key transformations (snake_case → camelCase)
+that are not exposed in the public API. Accessing internals will cause `keyNotFound` errors.
+
+### Example: Correct Usage
+
+```swift
+// ✅ CORRECT - Use VoxtralPipeline
+let pipeline = VoxtralPipeline(model: .mini3b8bit)
+try await pipeline.loadModel()
+let text = try await pipeline.transcribe(audio: audioURL)
+pipeline.unload()
+
+// ❌ WRONG - Don't access internals
+// let model = try loadVoxtralModel(...)  // Internal function
+// let params = model.parameters()         // Will have wrong keys
+```
+
 ## Version History
 
-- v1.0.7 - Complete @ModuleInfo key mappings for VoxtralStandardLoader + allow embed_tokens quantization
-- v1.0.6 - Fix snake_case key preservation for VoxtralForConditionalGeneration (embed_tokens, embed_positions)
-- v1.0.5 - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
+- v1.0.8 - Fix memory alignment crash (loadUnaligned) + revert broken v1.0.6/v1.0.7 changes
+- v1.0.7 - ⚠️ BROKEN - Do not use (gibberish output)
+- v1.0.6 - ⚠️ BROKEN - Do not use (gibberish output)
+- v1.0.5 - ✅ Stable - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
 - v1.0.4 - Tokenizer loading optimization (10-100x faster with binary cache)
 - v1.0.3 - Complete @ModuleInfo coverage for all quantized models
 - v1.0.2 - Fixed LlamaAttention/LlamaMLP quantization
