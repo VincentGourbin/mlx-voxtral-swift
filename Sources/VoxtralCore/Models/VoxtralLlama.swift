@@ -28,11 +28,11 @@ public class LlamaAttention: Module {
     let isCausal: Bool
     let scale: Float
     
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var q_proj: Linear
-    public var k_proj: Linear 
-    public var v_proj: Linear
-    public var o_proj: Linear
+    // @ModuleInfo required for quantization support (MLX needs to replace Linear with QuantizedLinear)
+    @ModuleInfo(key: "q_proj") public var qProj: Linear
+    @ModuleInfo(key: "k_proj") public var kProj: Linear
+    @ModuleInfo(key: "v_proj") public var vProj: Linear
+    @ModuleInfo(key: "o_proj") public var oProj: Linear
     let rope: MLXLMRope
     
     /**
@@ -70,16 +70,16 @@ public class LlamaAttention: Module {
             maxPositionEmbeddings: maxPositionEmbeddings
         )
         
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+        // Initialize with @ModuleInfo wrapper
         // Python: self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
-        self.q_proj = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias)
+        self._qProj.wrappedValue = Linear(hiddenSize, numHeads * headDim, bias: config.attentionBias)
         // Python: self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
-        self.k_proj = Linear(hiddenSize, numKeyValueHeads * headDim, bias: config.attentionBias)
+        self._kProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: config.attentionBias)
         // Python: self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
-        self.v_proj = Linear(hiddenSize, numKeyValueHeads * headDim, bias: config.attentionBias)
+        self._vProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: config.attentionBias)
         // Python: self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=config.attention_bias)
-        self.o_proj = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias)
-        
+        self._oProj.wrappedValue = Linear(numHeads * headDim, hiddenSize, bias: config.attentionBias)
+
         super.init()
     }
     
@@ -96,9 +96,9 @@ public class LlamaAttention: Module {
         let qLen = hiddenStates.shape[1]
 
         // Python: queries, keys, values = (self.q_proj(hidden_states), self.k_proj(hidden_states), self.v_proj(hidden_states))
-        let queries = q_proj(hiddenStates)
-        let keys = k_proj(hiddenStates)
-        let values = v_proj(hiddenStates)
+        let queries = qProj(hiddenStates)
+        let keys = kProj(hiddenStates)
+        let values = vProj(hiddenStates)
 
         // Python: queries = queries.reshape(bsz, q_len, self.num_heads, -1).transpose(0, 2, 1, 3)
         let queriesReshaped = queries.reshaped([bsz, qLen, numHeads, -1])
@@ -148,7 +148,7 @@ public class LlamaAttention: Module {
         let outputReshaped = outputTransposed.reshaped([bsz, qLen, -1])
         
         // Python: return self.o_proj(output)
-        return o_proj(outputReshaped)
+        return oProj(outputReshaped)
     }
 }
 
@@ -157,17 +157,17 @@ public class LlamaAttention: Module {
  * Llama MLP with SiLU activation.
  */
 public class LlamaMLP: Module {
-    
+
     // Python: def __init__(self, config):
     let config: LlamaConfig
     let hiddenSize: Int
     let intermediateSize: Int
-    // Approach A: Direct assignment WITHOUT @ModuleInfo (consistent pattern)
-    public var gate_proj: Linear
-    public var up_proj: Linear
-    public var down_proj: Linear
+    // @ModuleInfo required for quantization support (MLX needs to replace Linear with QuantizedLinear)
+    @ModuleInfo(key: "gate_proj") public var gateProj: Linear
+    @ModuleInfo(key: "up_proj") public var upProj: Linear
+    @ModuleInfo(key: "down_proj") public var downProj: Linear
     let actFn: (MLXArray) -> MLXArray
-    
+
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
@@ -179,27 +179,27 @@ public class LlamaMLP: Module {
         self.hiddenSize = config.hiddenSize
         // Python: self.intermediate_size = config.intermediate_size
         self.intermediateSize = config.intermediateSize
-        
+
         // Python: self.act_fn = nn.silu
         self.actFn = silu
-        
-        // Approach A: Initialize properties BEFORE super.init() (required without @ModuleInfo)
+
+        // Initialize with @ModuleInfo wrapper
         // Python: self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
-        self.gate_proj = Linear(hiddenSize, intermediateSize, bias: config.mlpBias)
+        self._gateProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: config.mlpBias)
         // Python: self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
-        self.up_proj = Linear(hiddenSize, intermediateSize, bias: config.mlpBias)
+        self._upProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: config.mlpBias)
         // Python: self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.mlp_bias)
-        self.down_proj = Linear(intermediateSize, hiddenSize, bias: config.mlpBias)
-        
+        self._downProj.wrappedValue = Linear(intermediateSize, hiddenSize, bias: config.mlpBias)
+
         super.init()
     }
-    
+
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array) -> mx.array:
      */
     public func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
         // Python: return self.down_proj(self.act_fn(self.gate_proj(hidden_states)) * self.up_proj(hidden_states))
-        return down_proj(actFn(gate_proj(hiddenStates)) * up_proj(hiddenStates))
+        return downProj(actFn(gateProj(hiddenStates)) * upProj(hiddenStates))
     }
 }
 

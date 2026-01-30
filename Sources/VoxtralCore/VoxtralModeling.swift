@@ -698,7 +698,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Check language model weights (first layer) - handle both types
         if let llamaModel = language_model as? LlamaModel, !llamaModel.layers.isEmpty {
             let firstLayer = llamaModel.layers[0]
-            let attnQWeight = firstLayer.self_attn.q_proj.weight
+            let attnQWeight = firstLayer.self_attn.qProj.weight
             let attnQStats = "min=\(attnQWeight.min().item(Float.self)), max=\(attnQWeight.max().item(Float.self)), mean=\(attnQWeight.mean().item(Float.self))"
             weightsDebug += "Language model layer 0 q_proj weight shape: \(attnQWeight.shape), stats: \(attnQStats)\n"
         }
