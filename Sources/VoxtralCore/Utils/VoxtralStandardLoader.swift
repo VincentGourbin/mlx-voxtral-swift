@@ -206,16 +206,10 @@ public struct LlamaStandardConfig {
  */
 // Container to match language_model.* parameter names
 public class LanguageModelContainer: Module {
-    @ModuleInfo var lmHead: Linear
+    @ModuleInfo(key: "lm_head") var lmHead: Linear
     @ModuleInfo var model: LlamaStandardModel
     
     public init(configuration: VoxtralStandardConfiguration) {
-        self.lmHead = Linear(
-            configuration.textConfig.hiddenSize,
-            configuration.textConfig.vocabularySize,
-            bias: false
-        )
-        
         // Use the corrected constructor with LlamaStandardConfig
         let llamaConfig = LlamaStandardConfig(
             vocabSize: configuration.textConfig.vocabularySize,
@@ -232,8 +226,14 @@ public class LanguageModelContainer: Module {
             mlpBias: configuration.textConfig.mlpBias
         )
 
-        self.model = LlamaStandardModel(config: llamaConfig)
-        
+        // Use _wrappedValue syntax before super.init() for @ModuleInfo properties
+        self._lmHead.wrappedValue = Linear(
+            configuration.textConfig.hiddenSize,
+            configuration.textConfig.vocabularySize,
+            bias: false
+        )
+        self._model.wrappedValue = LlamaStandardModel(config: llamaConfig)
+
         super.init()
     }
 }
@@ -310,7 +310,7 @@ public class LlamaStandardModel: Module {
     let config: LlamaStandardConfig
     let paddingIdx: Int?
     let vocabSize: Int
-    @ModuleInfo var embedTokens: Embedding
+    @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo var layers: [LlamaStandardBlock]
     @ModuleInfo var norm: RMSNorm
 
@@ -486,10 +486,10 @@ public class LlamaStandardModel: Module {
  */
 public class LlamaStandardBlock: Module {
     let hiddenSize: Int
-    @ModuleInfo var selfAttn: LlamaStandardAttention
+    @ModuleInfo(key: "self_attn") var selfAttn: LlamaStandardAttention
     @ModuleInfo var mlp: LlamaStandardMLP
-    @ModuleInfo var inputLayerNorm: RMSNorm
-    @ModuleInfo var postAttentionLayerNorm: RMSNorm
+    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
 
     /**
      * Direct Python equivalent: def __init__(self, config):
@@ -568,10 +568,10 @@ public class LlamaStandardBlock: Module {
  * Uses @ModuleInfo for quantization support
  */
 public class LlamaStandardAttention: Module {
-    @ModuleInfo var qProj: Linear
-    @ModuleInfo var kProj: Linear
-    @ModuleInfo var vProj: Linear
-    @ModuleInfo var oProj: Linear
+    @ModuleInfo(key: "q_proj") var qProj: Linear
+    @ModuleInfo(key: "k_proj") var kProj: Linear
+    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "o_proj") var oProj: Linear
     let rope: RoPE
 
     let headDim: Int
@@ -721,9 +721,9 @@ public class LlamaStandardMLP: Module {
     let config: LlamaStandardConfig
     let hiddenSize: Int
     let intermediateSize: Int
-    @ModuleInfo var gateProj: Linear
-    @ModuleInfo var upProj: Linear
-    @ModuleInfo var downProj: Linear
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear
+    @ModuleInfo(key: "up_proj") var upProj: Linear
+    @ModuleInfo(key: "down_proj") var downProj: Linear
     let actFn: (MLXArray) -> MLXArray
 
     /**
@@ -785,9 +785,9 @@ public class LlamaStandardMLP: Module {
 public class VoxtralStandardEncoder: Module {
     @ModuleInfo var conv1: Conv1d
     @ModuleInfo var conv2: Conv1d
-    @ModuleInfo var embedPositions: Embedding
+    @ModuleInfo(key: "embed_positions") var embedPositions: Embedding
     @ModuleInfo var layers: [VoxtralStandardEncoderLayer]
-    @ModuleInfo var layerNorm: LayerNorm
+    @ModuleInfo(key: "layer_norm") var layerNorm: LayerNorm
 
     public init(hiddenSize: Int, intermediateSize: Int, hiddenLayers: Int,
                 attentionHeads: Int, kvHeads: Int, headDim: Int,
@@ -841,10 +841,10 @@ public class VoxtralStandardEncoder: Module {
  * Implements full multi-head attention matching Python reference
  */
 public class AudioAttention: Module {
-    @ModuleInfo var qProj: Linear
-    @ModuleInfo var kProj: Linear
-    @ModuleInfo var vProj: Linear
-    @ModuleInfo var outProj: Linear  // audio_tower uses out_proj
+    @ModuleInfo(key: "q_proj") var qProj: Linear
+    @ModuleInfo(key: "k_proj") var kProj: Linear
+    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "out_proj") var outProj: Linear  // audio_tower uses out_proj
 
     let headDim: Int
     let numHeads: Int
@@ -902,11 +902,11 @@ public class AudioAttention: Module {
  * Uses @ModuleInfo for quantization support
  */
 public class VoxtralStandardEncoderLayer: Module {
-    @ModuleInfo var selfAttn: AudioAttention  // Use AudioAttention for audio_tower
-    @ModuleInfo var selfAttnLayerNorm: LayerNorm
+    @ModuleInfo(key: "self_attn") var selfAttn: AudioAttention  // Use AudioAttention for audio_tower
+    @ModuleInfo(key: "self_attn_layer_norm") var selfAttnLayerNorm: LayerNorm
     @ModuleInfo var fc1: Linear
     @ModuleInfo var fc2: Linear
-    @ModuleInfo var finalLayerNorm: LayerNorm
+    @ModuleInfo(key: "final_layer_norm") var finalLayerNorm: LayerNorm
 
     public init(hiddenSize: Int, intermediateSize: Int, attentionHeads: Int, headDim: Int) {
         self._selfAttn.wrappedValue = AudioAttention(

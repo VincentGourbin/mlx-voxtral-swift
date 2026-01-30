@@ -690,12 +690,10 @@ public func loadQuantizedVoxtral(
     
     // Python: def class_predicate(p, m):
     func classPredicate(path: String, module: Module) -> [String: Any]? {
-        // SKIP embed_tokens quantization - MLXLMCommon doesn't handle QuantizedEmbedding properly
-        // This is a workaround for Swift MLX limitations
-        if path.contains("embed_tokens") {
-            return nil  // Don't quantize embed_tokens
-        }
-        
+        // v1.0.6 FIX: ALLOW embed_tokens quantization for 4-bit models
+        // The weights file has quantized embed_tokens (weight + scales + biases)
+        // so we MUST quantize to match the expected shape
+
         // Python: if p in quantization: return quantization[p]
         if let layerConfig = quantization[path] as? [String: Any] {
             return layerConfig
