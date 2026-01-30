@@ -4,7 +4,7 @@
 
 ## Overview
 
-Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with optional Core ML acceleration.
+Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with optional Core ML acceleration for the audio encoder.
 
 ## Quick Start
 
@@ -28,25 +28,45 @@ High-level facade for easy integration:
 ```swift
 // Check/download model
 VoxtralTranscriptionManager.isDefaultModelDownloaded() -> Bool
+VoxtralTranscriptionManager.isModelDownloaded(_ model: VoxtralPipeline.Model) -> Bool
 VoxtralTranscriptionManager.downloadDefaultModel(progress:) async throws -> URL
+VoxtralTranscriptionManager.deleteDefaultModel() throws
 
 // Transcription
-let manager = VoxtralTranscriptionManager()
+let manager = VoxtralTranscriptionManager()  // Uses default model (mini-3b-8bit)
+let manager = VoxtralTranscriptionManager(model: .mini3b4bit)  // Specific model
 try await manager.loadModel()
 let result = try await manager.transcribe(audioURL: URL)
 let response = try await manager.chat(audioURL: URL, prompt: String)
 manager.unloadModel()
+
+// Result properties
+result.text          // Transcribed text
+result.tokenCount    // Number of tokens generated
+result.duration      // Generation time in seconds
+result.tokensPerSecond  // Performance metric
 ```
 
 ### VoxtralPipeline (Lower-level)
 
-More control over model selection:
+More control over model selection and backend:
 
 ```swift
-let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .hybrid)
-try await pipeline.loadModel()
+// Available models: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
+// Available backends: .mlx (pure GPU), .hybrid (Core ML encoder + MLX decoder), .auto
+
+let pipeline = VoxtralPipeline(model: .mini3b4bit, backend: .hybrid)
+try await pipeline.loadModel { progress, status in
+    print("\(Int(progress * 100))% - \(status)")
+}
 let text = try await pipeline.transcribe(audio: audioURL)
+let response = try await pipeline.chat(audio: audioURL, prompt: "Summarize this")
 pipeline.unload()
+
+// Configuration
+pipeline.configuration.maxTokens = 500
+pipeline.configuration.temperature = 0.0
+pipeline.configuration.memoryOptimization = .recommended()
 ```
 
 ### ModelDownloader
@@ -55,38 +75,66 @@ pipeline.unload()
 ModelDownloader.isDefaultModelDownloaded() -> Bool
 ModelDownloader.downloadDefaultModel(progress:) async throws -> URL
 ModelDownloader.deleteDefaultModel() throws
+ModelDownloader.defaultModel -> VoxtralModelInfo
 ModelDownloader.resolveModel(_ identifier: String) async throws -> URL
+ModelDownloader.listDownloadedModels() -> [VoxtralModelInfo]
+ModelDownloader.deleteModel(_ model: VoxtralModelInfo) throws
 ```
 
 ### ModelRegistry
 
 ```swift
 ModelRegistry.models -> [VoxtralModelInfo]
-ModelRegistry.defaultModel -> VoxtralModelInfo
+ModelRegistry.defaultModel -> VoxtralModelInfo  // mini-3b-8bit (recommended)
 ModelRegistry.model(withId: String) -> VoxtralModelInfo?
+ModelRegistry.model(withRepoId: String) -> VoxtralModelInfo?
+ModelRegistry.miniModels -> [VoxtralModelInfo]  // 3B models
+ModelRegistry.smallModels -> [VoxtralModelInfo]  // 24B models
 ```
 
 ## Available Models
 
-| ID | Name | Size | Quantization |
-|----|------|------|--------------|
-| mini-3b | Voxtral Mini 3B | ~6 GB | float16 |
-| mini-3b-8bit | Voxtral Mini 3B (8-bit) | ~3.5 GB | 8-bit (recommended) |
-| mini-3b-4bit | Voxtral Mini 3B (4-bit) | ~2 GB | 4-bit mixed |
-| small-24b | Voxtral Small 24B | ~48 GB | float16 |
-| small-24b-8bit | Voxtral Small 24B (8-bit) | ~25 GB | 8-bit |
-| small-4bit | Voxtral Small (4-bit) | ~12 GB | 4-bit mixed |
+| ID | Name | Size | Quantization | Recommended |
+|----|------|------|--------------|-------------|
+| mini-3b | Voxtral Mini 3B | ~6 GB | float16 | |
+| mini-3b-8bit | Voxtral Mini 3B (8-bit) | ~3.5 GB | 8-bit | Yes |
+| mini-3b-4bit | Voxtral Mini 3B (4-bit) | ~2 GB | 4-bit mixed | Low RAM |
+| small-24b | Voxtral Small 24B | ~48 GB | float16 | |
+| small-24b-8bit | Voxtral Small 24B (8-bit) | ~25 GB | 8-bit | High quality |
+| small-4bit | Voxtral Small (4-bit) | ~12 GB | 4-bit mixed | |
+
+All quantized models (4-bit, 8-bit) are fully supported with @ModuleInfo annotations for proper weight loading.
 
 ## Key Types
 
-- `VoxtralTranscriptionManager` - High-level transcription API
+- `VoxtralTranscriptionManager` - High-level transcription API (@MainActor)
 - `VoxtralPipeline` - Configurable inference pipeline
-- `TranscriptionResult` - Result with text, tokenCount, duration
-- `VoxtralModelInfo` - Model metadata (id, repoId, name, size)
+- `TranscriptionResult` - Result with text, tokenCount, duration, tokensPerSecond
+- `VoxtralModelInfo` - Model metadata (id, repoId, name, size, quantization, parameters, recommended)
 - `ModelDownloader` - Model download/cache management
 - `ModelRegistry` - Available models catalog
-- `MemoryOptimizationConfig` - GPU memory settings (.recommended(), .aggressive, .moderate)
-- `VoxtralMemoryManager` - Runtime memory optimization
+- `MemoryOptimizationConfig` - GPU memory settings (.recommended(), .aggressive, .moderate, .ultra)
+- `VoxtralMemoryManager` - Runtime memory optimization (singleton: .shared)
+- `VoxtralPipelineError` - Pipeline errors (invalidState, modelNotLoaded, processingFailed)
+- `VoxtralTranscriptionError` - Transcription errors (modelNotLoaded, audioRequired)
+- `DownloadProgressCallback` - Progress callback type: @Sendable (Double, String) -> Void
+
+## Memory Optimization
+
+```swift
+// Presets
+MemoryOptimizationConfig.recommended()  // Auto-detect based on system RAM
+MemoryOptimizationConfig.moderate       // Balanced
+MemoryOptimizationConfig.aggressive     // Lower memory, slower
+MemoryOptimizationConfig.ultra          // Minimum memory
+
+// Custom
+let config = MemoryOptimizationConfig(
+    maxKVCacheSize: 8192,
+    clearCacheInterval: 50,
+    useAggressiveCleanup: true
+)
+```
 
 ## CLI Usage
 
@@ -94,8 +142,12 @@ ModelRegistry.model(withId: String) -> VoxtralModelInfo?
 # Download model
 ./VoxtralCLI download mini-3b-8bit
 
+# List models
+./VoxtralCLI list
+
 # Transcribe
 ./VoxtralCLI transcribe audio.mp3
+./VoxtralCLI transcribe audio.mp3 --backend hybrid
 
 # Chat with audio
 ./VoxtralCLI chat audio.mp3 "Summarize this audio"
@@ -114,7 +166,7 @@ ModelRegistry.model(withId: String) -> VoxtralModelInfo?
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.0")
+    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.3")
 ]
 ```
 
@@ -123,7 +175,17 @@ dependencies: [
 - `Sources/VoxtralCore/Pipeline/VoxtralTranscriptionManager.swift` - High-level API
 - `Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift` - Pipeline implementation
 - `Sources/VoxtralCore/Utils/ModelDownloader.swift` - Model download logic
-- `Sources/VoxtralCore/Utils/ModelRegistry.swift` - Available models
+- `Sources/VoxtralCore/Utils/ModelRegistry.swift` - Available models catalog
 - `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift` - Memory settings
-- `Sources/VoxtralCore/VoxtralModeling.swift` - Core model implementation
+- `Sources/VoxtralCore/Utils/VoxtralMemoryManager.swift` - Runtime memory management
+- `Sources/VoxtralCore/VoxtralModeling.swift` - Core model (VoxtralForConditionalGeneration)
 - `Sources/VoxtralCore/VoxtralProcessor.swift` - Audio/text processing
+- `Sources/VoxtralCore/Models/VoxtralLlama.swift` - Llama decoder (LlamaAttention, LlamaMLP)
+- `Sources/VoxtralCore/CoreML/VoxtralHybridEncoder.swift` - Hybrid Core ML + MLX encoder
+
+## Version History
+
+- v1.0.3 - Complete @ModuleInfo coverage for all quantized models
+- v1.0.2 - Fixed LlamaAttention/LlamaMLP quantization
+- v1.0.1 - Added VoxtralTranscriptionManager API
+- v1.0.0 - Initial release
