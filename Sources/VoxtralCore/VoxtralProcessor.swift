@@ -430,16 +430,29 @@ public class VoxtralProcessor {
         return ProcessedInputs(inputIds: inputIds, inputFeatures: inputFeatures)
     }
     
+    /// Progress callback type for processor loading
+    public typealias ProcessorProgressCallback = @Sendable (Double, String) -> Void
+
     /**
      * Direct Python equivalent: @classmethod def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
      */
-    public static func fromPretrained(_ pretrainedModelNameOrPath: String) throws -> VoxtralProcessor {
+    public static func fromPretrained(
+        _ pretrainedModelNameOrPath: String,
+        progress: ProcessorProgressCallback? = nil
+    ) throws -> VoxtralProcessor {
         // Python: tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path, **kwargs)
-        let tokenizer = try TekkenTokenizer.fromPretrained(pretrainedModelNameOrPath)
-        
+        progress?(0.0, "Loading tokenizer...")
+        let tokenizer = try TekkenTokenizer.fromPretrained(pretrainedModelNameOrPath) { tokenizerProgress, status in
+            // Map tokenizer progress (0-1) to processor progress (0-0.9)
+            progress?(tokenizerProgress * 0.9, status)
+        }
+
         // Python: feature_extractor = VoxtralFeatureExtractor()
+        progress?(0.9, "Initializing feature extractor...")
         let featureExtractor = VoxtralFeatureExtractor()
-        
+
+        progress?(1.0, "Processor ready")
+
         // Python: return cls(feature_extractor=feature_extractor, tokenizer=tokenizer)
         return VoxtralProcessor(featureExtractor: featureExtractor, tokenizer: tokenizer)
     }

@@ -231,12 +231,15 @@ public class VoxtralPipeline: @unchecked Sendable {
             )
             self.voxtralModel = loadedModel
 
-            // Load processor
-            progress?(0.7, "Loading processor...")
-            self.processor = try VoxtralProcessor.fromPretrained(modelPath.path)
+            // Load processor (includes tokenizer loading which can be slow)
+            progress?(0.6, "Loading tokenizer...")
+            self.processor = try VoxtralProcessor.fromPretrained(modelPath.path) { processorProgress, status in
+                // Map processor progress (0-1) to pipeline progress (0.6-0.85)
+                progress?(0.6 + processorProgress * 0.25, status)
+            }
 
             // Setup hybrid encoder if needed
-            progress?(0.9, "Configuring encoder...")
+            progress?(0.85, "Configuring encoder...")
             try setupEncoder()
 
             state = .ready
