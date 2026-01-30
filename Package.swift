@@ -1,6 +1,7 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // MLX Voxtral Swift - Speech-to-Text with Apple Silicon acceleration
 // Based on the Python implementation: https://github.com/mzbac/mlx.voxtral
+// Aligned with flux-2-swift-mlx for API compatibility
 
 import PackageDescription
 
@@ -27,9 +28,10 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.29.0"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.0"),
+        // Aligned with flux-2-swift-mlx dependency versions
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.2"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.29.0")
     ],
     targets: [

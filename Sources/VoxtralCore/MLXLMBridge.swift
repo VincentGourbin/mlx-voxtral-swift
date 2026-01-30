@@ -727,13 +727,20 @@ public func loadQuantizedVoxtral(
     let globalGroupSize = quantization["group_size"] as! Int
     let globalBits = quantization["bits"] as! Int
 
-    // Use the new 4-argument quantize API
+    // Use the filter that returns per-layer (groupSize, bits, mode) for mixed quantization support
     MLXNN.quantize(
         model: model,
-        groupSize: globalGroupSize,
-        bits: globalBits,
-        filter: { path, module in
-            classPredicate(path: path, module: module) != nil
+        filter: { path, module -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
+            // Get per-layer config from classPredicate
+            guard let quantParams = classPredicate(path: path, module: module) else {
+                return nil  // Don't quantize this layer
+            }
+
+            // Use per-layer config if available, otherwise fall back to global
+            let layerGroupSize = quantParams["group_size"] as? Int ?? globalGroupSize
+            let layerBits = quantParams["bits"] as? Int ?? globalBits
+
+            return (groupSize: layerGroupSize, bits: layerBits, mode: .affine)
         }
     )
 

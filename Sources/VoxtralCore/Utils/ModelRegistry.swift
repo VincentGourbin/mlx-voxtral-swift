@@ -88,18 +88,9 @@ public enum ModelRegistry {
         // Small 24B quantized models (higher quality, more resources needed)
         VoxtralModelInfo(
             id: "small-24b-8bit",
-            repoId: "mzbac/Voxtral-Small-24B-2507-8bit",
+            repoId: "VincentGOURBIN/voxtral-small-8bit",
             name: "Voxtral Small 24B (8-bit)",
             description: "Higher quality, requires more memory (~25GB)",
-            size: "~25 GB",
-            quantization: "8-bit",
-            parameters: "24B"
-        ),
-        VoxtralModelInfo(
-            id: "small-8bit",
-            repoId: "VincentGOURBIN/voxtral-small-8bit",
-            name: "Voxtral Small (8-bit)",
-            description: "Community optimized 8-bit version",
             size: "~25 GB",
             quantization: "8-bit",
             parameters: "24B"

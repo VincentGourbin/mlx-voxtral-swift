@@ -261,7 +261,7 @@ class TranscriptionManager: ObservableObject {
         currentLoadedModelId = nil
 
         // Clear GPU cache to release memory
-        GPU.clearCache()
+        Memory.clearCache()
         GPU.resetPeakMemory()
     }
 
@@ -269,27 +269,27 @@ class TranscriptionManager: ObservableObject {
 
     /// Clear MLX GPU cache to free memory
     func clearCache() {
-        GPU.clearCache()
+        Memory.clearCache()
     }
 
     /// Aggressive memory cleanup - clears cache and resets peak tracking
     func aggressiveMemoryCleanup() {
         // Clear the recyclable cache
-        GPU.clearCache()
+        Memory.clearCache()
         // Reset peak memory tracking
         GPU.resetPeakMemory()
         // Try setting a temporary low cache limit to force cleanup
-        let currentCache = GPU.cacheMemory
+        let currentCache = Memory.cacheMemory
         if currentCache > 0 {
-            GPU.set(cacheLimit: 0)  // Temporarily disable caching
-            GPU.clearCache()
-            GPU.set(cacheLimit: Int.max)  // Restore default (unlimited)
+            Memory.cacheLimit = 0  // Temporarily disable caching
+            Memory.clearCache()
+            Memory.cacheLimit = Int.max  // Restore default (unlimited)
         }
     }
 
     /// Get current MLX memory stats
     var memoryStats: (active: Int, cache: Int, peak: Int) {
-        (GPU.activeMemory, GPU.cacheMemory, GPU.peakMemory)
+        (Memory.activeMemory, Memory.cacheMemory, Memory.peakMemory)
     }
 
     /// Format bytes as human-readable string
@@ -450,7 +450,7 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = false
 
         // 🧹 Release GPU memory after generation
-        GPU.clearCache()
+        Memory.clearCache()
     }
 
     // MARK: - Chat Mode
@@ -608,6 +608,6 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = false
 
         // 🧹 Release GPU memory after generation
-        GPU.clearCache()
+        Memory.clearCache()
     }
 }

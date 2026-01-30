@@ -451,7 +451,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     public var multi_modal_projector: VoxtralMultiModalProjector
 
     // CRITICAL: Store reference to standardModel for using loaded audio components
-    private var standardModel: VoxtralStandardModel?
+    // Internal access needed for VoxtralHybridEncoder extension to use loaded audio tower
+    var standardModel: VoxtralStandardModel?
     // Python: self.language_model = LlamaModel(text_config)  
     // Swift: Use LlamaModel for non-quantized, LlamaModelWrapper for quantized models
     @ModuleInfo public var language_model: Module  // Can be LlamaModel or LlamaModelWrapper
@@ -539,7 +540,19 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             numLayers: standardModel.configuration.audioConfig.hiddenLayers,
             intermediate_size: standardModel.configuration.audioConfig.intermediateSize  // 5120, not 4096!
         )
-        let textConfig = VoxtralConfig.TextConfig()
+        // FIX: Use actual text config values from model, not defaults!
+        let textConfig = VoxtralConfig.TextConfig(
+            vocabularySize: standardModel.configuration.textConfig.vocabularySize,
+            hiddenSize: standardModel.configuration.textConfig.hiddenSize,  // 3072 for mini-3b
+            intermediateSize: standardModel.configuration.textConfig.intermediateSize,
+            numberOfHiddenLayers: standardModel.configuration.textConfig.hiddenLayers,
+            numberOfAttentionHeads: standardModel.configuration.textConfig.attentionHeads,
+            numberOfKeyValueHeads: standardModel.configuration.textConfig.kvHeads,
+            headDimension: standardModel.configuration.textConfig.headDim ?? 128,
+            maxPositionEmbeddings: standardModel.configuration.textConfig.maxPositionEmbeddings,
+            ropeTheta: Double(standardModel.configuration.textConfig.ropeTheta),
+            rmsNormEpsilon: Double(standardModel.configuration.textConfig.rmsNormEps)
+        )
 
         self.config = VoxtralConfig(
             audioConfig: audioConfig,
@@ -1127,6 +1140,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Generate tokens from input - returns token IDs directly
      * 🚀 OPTIMIZED: Returns [Int] instead of [(MLXArray, Any?)] to avoid keeping GPU references
      * 📦 MEMORY: contextSize parameter controls KV cache limit (nil = unlimited)
+     * 🔧 MEMORY: memoryOptimization parameter controls periodic eval/cleanup (aligned with flux-2-swift-mlx)
      */
     public func generateStream(
         inputIds: MLXArray,
@@ -1136,7 +1150,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         repetitionPenalty: Float = 1.2,
-        contextSize: Int? = nil  // nil = unlimited (KVCacheSimple), set value = limited (RotatingKVCache)
+        contextSize: Int? = nil,  // nil = unlimited (KVCacheSimple), set value = limited (RotatingKVCache)
+        memoryOptimization: MemoryOptimizationConfig? = nil  // nil = use VoxtralMemoryManager.shared.config
     ) throws -> [Int] {
 
         var tokenIds: [Int] = []
@@ -1144,6 +1159,12 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         guard inputIds.size > 0 else {
             throw VoxtralError.invalidInput("input_ids must be provided")
         }
+
+        // Get memory optimization config (use shared manager if not provided)
+        let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
+
+        // Override contextSize if memory optimization specifies maxKVCacheSize
+        let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
         let stopTokens = [2, 4, 32000]
 
@@ -1156,7 +1177,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         let numLayers = getLanguageModelLayerCount()
         var cache: [any KVCache]? = []
 
-        if let maxContext = contextSize {
+        if let maxContext = effectiveContextSize {
             // RotatingKVCache: limits memory by discarding old tokens when exceeding maxSize
             // keep: 4 = preserve first 4 tokens (BOS + critical prompt tokens)
             for _ in 0..<numLayers {
@@ -1174,7 +1195,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         var recentTokenIds: [Int] = []  // Keep only Int IDs for repetition penalty
         var currentAttentionMask = attentionMask
 
-        for _ in 0..<maxNewTokens {
+        // Reset memory optimization cycle counter
+        VoxtralMemoryManager.shared.resetOptimizationCycle()
+
+        for tokenIndex in 0..<maxNewTokens {
             let modelOutput: VoxtralModelOutput
 
             if cache![0].offset == 0 {
@@ -1224,6 +1248,20 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
             }
 
+            // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
+            if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
+                // Force evaluation to prevent memory buildup from lazy computation
+                eval(generated)
+
+                if memConfig.clearCacheOnEval {
+                    Memory.clearCache()
+                }
+
+                if memConfig.resetPeakMemory {
+                    GPU.resetPeakMemory()
+                }
+            }
+
             // Python: if current_token_id in stop_tokens: break
             if stopTokens.contains(currentTokenId) {
                 break
@@ -1240,7 +1278,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
         // 🧹 Clear KV cache and intermediate tensors
         cache = nil
-        GPU.clearCache()
+        Memory.clearCache()
 
         return tokenIds
     }
@@ -1248,6 +1286,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Generate tokens using pre-computed audio embeddings (for hybrid Core ML + MLX mode)
      * This bypasses the audio encoder and uses embeddings computed externally (e.g., via Core ML)
+     * 🔧 MEMORY: memoryOptimization parameter controls periodic eval/cleanup (aligned with flux-2-swift-mlx)
      */
     public func generateStreamWithAudioEmbeds(
         inputIds: MLXArray,
@@ -1257,7 +1296,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         repetitionPenalty: Float = 1.2,
-        contextSize: Int? = nil
+        contextSize: Int? = nil,
+        memoryOptimization: MemoryOptimizationConfig? = nil  // nil = use VoxtralMemoryManager.shared.config
     ) throws -> [Int] {
 
         var tokenIds: [Int] = []
@@ -1265,6 +1305,12 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         guard inputIds.size > 0 else {
             throw VoxtralError.invalidInput("input_ids must be provided")
         }
+
+        // Get memory optimization config (use shared manager if not provided)
+        let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
+
+        // Override contextSize if memory optimization specifies maxKVCacheSize
+        let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
         let stopTokens = [2, 4, 32000]
 
@@ -1277,7 +1323,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         let numLayers = getLanguageModelLayerCount()
         var cache: [any KVCache]? = []
 
-        if let maxContext = contextSize {
+        if let maxContext = effectiveContextSize {
             for _ in 0..<numLayers {
                 cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
             }
@@ -1292,7 +1338,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         var recentTokenIds: [Int] = []
         var currentAttentionMask = attentionMask
 
-        for _ in 0..<maxNewTokens {
+        // Reset memory optimization cycle counter
+        VoxtralMemoryManager.shared.resetOptimizationCycle()
+
+        for tokenIndex in 0..<maxNewTokens {
             let modelOutput: VoxtralModelOutput
 
             if cache![0].offset == 0 {
@@ -1339,6 +1388,20 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
             }
 
+            // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
+            if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
+                // Force evaluation to prevent memory buildup from lazy computation
+                eval(generated)
+
+                if memConfig.clearCacheOnEval {
+                    Memory.clearCache()
+                }
+
+                if memConfig.resetPeakMemory {
+                    GPU.resetPeakMemory()
+                }
+            }
+
             if stopTokens.contains(currentTokenId) {
                 break
             }
@@ -1352,7 +1415,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         }
 
         cache = nil
-        GPU.clearCache()
+        Memory.clearCache()
 
         return tokenIds
     }

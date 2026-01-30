@@ -93,11 +93,13 @@ public class VoxtralHybridEncoder {
     /// Initialize hybrid encoder with optional Core ML model URL
     /// - Parameters:
     ///   - coreMLModelURL: Optional URL to Core ML model
+    ///   - coreMLConfig: Optional Core ML configuration with variant info
     ///   - encoderConfig: Configuration for MLX fallback encoder
     ///   - projectorIntermediateSize: Intermediate size for projector
     ///   - preferredBackend: Preferred backend (default: auto)
     public init(
         coreMLModelURL: URL? = nil,
+        coreMLConfig: VoxtralCoreMLConfig? = nil,
         encoderConfig: VoxtralEncoderConfig = VoxtralEncoderConfig(),
         projectorIntermediateSize: Int = 5120,
         preferredBackend: VoxtralEncoderBackend = .auto
@@ -116,10 +118,11 @@ public class VoxtralHybridEncoder {
                 VoxtralDebug.log("Failed to load Core ML encoder: \(error)")
             }
         } else {
-            // Try auto-discovery
+            // Try auto-discovery with variant-specific config
+            let config = coreMLConfig ?? .default
             do {
-                self.coreMLEncoder = try VoxtralCoreMLEncoder()
-                VoxtralDebug.log("Core ML encoder auto-discovered")
+                self.coreMLEncoder = try VoxtralCoreMLEncoder(config: config)
+                VoxtralDebug.log("Core ML encoder auto-discovered (variant: \(config.variant.rawValue))")
             } catch {
                 VoxtralDebug.log("Core ML encoder not found, using MLX fallback")
             }
@@ -138,6 +141,32 @@ public class VoxtralHybridEncoder {
     public func setMLXProjector(_ projector: VoxtralMultiModalProjector) {
         self.mlxProjector = projector
     }
+
+    /// Set the MLX encoder for fallback mode (with loaded weights)
+    /// - Parameter encoder: The VoxtralEncoder instance with loaded weights
+    public func setMLXEncoder(_ encoder: VoxtralEncoder) {
+        self.mlxEncoder = encoder
+    }
+
+    /// Set the MLX encoder from VoxtralStandardEncoder (with loaded weights)
+    /// - Parameter encoder: The VoxtralStandardEncoder instance with loaded weights
+    public func setMLXEncoderFromStandard(_ encoder: VoxtralStandardEncoder) {
+        // Store reference to use in encodeMLX
+        self.standardEncoder = encoder
+    }
+
+    /// Set the MLX projector from VoxtralStandardProjector (with loaded weights)
+    /// - Parameter projector: The VoxtralStandardProjector instance with loaded weights
+    public func setMLXProjectorFromStandard(_ projector: VoxtralStandardProjector) {
+        // Store reference to use in encodeMLX
+        self.standardProjector = projector
+    }
+
+    /// Internal reference to standard encoder for fallback
+    private var standardEncoder: VoxtralStandardEncoder?
+
+    /// Internal reference to standard projector for fallback
+    private var standardProjector: VoxtralStandardProjector?
 
     // MARK: - Backend Selection
 
@@ -228,9 +257,41 @@ public class VoxtralHybridEncoder {
 
     /// Encode using MLX (GPU) - fallback
     private func encodeMLX(_ inputFeatures: MLXArray) throws -> MLXArray {
+        // Prefer standard encoder with loaded weights if available
+        if let stdEncoder = standardEncoder {
+            // Use the loaded standard encoder and projector
+            VoxtralDebug.log("Using standard encoder with loaded weights")
+            // VoxtralStandardEncoder returns MLXArray directly (not a tuple)
+            let hiddenStates = stdEncoder(inputFeatures)  // [numChunks, 1500, 1280]
+
+            // Reshape for projector: [numChunks, 1500, 1280] -> [-1, 5120]
+            let reshaped = hiddenStates.reshaped([-1, projectorIntermediateSize])
+
+            // Project using standard projector with loaded weights (preferred)
+            let projected: MLXArray
+            if let stdProjector = standardProjector {
+                projected = stdProjector(reshaped)  // [-1, 3072]
+                VoxtralDebug.log("Using standard projector with loaded weights")
+            } else if let projector = mlxProjector {
+                projected = projector(reshaped)  // [-1, 3072]
+                VoxtralDebug.log("WARNING: Using empty projector (no loaded weights)")
+            } else {
+                VoxtralDebug.log("WARNING: No projector set, returning raw encoder output")
+                projected = reshaped
+            }
+
+            // Add batch dimension
+            let result = expandedDimensions(projected, axis: 0)
+            eval(result)
+            return result
+        }
+
+        // Fallback to basic MLX encoder (uninitialized weights - not recommended)
         guard let encoder = mlxEncoder else {
             throw VoxtralCoreMLError.notAvailable("MLX encoder not initialized")
         }
+
+        VoxtralDebug.log("WARNING: Using MLX encoder without loaded weights")
 
         // Process through encoder
         let (hiddenStates, _, _) = encoder(inputFeatures)  // [numChunks, 1500, 1280]
@@ -338,6 +399,69 @@ public class VoxtralHybridEncoder {
     }
 }
 
+// MARK: - Factory Methods
+
+@available(macOS 13.0, iOS 16.0, *)
+extension VoxtralHybridEncoder {
+
+    /// Create hybrid encoder with Core ML downloaded from HuggingFace
+    /// - Parameters:
+    ///   - variant: Core ML variant to download (mini or small)
+    ///   - encoderConfig: Configuration for MLX fallback encoder
+    ///   - projectorIntermediateSize: Intermediate size for projector
+    ///   - preferredBackend: Preferred backend (default: auto)
+    ///   - progress: Optional download progress callback
+    /// - Returns: Configured VoxtralHybridEncoder
+    public static func withHuggingFaceDownload(
+        variant: VoxtralCoreMLVariant = .mini,
+        encoderConfig: VoxtralEncoderConfig = VoxtralEncoderConfig(),
+        projectorIntermediateSize: Int = 5120,
+        preferredBackend: VoxtralEncoderBackend = .auto,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> VoxtralHybridEncoder {
+        // Download Core ML model from HuggingFace
+        let modelURL = try await VoxtralCoreMLEncoder.downloadFromHuggingFace(
+            variant: variant,
+            progress: progress
+        )
+
+        // Create hybrid encoder with downloaded model
+        return VoxtralHybridEncoder(
+            coreMLModelURL: modelURL,
+            encoderConfig: encoderConfig,
+            projectorIntermediateSize: projectorIntermediateSize,
+            preferredBackend: preferredBackend
+        )
+    }
+
+    /// Create hybrid encoder with Core ML auto-selected for MLX model
+    /// - Parameters:
+    ///   - mlxModelRepoId: MLX model repository ID to match variant
+    ///   - encoderConfig: Configuration for MLX fallback encoder
+    ///   - projectorIntermediateSize: Intermediate size for projector
+    ///   - preferredBackend: Preferred backend (default: auto)
+    ///   - progress: Optional download progress callback
+    /// - Returns: Configured VoxtralHybridEncoder with matching Core ML variant
+    public static func forMLXModel(
+        mlxModelRepoId: String,
+        encoderConfig: VoxtralEncoderConfig = VoxtralEncoderConfig(),
+        projectorIntermediateSize: Int = 5120,
+        preferredBackend: VoxtralEncoderBackend = .auto,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> VoxtralHybridEncoder {
+        let variant = VoxtralCoreMLVariant.fromMLXModelRepoId(mlxModelRepoId)
+        VoxtralDebug.log("Auto-selected Core ML variant '\(variant.rawValue)' for MLX model: \(mlxModelRepoId)")
+
+        return try await withHuggingFaceDownload(
+            variant: variant,
+            encoderConfig: encoderConfig,
+            projectorIntermediateSize: projectorIntermediateSize,
+            preferredBackend: preferredBackend,
+            progress: progress
+        )
+    }
+}
+
 // MARK: - Integration with VoxtralForConditionalGeneration
 
 @available(macOS 13.0, iOS 16.0, *)
@@ -347,6 +471,13 @@ extension VoxtralForConditionalGeneration {
     /// - Parameter preferredBackend: Preferred backend for audio encoding
     /// - Returns: Configured VoxtralHybridEncoder
     public func createHybridEncoder(preferredBackend: VoxtralEncoderBackend = .auto) -> VoxtralHybridEncoder {
+        // Determine Core ML variant based on text hidden size
+        // Small (24B) has hiddenSize 5120, Mini (3B) has hiddenSize 3072
+        let coreMLVariant: VoxtralCoreMLVariant = config.textConfig.hiddenSize == 5120 ? .small : .mini
+        VoxtralDebug.log("Model text hiddenSize: \(config.textConfig.hiddenSize) -> Core ML variant: \(coreMLVariant.rawValue)")
+
+        let coreMLConfig = coreMLVariant == .small ? VoxtralCoreMLConfig.small : VoxtralCoreMLConfig.mini
+
         let encoderConfig = VoxtralEncoderConfig(
             hidden_size: config.audioConfig.hiddenSize,
             intermediate_size: config.audioConfig.intermediate_size,
@@ -355,13 +486,63 @@ extension VoxtralForConditionalGeneration {
         )
 
         let hybridEncoder = VoxtralHybridEncoder(
+            coreMLConfig: coreMLConfig,
             encoderConfig: encoderConfig,
             projectorIntermediateSize: config.audioConfig.intermediate_size,
             preferredBackend: preferredBackend
         )
 
+        // Set the MLX projector for fallback (empty - not recommended)
+        hybridEncoder.setMLXProjector(multi_modal_projector)
+
+        // Set the standard encoder and projector with loaded weights for MLX fallback
+        if let stdModel = standardModel {
+            hybridEncoder.setMLXEncoderFromStandard(stdModel.audioTower)
+            hybridEncoder.setMLXProjectorFromStandard(stdModel.multiModalProjector)
+            VoxtralDebug.log("Hybrid encoder: MLX fallback will use loaded audio tower and projector weights")
+        }
+
+        return hybridEncoder
+    }
+
+    /// Create a hybrid encoder with Core ML downloaded from HuggingFace
+    /// The variant is auto-selected based on this model's configuration
+    /// - Parameters:
+    ///   - preferredBackend: Preferred backend for audio encoding
+    ///   - progress: Optional download progress callback
+    /// - Returns: Configured VoxtralHybridEncoder with matching Core ML model
+    public func createHybridEncoderWithDownload(
+        preferredBackend: VoxtralEncoderBackend = .auto,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> VoxtralHybridEncoder {
+        // Determine variant based on text hidden size
+        let variant: VoxtralCoreMLVariant = config.textConfig.hiddenSize == 5120 ? .small : .mini
+        VoxtralDebug.log("Model text hiddenSize: \(config.textConfig.hiddenSize) -> Core ML variant: \(variant.rawValue)")
+
+        let encoderConfig = VoxtralEncoderConfig(
+            hidden_size: config.audioConfig.hiddenSize,
+            intermediate_size: config.audioConfig.intermediate_size,
+            num_hidden_layers: 32,
+            num_attention_heads: config.audioConfig.numAttentionHeads
+        )
+
+        let hybridEncoder = try await VoxtralHybridEncoder.withHuggingFaceDownload(
+            variant: variant,
+            encoderConfig: encoderConfig,
+            projectorIntermediateSize: config.audioConfig.intermediate_size,
+            preferredBackend: preferredBackend,
+            progress: progress
+        )
+
         // Set the MLX projector for fallback
         hybridEncoder.setMLXProjector(multi_modal_projector)
+
+        // Set the standard encoder and projector with loaded weights for MLX fallback
+        if let stdModel = standardModel {
+            hybridEncoder.setMLXEncoderFromStandard(stdModel.audioTower)
+            hybridEncoder.setMLXProjectorFromStandard(stdModel.multiModalProjector)
+            VoxtralDebug.log("Hybrid encoder: MLX fallback will use loaded audio tower and projector weights")
+        }
 
         return hybridEncoder
     }

@@ -16,6 +16,7 @@
 
 import Foundation
 @preconcurrency import CoreML
+import Hub
 
 /// Errors specific to Core ML encoder operations
 public enum VoxtralCoreMLError: Error, LocalizedError {
@@ -47,8 +48,59 @@ public enum VoxtralCoreMLError: Error, LocalizedError {
     }
 }
 
+/// Voxtral Core ML model variant
+public enum VoxtralCoreMLVariant: String, Sendable {
+    case mini = "mini"    // 3B - output 3072
+    case small = "small"  // 24B - output 5120
+
+    /// Output hidden size for this variant
+    public var hiddenSize: Int {
+        switch self {
+        case .mini: return 3072
+        case .small: return 5120
+        }
+    }
+
+    /// HuggingFace repository for this variant
+    public var huggingFaceRepo: String {
+        switch self {
+        case .mini: return "VincentGOURBIN/voxtral-encoder-coreml-mini"
+        case .small: return "VincentGOURBIN/voxtral-encoder-coreml-small"
+        }
+    }
+
+    /// Model file name for this variant
+    public var modelName: String {
+        switch self {
+        case .mini: return "VoxtralEncoderMini.mlmodelc"
+        case .small: return "VoxtralEncoderSmall.mlmodelc"
+        }
+    }
+
+    /// Detect variant from MLX model repo ID
+    public static func fromMLXModelRepoId(_ repoId: String) -> VoxtralCoreMLVariant {
+        // Small models (24B)
+        if repoId.lowercased().contains("small") || repoId.lowercased().contains("24b") {
+            return .small
+        }
+        // Default to mini (3B)
+        return .mini
+    }
+
+    /// Description for display
+    public var description: String {
+        switch self {
+        case .mini: return "Mini (3B) - output [1, 375, 3072]"
+        case .small: return "Small (24B) - output [1, 375, 5120]"
+        }
+    }
+}
+
 /// Configuration for Core ML encoder
 public struct VoxtralCoreMLConfig {
+    /// Model variant (mini or small)
+    public var variant: VoxtralCoreMLVariant
+
     /// Preferred compute units (default: cpuAndNeuralEngine for ANE)
     public var computeUnits: MLComputeUnits
 
@@ -58,13 +110,34 @@ public struct VoxtralCoreMLConfig {
     /// Expected input shape [batch, melBins, frames]
     public let inputShape: [Int] = [1, 128, 3000]
 
-    /// Expected output shape [batch, audioFrames, hiddenSize]
-    public let outputShape: [Int] = [1, 375, 3072]
+    /// Expected output shape [batch, audioFrames, hiddenSize] - depends on variant
+    public var outputShape: [Int] {
+        [1, 375, variant.hiddenSize]
+    }
 
-    /// Default configuration optimized for GPU
+    /// Default configuration optimized for GPU with Mini variant
     /// GPU provides more consistent performance (~280ms with VoxtralEncoderFull)
     public static var `default`: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
+            variant: .mini,
+            computeUnits: .cpuAndGPU,
+            allowLowPrecisionAccumulationOnGPU: true
+        )
+    }
+
+    /// Default configuration for Mini variant
+    public static var mini: VoxtralCoreMLConfig {
+        VoxtralCoreMLConfig(
+            variant: .mini,
+            computeUnits: .cpuAndGPU,
+            allowLowPrecisionAccumulationOnGPU: true
+        )
+    }
+
+    /// Default configuration for Small variant
+    public static var small: VoxtralCoreMLConfig {
+        VoxtralCoreMLConfig(
+            variant: .small,
             computeUnits: .cpuAndGPU,
             allowLowPrecisionAccumulationOnGPU: true
         )
@@ -73,6 +146,7 @@ public struct VoxtralCoreMLConfig {
     /// Configuration for GPU-only execution
     public static var gpuOnly: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
+            variant: .mini,
             computeUnits: .cpuAndGPU,
             allowLowPrecisionAccumulationOnGPU: true
         )
@@ -81,15 +155,18 @@ public struct VoxtralCoreMLConfig {
     /// Configuration for CPU-only execution (fallback)
     public static var cpuOnly: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
+            variant: .mini,
             computeUnits: .cpuOnly,
             allowLowPrecisionAccumulationOnGPU: false
         )
     }
 
     public init(
+        variant: VoxtralCoreMLVariant = .mini,
         computeUnits: MLComputeUnits = .cpuAndNeuralEngine,
         allowLowPrecisionAccumulationOnGPU: Bool = true
     ) {
+        self.variant = variant
         self.computeUnits = computeUnits
         self.allowLowPrecisionAccumulationOnGPU = allowLowPrecisionAccumulationOnGPU
     }
@@ -155,13 +232,20 @@ public class VoxtralCoreMLEncoder {
         // 2. Documents directory
         // 3. Current directory
 
-        // Search for models in priority order (full encoder with projector preferred)
-        let modelNames = [
+        // Build search list based on variant (variant-specific models first)
+        var modelNames: [String] = []
+
+        // Add variant-specific model names first
+        modelNames.append(config.variant.modelName)
+        modelNames.append(config.variant.modelName.replacingOccurrences(of: ".mlmodelc", with: ".mlpackage"))
+
+        // Add generic fallback names (legacy support)
+        modelNames.append(contentsOf: [
             "VoxtralEncoderFull.mlmodelc",
             "VoxtralEncoderFull.mlpackage",
             "VoxtralEncoder.mlmodelc",
             "VoxtralEncoder.mlpackage"
-        ]
+        ])
         var foundURL: URL?
 
         // Search in main bundle
@@ -342,6 +426,141 @@ public class VoxtralCoreMLEncoder {
         // iOS devices with A11 or later have ANE
         return true
         #endif
+    }
+
+    // MARK: - HuggingFace Download
+
+    /// Default HuggingFace repository for Core ML encoder (Mini variant)
+    public static let defaultHuggingFaceRepo = "VincentGOURBIN/voxtral-encoder-coreml-mini"
+
+    /// Default model name in the repository
+    public static let defaultModelName = "VoxtralEncoderMini.mlmodelc"
+
+    /// Download Core ML encoder from HuggingFace Hub
+    /// - Parameters:
+    ///   - variant: Model variant (mini or small) - determines repo and model name
+    ///   - progress: Optional progress callback (progress 0-1, status message)
+    /// - Returns: URL to the downloaded model
+    public static func downloadFromHuggingFace(
+        variant: VoxtralCoreMLVariant = .mini,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> URL {
+        let repo = variant.huggingFaceRepo
+        let modelName = variant.modelName
+
+        progress?(0.0, "Checking cache for \(variant.rawValue) encoder...")
+
+        // Check if already cached
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("models")
+            .appendingPathComponent(repo.replacingOccurrences(of: "/", with: "--"))
+
+        let modelPath = cacheDir.appendingPathComponent(modelName)
+
+        // Check if model exists in cache
+        if FileManager.default.fileExists(atPath: modelPath.path) {
+            // Verify it's a valid Core ML model
+            let compiledPath = modelPath.appendingPathComponent("model.mil")
+            let weightsPath = modelPath.appendingPathComponent("weights")
+            if FileManager.default.fileExists(atPath: compiledPath.path) ||
+               FileManager.default.fileExists(atPath: weightsPath.path) {
+                progress?(1.0, "Core ML \(variant.rawValue) model found in cache")
+                return modelPath
+            }
+        }
+
+        progress?(0.1, "Downloading \(variant.rawValue) encoder from HuggingFace...")
+        VoxtralDebug.log("Downloading Core ML \(variant.rawValue) encoder from \(repo)")
+
+        // Create Hub API
+        let hubApi = HubApi(
+            downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            useOfflineMode: false
+        )
+
+        // Download the model
+        do {
+            progress?(0.2, "Fetching \(modelName)...")
+
+            // Download the entire repository snapshot
+            // The model is stored as a directory (VoxtralEncoderMini.mlmodelc/)
+            let snapshotURL = try await hubApi.snapshot(
+                from: repo,
+                matching: ["\(modelName)/*", "\(modelName)/**/*"]
+            )
+
+            progress?(0.9, "Verifying download...")
+
+            // The snapshot URL points to the repo directory, find the model inside
+            let downloadedModelPath = snapshotURL.appendingPathComponent(modelName)
+
+            if FileManager.default.fileExists(atPath: downloadedModelPath.path) {
+                progress?(1.0, "Core ML \(variant.rawValue) encoder downloaded!")
+                return downloadedModelPath
+            }
+
+            // If exact path doesn't work, try finding it
+            let enumerator = FileManager.default.enumerator(at: snapshotURL, includingPropertiesForKeys: nil)
+            while let url = enumerator?.nextObject() as? URL {
+                if url.lastPathComponent == modelName && url.hasDirectoryPath {
+                    progress?(1.0, "Core ML \(variant.rawValue) encoder downloaded!")
+                    return url
+                }
+            }
+
+            throw VoxtralCoreMLError.modelNotFound("Model \(modelName) not found in downloaded snapshot from \(repo)")
+
+        } catch {
+            throw VoxtralCoreMLError.modelLoadFailed("Failed to download \(variant.rawValue) encoder from HuggingFace: \(error.localizedDescription)")
+        }
+    }
+
+    /// Download Core ML encoder for a specific MLX model
+    /// Automatically selects the correct variant based on the MLX model's configuration
+    /// - Parameters:
+    ///   - mlxModelRepoId: The MLX model repository ID to match
+    ///   - progress: Optional progress callback
+    /// - Returns: URL to the downloaded model
+    public static func downloadForMLXModel(
+        mlxModelRepoId: String,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> URL {
+        let variant = VoxtralCoreMLVariant.fromMLXModelRepoId(mlxModelRepoId)
+        VoxtralDebug.log("Selected Core ML variant '\(variant.rawValue)' for MLX model: \(mlxModelRepoId)")
+        return try await downloadFromHuggingFace(variant: variant, progress: progress)
+    }
+
+    /// Convenience initializer that downloads from HuggingFace if needed
+    /// - Parameters:
+    ///   - variant: Model variant to download
+    ///   - config: Core ML configuration (will be updated with variant if needed)
+    ///   - progress: Optional progress callback
+    public static func fromHuggingFace(
+        variant: VoxtralCoreMLVariant = .mini,
+        config: VoxtralCoreMLConfig? = nil,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> VoxtralCoreMLEncoder {
+        let modelURL = try await downloadFromHuggingFace(variant: variant, progress: progress)
+
+        // Use provided config or create one with the correct variant
+        var finalConfig = config ?? .default
+        finalConfig.variant = variant
+
+        return try VoxtralCoreMLEncoder(modelURL: modelURL, config: finalConfig)
+    }
+
+    /// Convenience initializer that auto-selects variant based on MLX model
+    /// - Parameters:
+    ///   - mlxModelRepoId: MLX model repository ID to match variant
+    ///   - config: Core ML configuration
+    ///   - progress: Optional progress callback
+    public static func forMLXModel(
+        mlxModelRepoId: String,
+        config: VoxtralCoreMLConfig? = nil,
+        progress: ((Double, String) -> Void)? = nil
+    ) async throws -> VoxtralCoreMLEncoder {
+        let variant = VoxtralCoreMLVariant.fromMLXModelRepoId(mlxModelRepoId)
+        return try await fromHuggingFace(variant: variant, config: config, progress: progress)
     }
 }
 

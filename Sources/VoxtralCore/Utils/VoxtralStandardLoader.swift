@@ -1241,17 +1241,18 @@ func loadQuantizedVoxtral(
         }
     }
 
-    // Use the new 4-argument quantize API with filter
+    // Use the filter that returns per-layer (groupSize, bits, mode) for mixed quantization support
     MLXNN.quantize(
         model: model,
-        groupSize: defaultGroupSize,
-        bits: defaultBits,
-        filter: { modulePath, module in
-            // Check if this module should be quantized based on detected weights
-            quantizedModules[modulePath] != nil
+        filter: { modulePath, module -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
+            // Get per-layer config from detected quantized modules
+            guard let layerConfig = quantizedModules[modulePath] else {
+                return nil  // Don't quantize this layer
+            }
+            return (groupSize: layerConfig.groupSize, bits: layerConfig.bits, mode: .affine)
         }
     )
-    VoxtralDebug.log("Quantization applied to \(quantizedModules.count) modules")
+    VoxtralDebug.log("Quantization applied to \(quantizedModules.count) modules with per-layer config")
 
     return model
 }

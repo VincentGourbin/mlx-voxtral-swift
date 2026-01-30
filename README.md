@@ -60,14 +60,23 @@ swift build
 
 ## Available Models
 
-| Model ID | Size | Description |
-|----------|------|-------------|
-| `mini-3b` | ~6 GB | Official Mistral model (float16) |
-| `mini-3b-8bit` | ~3.5 GB | **Recommended** - Best quality/size balance |
-| `mini-3b-4bit` | ~2 GB | Smallest footprint |
-| `small-24b` | ~48 GB | Official large model (float16) |
-| `small-24b-8bit` | ~25 GB | Large model, better quality |
-| `small-4bit` | ~12 GB | Memory efficient large model |
+### Mini 3B (Fast, lightweight)
+
+| Model ID | HuggingFace Repo | Disk | GPU Peak | Speed |
+|----------|------------------|------|----------|-------|
+| `mini-3b` | `mistralai/Voxtral-Mini-3B-2507` | ~6 GB | ~15 GB | 5.6 tok/s |
+| `mini-3b-8bit` | `mzbac/voxtral-mini-3b-8bit` | ~3.5 GB | ~10 GB | **14.5 tok/s** |
+| `mini-3b-4bit` | `mzbac/voxtral-mini-3b-4bit-mixed` | ~2 GB | ~8 GB | **17.7 tok/s** |
+
+### Small 24B (High quality, resource intensive)
+
+| Model ID | HuggingFace Repo | Disk | GPU Peak | Speed |
+|----------|------------------|------|----------|-------|
+| `small-24b` | `mistralai/Voxtral-Small-24B-2507` | ~48 GB | ~56 GB | 0.5 tok/s |
+| `small-24b-8bit` | `VincentGOURBIN/voxtral-small-8bit` | ~25 GB | ~31 GB | 0.7 tok/s |
+| `small-4bit` | `VincentGOURBIN/voxtral-small-4bit-mixed` | ~12 GB | ~21 GB | **1.0 tok/s** |
+
+> **Recommended**: `mini-3b-8bit` for most users (best speed/quality balance)
 
 ## Model Download
 
@@ -246,27 +255,58 @@ mlx-voxtral-swift/
 
 ## Performance Benchmarks
 
-### Comparison: Swift vs Python
+> Tested on **Apple M3 Max with 96GB unified memory**, Hybrid mode (Core ML encoder + MLX decoder)
 
-Benchmark on a ~7 minute podcast (8000 tokens max) on Apple M3 Max:
+### Mini 3B - Transcription Mode (500 tokens, ~8.5 min audio)
 
-| Implementation | Time | Speedup | Peak Memory | Final Memory |
-|----------------|------|---------|-------------|--------------|
-| **Python** (mlx-voxtral) | 131s | baseline | - | - |
-| **Swift MLX** | 85.6s | **1.53x faster** | 10.79 GB | 4.66 GB |
-| **Swift Hybrid** (Core ML + MLX) | 81.9s | **1.60x faster** | 10.20 GB | 4.00 GB |
+| Quantization | Time | Tokens/s | RTF | GPU Active | GPU Peak |
+|--------------|------|----------|-----|------------|----------|
+| **fp16** | 90.1s | 5.6 | 5.7x | 7.50 GB | 15.26 GB |
+| **8-bit** | 34.6s | 14.5 | 14.8x | 4.00 GB | 10.05 GB |
+| **4-bit mixed** | 28.2s | **17.7** | **18.1x** | 2.28 GB | 8.31 GB |
 
-**Key Findings:**
-- Swift implementation is **~53% faster** than Python
-- Hybrid mode (Core ML encoder + MLX decoder) provides **~4.5% additional speedup** and **660 MB less memory**
-- For longer audio files, hybrid mode benefits increase
+### Mini 3B - Analysis Mode (Chat)
 
-### General Performance
+| Quantization | Tokens | Time | Tokens/s | GPU Active | GPU Peak |
+|--------------|--------|------|----------|------------|----------|
+| **fp16** | 64 | 28.8s | 2.2 | 7.50 GB | 15.27 GB |
+| **8-bit** | 77 | 21.6s | 3.6 | 4.00 GB | 10.07 GB |
+| **4-bit mixed** | 68 | 20.1s | 3.4 | 2.28 GB | 8.33 GB |
 
-On Apple Silicon (M1/M2/M3/M4):
-- **Model loading**: ~5-10 seconds (8-bit quantized)
-- **Transcription speed**: ~15-25 tokens/second
-- **Memory usage**: ~4GB (8-bit) / ~2GB (4-bit)
+### Small 24B - Analysis Mode (Chat)
+
+| Quantization | Tokens | Time | Tokens/s | GPU Active | GPU Peak |
+|--------------|--------|------|----------|------------|----------|
+| **fp16** | 63 | 116.0s | 0.54 | 43.93 GB | 55.56 GB |
+| **8-bit** | 53 | 71.6s | 0.74 | 23.35 GB | 30.96 GB |
+| **4-bit mixed** | 70 | 70.2s | **1.00** | 12.98 GB | 20.55 GB |
+
+### Model Recommendations
+
+| Model | Best For | Min Memory | Speed |
+|-------|----------|------------|-------|
+| **Mini 4-bit** | Mac 8-16GB | ~8 GB | Fast |
+| **Mini 8-bit** | Mac 16-32GB | ~10 GB | Balanced |
+| **Mini fp16** | Mac 32GB+ | ~15 GB | Best quality |
+| **Small 4-bit** | Mac 32GB+ | ~21 GB | High quality |
+| **Small 8-bit** | Mac 64GB+ | ~31 GB | Very high quality |
+| **Small fp16** | Mac 128GB+ | ~56 GB | Maximum quality |
+
+### Swift vs Python Comparison
+
+| Implementation | Time | Speedup | Peak Memory |
+|----------------|------|---------|-------------|
+| **Python** (mlx-voxtral) | 131s | baseline | - |
+| **Swift MLX** | 85.6s | **1.53x faster** | 10.79 GB |
+| **Swift Hybrid** | 81.9s | **1.60x faster** | 10.20 GB |
+
+### Profiling Mode
+
+Run with `--profile` flag for detailed metrics (TTFT, memory):
+
+```bash
+VoxtralCLI transcribe audio.mp3 --backend hybrid --profile
+```
 
 ## Hybrid Mode (Core ML + MLX)
 

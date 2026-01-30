@@ -131,6 +131,9 @@ struct Transcribe: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Show verbose output")
     var verbose = false
 
+    @Flag(name: .long, help: "Show detailed profiling (TTFT, memory, etc.)")
+    var profile = false
+
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TRANSCRIPTION")
@@ -163,11 +166,26 @@ struct Transcribe: AsyncParsableCommand {
         // Initialize hybrid encoder if requested
         var hybridEncoder: VoxtralHybridEncoder? = nil
         if #available(macOS 13.0, iOS 16.0, *), useHybrid {
-            hybridEncoder = voxtralModel.createHybridEncoder(preferredBackend: .auto)
-            if hybridEncoder?.status.coreMLAvailable == true {
-                print("  Core ML encoder: available (using ANE)")
+            // Try local Core ML first, then download from HuggingFace if needed
+            let localEncoder = voxtralModel.createHybridEncoder(preferredBackend: VoxtralEncoderBackend.auto)
+            if localEncoder.status.coreMLAvailable {
+                hybridEncoder = localEncoder
+                print("  Core ML encoder: available (local)")
             } else {
-                print("  Core ML encoder: not found, falling back to MLX")
+                // Download Core ML model from HuggingFace
+                print("  Core ML encoder: downloading from HuggingFace...")
+                do {
+                    hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
+                        preferredBackend: VoxtralEncoderBackend.auto,
+                        progress: { progress, status in
+                            print("    \(status): \(Int(progress * 100))%")
+                        }
+                    )
+                    print("  Core ML encoder: downloaded and ready")
+                } catch {
+                    print("  Core ML encoder: download failed (\(error.localizedDescription)), using MLX fallback")
+                    hybridEncoder = localEncoder
+                }
             }
         }
 
@@ -229,8 +247,16 @@ struct Transcribe: AsyncParsableCommand {
         let tokenCount = tokenIds.count
         var transcription = ""
 
+        // Track TTFT (time to first token)
+        var ttft: Double? = nil
+        var firstTokenTime: Date? = nil
+
         print("\n" + String(repeating: "-", count: 60))
-        for tokenId in tokenIds {
+        for (index, tokenId) in tokenIds.enumerated() {
+            if index == 0 {
+                firstTokenTime = Date()
+                ttft = firstTokenTime!.timeIntervalSince(startGen)
+            }
             if let text = try? processor.decode([tokenId]) {
                 transcription += text
                 print(text, terminator: "")
@@ -253,7 +279,29 @@ struct Transcribe: AsyncParsableCommand {
             }
         }
 
+        // Profiling output
+        if profile {
+            print("\nProfiling:")
+            if let ttftValue = ttft {
+                print("  TTFT (Time to First Token): \(String(format: "%.2f", ttftValue * 1000))ms")
+            }
+            let memStats = VoxtralMemoryManager.shared.memorySummary()
+            print("  GPU Memory Active: \(formatBytes(memStats.active))")
+            print("  GPU Memory Peak: \(formatBytes(memStats.peak))")
+            print("  GPU Memory Cache: \(formatBytes(memStats.cache))")
+        }
+
         print("\n" + String(repeating: "=", count: 60))
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let gb = Double(bytes) / 1_073_741_824
+        let mb = Double(bytes) / 1_048_576
+        if gb >= 1.0 {
+            return String(format: "%.2f GB", gb)
+        } else {
+            return String(format: "%.0f MB", mb)
+        }
     }
 }
 
@@ -282,6 +330,9 @@ struct Chat: AsyncParsableCommand {
 
     @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
+
+    @Flag(name: .long, help: "Show detailed profiling (TTFT, memory, etc.)")
+    var profile = false
 
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
@@ -315,11 +366,26 @@ struct Chat: AsyncParsableCommand {
         // Initialize hybrid encoder if requested
         var hybridEncoder: VoxtralHybridEncoder? = nil
         if #available(macOS 13.0, iOS 16.0, *), useHybrid {
-            hybridEncoder = voxtralModel.createHybridEncoder(preferredBackend: .auto)
-            if hybridEncoder?.status.coreMLAvailable == true {
-                print("  Core ML encoder: available (using ANE)")
+            // Try local Core ML first, then download from HuggingFace if needed
+            let localEncoder = voxtralModel.createHybridEncoder(preferredBackend: VoxtralEncoderBackend.auto)
+            if localEncoder.status.coreMLAvailable {
+                hybridEncoder = localEncoder
+                print("  Core ML encoder: available (local)")
             } else {
-                print("  Core ML encoder: not found, falling back to MLX")
+                // Download Core ML model from HuggingFace
+                print("  Core ML encoder: downloading from HuggingFace...")
+                do {
+                    hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
+                        preferredBackend: VoxtralEncoderBackend.auto,
+                        progress: { progress, status in
+                            print("    \(status): \(Int(progress * 100))%")
+                        }
+                    )
+                    print("  Core ML encoder: downloaded and ready")
+                } catch {
+                    print("  Core ML encoder: download failed (\(error.localizedDescription)), using MLX fallback")
+                    hybridEncoder = localEncoder
+                }
             }
         }
 
@@ -385,8 +451,14 @@ struct Chat: AsyncParsableCommand {
         let tokenCount = tokenIds.count
         var response = ""
 
+        // Track TTFT
+        var ttft: Double? = nil
+
         print("\n" + String(repeating: "-", count: 60))
-        for tokenId in tokenIds {
+        for (index, tokenId) in tokenIds.enumerated() {
+            if index == 0 {
+                ttft = Date().timeIntervalSince(startGen)
+            }
             if let text = try? processor.decode([tokenId]) {
                 response += text
                 print(text, terminator: "")
@@ -396,6 +468,7 @@ struct Chat: AsyncParsableCommand {
         print("\n" + String(repeating: "-", count: 60))
 
         let genTime = Date().timeIntervalSince(startGen)
+        let tokensPerSecond = tokenCount > 0 ? Double(tokenCount) / genTime : 0
         print("\nGenerated \(tokenCount) tokens in \(String(format: "%.2f", genTime))s")
         if #available(macOS 13.0, iOS 16.0, *), let hybrid = hybridEncoder {
             if let encTime = hybrid.status.lastInferenceTimeMs {
@@ -403,7 +476,30 @@ struct Chat: AsyncParsableCommand {
             }
         }
 
+        // Profiling output
+        if profile {
+            print("\nProfiling:")
+            if let ttftValue = ttft {
+                print("  TTFT (Time to First Token): \(String(format: "%.2f", ttftValue * 1000))ms")
+            }
+            print("  Tokens/second: \(String(format: "%.2f", tokensPerSecond))")
+            let memStats = VoxtralMemoryManager.shared.memorySummary()
+            print("  GPU Memory Active: \(formatBytes(memStats.active))")
+            print("  GPU Memory Peak: \(formatBytes(memStats.peak))")
+            print("  GPU Memory Cache: \(formatBytes(memStats.cache))")
+        }
+
         print("\n" + String(repeating: "=", count: 60))
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let gb = Double(bytes) / 1_073_741_824
+        let mb = Double(bytes) / 1_048_576
+        if gb >= 1.0 {
+            return String(format: "%.2f GB", gb)
+        } else {
+            return String(format: "%.0f MB", mb)
+        }
     }
 }
 
