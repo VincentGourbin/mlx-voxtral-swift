@@ -301,6 +301,30 @@ public class ModelDownloader {
             try FileManager.default.removeItem(at: path)
         }
     }
+
+    // MARK: - Convenience Methods for Default Model
+
+    /// Check if the default/recommended model is downloaded
+    public static func isDefaultModelDownloaded() -> Bool {
+        findModelPath(for: ModelRegistry.defaultModel) != nil
+    }
+
+    /// Download the default/recommended model
+    public static func downloadDefaultModel(
+        progress: DownloadProgressCallback? = nil
+    ) async throws -> URL {
+        try await download(ModelRegistry.defaultModel, progress: progress)
+    }
+
+    /// Delete the default/recommended model
+    public static func deleteDefaultModel() throws {
+        try deleteModel(ModelRegistry.defaultModel)
+    }
+
+    /// Get the default model info
+    public static var defaultModel: VoxtralModelInfo {
+        ModelRegistry.defaultModel
+    }
 }
 
 /// Errors for model downloading
