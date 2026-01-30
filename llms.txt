@@ -1,0 +1,129 @@
+# Voxtral Swift MLX
+
+> Native Swift implementation of Voxtral speech-to-text running on Apple Silicon with MLX
+
+## Overview
+
+Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with optional Core ML acceleration.
+
+## Quick Start
+
+```swift
+import VoxtralCore
+
+// High-level API
+let manager = VoxtralTranscriptionManager()
+try await manager.loadModel()
+let result = try await manager.transcribe(audioURL: audioFile)
+print(result.text)
+manager.unloadModel()
+```
+
+## Main APIs
+
+### VoxtralTranscriptionManager (Recommended)
+
+High-level facade for easy integration:
+
+```swift
+// Check/download model
+VoxtralTranscriptionManager.isDefaultModelDownloaded() -> Bool
+VoxtralTranscriptionManager.downloadDefaultModel(progress:) async throws -> URL
+
+// Transcription
+let manager = VoxtralTranscriptionManager()
+try await manager.loadModel()
+let result = try await manager.transcribe(audioURL: URL)
+let response = try await manager.chat(audioURL: URL, prompt: String)
+manager.unloadModel()
+```
+
+### VoxtralPipeline (Lower-level)
+
+More control over model selection:
+
+```swift
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .hybrid)
+try await pipeline.loadModel()
+let text = try await pipeline.transcribe(audio: audioURL)
+pipeline.unload()
+```
+
+### ModelDownloader
+
+```swift
+ModelDownloader.isDefaultModelDownloaded() -> Bool
+ModelDownloader.downloadDefaultModel(progress:) async throws -> URL
+ModelDownloader.deleteDefaultModel() throws
+ModelDownloader.resolveModel(_ identifier: String) async throws -> URL
+```
+
+### ModelRegistry
+
+```swift
+ModelRegistry.models -> [VoxtralModelInfo]
+ModelRegistry.defaultModel -> VoxtralModelInfo
+ModelRegistry.model(withId: String) -> VoxtralModelInfo?
+```
+
+## Available Models
+
+| ID | Name | Size | Quantization |
+|----|------|------|--------------|
+| mini-3b | Voxtral Mini 3B | ~6 GB | float16 |
+| mini-3b-8bit | Voxtral Mini 3B (8-bit) | ~3.5 GB | 8-bit (recommended) |
+| mini-3b-4bit | Voxtral Mini 3B (4-bit) | ~2 GB | 4-bit mixed |
+| small-24b | Voxtral Small 24B | ~48 GB | float16 |
+| small-24b-8bit | Voxtral Small 24B (8-bit) | ~25 GB | 8-bit |
+| small-4bit | Voxtral Small (4-bit) | ~12 GB | 4-bit mixed |
+
+## Key Types
+
+- `VoxtralTranscriptionManager` - High-level transcription API
+- `VoxtralPipeline` - Configurable inference pipeline
+- `TranscriptionResult` - Result with text, tokenCount, duration
+- `VoxtralModelInfo` - Model metadata (id, repoId, name, size)
+- `ModelDownloader` - Model download/cache management
+- `ModelRegistry` - Available models catalog
+- `MemoryOptimizationConfig` - GPU memory settings (.recommended(), .aggressive, .moderate)
+- `VoxtralMemoryManager` - Runtime memory optimization
+
+## CLI Usage
+
+```bash
+# Download model
+./VoxtralCLI download mini-3b-8bit
+
+# Transcribe
+./VoxtralCLI transcribe audio.mp3
+
+# Chat with audio
+./VoxtralCLI chat audio.mp3 "Summarize this audio"
+
+# With profiling
+./VoxtralCLI transcribe audio.mp3 --profile
+```
+
+## Requirements
+
+- macOS 14.0+ (Sonoma)
+- Apple Silicon (M1/M2/M3/M4)
+- Swift 6.0+
+
+## Installation (Swift Package Manager)
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.0")
+]
+```
+
+## Source Files
+
+- `Sources/VoxtralCore/Pipeline/VoxtralTranscriptionManager.swift` - High-level API
+- `Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift` - Pipeline implementation
+- `Sources/VoxtralCore/Utils/ModelDownloader.swift` - Model download logic
+- `Sources/VoxtralCore/Utils/ModelRegistry.swift` - Available models
+- `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift` - Memory settings
+- `Sources/VoxtralCore/VoxtralModeling.swift` - Core model implementation
+- `Sources/VoxtralCore/VoxtralProcessor.swift` - Audio/text processing
