@@ -14,13 +14,12 @@ import MLXLMCommon
  * Wrapper minimal pour les anciens codes qui référencent LlamaModelWrapper
  */
 public class LlamaModelWrapper: Module {
-    // @ModuleInfo required for weight loading and quantization
-    @ModuleInfo(key: "embed_tokens") public var embed_tokens: Embedding
-    @ModuleInfo public var layers: [LlamaStandardBlock]
+    let embed_tokens: Embedding
+    let layers: [LlamaStandardBlock]
 
     public init(embedTokens: Embedding, layers: [LlamaStandardBlock]) {
-        self._embed_tokens.wrappedValue = embedTokens
-        self._layers.wrappedValue = layers
+        self.embed_tokens = embedTokens
+        self.layers = layers
         super.init()
     }
 

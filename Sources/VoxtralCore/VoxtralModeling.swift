@@ -151,12 +151,12 @@ public class VoxtralEncoderLayer: Module {
 
     // Python: def __init__(self, config: VoxtralEncoderConfig)
     let embedDim: Int
-    // @ModuleInfo required for weight loading
+    // @ModuleInfo required for quantization support
     @ModuleInfo(key: "self_attn") public var selfAttn: VoxtralAttention
-    @ModuleInfo(key: "self_attn_layer_norm") public var selfAttnLayerNorm: LayerNorm
+    let self_attn_layer_norm: LayerNorm
     @ModuleInfo public var fc1: Linear
     @ModuleInfo public var fc2: Linear
-    @ModuleInfo(key: "final_layer_norm") public var finalLayerNorm: LayerNorm
+    let final_layer_norm: LayerNorm
     let activation: (MLXArray) -> MLXArray
 
     public init(config: VoxtralEncoderConfig) {
@@ -164,10 +164,10 @@ public class VoxtralEncoderLayer: Module {
         self.embedDim = config.hidden_size
 
         // Python: self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, eps=1e-5)
-        self._selfAttnLayerNorm.wrappedValue = LayerNorm(dimensions: embedDim, eps: 1e-5)
+        self.self_attn_layer_norm = LayerNorm(dimensions: embedDim, eps: 1e-5)
 
         // Python: self.final_layer_norm = nn.LayerNorm(self.embed_dim, eps=1e-5)
-        self._finalLayerNorm.wrappedValue = LayerNorm(dimensions: embedDim, eps: 1e-5)
+        self.final_layer_norm = LayerNorm(dimensions: embedDim, eps: 1e-5)
 
         // Python: activation based on config.activation_function
         switch config.activation_function {
@@ -206,7 +206,7 @@ public class VoxtralEncoderLayer: Module {
         let residual = hiddenStates
         
         // Python: hidden_states = self.self_attn_layer_norm(hidden_states)
-        let normalizedStates = selfAttnLayerNorm(hiddenStates)
+        let normalizedStates = self_attn_layer_norm(hiddenStates)
         
         // Python: hidden_states, attn_weights = self.self_attn(hidden_states=hidden_states, attention_mask=attention_mask, output_attentions=output_attentions)
         let (attnOutput, attnWeights) = selfAttn(normalizedStates, attentionMask: attentionMask, outputAttentions: outputAttentions)
@@ -218,7 +218,7 @@ public class VoxtralEncoderLayer: Module {
         let residual2 = afterAttnResidual
         
         // Python: hidden_states = self.final_layer_norm(hidden_states)
-        let normalizedStates2 = finalLayerNorm(afterAttnResidual)
+        let normalizedStates2 = final_layer_norm(afterAttnResidual)
         
         // Python: hidden_states = self.activation_fn(self.fc1(hidden_states))
         let fc1Output = fc1(normalizedStates2)

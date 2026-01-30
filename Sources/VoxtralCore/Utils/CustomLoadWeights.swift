@@ -118,12 +118,17 @@ extension VoxtralForConditionalGeneration {
             writeDebugToDump("  🎯 Detected quantized layers - replacing ALL quantized modules\n")
             self.replaceAllQuantizedLinearWithWeights(moduleWeights)
         } else {
-            writeDebugToDump("  ℹ️ No quantized modules detected - using update(parameters:) for standard loading\n")
-            // For non-quantized modules, convert weights to ModuleParameters and use update()
-            let weightDict = Dictionary(uniqueKeysWithValues: weights)
-            let parameters = ModuleParameters.unflattened(weightDict)
-            self.update(parameters: parameters)
-            writeDebugToDump("  ✅ Applied \(weights.count) weights via update(parameters:)\n")
+            writeDebugToDump("  ℹ️ No quantized modules detected - using standard loading\n")
+            // For non-quantized modules, use standard loading
+            if let projectorWeights = moduleWeights["multiModalProjector.linear1"] {
+                writeDebugToDump("  🎯 Loading weights for multiModalProjector.linear1 (Linear)\n")
+                try multiModalProjector.linear1.loadWeights(projectorWeights, strict: false)
+            }
+            
+            if let projectorWeights = moduleWeights["multiModalProjector.linear2"] {
+                writeDebugToDump("  🎯 Loading weights for multiModalProjector.linear2 (Linear)\n")
+                try multiModalProjector.linear2.loadWeights(projectorWeights, strict: false)
+            }
         }
         
         // Remove handled weights from the list (including lm_head)
