@@ -245,8 +245,9 @@ public func loadVoxtralModel(
     
     // 🎯 BREAKTHROUGH FIX: Pass ORIGINAL raw weights to sanitize() like Python does
     // Python: weights = model.sanitize(weights) - where weights are the ORIGINAL raw weights
-    writeDebugToDump("🔍 CRITICAL: Calling sanitize() on ORIGINAL RAW weights (not corrupted ones)\n")
-    let sanitizedWeights = try model.sanitize(originalRawWeights)
+    // Use VoxtralForConditionalGeneration-specific sanitize that PRESERVES snake_case keys
+    writeDebugToDump("🔍 CRITICAL: Calling sanitizeForConditionalGeneration() on ORIGINAL RAW weights\n")
+    let sanitizedWeights = try model.sanitizeForConditionalGeneration(originalRawWeights)
     writeDebugToDump("✅ Sanitized \(originalRawWeights.count) original weights to \(sanitizedWeights.count) weights\n")
     
     // ✅ VALIDATED: Sanitized weights preserve original values
@@ -414,8 +415,12 @@ private func convertSnakeCaseToCamelCase(_ snakeCaseString: String) -> String {
  * Extension to support model loading operations not provided by MLX
  */
 extension Module {
+    /**
+     * Default sanitize for VoxtralStandardModel (uses camelCase keys)
+     * This converts snake_case weight keys to camelCase to match VoxtralStandardModel's @ModuleInfo declarations
+     */
     func sanitize(_ weights: [String: MLXArray]) throws -> [String: MLXArray] {
-        VoxtralDebug.log("Sanitizing \(weights.count) weights")
+        VoxtralDebug.log("Sanitizing \(weights.count) weights (VoxtralStandardModel mode)")
 
         var sanitized: [String: MLXArray] = [:]
         var rotaryCount = 0
@@ -494,6 +499,67 @@ extension Module {
         }
 
         VoxtralDebug.log("Sanitized to \(sanitized.count) weights")
+        return sanitized
+    }
+}
+
+/**
+ * Specialized sanitize for VoxtralForConditionalGeneration
+ * PRESERVES snake_case keys to match @ModuleInfo declarations:
+ * - language_model (not languageModel)
+ * - embed_tokens (not embedTokens)
+ * - embed_positions (not embedPositions)
+ * etc.
+ */
+extension VoxtralForConditionalGeneration {
+    func sanitizeForConditionalGeneration(_ weights: [String: MLXArray]) throws -> [String: MLXArray] {
+        VoxtralDebug.log("Sanitizing \(weights.count) weights (VoxtralForConditionalGeneration mode - preserving snake_case)")
+
+        var sanitized: [String: MLXArray] = [:]
+
+        for (key, value) in weights {
+            // Skip rotary embeddings and position_ids like Python
+            if key.contains("rotary_emb") || key.contains("position_ids") {
+                continue
+            }
+
+            let newKey = key
+
+            // For VoxtralForConditionalGeneration, PRESERVE the original snake_case keys
+            // because @ModuleInfo declarations use snake_case keys:
+            // - @ModuleInfo public var language_model: Module
+            // - @ModuleInfo(key: "embed_tokens") public var embedTokens: Embedding
+            // - @ModuleInfo(key: "embed_positions") public var embedPositions: Embedding
+            // - @ModuleInfo(key: "audio_tower") public var audioTower: VoxtralEncoder
+            // - @ModuleInfo(key: "multi_modal_projector") public var multiModalProjector: VoxtralMultiModalProjector
+
+            // VOXTRAL SPECIFIC: Conv weight transpose if needed
+            var finalValue = value
+            if key.contains("conv") && key.contains("weight") && value.ndim == 3 {
+                if value.shape[1] != 3 {  // kernel_size should be 3
+                    finalValue = value.transposed(axes: [0, 2, 1])
+                }
+            }
+
+            sanitized[newKey] = finalValue
+        }
+
+        // VOXTRAL SPECIFIC: Copy embed_tokens for sharing with top-level embed_tokens
+        if let embedWeight = sanitized["language_model.embed_tokens.weight"],
+           sanitized["embed_tokens.weight"] == nil {
+            sanitized["embed_tokens.weight"] = embedWeight
+        }
+        // Also copy quantized components if present
+        if let embedScales = sanitized["language_model.embed_tokens.scales"],
+           sanitized["embed_tokens.scales"] == nil {
+            sanitized["embed_tokens.scales"] = embedScales
+        }
+        if let embedBiases = sanitized["language_model.embed_tokens.biases"],
+           sanitized["embed_tokens.biases"] == nil {
+            sanitized["embed_tokens.biases"] = embedBiases
+        }
+
+        VoxtralDebug.log("Sanitized to \(sanitized.count) weights (snake_case preserved)")
         return sanitized
     }
     
