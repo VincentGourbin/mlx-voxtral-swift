@@ -25,7 +25,7 @@ This is a Swift port of the excellent Python implementation by [@mzbac](https://
 - macOS 14.0 (Sonoma) or later
 - Apple Silicon Mac (M1/M2/M3/M4)
 - Xcode 15.0 or later
-- Swift 5.9 or later
+- Swift 6.0 or later
 
 ## Installation
 
