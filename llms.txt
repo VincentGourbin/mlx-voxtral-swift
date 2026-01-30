@@ -185,6 +185,7 @@ dependencies: [
 
 ## Version History
 
+- v1.0.6 - Fix snake_case key preservation for VoxtralForConditionalGeneration (embed_tokens, embed_positions)
 - v1.0.5 - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
 - v1.0.4 - Tokenizer loading optimization (10-100x faster with binary cache)
 - v1.0.3 - Complete @ModuleInfo coverage for all quantized models
