@@ -119,9 +119,9 @@ public class VoxtralProfiler {
     /// Take a memory snapshot
     public static func snapshot() -> MemorySnapshot {
         MemorySnapshot(
-            mlxActive: GPU.activeMemory,
-            mlxCache: GPU.cacheMemory,
-            mlxPeak: GPU.peakMemory,
+            mlxActive: Memory.activeMemory,
+            mlxCache: Memory.cacheMemory,
+            mlxPeak: Memory.peakMemory,
             processFootprint: getProcessMemoryFootprint(),
             timestamp: Date()
         )
@@ -195,7 +195,7 @@ public class VoxtralProfiler {
 
     /// Clear MLX cache and take new snapshot
     public func clearCacheAndSnapshot() -> MemorySnapshot {
-        GPU.clearCache()
+        Memory.clearCache()
         return Self.snapshot()
     }
 }

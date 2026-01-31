@@ -1229,18 +1229,6 @@ func loadQuantizedVoxtral(
     let quantizedModules = detectQuantizedModules(weights: weights, config: config)
 
     // Step 2: Apply quantization using MLX Swift standard function
-    // Get default quantization params from config
-    var defaultGroupSize = 64
-    var defaultBits = 4
-    if let quantConfig = config.quantization {
-        if case .int(let gs) = quantConfig["group_size"] {
-            defaultGroupSize = gs
-        }
-        if case .int(let b) = quantConfig["bits"] {
-            defaultBits = b
-        }
-    }
-
     // Use the filter that returns per-layer (groupSize, bits, mode) for mixed quantization support
     MLXNN.quantize(
         model: model,

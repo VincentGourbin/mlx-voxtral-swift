@@ -222,14 +222,13 @@ public class VoxtralPipeline: @unchecked Sendable {
                 progress?(0.1 + downloadProgress * 0.4, status)
             }
 
-            // Load model
+            // Load model using the working loadVoxtralStandardModel approach
             progress?(0.5, "Loading model...")
-            let (loadedModel, _) = try loadVoxtralModel(
+            let (standardModel, _) = try loadVoxtralStandardModel(
                 modelPath: modelPath.path,
-                dtype: .bfloat16,
-                lazy: false
+                dtype: .float16
             )
-            self.voxtralModel = loadedModel
+            self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
 
             // Load processor (includes tokenizer loading which can be slow)
             progress?(0.6, "Loading tokenizer...")
@@ -238,9 +237,9 @@ public class VoxtralPipeline: @unchecked Sendable {
                 progress?(0.6 + processorProgress * 0.25, status)
             }
 
-            // Setup hybrid encoder if needed
+            // Setup hybrid encoder if needed (downloads Core ML model for hybrid mode)
             progress?(0.85, "Configuring encoder...")
-            try setupEncoder()
+            try await setupEncoder()
 
             state = .ready
             progress?(1.0, "Model ready!")
@@ -252,18 +251,27 @@ public class VoxtralPipeline: @unchecked Sendable {
     }
 
     /// Setup encoder based on backend preference
-    private func setupEncoder() throws {
-        guard let voxtralModel = voxtralModel as? VoxtralForConditionalGeneration else {
+    /// Downloads Core ML model from HuggingFace if hybrid mode is requested
+    private func setupEncoder() async throws {
+        guard let voxtralModel = voxtralModel else {
             return
         }
 
         switch backend {
         case .hybrid, .auto:
-            // Try to create hybrid encoder with Core ML
-            hybridEncoder = voxtralModel.createHybridEncoder(
-                preferredBackend: backend == .hybrid ? .coreML : .auto
-            )
-            VoxtralDebug.log("Hybrid encoder created: \(hybridEncoder?.status.description ?? "nil")")
+            // Download Core ML model from HuggingFace (same cache as MLX models)
+            do {
+                hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
+                    preferredBackend: backend == .hybrid ? .coreML : .auto
+                )
+                VoxtralDebug.log("Hybrid encoder created with Core ML: \(hybridEncoder?.status.description ?? "nil")")
+            } catch {
+                // If Core ML download fails, fall back to pure MLX
+                VoxtralDebug.log("Core ML download failed (\(error)), using MLX fallback")
+                hybridEncoder = voxtralModel.createHybridEncoder(
+                    preferredBackend: .mlx
+                )
+            }
 
         case .mlx:
             // Pure MLX mode - no hybrid encoder needed

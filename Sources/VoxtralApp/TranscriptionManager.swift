@@ -1,7 +1,11 @@
 /**
  * TranscriptionManager - Handles model loading and audio processing for the app
- * Supports both transcription and chat modes with real-time streaming
- * Now with model selection and automatic downloading
+ * 
+ * IMPORTANT: This manager uses ONLY the high-level VoxtralPipeline API.
+ * This ensures the public API works correctly and is properly tested.
+ *
+ * Supports both transcription and chat modes with real-time streaming.
+ * Includes model selection and automatic downloading.
  */
 
 import Foundation
@@ -68,11 +72,8 @@ class TranscriptionManager: ObservableObject {
     // Hybrid encoder status (updated after model load)
     @Published var hybridEncoderAvailable: Bool = false
 
-    // Private model references
-    private var model: VoxtralForConditionalGeneration?
-    private var standardModel: VoxtralStandardModel?
-    private var processor: VoxtralProcessor?
-    private var hybridEncoder: VoxtralHybridEncoder?
+    // High-level Pipeline (replaces low-level model references)
+    private var pipeline: VoxtralPipeline?
     @Published private(set) var currentLoadedModelId: String?
 
     var canRun: Bool {
@@ -151,7 +152,20 @@ class TranscriptionManager: ObservableObject {
         isDownloading = false
     }
 
-    // MARK: - Model Loading
+    // MARK: - Model Loading (Uses VoxtralPipeline API)
+
+    /// Convert model ID to VoxtralPipeline.Model enum
+    private func pipelineModel(for modelId: String) -> VoxtralPipeline.Model? {
+        switch modelId.lowercased() {
+        case "mini-3b", "mini3b": return .mini3b
+        case "mini-3b-8bit", "mini3b8bit": return .mini3b8bit
+        case "mini-3b-4bit", "mini3b4bit": return .mini3b4bit
+        case "small-24b", "small24b": return .small24b
+        case "small-24b-8bit", "small24b8bit": return .small24b8bit
+        case "small-4bit", "small4bit": return .small4bit
+        default: return nil
+        }
+    }
 
     func loadModel() async {
         guard !isLoading else {
@@ -178,9 +192,10 @@ class TranscriptionManager: ObservableObject {
         loadingStatus = "Resolving model..."
 
         do {
-            // Resolve model path (downloads if needed)
-            print("[VoxtralApp] Resolving model path...")
-            loadingStatus = "Checking model..."
+            // Get pipeline model enum
+            guard let pipelineModelEnum = pipelineModel(for: selectedModelId) else {
+                throw NSError(domain: "VoxtralApp", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown model: \(selectedModelId)"])
+            }
 
             // Check if download is needed
             let needsDownload = !isModelDownloaded(selectedModelId)
@@ -189,7 +204,22 @@ class TranscriptionManager: ObservableObject {
                 downloadProgress = 0.0
             }
 
-            let modelPath = try await ModelDownloader.resolveModel(selectedModelId) { @Sendable [weak self] progress, message in
+            // Create pipeline configuration
+            var config = VoxtralPipeline.Configuration.default
+            config.maxTokens = maxTokens
+            config.temperature = temperature
+            config.memoryOptimization.maxKVCacheSize = contextSize
+
+            // Always use .auto to download Core ML if available
+            // The useHybridBackend toggle controls whether we USE Core ML, not whether we download it
+            let newPipeline = VoxtralPipeline(
+                model: pipelineModelEnum,
+                backend: .auto,  // Always try to get Core ML
+                configuration: config
+            )
+
+            // Load model using high-level API
+            try await newPipeline.loadModel { @Sendable [weak self] progress, message in
                 Task { @MainActor in
                     self?.loadingStatus = message
                     if needsDownload {
@@ -200,44 +230,23 @@ class TranscriptionManager: ObservableObject {
             }
 
             isDownloading = false
-            print("[VoxtralApp] Model path resolved: \(modelPath.path)")
-
-            loadingStatus = "Loading model weights..."
-            print("[VoxtralApp] Loading model weights...")
-
-            let path = modelPath.path
-            let (loadedModel, _) = try await Task.detached(priority: .userInitiated) {
-                try loadVoxtralStandardModel(modelPath: path, dtype: .float16)
-            }.value
-            print("[VoxtralApp] Model weights loaded")
-
-            loadingStatus = "Initializing processor..."
-            print("[VoxtralApp] Initializing processor...")
-
-            let wrapper = VoxtralForConditionalGeneration(standardModel: loadedModel)
-            let loadedProcessor = try VoxtralProcessor.fromPretrained(path)
-
-            self.standardModel = loadedModel
-            self.model = wrapper
-            self.processor = loadedProcessor
+            self.pipeline = newPipeline
             self.isModelLoaded = true
             self.currentLoadedModelId = selectedModelId
             self.loadingStatus = ""
 
-            // Initialize hybrid encoder if available (Core ML + MLX)
-            if #available(macOS 13.0, iOS 16.0, *) {
-                self.hybridEncoder = wrapper.createHybridEncoder(preferredBackend: .auto)
-                self.hybridEncoderAvailable = self.hybridEncoder?.status.coreMLAvailable ?? false
-                if self.hybridEncoderAvailable {
-                    print("[VoxtralApp] Hybrid encoder initialized (Core ML available)")
-                } else {
-                    print("[VoxtralApp] Hybrid encoder: Core ML not available, will use MLX only")
-                }
+            // Check hybrid encoder availability from pipeline status
+            let encoderStatus = newPipeline.encoderStatus
+            print("[VoxtralApp] Encoder status: \(encoderStatus)")
+            self.hybridEncoderAvailable = encoderStatus.contains("Core ML available: true")
+            
+            if self.hybridEncoderAvailable {
+                print("[VoxtralApp] ✅ Hybrid encoder initialized (Core ML available)")
             } else {
-                self.hybridEncoderAvailable = false
+                print("[VoxtralApp] ⚠️ Core ML not available, encoderStatus=\(encoderStatus)")
             }
 
-            print("[VoxtralApp] Model loaded successfully!")
+            print("[VoxtralApp] Model loaded successfully via VoxtralPipeline!")
 
             // Refresh downloaded models list
             refreshDownloadedModels()
@@ -246,16 +255,15 @@ class TranscriptionManager: ObservableObject {
             print("[VoxtralApp] Error loading model: \(error)")
             self.errorMessage = error.localizedDescription
             self.loadingStatus = ""
+            isDownloading = false
         }
 
         isLoading = false
     }
 
     func unloadModel() {
-        model = nil
-        standardModel = nil
-        processor = nil
-        hybridEncoder = nil
+        pipeline?.unload()
+        pipeline = nil
         hybridEncoderAvailable = false
         isModelLoaded = false
         currentLoadedModelId = nil
@@ -316,11 +324,10 @@ class TranscriptionManager: ObservableObject {
         }
     }
 
-    // MARK: - Transcription Mode
+    // MARK: - Transcription Mode (Uses VoxtralPipeline API)
 
     func transcribe() async {
-        guard let model = model,
-              let processor = processor,
+        guard let pipeline = pipeline,
               let audioPath = selectedAudioPath else { return }
 
         isTranscribing = true
@@ -330,6 +337,11 @@ class TranscriptionManager: ObservableObject {
         currentTokenCount = 0
         currentStep = .processingAudio
 
+        // Update pipeline configuration if needed
+        pipeline.configuration.maxTokens = maxTokens
+        pipeline.configuration.temperature = temperature
+        pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
+
         // Start profiling
         if profilingEnabled {
             profiler.start()
@@ -338,100 +350,17 @@ class TranscriptionManager: ObservableObject {
         let startTime = Date()
 
         do {
-            // Step 1: Process audio
-            currentStep = .processingAudio
-            await Task.yield()  // Allow UI to update
-
-            let inputs: ProcessedInputs
-            if profilingEnabled {
-                inputs = try profiler.profile("Audio Processing") {
-                    try processor.applyTranscritionRequest(
-                        audio: audioPath,
-                        language: "en",
-                        samplingRate: 16000
-                    )
-                }
-            } else {
-                inputs = try processor.applyTranscritionRequest(
-                    audio: audioPath,
-                    language: "en",
-                    samplingRate: 16000
-                )
-            }
-
-            // Step 2: Setup generation
             currentStep = .settingUpGeneration
             await Task.yield()  // Allow UI to update
 
-            // 🚀 generateStream now returns [Int] directly - no GPU references to clean
-            // Use hybrid encoder (Core ML + MLX) if available and enabled
-            var tokenIds: [Int]
-            if #available(macOS 13.0, iOS 16.0, *), useHybridBackend, let hybrid = hybridEncoder {
-                // Hybrid path: Core ML encoder + MLX decoder
-                if profilingEnabled {
-                    tokenIds = try profiler.profile("Generation (Hybrid)") {
-                        let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-                        return try model.generateStreamWithAudioEmbeds(
-                            inputIds: inputs.inputIds,
-                            audioEmbeds: audioEmbeds,
-                            attentionMask: nil,
-                            maxNewTokens: maxTokens,
-                            temperature: temperature,
-                            topP: 1.0,
-                            repetitionPenalty: 1.1,
-                            contextSize: contextSize
-                        )
-                    }
-                } else {
-                    let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-                    tokenIds = try model.generateStreamWithAudioEmbeds(
-                        inputIds: inputs.inputIds,
-                        audioEmbeds: audioEmbeds,
-                        attentionMask: nil,
-                        maxNewTokens: maxTokens,
-                        temperature: temperature,
-                        topP: 1.0,
-                        repetitionPenalty: 1.1,
-                        contextSize: contextSize
-                    )
-                }
-            } else {
-                // Full MLX path
-                if profilingEnabled {
-                    tokenIds = try profiler.profile("Generation") {
-                        try model.generateStream(
-                            inputIds: inputs.inputIds,
-                            inputFeatures: inputs.inputFeatures,
-                            attentionMask: nil,
-                            maxNewTokens: maxTokens,
-                            temperature: temperature,
-                            topP: 1.0,
-                            repetitionPenalty: 1.1,
-                            contextSize: contextSize
-                        )
-                    }
-                } else {
-                    tokenIds = try model.generateStream(
-                        inputIds: inputs.inputIds,
-                        inputFeatures: inputs.inputFeatures,
-                        attentionMask: nil,
-                        maxNewTokens: maxTokens,
-                        temperature: temperature,
-                        topP: 1.0,
-                        repetitionPenalty: 1.1,
-                        contextSize: contextSize
-                    )
-                }
-            }
+            let audioURL = URL(fileURLWithPath: audioPath)
+            
+            // Use high-level pipeline API
+            let result = try await pipeline.transcribe(audio: audioURL, language: "en")
 
-            // Step 3: Decode tokens to text
             currentStep = .generating
-            currentTokenCount = tokenIds.count
-
-            // Decode all tokens at once
-            if let text = try? processor.decode(tokenIds) {
-                transcription = text
-            }
+            transcription = result
+            currentTokenCount = result.split(separator: " ").count  // Approximate
 
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)
@@ -453,11 +382,10 @@ class TranscriptionManager: ObservableObject {
         Memory.clearCache()
     }
 
-    // MARK: - Chat Mode
+    // MARK: - Chat Mode (Uses VoxtralPipeline API)
 
     func chat() async {
-        guard let model = model,
-              let processor = processor,
+        guard let pipeline = pipeline,
               let audioPath = selectedAudioPath else { return }
 
         isTranscribing = true
@@ -467,6 +395,11 @@ class TranscriptionManager: ObservableObject {
         currentTokenCount = 0
         currentStep = .processingAudio
 
+        // Update pipeline configuration if needed
+        pipeline.configuration.maxTokens = maxTokens
+        pipeline.configuration.temperature = temperature
+        pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
+
         // Start profiling
         if profilingEnabled {
             profiler.start()
@@ -475,121 +408,17 @@ class TranscriptionManager: ObservableObject {
         let startTime = Date()
 
         do {
-            // Step 1: Process audio and build chat template
-            currentStep = .processingAudio
-            await Task.yield()
-
-            // Build chat conversation with audio and prompt
-            let conversation: [[String: Any]] = [
-                [
-                    "role": "user",
-                    "content": [
-                        ["type": "audio", "audio": audioPath],
-                        ["type": "text", "text": chatPrompt]
-                    ]
-                ]
-            ]
-
-            let inputs: ProcessedInputs
-            if profilingEnabled {
-                inputs = try profiler.profile("Chat Template") {
-                    let chatResult = try processor.applyChatTemplate(
-                        conversation: conversation,
-                        tokenize: true,
-                        returnTensors: "mlx"
-                    ) as! [String: MLXArray]
-
-                    return ProcessedInputs(
-                        inputIds: chatResult["input_ids"]!,
-                        inputFeatures: chatResult["input_features"]!
-                    )
-                }
-            } else {
-                let chatResult = try processor.applyChatTemplate(
-                    conversation: conversation,
-                    tokenize: true,
-                    returnTensors: "mlx"
-                ) as! [String: MLXArray]
-
-                inputs = ProcessedInputs(
-                    inputIds: chatResult["input_ids"]!,
-                    inputFeatures: chatResult["input_features"]!
-                )
-            }
-
-            // Step 2: Setup generation
             currentStep = .settingUpGeneration
             await Task.yield()
 
-            // 🚀 generateStream now returns [Int] directly - no GPU references to clean
-            // Use hybrid encoder (Core ML + MLX) if available and enabled
-            var tokenIds: [Int]
-            if #available(macOS 13.0, iOS 16.0, *), useHybridBackend, let hybrid = hybridEncoder {
-                // Hybrid path: Core ML encoder + MLX decoder
-                if profilingEnabled {
-                    tokenIds = try profiler.profile("Generation (Hybrid)") {
-                        let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-                        return try model.generateStreamWithAudioEmbeds(
-                            inputIds: inputs.inputIds,
-                            audioEmbeds: audioEmbeds,
-                            attentionMask: nil,
-                            maxNewTokens: maxTokens,
-                            temperature: temperature,
-                            topP: 1.0,
-                            repetitionPenalty: 1.1,
-                            contextSize: contextSize
-                        )
-                    }
-                } else {
-                    let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-                    tokenIds = try model.generateStreamWithAudioEmbeds(
-                        inputIds: inputs.inputIds,
-                        audioEmbeds: audioEmbeds,
-                        attentionMask: nil,
-                        maxNewTokens: maxTokens,
-                        temperature: temperature,
-                        topP: 1.0,
-                        repetitionPenalty: 1.1,
-                        contextSize: contextSize
-                    )
-                }
-            } else {
-                // Full MLX path
-                if profilingEnabled {
-                    tokenIds = try profiler.profile("Generation") {
-                        try model.generateStream(
-                            inputIds: inputs.inputIds,
-                            inputFeatures: inputs.inputFeatures,
-                            attentionMask: nil,
-                            maxNewTokens: maxTokens,
-                            temperature: temperature,
-                            topP: 1.0,
-                            repetitionPenalty: 1.1,
-                            contextSize: contextSize
-                        )
-                    }
-                } else {
-                    tokenIds = try model.generateStream(
-                        inputIds: inputs.inputIds,
-                        inputFeatures: inputs.inputFeatures,
-                        attentionMask: nil,
-                        maxNewTokens: maxTokens,
-                        temperature: temperature,
-                        topP: 1.0,
-                        repetitionPenalty: 1.1,
-                        contextSize: contextSize
-                    )
-                }
-            }
+            let audioURL = URL(fileURLWithPath: audioPath)
 
-            // Step 3: Decode tokens to text
+            // Use high-level pipeline API
+            let result = try await pipeline.chat(audio: audioURL, prompt: chatPrompt, language: "en")
+
             currentStep = .generating
-            currentTokenCount = tokenIds.count
-
-            // Decode all tokens at once
-            if let text = try? processor.decode(tokenIds) {
-                transcription = text
-            }
+            transcription = result
+            currentTokenCount = result.split(separator: " ").count  // Approximate
 
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)

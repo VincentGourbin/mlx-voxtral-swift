@@ -1,6 +1,9 @@
 /**
  * VoxtralCLI - Command-line interface for Voxtral speech-to-text
  *
+ * IMPORTANT: This CLI uses ONLY the high-level VoxtralPipeline API.
+ * This ensures the public API works correctly for external users.
+ *
  * Features:
  * - List available models
  * - Download models from HuggingFace
@@ -9,26 +12,20 @@
  */
 
 import Foundation
-import MLX
 import VoxtralCore
-import MLXLMCommon
 import ArgumentParser
-#if canImport(CoreML)
-import CoreML
-#endif
 
 @main
 struct VoxtralCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "voxtral",
         abstract: "Voxtral speech-to-text for Apple Silicon",
-        version: "1.0.0",
+        version: "1.1.0",
         subcommands: [
             ListModels.self,
             Download.self,
             Transcribe.self,
-            Chat.self,
-            BenchmarkCoreML.self
+            Chat.self
         ],
         defaultSubcommand: Transcribe.self
     )
@@ -105,18 +102,18 @@ struct Download: AsyncParsableCommand {
     }
 }
 
-// MARK: - Transcribe Command
+// MARK: - Transcribe Command (Uses VoxtralPipeline ONLY)
 
 struct Transcribe: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "transcribe",
-        abstract: "Transcribe an audio file"
+        abstract: "Transcribe an audio file using VoxtralPipeline API"
     )
 
     @Argument(help: "Path to audio file (MP3, WAV, M4A, etc.)")
     var audioFile: String
 
-    @Option(name: .shortAndLong, help: "Model ID or path (default: mini-3b-8bit)")
+    @Option(name: .shortAndLong, help: "Model: mini-3b, mini-3b-8bit, mini-3b-4bit, small-24b, small-24b-8bit, small-4bit")
     var model: String = "mini-3b-8bit"
 
     @Option(name: .long, help: "Maximum tokens to generate")
@@ -128,189 +125,93 @@ struct Transcribe: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
-    @Flag(name: .shortAndLong, help: "Show verbose output")
-    var verbose = false
-
-    @Flag(name: .long, help: "Show detailed profiling (TTFT, memory, etc.)")
-    var profile = false
-
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
-        print("VOXTRAL TRANSCRIPTION")
+        print("VOXTRAL TRANSCRIPTION (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
 
         // Validate audio file
+        let audioURL = URL(fileURLWithPath: audioFile)
         guard FileManager.default.fileExists(atPath: audioFile) else {
             throw ValidationError("Audio file not found: \(audioFile)")
         }
 
-        // Parse backend option
-        let useHybrid = backend.lowercased() == "hybrid"
-        print("\nBackend: \(useHybrid ? "Hybrid (Core ML encoder + MLX decoder)" : "MLX (GPU only)")")
+        // Parse model option
+        guard let pipelineModel = parseModel(model) else {
+            throw ValidationError("Unknown model: \(model). Use 'voxtral list' to see available models.")
+        }
 
-        // Resolve model path
-        print("\n[1/4] Resolving model...")
-        let modelPath = try await ModelDownloader.resolveModel(model)
-        print("  Using model: \(modelPath.path)")
+        // Parse backend option
+        let pipelineBackend: VoxtralPipeline.Backend = backend.lowercased() == "hybrid" ? .hybrid : .mlx
+        print("\nModel: \(pipelineModel.displayName)")
+        print("Backend: \(pipelineBackend.displayName)")
+
+        // Create pipeline with high-level API
+        var config = VoxtralPipeline.Configuration.default
+        config.maxTokens = maxTokens
+        config.temperature = 0.0  // Deterministic for transcription
+
+        let pipeline = VoxtralPipeline(
+            model: pipelineModel,
+            backend: pipelineBackend,
+            configuration: config
+        )
 
         // Load model
-        print("\n[2/4] Loading model...")
+        print("\n[1/3] Loading model...")
         let startLoad = Date()
-        let (standardModel, config) = try loadVoxtralStandardModel(
-            modelPath: modelPath.path,
-            dtype: .float16
-        )
-        let voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
-        let processor = try VoxtralProcessor.fromPretrained(modelPath.path)
-
-        // Initialize hybrid encoder if requested
-        var hybridEncoder: VoxtralHybridEncoder? = nil
-        if #available(macOS 13.0, iOS 16.0, *), useHybrid {
-            // Try local Core ML first, then download from HuggingFace if needed
-            let localEncoder = voxtralModel.createHybridEncoder(preferredBackend: VoxtralEncoderBackend.auto)
-            if localEncoder.status.coreMLAvailable {
-                hybridEncoder = localEncoder
-                print("  Core ML encoder: available (local)")
-            } else {
-                // Download Core ML model from HuggingFace
-                print("  Core ML encoder: downloading from HuggingFace...")
-                do {
-                    hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
-                        preferredBackend: VoxtralEncoderBackend.auto,
-                        progress: { progress, status in
-                            print("    \(status): \(Int(progress * 100))%")
-                        }
-                    )
-                    print("  Core ML encoder: downloaded and ready")
-                } catch {
-                    print("  Core ML encoder: download failed (\(error.localizedDescription)), using MLX fallback")
-                    hybridEncoder = localEncoder
-                }
-            }
+        try await pipeline.loadModel { progress, status in
+            print("  [\(Int(progress * 100))%] \(status)")
         }
-
         let loadTime = Date().timeIntervalSince(startLoad)
+        print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+        print("  Encoder: \(pipeline.encoderStatus)")
 
-        if verbose {
-            print("  Model loaded in \(String(format: "%.2f", loadTime))s")
-            print("  Model type: \(config.modelType)")
-            print("  Audio encoder: \(config.audioConfig.hiddenLayers) layers")
-        } else {
-            print("  Model loaded in \(String(format: "%.2f", loadTime))s")
-        }
-
-        // Process audio
-        print("\n[3/4] Processing audio: \(audioFile)")
-        let startAudio = Date()
-        let inputs = try processor.applyTranscritionRequest(
-            audio: audioFile,
-            language: language,
-            samplingRate: 16000
-        )
-        let audioTime = Date().timeIntervalSince(startAudio)
-
-        let numChunks = inputs.inputFeatures.shape[0]
-        let audioDuration = Float(numChunks) * 30.0
-        print("  Audio processed in \(String(format: "%.2f", audioTime))s (~\(Int(audioDuration))s audio)")
-
-        // Generate transcription
-        print("\n[4/4] Generating transcription...")
+        // Transcribe
+        print("\n[2/3] Processing audio: \(audioFile)")
+        print("\n[3/3] Generating transcription...")
         let startGen = Date()
 
-        // Use hybrid encoder if available, otherwise use full MLX path
-        let tokenIds: [Int]
-        if #available(macOS 13.0, iOS 16.0, *), let hybrid = hybridEncoder {
-            // Hybrid path: Core ML encoder + MLX decoder
-            let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-            tokenIds = try voxtralModel.generateStreamWithAudioEmbeds(
-                inputIds: inputs.inputIds,
-                audioEmbeds: audioEmbeds,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: 0.0,
-                topP: 1.0,
-                repetitionPenalty: 1.1
-            )
-        } else {
-            // Full MLX path
-            tokenIds = try voxtralModel.generateStream(
-                inputIds: inputs.inputIds,
-                inputFeatures: inputs.inputFeatures,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: 0.0,
-                topP: 1.0,
-                repetitionPenalty: 1.1
-            )
-        }
-
-        let tokenCount = tokenIds.count
-        var transcription = ""
-
-        // Track TTFT (time to first token)
-        var ttft: Double? = nil
-        var firstTokenTime: Date? = nil
-
-        print("\n" + String(repeating: "-", count: 60))
-        for (index, tokenId) in tokenIds.enumerated() {
-            if index == 0 {
-                firstTokenTime = Date()
-                ttft = firstTokenTime!.timeIntervalSince(startGen)
-            }
-            if let text = try? processor.decode([tokenId]) {
-                transcription += text
-                print(text, terminator: "")
-                fflush(stdout)
-            }
-        }
-        print("\n" + String(repeating: "-", count: 60))
+        let transcription = try await pipeline.transcribe(audio: audioURL, language: language)
 
         let genTime = Date().timeIntervalSince(startGen)
-        let tokensPerSecond = Double(tokenCount) / genTime
 
+        // Output result
+        print("\n" + String(repeating: "-", count: 60))
+        print(transcription)
+        print(String(repeating: "-", count: 60))
+
+        // Statistics
+        let tokenCount = transcription.split(separator: " ").count  // Approximate
         print("\nStatistics:")
-        print("  Tokens: \(tokenCount)")
         print("  Time: \(String(format: "%.2f", genTime))s")
-        print("  Speed: \(String(format: "%.1f", tokensPerSecond)) tokens/s")
-        print("  RTF: \(String(format: "%.2fx", audioDuration / Float(genTime)))")
-        if #available(macOS 13.0, iOS 16.0, *), let hybrid = hybridEncoder {
-            if let encTime = hybrid.status.lastInferenceTimeMs {
-                print("  Encoder time: \(String(format: "%.1f", encTime))ms")
-            }
-        }
+        print("  Memory: \(pipeline.memorySummary)")
 
-        // Profiling output
-        if profile {
-            print("\nProfiling:")
-            if let ttftValue = ttft {
-                print("  TTFT (Time to First Token): \(String(format: "%.2f", ttftValue * 1000))ms")
-            }
-            let memStats = VoxtralMemoryManager.shared.memorySummary()
-            print("  GPU Memory Active: \(formatBytes(memStats.active))")
-            print("  GPU Memory Peak: \(formatBytes(memStats.peak))")
-            print("  GPU Memory Cache: \(formatBytes(memStats.cache))")
-        }
+        // Cleanup
+        pipeline.unload()
 
         print("\n" + String(repeating: "=", count: 60))
     }
 
-    private func formatBytes(_ bytes: Int) -> String {
-        let gb = Double(bytes) / 1_073_741_824
-        let mb = Double(bytes) / 1_048_576
-        if gb >= 1.0 {
-            return String(format: "%.2f GB", gb)
-        } else {
-            return String(format: "%.0f MB", mb)
+    private func parseModel(_ id: String) -> VoxtralPipeline.Model? {
+        switch id.lowercased() {
+        case "mini-3b", "mini3b": return .mini3b
+        case "mini-3b-8bit", "mini3b8bit": return .mini3b8bit
+        case "mini-3b-4bit", "mini3b4bit": return .mini3b4bit
+        case "small-24b", "small24b": return .small24b
+        case "small-24b-8bit", "small24b8bit": return .small24b8bit
+        case "small-4bit", "small4bit": return .small4bit
+        default: return nil
         }
     }
 }
 
-// MARK: - Chat Command
+// MARK: - Chat Command (Uses VoxtralPipeline ONLY)
 
 struct Chat: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "chat",
-        abstract: "Ask a question about an audio file"
+        abstract: "Ask a question about an audio file using VoxtralPipeline API"
     )
 
     @Argument(help: "Path to audio file")
@@ -319,7 +220,7 @@ struct Chat: AsyncParsableCommand {
     @Argument(help: "Question or prompt about the audio")
     var prompt: String
 
-    @Option(name: .shortAndLong, help: "Model ID or path (default: mini-3b-8bit)")
+    @Option(name: .shortAndLong, help: "Model: mini-3b, mini-3b-8bit, mini-3b-4bit, small-24b, small-24b-8bit, small-4bit")
     var model: String = "mini-3b-8bit"
 
     @Option(name: .long, help: "Maximum tokens to generate")
@@ -331,273 +232,82 @@ struct Chat: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
-    @Flag(name: .long, help: "Show detailed profiling (TTFT, memory, etc.)")
-    var profile = false
-
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
-        print("VOXTRAL CHAT")
+        print("VOXTRAL CHAT (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
 
         // Validate audio file
+        let audioURL = URL(fileURLWithPath: audioFile)
         guard FileManager.default.fileExists(atPath: audioFile) else {
             throw ValidationError("Audio file not found: \(audioFile)")
         }
 
-        // Parse backend option
-        let useHybrid = backend.lowercased() == "hybrid"
-        print("\nBackend: \(useHybrid ? "Hybrid (Core ML encoder + MLX decoder)" : "MLX (GPU only)")")
+        // Parse model option
+        guard let pipelineModel = parseModel(model) else {
+            throw ValidationError("Unknown model: \(model). Use 'voxtral list' to see available models.")
+        }
 
-        // Resolve model path
-        print("\n[1/4] Resolving model...")
-        let modelPath = try await ModelDownloader.resolveModel(model)
-        print("  Using model: \(modelPath.path)")
+        // Parse backend option
+        let pipelineBackend: VoxtralPipeline.Backend = backend.lowercased() == "hybrid" ? .hybrid : .mlx
+        print("\nModel: \(pipelineModel.displayName)")
+        print("Backend: \(pipelineBackend.displayName)")
+        print("Prompt: \(prompt)")
+
+        // Create pipeline with high-level API
+        var config = VoxtralPipeline.Configuration.default
+        config.maxTokens = maxTokens
+        config.temperature = temperature
+
+        let pipeline = VoxtralPipeline(
+            model: pipelineModel,
+            backend: pipelineBackend,
+            configuration: config
+        )
 
         // Load model
-        print("\n[2/4] Loading model...")
+        print("\n[1/3] Loading model...")
         let startLoad = Date()
-        let (standardModel, _) = try loadVoxtralStandardModel(
-            modelPath: modelPath.path,
-            dtype: .float16
-        )
-        let voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
-        let processor = try VoxtralProcessor.fromPretrained(modelPath.path)
-
-        // Initialize hybrid encoder if requested
-        var hybridEncoder: VoxtralHybridEncoder? = nil
-        if #available(macOS 13.0, iOS 16.0, *), useHybrid {
-            // Try local Core ML first, then download from HuggingFace if needed
-            let localEncoder = voxtralModel.createHybridEncoder(preferredBackend: VoxtralEncoderBackend.auto)
-            if localEncoder.status.coreMLAvailable {
-                hybridEncoder = localEncoder
-                print("  Core ML encoder: available (local)")
-            } else {
-                // Download Core ML model from HuggingFace
-                print("  Core ML encoder: downloading from HuggingFace...")
-                do {
-                    hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
-                        preferredBackend: VoxtralEncoderBackend.auto,
-                        progress: { progress, status in
-                            print("    \(status): \(Int(progress * 100))%")
-                        }
-                    )
-                    print("  Core ML encoder: downloaded and ready")
-                } catch {
-                    print("  Core ML encoder: download failed (\(error.localizedDescription)), using MLX fallback")
-                    hybridEncoder = localEncoder
-                }
-            }
+        try await pipeline.loadModel { progress, status in
+            print("  [\(Int(progress * 100))%] \(status)")
         }
+        let loadTime = Date().timeIntervalSince(startLoad)
+        print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+        print("  Encoder: \(pipeline.encoderStatus)")
 
-        print("  Model loaded in \(String(format: "%.2f", Date().timeIntervalSince(startLoad)))s")
-
-        // Process audio with chat template
-        print("\n[3/4] Processing audio and prompt...")
-        print("  Audio: \(audioFile)")
-        print("  Prompt: \(prompt)")
-
-        let conversation: [[String: Any]] = [
-            [
-                "role": "user",
-                "content": [
-                    ["type": "audio", "audio": audioFile],
-                    ["type": "text", "text": prompt]
-                ]
-            ]
-        ]
-
-        let chatResult = try processor.applyChatTemplate(
-            conversation: conversation,
-            tokenize: true,
-            returnTensors: "mlx"
-        ) as! [String: MLXArray]
-
-        let inputs = ProcessedInputs(
-            inputIds: chatResult["input_ids"]!,
-            inputFeatures: chatResult["input_features"]!
-        )
-
-        // Generate response
-        print("\n[4/4] Generating response...")
+        // Chat
+        print("\n[2/3] Processing audio and prompt...")
+        print("\n[3/3] Generating response...")
         let startGen = Date()
 
-        // Use hybrid encoder if available, otherwise use full MLX path
-        let tokenIds: [Int]
-        if #available(macOS 13.0, iOS 16.0, *), let hybrid = hybridEncoder {
-            // Hybrid path: Core ML encoder + MLX decoder
-            let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-            tokenIds = try voxtralModel.generateStreamWithAudioEmbeds(
-                inputIds: inputs.inputIds,
-                audioEmbeds: audioEmbeds,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: temperature,
-                topP: 0.9,
-                repetitionPenalty: 1.1
-            )
-        } else {
-            // Full MLX path
-            tokenIds = try voxtralModel.generateStream(
-                inputIds: inputs.inputIds,
-                inputFeatures: inputs.inputFeatures,
-                attentionMask: nil,
-                maxNewTokens: maxTokens,
-                temperature: temperature,
-                topP: 0.9,
-                repetitionPenalty: 1.1
-            )
-        }
-
-        let tokenCount = tokenIds.count
-        var response = ""
-
-        // Track TTFT
-        var ttft: Double? = nil
-
-        print("\n" + String(repeating: "-", count: 60))
-        for (index, tokenId) in tokenIds.enumerated() {
-            if index == 0 {
-                ttft = Date().timeIntervalSince(startGen)
-            }
-            if let text = try? processor.decode([tokenId]) {
-                response += text
-                print(text, terminator: "")
-                fflush(stdout)
-            }
-        }
-        print("\n" + String(repeating: "-", count: 60))
+        let response = try await pipeline.chat(audio: audioURL, prompt: prompt)
 
         let genTime = Date().timeIntervalSince(startGen)
-        let tokensPerSecond = tokenCount > 0 ? Double(tokenCount) / genTime : 0
-        print("\nGenerated \(tokenCount) tokens in \(String(format: "%.2f", genTime))s")
-        if #available(macOS 13.0, iOS 16.0, *), let hybrid = hybridEncoder {
-            if let encTime = hybrid.status.lastInferenceTimeMs {
-                print("  Encoder time: \(String(format: "%.1f", encTime))ms")
-            }
-        }
 
-        // Profiling output
-        if profile {
-            print("\nProfiling:")
-            if let ttftValue = ttft {
-                print("  TTFT (Time to First Token): \(String(format: "%.2f", ttftValue * 1000))ms")
-            }
-            print("  Tokens/second: \(String(format: "%.2f", tokensPerSecond))")
-            let memStats = VoxtralMemoryManager.shared.memorySummary()
-            print("  GPU Memory Active: \(formatBytes(memStats.active))")
-            print("  GPU Memory Peak: \(formatBytes(memStats.peak))")
-            print("  GPU Memory Cache: \(formatBytes(memStats.cache))")
-        }
-
-        print("\n" + String(repeating: "=", count: 60))
-    }
-
-    private func formatBytes(_ bytes: Int) -> String {
-        let gb = Double(bytes) / 1_073_741_824
-        let mb = Double(bytes) / 1_048_576
-        if gb >= 1.0 {
-            return String(format: "%.2f GB", gb)
-        } else {
-            return String(format: "%.0f MB", mb)
-        }
-    }
-}
-
-// MARK: - Benchmark Core ML Command
-
-struct BenchmarkCoreML: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "benchmark-coreml",
-        abstract: "Benchmark Core ML encoder (Neural Engine)"
-    )
-
-    @Option(name: .shortAndLong, help: "Number of benchmark iterations")
-    var iterations: Int = 10
-
-    @Option(name: .shortAndLong, help: "Number of warmup iterations")
-    var warmup: Int = 3
-
-    @Option(name: .long, help: "Path to VoxtralEncoder.mlpackage (optional)")
-    var modelPath: String?
-
-    @Flag(name: .shortAndLong, help: "Compare with MLX encoder")
-    var compare = false
-
-    @Option(name: .long, help: "Compute units: gpu, ane, cpu, all (default: gpu)")
-    var computeUnits: String = "gpu"
-
-    func run() throws {
-        if #available(macOS 13.0, iOS 16.0, *) {
-            try runBenchmark()
-        } else {
-            print("Core ML encoder requires macOS 13.0+ or iOS 16.0+")
-        }
-    }
-
-    @available(macOS 13.0, iOS 16.0, *)
-    private func runBenchmark() throws {
-        print("\n" + String(repeating: "=", count: 60))
-        print("VOXTRAL CORE ML BENCHMARK")
-        print(String(repeating: "=", count: 60))
-
-        // Check ANE availability
-        print("\nSystem Info:")
-        print("  ANE Available: \(VoxtralCoreMLEncoder.isANEAvailable)")
-
-        // Configure compute units
-        let config: VoxtralCoreMLConfig
-        switch computeUnits.lowercased() {
-        case "gpu":
-            config = .gpuOnly
-            print("  Compute Units: GPU only")
-        case "cpu":
-            config = .cpuOnly
-            print("  Compute Units: CPU only")
-        case "all":
-            config = VoxtralCoreMLConfig(computeUnits: .all)
-            print("  Compute Units: All (CPU + GPU + ANE)")
-        default:
-            config = .default  // cpuAndNeuralEngine
-            print("  Compute Units: ANE preferred")
-        }
-
-        // Load Core ML encoder
-        print("\nLoading Core ML encoder...")
-        let coreMLEncoder: VoxtralCoreMLEncoder
-        if let path = modelPath {
-            let url = URL(fileURLWithPath: path)
-            coreMLEncoder = try VoxtralCoreMLEncoder(modelURL: url, config: config)
-        } else {
-            coreMLEncoder = try VoxtralCoreMLEncoder(config: config)
-        }
-
-        print("  \(coreMLEncoder.modelDescription)")
-
-        // Run benchmark
-        print("\nBenchmarking Core ML encoder...")
-        print("  Warmup: \(warmup) iterations")
-        print("  Benchmark: \(iterations) iterations")
-
-        let avgTime = try coreMLEncoder.benchmark(iterations: iterations, warmup: warmup)
-
+        // Output result
         print("\n" + String(repeating: "-", count: 60))
-        print("Results:")
-        print("  Core ML (ANE): \(String(format: "%.2f", avgTime)) ms/inference")
+        print(response)
+        print(String(repeating: "-", count: 60))
 
-        // Compare with MLX if requested
-        if compare {
-            print("\nNote: MLX comparison requires loading the full model.")
-            print("Use 'voxtral transcribe' with --verbose to see MLX timing.")
-        }
+        // Statistics
+        print("\nGenerated in \(String(format: "%.2f", genTime))s")
+        print("Memory: \(pipeline.memorySummary)")
 
-        // Summary
-        print("\n" + String(repeating: "-", count: 60))
-        print("Summary:")
-        print("  GPU mode with VoxtralEncoderFull: ~283ms (fastest)")
-        print("  ANE mode with VoxtralEncoderFull: ~597ms")
-        print("  Typical MLX GPU encoder: ~500ms")
-        print("  Core ML GPU provides 1.8x speedup over MLX GPU")
+        // Cleanup
+        pipeline.unload()
 
         print("\n" + String(repeating: "=", count: 60))
+    }
+
+    private func parseModel(_ id: String) -> VoxtralPipeline.Model? {
+        switch id.lowercased() {
+        case "mini-3b", "mini3b": return .mini3b
+        case "mini-3b-8bit", "mini3b8bit": return .mini3b8bit
+        case "mini-3b-4bit", "mini3b4bit": return .mini3b4bit
+        case "small-24b", "small24b": return .small24b
+        case "small-24b-8bit", "small24b8bit": return .small24b8bit
+        case "small-4bit", "small4bit": return .small4bit
+        default: return nil
+        }
     }
 }

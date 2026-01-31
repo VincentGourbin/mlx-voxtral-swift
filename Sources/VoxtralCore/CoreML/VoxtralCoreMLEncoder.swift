@@ -174,7 +174,7 @@ public struct VoxtralCoreMLConfig {
 
 /// Core ML wrapper for Voxtral audio encoder
 @available(macOS 13.0, iOS 16.0, *)
-public class VoxtralCoreMLEncoder {
+public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     // MARK: - Static Configuration
 
