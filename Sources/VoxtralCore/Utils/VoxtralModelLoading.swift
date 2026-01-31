@@ -439,52 +439,35 @@ extension Module {
 
             var newKey = key
 
-            // CRITICAL MAPPINGS for VoxtralStandardModel structure:
-            // language_model.lm_head.weight -> languageModel.lmHead.weight (for LanguageModelContainer)
-            if newKey == "language_model.lm_head.weight" {
-                newKey = "languageModel.lmHead.weight"
+            // IMPORTANT: The model uses @ModuleInfo(key: "snake_case") annotations
+            // so MLX Swift expects snake_case keys in the weights.
+            // We only need to handle special cases where the structure differs.
+
+            // Handle language_model prefix - needs special routing
+            if newKey.hasPrefix("language_model.model.") {
+                // language_model.model.* stays as-is (model has this structure)
+                // Just keep the key unchanged
             }
-            // CRITICAL FIX: Handle root-level lm_head.* keys (for quantized models)
-            // lm_head.weight, lm_head.scales, lm_head.biases -> languageModel.lmHead.*
-            else if newKey.hasPrefix("lm_head.") {
-                let suffix = String(newKey.dropFirst("lm_head.".count))
-                newKey = "languageModel.lmHead.\(suffix)"
-            }
-            // language_model.model.* -> languageModel.model.* (for LlamaStandardModel inside)
-            else if newKey.hasPrefix("language_model.model.") {
-                let suffix = String(newKey.dropFirst("language_model.model.".count))
-                newKey = "languageModel.model.\(suffix)"
-            }
-            // language_model.* -> languageModel.model.* (other language_model components)
-            else if newKey.hasPrefix("language_model.") {
+            else if newKey.hasPrefix("language_model.") && !newKey.hasPrefix("language_model.model.") {
+                // language_model.embed_tokens.* -> language_model.model.embed_tokens.*
+                // (The embed_tokens is inside the model, not at language_model level)
                 let suffix = String(newKey.dropFirst("language_model.".count))
-                newKey = "languageModel.model.\(suffix)"
-            }
-            // Handle top-level components (snake_case to camelCase)
-            else {
-                newKey = newKey.replacingOccurrences(of: "multi_modal_projector", with: "multiModalProjector")
-                newKey = newKey.replacingOccurrences(of: "audio_tower", with: "audioTower")
+                if suffix.hasPrefix("embed_tokens") {
+                    newKey = "language_model.model.\(suffix)"
+                }
+                // language_model.lm_head.* -> lm_head.* (lm_head is at root level in Swift model)
+                else if suffix.hasPrefix("lm_head") {
+                    newKey = suffix  // Just "lm_head.weight" etc.
+                }
             }
 
-            // Audio-specific conversions - ORDER MATTERS: longer patterns first!
-            newKey = newKey.replacingOccurrences(of: "self_attn_layer_norm", with: "selfAttnLayerNorm")
-            newKey = newKey.replacingOccurrences(of: "final_layer_norm", with: "finalLayerNorm")
-            newKey = newKey.replacingOccurrences(of: "embed_positions", with: "embedPositions")
-            newKey = newKey.replacingOccurrences(of: "embed_tokens", with: "embedTokens")
-            newKey = newKey.replacingOccurrences(of: "self_attn", with: "selfAttn")
-            newKey = newKey.replacingOccurrences(of: "layer_norm", with: "layerNorm")
-            newKey = newKey.replacingOccurrences(of: "out_proj", with: "outProj")  // For audio
-            newKey = newKey.replacingOccurrences(of: "o_proj", with: "oProj")      // For language model
-            newKey = newKey.replacingOccurrences(of: "q_proj", with: "qProj")
-            newKey = newKey.replacingOccurrences(of: "k_proj", with: "kProj")
-            newKey = newKey.replacingOccurrences(of: "v_proj", with: "vProj")
-
-            // Language model specific conversions
-            newKey = newKey.replacingOccurrences(of: "input_layernorm", with: "inputLayerNorm")
-            newKey = newKey.replacingOccurrences(of: "post_attention_layernorm", with: "postAttentionLayerNorm")
-            newKey = newKey.replacingOccurrences(of: "gate_proj", with: "gateProj")
-            newKey = newKey.replacingOccurrences(of: "up_proj", with: "upProj")
-            newKey = newKey.replacingOccurrences(of: "down_proj", with: "downProj")
+            // All other keys stay in snake_case because model uses @ModuleInfo(key: "snake_case")
+            // - multi_modal_projector.linear_1.* stays as-is
+            // - audio_tower.* stays as-is
+            // - q_proj, k_proj, v_proj, out_proj stay as-is
+            // - self_attn, layer_norm, embed_positions stay as-is
+            // - input_layernorm, post_attention_layernorm stay as-is
+            // - gate_proj, up_proj, down_proj stay as-is
 
             // VOXTRAL SPECIFIC: Conv weight transpose if needed
             var finalValue = value
@@ -497,10 +480,10 @@ extension Module {
             sanitized[newKey] = finalValue
         }
 
-        // VOXTRAL SPECIFIC: Copy embed_tokens for sharing
-        if let embedWeight = sanitized["languageModel.model.embedTokens.weight"],
-           sanitized["embedTokens.weight"] == nil {
-            sanitized["embedTokens.weight"] = embedWeight
+        // VOXTRAL SPECIFIC: Copy embed_tokens for sharing (snake_case keys)
+        if let embedWeight = sanitized["language_model.model.embed_tokens.weight"],
+           sanitized["embed_tokens.weight"] == nil {
+            sanitized["embed_tokens.weight"] = embedWeight
         }
 
         VoxtralDebug.log("Sanitized to \(sanitized.count) weights")
