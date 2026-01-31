@@ -140,77 +140,87 @@ swift build --product VoxtralCLI
 ./.build/debug/VoxtralCLI --help
 ```
 
-### Library Integration
+### Library Integration (SPM)
+
+The recommended way to integrate Voxtral in your Swift project is using `VoxtralPipeline`:
 
 ```swift
 import VoxtralCore
-import MLX
 
-// Load model
-let (model, config) = try loadVoxtralStandardModel(
-    modelPath: "/path/to/voxtral-mini-3b-8bit",
-    dtype: .float16
+// Create pipeline with desired model and backend
+let pipeline = VoxtralPipeline(
+    model: .mini3b8bit,      // .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
+    backend: .auto           // .mlx (pure GPU), .hybrid (Core ML + MLX), .auto
 )
 
-// Create wrapper and processor
-let voxtral = VoxtralForConditionalGeneration(standardModel: model)
-let processor = try VoxtralProcessor.fromPretrained("/path/to/voxtral-mini-3b-8bit")
+// Load model (downloads automatically from HuggingFace if needed)
+try await pipeline.loadModel { progress, status in
+    print("[\(Int(progress * 100))%] \(status)")
+}
 
 // Transcribe audio
-let inputs = try processor.applyTranscritionRequest(
-    audio: "/path/to/audio.mp3",
-    language: "en",
-    samplingRate: 16000
-)
+let text = try await pipeline.transcribe(audio: audioURL, language: "en")
+print(text)
 
-// Generate with streaming
-let results = try voxtral.generateStream(
-    inputIds: inputs.inputIds,
-    inputFeatures: inputs.inputFeatures,
-    attentionMask: nil,
-    maxNewTokens: 500,
-    temperature: 0.0,
-    topP: 1.0,
-    repetitionPenalty: 1.1
-)
-
-// Process tokens as they arrive
-var transcription = ""
-for (token, _) in results {
-    let tokenId = token.item(Int.self)
-    if let text = try? processor.decode([tokenId]) {
-        transcription += text
-        print(text, terminator: "")
-    }
-}
+// When done, release memory
+pipeline.unload()
 ```
 
 ### Chat Mode (Ask Questions About Audio)
 
 ```swift
-// Build conversation with audio and text prompt
-let conversation: [[String: Any]] = [
-    [
-        "role": "user",
-        "content": [
-            ["type": "audio", "audio": "/path/to/audio.mp3"],
-            ["type": "text", "text": "What language is being spoken?"]
-        ]
-    ]
-]
+import VoxtralCore
 
-let chatResult = try processor.applyChatTemplate(
-    conversation: conversation,
-    tokenize: true,
-    returnTensors: "mlx"
-) as! [String: MLXArray]
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto)
+try await pipeline.loadModel()
 
-let inputs = ProcessedInputs(
-    inputIds: chatResult["input_ids"]!,
-    inputFeatures: chatResult["input_features"]!
+// Ask questions about audio content
+let response = try await pipeline.chat(
+    audio: audioURL,
+    prompt: "Summarize what is being said in this audio",
+    language: "en"
 )
+print(response)
 
-// Generate response...
+pipeline.unload()
+```
+
+### Configuration Options
+
+```swift
+var config = VoxtralPipeline.Configuration.default
+config.maxTokens = 1000          // Maximum tokens to generate
+config.temperature = 0.0         // 0 = deterministic, higher = more random
+config.topP = 0.95               // Nucleus sampling
+config.repetitionPenalty = 1.2   // Avoid repetition
+
+// Memory optimization
+config.memoryOptimization = .recommended()  // Auto-detect based on RAM
+// Other presets: .moderate, .aggressive, .ultra
+
+let pipeline = VoxtralPipeline(
+    model: .mini3b8bit,
+    backend: .auto,
+    configuration: config
+)
+```
+
+### High-Level Manager API
+
+For the simplest integration (automatically uses recommended model):
+
+```swift
+import VoxtralCore
+
+let manager = VoxtralTranscriptionManager()
+try await manager.loadModel()
+
+let result = try await manager.transcribe(audioURL: audioFile)
+print(result.text)
+print("Generated \(result.tokenCount) tokens in \(result.duration)s")
+print("Speed: \(result.tokensPerSecond) tok/s")
+
+manager.unloadModel()
 ```
 
 ## Architecture
@@ -316,20 +326,42 @@ The hybrid mode uses Apple's Core ML for the audio encoder (running on GPU or AN
 - **Lower memory usage** (~660 MB less)
 - **Better thermal performance** for sustained workloads
 
+### Automatic Core ML Download
+
+When using `.auto` or `.hybrid` backend, the Core ML encoder model is **automatically downloaded** from HuggingFace, just like the MLX models:
+
+```swift
+// Auto mode: downloads Core ML if available, uses it automatically
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto)
+try await pipeline.loadModel()  // Downloads Core ML encoder to ~/Library/Caches/models/
+
+// Force hybrid mode
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .hybrid)
+
+// Check encoder status
+print(pipeline.encoderStatus)  // "Core ML available: true" or "MLX encoder (GPU)"
+```
+
 ### Enabling Hybrid Mode
 
 **CLI:**
 ```bash
-# Use --backend hybrid flag
-./.build/debug/VoxtralCLI transcribe --backend hybrid /path/to/audio.mp3
+# Auto mode (recommended): uses Core ML if available
+./.build/debug/VoxtralCLI transcribe /path/to/audio.mp3 --backend auto
+
+# Force hybrid mode
+./.build/debug/VoxtralCLI transcribe /path/to/audio.mp3 --backend hybrid
+
+# Force pure MLX mode
+./.build/debug/VoxtralCLI transcribe /path/to/audio.mp3 --backend mlx
 ```
 
 **App:**
 Enable "Hybrid mode (Core ML + MLX)" toggle in Settings.
 
-### Building the Core ML Encoder
+### Manual Core ML Conversion (Advanced)
 
-The Core ML model (~1.2 GB) is not included in the repository. Generate it with:
+If you want to convert the Core ML encoder yourself:
 
 ```bash
 cd Scripts/CoreMLConversion
@@ -337,24 +369,7 @@ chmod +x convert.sh
 ./convert.sh
 ```
 
-This script will:
-1. Create a Python virtual environment
-2. Download the Voxtral model from HuggingFace
-3. Extract encoder weights
-4. Convert to Core ML format
-5. Compile to `.mlmodelc`
-
-Then copy the output to the app:
-
-```bash
-cp -r Scripts/CoreMLConversion/output/VoxtralEncoderFull.mlmodelc Sources/VoxtralApp/Resources/
-swift build
-```
-
-**Requirements:**
-- Python 3.10+
-- ~10 GB disk space
-- macOS 13.0+ (for Core ML compilation)
+This creates `VoxtralEncoderFull.mlmodelc` which can be uploaded to HuggingFace or used locally.
 
 ## Acknowledgments
 

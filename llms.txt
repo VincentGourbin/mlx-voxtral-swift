@@ -2,9 +2,12 @@
 
 > Native Swift implementation of Voxtral speech-to-text running on Apple Silicon with MLX
 
+**Version:** 1.0.9
+**Repository:** https://github.com/VincentGourbin/mlx-voxtral-swift
+
 ## Overview
 
-Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with optional Core ML acceleration for the audio encoder.
+Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with automatic Core ML acceleration for the audio encoder (downloaded automatically from HuggingFace).
 
 ## Quick Start
 
@@ -47,26 +50,38 @@ result.duration      // Generation time in seconds
 result.tokensPerSecond  // Performance metric
 ```
 
-### VoxtralPipeline (Lower-level)
+### VoxtralPipeline (Recommended for SPM Integration)
 
-More control over model selection and backend:
+Full control over model selection and backend with automatic downloads:
 
 ```swift
 // Available models: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
 // Available backends: .mlx (pure GPU), .hybrid (Core ML encoder + MLX decoder), .auto
 
-let pipeline = VoxtralPipeline(model: .mini3b4bit, backend: .hybrid)
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto)
 try await pipeline.loadModel { progress, status in
+    // Downloads MLX model + Core ML encoder automatically from HuggingFace
     print("\(Int(progress * 100))% - \(status)")
 }
-let text = try await pipeline.transcribe(audio: audioURL)
-let response = try await pipeline.chat(audio: audioURL, prompt: "Summarize this")
+
+// Transcribe
+let text = try await pipeline.transcribe(audio: audioURL, language: "en")
+
+// Chat (ask questions about audio)
+let response = try await pipeline.chat(audio: audioURL, prompt: "Summarize this", language: "en")
+
+// Check encoder status
+print(pipeline.encoderStatus)  // "Core ML available: true" or "MLX encoder (GPU)"
+
+// Release memory
 pipeline.unload()
 
-// Configuration
-pipeline.configuration.maxTokens = 500
-pipeline.configuration.temperature = 0.0
-pipeline.configuration.memoryOptimization = .recommended()
+// Configuration (before loadModel)
+var config = VoxtralPipeline.Configuration.default
+config.maxTokens = 500
+config.temperature = 0.0
+config.memoryOptimization = .recommended()
+let pipeline = VoxtralPipeline(model: .mini3b8bit, configuration: config)
 ```
 
 ### ModelDownloader
@@ -108,16 +123,30 @@ All quantized models (4-bit, 8-bit) are fully supported with @ModuleInfo annotat
 ## Key Types
 
 - `VoxtralTranscriptionManager` - High-level transcription API (@MainActor)
-- `VoxtralPipeline` - Configurable inference pipeline
+- `VoxtralPipeline` - Configurable inference pipeline (@unchecked Sendable)
+- `VoxtralPipeline.Model` - Enum: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
+- `VoxtralPipeline.Backend` - Enum: .mlx (GPU only), .hybrid (Core ML + MLX), .auto (recommended)
+- `VoxtralPipeline.Configuration` - maxTokens, temperature, topP, repetitionPenalty, memoryOptimization
+- `VoxtralPipeline.State` - Enum: .unloaded, .loading, .ready, .processing, .error(String)
 - `TranscriptionResult` - Result with text, tokenCount, duration, tokensPerSecond
 - `VoxtralModelInfo` - Model metadata (id, repoId, name, size, quantization, parameters, recommended)
-- `ModelDownloader` - Model download/cache management
+- `ModelDownloader` - Model download/cache management (~/Library/Caches/models/)
 - `ModelRegistry` - Available models catalog
 - `MemoryOptimizationConfig` - GPU memory settings (.recommended(), .aggressive, .moderate, .ultra)
 - `VoxtralMemoryManager` - Runtime memory optimization (singleton: .shared)
 - `VoxtralPipelineError` - Pipeline errors (invalidState, modelNotLoaded, processingFailed)
 - `VoxtralTranscriptionError` - Transcription errors (modelNotLoaded, audioRequired)
 - `DownloadProgressCallback` - Progress callback type: @Sendable (Double, String) -> Void
+
+## Backend Selection
+
+| Backend | Description | Core ML Download |
+|---------|-------------|------------------|
+| `.auto` | Automatically uses Core ML if available, falls back to MLX | Yes (automatic) |
+| `.hybrid` | Forces Core ML encoder + MLX decoder | Yes (required) |
+| `.mlx` | Pure MLX (GPU), no Core ML | No |
+
+**Recommendation:** Use `.auto` for best performance. Core ML encoder is downloaded automatically from HuggingFace to `~/Library/Caches/models/VincentGOURBIN/voxtral-encoder-coreml-mini/`.
 
 ## Memory Optimization
 
@@ -221,6 +250,7 @@ pipeline.unload()
 
 ## Version History
 
+- v1.0.9 - ✅ Refactor: CLI and App now use only VoxtralPipeline API; automatic Core ML download
 - v1.0.8 - Fix memory alignment crash (loadUnaligned) + revert broken v1.0.6/v1.0.7 changes
 - v1.0.7 - ⚠️ BROKEN - Do not use (gibberish output)
 - v1.0.6 - ⚠️ BROKEN - Do not use (gibberish output)
