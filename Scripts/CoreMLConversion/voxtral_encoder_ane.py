@@ -43,7 +43,20 @@ class VoxtralEncoderConfig:
 class VoxtralProjectorConfig:
     """Configuration for VoxtralMultiModalProjector"""
     audio_intermediate_size: int = 5120
-    text_hidden_size: int = 3072
+    text_hidden_size: int = 3072  # 3072 for Mini, 5120 for Small
+
+
+# Variant configurations
+VOXTRAL_VARIANTS = {
+    "mini": {
+        "text_hidden_size": 3072,
+        "description": "Voxtral Mini 3B - output [1, 375, 3072]"
+    },
+    "small": {
+        "text_hidden_size": 5120,
+        "description": "Voxtral Small 24B - output [1, 375, 5120]"
+    }
+}
 
 
 # =============================================================================
@@ -401,7 +414,9 @@ class ANEVoxtralEncoderWithProjector(nn.Module):
     Complete ANE-optimized audio processing pipeline.
 
     Input: Mel spectrogram (1, 128, 3000)
-    Output: Audio embeddings (1, 375, 3072) - converted back from ANE format
+    Output: Audio embeddings (1, 375, text_hidden_size)
+            - Mini: (1, 375, 3072)
+            - Small: (1, 375, 5120)
     """
 
     def __init__(
@@ -413,6 +428,7 @@ class ANEVoxtralEncoderWithProjector(nn.Module):
 
         self.encoder_config = encoder_config or VoxtralEncoderConfig()
         self.projector_config = projector_config or VoxtralProjectorConfig()
+        self.text_hidden_size = self.projector_config.text_hidden_size
 
         self.encoder = ANEVoxtralEncoder(self.encoder_config)
         self.projector = ANEMultiModalProjector(self.projector_config)
@@ -512,8 +528,21 @@ def convert_standard_to_ane_weights(standard_state_dict: dict) -> dict:
     return ane_state_dict
 
 
-def create_ane_model() -> ANEVoxtralEncoderWithProjector:
-    """Create ANE-optimized model with default Voxtral configuration."""
+def create_ane_model(variant: str = "mini") -> ANEVoxtralEncoderWithProjector:
+    """Create ANE-optimized model with Voxtral configuration for the specified variant.
+
+    Args:
+        variant: "mini" (3072 output) or "small" (5120 output)
+
+    Returns:
+        ANEVoxtralEncoderWithProjector configured for the variant
+    """
+    if variant not in VOXTRAL_VARIANTS:
+        raise ValueError(f"Unknown variant '{variant}'. Must be one of: {list(VOXTRAL_VARIANTS.keys())}")
+
+    variant_config = VOXTRAL_VARIANTS[variant]
+    text_hidden_size = variant_config["text_hidden_size"]
+
     encoder_config = VoxtralEncoderConfig(
         hidden_size=1280,
         intermediate_size=5120,
@@ -525,8 +554,12 @@ def create_ane_model() -> ANEVoxtralEncoderWithProjector:
 
     projector_config = VoxtralProjectorConfig(
         audio_intermediate_size=5120,
-        text_hidden_size=3072
+        text_hidden_size=text_hidden_size
     )
+
+    print(f"  Creating ANE model for variant '{variant}'")
+    print(f"    Projector output: {text_hidden_size}")
+    print(f"    Description: {variant_config['description']}")
 
     return ANEVoxtralEncoderWithProjector(encoder_config, projector_config)
 
@@ -536,13 +569,24 @@ def create_ane_model() -> ANEVoxtralEncoderWithProjector:
 # =============================================================================
 
 if __name__ == "__main__":
+    import sys
+
     print("=" * 60)
     print("ANE-Optimized VoxtralEncoder Test")
     print("=" * 60)
 
+    # Parse variant from command line
+    variant = "mini"
+    if len(sys.argv) > 1 and sys.argv[1] in VOXTRAL_VARIANTS:
+        variant = sys.argv[1]
+
+    print(f"\nTesting variant: {variant}")
+    variant_config = VOXTRAL_VARIANTS[variant]
+    expected_output_size = variant_config["text_hidden_size"]
+
     # Create model
     print("\nCreating ANE-optimized model...")
-    model = create_ane_model()
+    model = create_ane_model(variant=variant)
     model.eval()
 
     # Print model info
@@ -558,10 +602,11 @@ if __name__ == "__main__":
 
     print(f"Input shape:  {dummy_input.shape}")
     print(f"Output shape: {output.shape}")
-    print(f"Expected:     [1, 375, 3072]")
+    print(f"Expected:     [1, 375, {expected_output_size}]")
 
     # Verify output shape
-    assert output.shape == (1, 375, 3072), f"Output shape mismatch: {output.shape}"
+    expected_shape = (1, 375, expected_output_size)
+    assert output.shape == expected_shape, f"Output shape mismatch: {output.shape} vs {expected_shape}"
     print("\n✓ Forward pass successful!")
 
     # Test intermediate shapes

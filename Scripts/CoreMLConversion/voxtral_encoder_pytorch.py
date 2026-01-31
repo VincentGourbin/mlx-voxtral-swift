@@ -49,7 +49,20 @@ class VoxtralEncoderConfig:
 class VoxtralProjectorConfig:
     """Configuration for VoxtralMultiModalProjector"""
     audio_intermediate_size: int = 5120  # From audio encoder
-    text_hidden_size: int = 3072  # LLM hidden size
+    text_hidden_size: int = 3072  # LLM hidden size (3072 for Mini, 5120 for Small)
+
+
+# Model variant configurations
+VOXTRAL_VARIANTS = {
+    "mini": {
+        "text_hidden_size": 3072,
+        "description": "Voxtral Mini 3B - output [1, 375, 3072]"
+    },
+    "small": {
+        "text_hidden_size": 5120,
+        "description": "Voxtral Small 24B - output [1, 375, 5120]"
+    }
+}
 
 
 class VoxtralAttention(nn.Module):
@@ -416,24 +429,28 @@ class VoxtralEncoderWithProjector(nn.Module):
     This is the full audio processing pipeline.
 
     Input: Mel spectrogram [batch, 128, 3000]
-    Output: Audio embeddings [batch, num_frames, 3072]
+    Output: Audio embeddings [batch, num_frames, text_hidden_size]
+            - Mini:  [1, 375, 3072]
+            - Small: [1, 375, 5120]
 
     Processing:
     1. VoxtralEncoder: [1, 128, 3000] -> [1, 1500, 1280]
     2. Reshape: [1, 1500, 1280] -> [375, 5120] (4 frames combined)
-    3. VoxtralMultiModalProjector: [375, 5120] -> [375, 3072]
-    4. Add batch dim: [375, 3072] -> [1, 375, 3072]
+    3. VoxtralMultiModalProjector: [375, 5120] -> [375, text_hidden_size]
+    4. Add batch dim: [375, text_hidden_size] -> [1, 375, text_hidden_size]
     """
 
     def __init__(
         self,
         encoder_config: Optional[VoxtralEncoderConfig] = None,
-        projector_config: Optional[VoxtralProjectorConfig] = None
+        projector_config: Optional[VoxtralProjectorConfig] = None,
+        variant: str = "mini"  # "mini" or "small"
     ):
         super().__init__()
 
         self.encoder_config = encoder_config or VoxtralEncoderConfig()
         self.projector_config = projector_config or VoxtralProjectorConfig()
+        self.variant = variant
 
         self.encoder = VoxtralEncoder(self.encoder_config)
         self.projector = VoxtralMultiModalProjector(self.projector_config)
@@ -446,7 +463,9 @@ class VoxtralEncoderWithProjector(nn.Module):
             mel_spectrogram: [1, 128, 3000] mel spectrogram (batch=1 fixed for Core ML)
 
         Returns:
-            Audio embeddings [1, 375, 3072]
+            Audio embeddings [1, 375, text_hidden_size]
+            - Mini:  [1, 375, 3072]
+            - Small: [1, 375, 5120]
         """
         # Step 1: Encode
         # Swift: let (hiddenStates, _, _) = audio_tower(inputFeatures, ...)
@@ -468,13 +487,26 @@ class VoxtralEncoderWithProjector(nn.Module):
 
         # Step 3: Project
         # Swift: audioEmbeds = multi_modal_projector(audioHiddenStatesProcessed)
-        projected = self.projector(reshaped)  # [1, 375, 3072]
+        projected = self.projector(reshaped)  # [1, 375, text_hidden_size]
 
         return projected
 
 
-def create_default_model() -> VoxtralEncoderWithProjector:
-    """Create model with default Voxtral Mini/Small configuration."""
+def create_model_for_variant(variant: str = "mini") -> VoxtralEncoderWithProjector:
+    """
+    Create model for a specific Voxtral variant.
+
+    Args:
+        variant: "mini" for Mini 3B (output 3072) or "small" for Small 24B (output 5120)
+
+    Returns:
+        VoxtralEncoderWithProjector configured for the variant
+    """
+    if variant not in VOXTRAL_VARIANTS:
+        raise ValueError(f"Unknown variant: {variant}. Choose from: {list(VOXTRAL_VARIANTS.keys())}")
+
+    variant_config = VOXTRAL_VARIANTS[variant]
+
     encoder_config = VoxtralEncoderConfig(
         hidden_size=1280,
         intermediate_size=5120,
@@ -486,10 +518,16 @@ def create_default_model() -> VoxtralEncoderWithProjector:
 
     projector_config = VoxtralProjectorConfig(
         audio_intermediate_size=5120,
-        text_hidden_size=3072
+        text_hidden_size=variant_config["text_hidden_size"]
     )
 
-    return VoxtralEncoderWithProjector(encoder_config, projector_config)
+    print(f"Creating model for {variant_config['description']}")
+    return VoxtralEncoderWithProjector(encoder_config, projector_config, variant=variant)
+
+
+def create_default_model() -> VoxtralEncoderWithProjector:
+    """Create model with default Voxtral Mini configuration (for backward compatibility)."""
+    return create_model_for_variant("mini")
 
 
 if __name__ == "__main__":

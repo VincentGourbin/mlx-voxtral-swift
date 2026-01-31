@@ -32,7 +32,9 @@ from voxtral_encoder_pytorch import (
     VoxtralEncoderConfig,
     VoxtralProjectorConfig,
     VoxtralEncoderWithProjector,
-    create_default_model
+    create_default_model,
+    create_model_for_variant,
+    VOXTRAL_VARIANTS
 )
 
 
@@ -384,7 +386,7 @@ def load_weights_into_model(
     return model
 
 
-def test_model_output(model: VoxtralEncoderWithProjector) -> None:
+def test_model_output(model: VoxtralEncoderWithProjector, variant: str = "mini") -> None:
     """
     Test the model with dummy input to verify it works.
     """
@@ -406,12 +408,13 @@ def test_model_output(model: VoxtralEncoderWithProjector) -> None:
         print(f"Output dtype: {output.dtype}")
         print(f"Output stats: min={output.min():.4f}, max={output.max():.4f}, mean={output.mean():.4f}")
 
-        # Expected output shape: [1, 375, 3072]
-        expected_shape = (1, 375, 3072)
+        # Expected output shape depends on variant
+        text_hidden_size = VOXTRAL_VARIANTS[variant]["text_hidden_size"]
+        expected_shape = (1, 375, text_hidden_size)
         if output.shape == expected_shape:
-            print(f"\nOutput shape matches expected {expected_shape}")
+            print(f"\n✅ Output shape matches expected {expected_shape} for {variant}")
         else:
-            print(f"\nWARNING: Output shape {output.shape} != expected {expected_shape}")
+            print(f"\n❌ WARNING: Output shape {output.shape} != expected {expected_shape}")
 
 
 def main():
@@ -434,6 +437,13 @@ def main():
         type=str,
         default="voxtral_encoder.pt",
         help="Output file path for PyTorch weights"
+    )
+    parser.add_argument(
+        "--variant",
+        type=str,
+        choices=["mini", "small"],
+        default="mini",
+        help="Model variant: 'mini' (3B, output 3072) or 'small' (24B, output 5120)"
     )
     parser.add_argument(
         "--no-dequantize",
@@ -507,9 +517,9 @@ def main():
 
     # Step 4: Create model and validate
     print("\n" + "-"*40)
-    print("Step 4: Validating weights")
+    print(f"Step 4: Creating {args.variant.upper()} model and validating weights")
     print("-"*40)
-    model = create_default_model()
+    model = create_model_for_variant(args.variant)
 
     if validate_weights(pytorch_weights, model):
         # Step 5: Load weights into model
@@ -520,7 +530,7 @@ def main():
 
         # Step 6: Test model (optional)
         if args.test:
-            test_model_output(model)
+            test_model_output(model, args.variant)
 
         # Step 7: Save weights
         print("\n" + "-"*40)

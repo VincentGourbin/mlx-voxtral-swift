@@ -19,12 +19,14 @@ from pathlib import Path
 # Import our models
 from voxtral_encoder_pytorch import (
     VoxtralEncoderWithProjector,
-    create_default_model as create_standard_model
+    create_model_for_variant as create_standard_model,
+    VOXTRAL_VARIANTS as PYTORCH_VARIANTS
 )
 from voxtral_encoder_ane import (
     ANEVoxtralEncoderWithProjector,
     create_ane_model,
-    convert_linear_to_conv2d_weight
+    convert_linear_to_conv2d_weight,
+    VOXTRAL_VARIANTS as ANE_VARIANTS
 )
 
 
@@ -157,13 +159,20 @@ def test_model_output(
 def convert_to_coreml(
     model: ANEVoxtralEncoderWithProjector,
     output_path: Path,
-    precision: str = "float16"
+    precision: str = "float16",
+    variant: str = "mini"
 ):
     """Convert ANE model to Core ML."""
     import coremltools as ct
 
+    # Get output size based on variant
+    text_hidden_size = ANE_VARIANTS[variant]["text_hidden_size"]
+    variant_description = ANE_VARIANTS[variant]["description"]
+
     print(f"\nConverting to Core ML...")
+    print(f"  Variant: {variant}")
     print(f"  Precision: {precision}")
+    print(f"  Output size: [1, 375, {text_hidden_size}]")
     print(f"  Output: {output_path}")
 
     model.eval()
@@ -202,7 +211,7 @@ def convert_to_coreml(
 
     # Add metadata
     mlmodel.author = "Voxtral ANE Conversion"
-    mlmodel.short_description = "Voxtral Audio Encoder optimized for Apple Neural Engine"
+    mlmodel.short_description = f"Voxtral Audio Encoder ({variant.capitalize()}) optimized for Apple Neural Engine"
     mlmodel.version = "2.0.0"
 
     # Save
@@ -213,7 +222,7 @@ def convert_to_coreml(
     spec = mlmodel.get_spec()
     print(f"\n  Model saved successfully!")
     print(f"  Input:  mel_spectrogram [1, 128, 3000]")
-    print(f"  Output: audio_embeddings [1, 375, 3072]")
+    print(f"  Output: audio_embeddings [1, 375, {text_hidden_size}]")
 
     return mlmodel
 
@@ -221,15 +230,24 @@ def convert_to_coreml(
 def main():
     parser = argparse.ArgumentParser(description="Convert Voxtral to Core ML with ANE optimizations")
     parser.add_argument("--weights", type=str, required=True, help="Path to standard PyTorch weights")
-    parser.add_argument("--output", type=str, default="VoxtralEncoderANE.mlpackage", help="Output path")
+    parser.add_argument("--variant", type=str, choices=["mini", "small"], default="mini",
+                        help="Model variant (mini=3072 output, small=5120 output)")
+    parser.add_argument("--output", type=str, default=None, help="Output path (default: VoxtralEncoder{Variant}.mlpackage)")
     parser.add_argument("--precision", type=str, choices=["float16", "float32"], default="float16")
     parser.add_argument("--skip-validation", action="store_true", help="Skip output validation")
     parser.add_argument("--test", action="store_true", help="Run comparison test")
     args = parser.parse_args()
 
+    # Set default output path based on variant
+    if args.output is None:
+        variant_name = args.variant.capitalize()
+        args.output = f"VoxtralEncoder{variant_name}.mlpackage"
+
     print("=" * 60)
     print("VOXTRAL ANE CORE ML CONVERSION")
     print("=" * 60)
+    print(f"  Variant: {args.variant}")
+    print(f"  Output size: [1, 375, {ANE_VARIANTS[args.variant]['text_hidden_size']}]")
 
     weights_path = Path(args.weights)
     output_path = Path(args.output)
@@ -244,8 +262,8 @@ def main():
 
     # Step 2: Create models
     print("\n[2/4] Creating models...")
-    standard_model = create_standard_model()
-    ane_model = create_ane_model()
+    standard_model = create_standard_model(variant=args.variant)
+    ane_model = create_ane_model(variant=args.variant)
 
     # Load weights into standard model for comparison
     standard_model.load_state_dict(standard_state_dict)
@@ -278,7 +296,7 @@ def main():
 
     # Step 4: Convert to Core ML
     print("\n[4/4] Converting to Core ML...")
-    mlmodel = convert_to_coreml(ane_model, output_path, args.precision)
+    mlmodel = convert_to_coreml(ane_model, output_path, args.precision, args.variant)
 
     # Summary
     print("\n" + "=" * 60)

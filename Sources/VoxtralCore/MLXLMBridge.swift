@@ -674,31 +674,6 @@ public func voxtralMixedQuantizationPredicate(
     return ["group_size": groupSize, "bits": defaultBits]
 }
 
-/// Convert Swift camelCase module path to Python snake_case for weight lookup
-/// Example: "multiModalProjector.linear1" -> "multi_modal_projector.linear_1"
-private func toSnakeCasePath(_ path: String) -> String {
-    path
-        .replacingOccurrences(of: "multiModalProjector", with: "multi_modal_projector")
-        .replacingOccurrences(of: "audioTower", with: "audio_tower")
-        .replacingOccurrences(of: "languageModel", with: "language_model")
-        .replacingOccurrences(of: "embedTokens", with: "embed_tokens")
-        .replacingOccurrences(of: "lmHead", with: "lm_head")
-        // Handle linear1/linear2 -> linear_1/linear_2
-        .replacingOccurrences(of: "linear1", with: "linear_1")
-        .replacingOccurrences(of: "linear2", with: "linear_2")
-        // Handle other common camelCase patterns
-        .replacingOccurrences(of: "selfAttn", with: "self_attn")
-        .replacingOccurrences(of: "qProj", with: "q_proj")
-        .replacingOccurrences(of: "kProj", with: "k_proj")
-        .replacingOccurrences(of: "vProj", with: "v_proj")
-        .replacingOccurrences(of: "oProj", with: "o_proj")
-        .replacingOccurrences(of: "gateProj", with: "gate_proj")
-        .replacingOccurrences(of: "upProj", with: "up_proj")
-        .replacingOccurrences(of: "downProj", with: "down_proj")
-        .replacingOccurrences(of: "inputLayerNorm", with: "input_layernorm")
-        .replacingOccurrences(of: "postAttentionLayerNorm", with: "post_attention_layernorm")
-}
-
 /**
  * Direct Python equivalent: load_quantized_voxtral()
  * Python source: mlx.voxtral/quantization.py lines 55-94
@@ -712,33 +687,26 @@ public func loadQuantizedVoxtral(
     guard let quantization = config["quantization"] as? [String: Any] else {
         return model
     }
-
+    
     // Python: def class_predicate(p, m):
     func classPredicate(path: String, module: Module) -> [String: Any]? {
-        // Convert path to snake_case for lookups
-        let snakeCasePath = toSnakeCasePath(path)
-
         // SKIP embed_tokens quantization - MLXLMCommon doesn't handle QuantizedEmbedding properly
         // This is a workaround for Swift MLX limitations
-        if snakeCasePath.contains("embed_tokens") {
+        if path.contains("embed_tokens") {
             return nil  // Don't quantize embed_tokens
         }
-
+        
         // Python: if p in quantization: return quantization[p]
-        // Check both camelCase and snake_case keys for per-layer config
         if let layerConfig = quantization[path] as? [String: Any] {
             return layerConfig
         }
-        if let layerConfig = quantization[snakeCasePath] as? [String: Any] {
-            return layerConfig
-        }
-
-        // Python: if not hasattr(m, "to_quantized"): return False
+        
+        // Python: if not hasattr(m, "to_quantized"): return False  
         // In Swift MLX, Linear and Embedding modules can be quantized
         guard module is Linear || module is Embedding else {
             return nil
         }
-
+        
         // Python: if not weights: return True
         if weights.isEmpty {
             return [
@@ -746,10 +714,9 @@ public func loadQuantizedVoxtral(
                 "bits": quantization["bits"]!
             ]
         }
-
+        
         // Python: return f"{p}.scales" in weights
-        // CRITICAL FIX: Use snake_case path to find scales in weights
-        let scalesKey = "\(snakeCasePath).scales"
+        let scalesKey = "\(path).scales"
         return weights[scalesKey] != nil ? [
             "group_size": quantization["group_size"]!,
             "bits": quantization["bits"]!
