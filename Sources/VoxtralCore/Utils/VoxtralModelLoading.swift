@@ -245,8 +245,18 @@ public func loadVoxtralModel(
     
     // 🎯 BREAKTHROUGH FIX: Pass ORIGINAL raw weights to sanitize() like Python does
     // Python: weights = model.sanitize(weights) - where weights are the ORIGINAL raw weights
-    writeDebugToDump("🔍 CRITICAL: Calling sanitize() on ORIGINAL RAW weights (not corrupted ones)\n")
+    print("🔍 SANITIZE DEBUG: Original keys with 'projector':")
+    for key in originalRawWeights.keys.sorted() where key.contains("projector") {
+        print("  BEFORE: \(key)")
+    }
+
     let sanitizedWeights = try model.sanitize(originalRawWeights)
+
+    print("🔍 SANITIZE DEBUG: Sanitized keys with 'projector':")
+    for key in sanitizedWeights.keys.sorted() where key.contains("projector") || key.contains("Projector") {
+        print("  AFTER: \(key)")
+    }
+
     writeDebugToDump("✅ Sanitized \(originalRawWeights.count) original weights to \(sanitizedWeights.count) weights\n")
     
     // ✅ VALIDATED: Sanitized weights preserve original values
