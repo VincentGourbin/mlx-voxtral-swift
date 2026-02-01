@@ -2,7 +2,7 @@
 
 > Native Swift implementation of Voxtral speech-to-text running on Apple Silicon with MLX
 
-**Version:** 1.0.9
+**Version:** 1.0.10
 **Repository:** https://github.com/VincentGourbin/mlx-voxtral-swift
 
 ## Overview
@@ -250,6 +250,7 @@ pipeline.unload()
 
 ## Version History
 
+- v1.0.10 - ✅ Fix: Float16 availability in Release builds (SPM integration fix)
 - v1.0.9 - ✅ Refactor: CLI and App now use only VoxtralPipeline API; automatic Core ML download
 - v1.0.8 - Fix memory alignment crash (loadUnaligned) + revert broken v1.0.6/v1.0.7 changes
 - v1.0.7 - ⚠️ BROKEN - Do not use (gibberish output)
