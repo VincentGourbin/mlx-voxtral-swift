@@ -14,6 +14,69 @@ import Foundation
 import CoreML
 import MLX
 
+// MARK: - Float16 Bit Conversion Helpers
+
+/// Convert Float to Float16 bit representation (IEEE 754 half-precision)
+/// This avoids using Float16 type directly which has availability issues in Release builds
+@inline(__always)
+private func floatToFloat16Bits(_ value: Float) -> UInt16 {
+    let bits = value.bitPattern
+    let sign = (bits >> 16) & 0x8000
+    let exp = Int((bits >> 23) & 0xFF) - 127 + 15
+    let mantissa = bits & 0x007FFFFF
+
+    if exp <= 0 {
+        // Denormalized or zero
+        if exp < -10 {
+            return UInt16(sign)
+        }
+        let m = (mantissa | 0x00800000) >> (1 - exp + 13)
+        return UInt16(sign | (m >> 13))
+    } else if exp >= 31 {
+        // Infinity or NaN
+        if mantissa != 0 {
+            return UInt16(sign | 0x7FFF)  // NaN
+        }
+        return UInt16(sign | 0x7C00)  // Infinity
+    }
+
+    return UInt16(sign | UInt32(exp << 10) | (mantissa >> 13))
+}
+
+/// Convert Float16 bit representation to Float
+@inline(__always)
+private func float16BitsToFloat(_ bits: UInt16) -> Float {
+    let sign = UInt32(bits & 0x8000) << 16
+    let exp = UInt32((bits >> 10) & 0x1F)
+    let mantissa = UInt32(bits & 0x03FF)
+
+    if exp == 0 {
+        if mantissa == 0 {
+            return Float(bitPattern: sign)  // Zero
+        }
+        // Denormalized
+        var m = mantissa
+        var e: UInt32 = 0
+        while (m & 0x0400) == 0 {
+            m <<= 1
+            e += 1
+        }
+        let newExp = (127 - 15 - e) << 23
+        let newMantissa = (m & 0x03FF) << 13
+        return Float(bitPattern: sign | newExp | newMantissa)
+    } else if exp == 31 {
+        // Infinity or NaN
+        if mantissa != 0 {
+            return Float.nan
+        }
+        return sign == 0 ? Float.infinity : -Float.infinity
+    }
+
+    let newExp = (exp + 127 - 15) << 23
+    let newMantissa = mantissa << 13
+    return Float(bitPattern: sign | newExp | newMantissa)
+}
+
 /// Bridge utilities for MLX <-> Core ML tensor conversion
 @available(macOS 13.0, iOS 16.0, *)
 public struct MLXCoreMLBridge {
@@ -63,12 +126,14 @@ public struct MLXCoreMLBridge {
             }
 
         case .float16:
-            // For Float16, we need to convert through Float
+            // For Float16, convert through Float and use raw memory copy
+            // Float16 is only available on arm64, so we handle it via raw bytes
             let floatArray = mlxArray.asType(.float32).asArray(Float.self)
-            let pointer = multiArray.dataPointer.assumingMemoryBound(to: Float16.self)
+            let destPointer = multiArray.dataPointer.assumingMemoryBound(to: UInt16.self)
             floatArray.withUnsafeBufferPointer { buffer in
                 for i in 0..<count {
-                    pointer[i] = Float16(buffer[i])
+                    // Convert Float to Float16 representation (IEEE 754 half-precision)
+                    destPointer[i] = floatToFloat16Bits(buffer[i])
                 }
             }
 
@@ -115,11 +180,11 @@ public struct MLXCoreMLBridge {
             return MLXArray(array).reshaped(shape)
 
         case .float16:
-            let pointer = multiArray.dataPointer.assumingMemoryBound(to: Float16.self)
-            // Convert Float16 to Float for MLXArray creation
+            // Read Float16 as raw UInt16 bits and convert to Float
+            let pointer = multiArray.dataPointer.assumingMemoryBound(to: UInt16.self)
             var floatArray = [Float](repeating: 0, count: count)
             for i in 0..<count {
-                floatArray[i] = Float(pointer[i])
+                floatArray[i] = float16BitsToFloat(pointer[i])
             }
             return MLXArray(floatArray).reshaped(shape).asType(.float16)
 
