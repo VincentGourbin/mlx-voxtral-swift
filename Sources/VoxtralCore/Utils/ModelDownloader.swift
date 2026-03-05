@@ -15,21 +15,40 @@ public typealias DownloadProgressCallback = @Sendable (Double, String) -> Void
 /// Model downloader with HuggingFace Hub integration
 public class ModelDownloader {
 
-    /// Default Hub API instance (uses system cache directory, forces online mode)
+    /// Override the default models directory. Set before first download.
+    nonisolated(unsafe) public static var customModelsDirectory: URL? = nil
+
+    /// Hub API instance
     // Swift 6: nonisolated(unsafe) for lazy-initialized singleton
-    nonisolated(unsafe) private static var hubApi: HubApi = {
+    nonisolated(unsafe) private static var _hubApi: HubApi? = nil
+
+    public static var hubApi: HubApi {
+        if let existing = _hubApi { return existing }
+        let api = createHubApi()
+        _hubApi = api
+        return api
+    }
+
+    private static func createHubApi() -> HubApi {
         // Disable network monitor that can incorrectly trigger offline mode
         // This happens when connection is detected as "constrained" or "expensive"
         setenv("CI_DISABLE_NETWORK_MONITOR", "1", 1)
 
         return HubApi(
-            downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            downloadBase: customModelsDirectory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
             useOfflineMode: false
         )
-    }()
+    }
 
-    /// Default models directory (in user's home)
+    /// Recreate the HubApi to pick up a new customModelsDirectory.
+    /// Call after setting customModelsDirectory.
+    public static func reconfigureHubApi() {
+        _hubApi = createHubApi()
+    }
+
+    /// Models directory (uses customModelsDirectory if set, otherwise ~/.voxtral/models/)
     public static var modelsDirectory: URL {
+        if let custom = customModelsDirectory { return custom }
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         return homeDir.appendingPathComponent(".voxtral").appendingPathComponent("models")
     }
@@ -96,10 +115,33 @@ public class ModelDownloader {
         return nil
     }
 
-    /// Find a model path (checks Hub cache first, then local directory)
+    /// Find a model path (checks custom directory first, then Hub cache, then local directory)
     /// Only returns paths for complete downloads (all sharded files present)
     public static func findModelPath(for model: VoxtralModelInfo) -> URL? {
-        // Check Hub cache first
+        // Check custom models directory first
+        if let customDir = customModelsDirectory {
+            // Check both as direct Hub download location and as named subfolder
+            let customModelDir = localPath(for: model, in: customDir)
+            if FileManager.default.fileExists(atPath: customModelDir.appendingPathComponent("config.json").path) {
+                let verification = verifyShardedModel(at: customModelDir)
+                if verification.complete {
+                    return customModelDir
+                }
+            }
+
+            // Also check Hub-style path within custom directory (models/{org}/{repo})
+            let hubStylePath = customDir
+                .appendingPathComponent("models")
+                .appendingPathComponent(model.repoId)
+            if FileManager.default.fileExists(atPath: hubStylePath.appendingPathComponent("config.json").path) {
+                let verification = verifyShardedModel(at: hubStylePath)
+                if verification.complete {
+                    return hubStylePath
+                }
+            }
+        }
+
+        // Check Hub cache
         if let hubPath = hubCachePath(for: model) {
             let verification = verifyShardedModel(at: hubPath)
             if verification.complete {
@@ -107,7 +149,7 @@ public class ModelDownloader {
             }
         }
 
-        // Check local models directory
+        // Check local models directory (default ~/.voxtral/models/)
         let localDir = localPath(for: model)
         if FileManager.default.fileExists(atPath: localDir.appendingPathComponent("config.json").path) {
             let verification = verifyShardedModel(at: localDir)
