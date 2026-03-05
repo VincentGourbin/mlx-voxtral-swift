@@ -34,8 +34,16 @@ public class ModelDownloader {
         // This happens when connection is detected as "constrained" or "expensive"
         setenv("CI_DISABLE_NETWORK_MONITOR", "1", 1)
 
+        let base: URL?
+        if let custom = customModelsDirectory {
+            // HubApi appends "models/" to downloadBase, so pass the parent
+            base = custom.deletingLastPathComponent()
+        } else {
+            base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        }
+
         return HubApi(
-            downloadBase: customModelsDirectory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            downloadBase: base,
             useOfflineMode: false
         )
     }
@@ -118,25 +126,13 @@ public class ModelDownloader {
     /// Find a model path (checks custom directory first, then Hub cache, then local directory)
     /// Only returns paths for complete downloads (all sharded files present)
     public static func findModelPath(for model: VoxtralModelInfo) -> URL? {
-        // Check custom models directory first
+        // Check custom models directory first (HubApi downloads to customDir/{org}/{repo})
         if let customDir = customModelsDirectory {
-            // Check both as direct Hub download location and as named subfolder
-            let customModelDir = localPath(for: model, in: customDir)
-            if FileManager.default.fileExists(atPath: customModelDir.appendingPathComponent("config.json").path) {
-                let verification = verifyShardedModel(at: customModelDir)
+            let customModelPath = customDir.appendingPathComponent(model.repoId)
+            if FileManager.default.fileExists(atPath: customModelPath.appendingPathComponent("config.json").path) {
+                let verification = verifyShardedModel(at: customModelPath)
                 if verification.complete {
-                    return customModelDir
-                }
-            }
-
-            // Also check Hub-style path within custom directory (models/{org}/{repo})
-            let hubStylePath = customDir
-                .appendingPathComponent("models")
-                .appendingPathComponent(model.repoId)
-            if FileManager.default.fileExists(atPath: hubStylePath.appendingPathComponent("config.json").path) {
-                let verification = verifyShardedModel(at: hubStylePath)
-                if verification.complete {
-                    return hubStylePath
+                    return customModelPath
                 }
             }
         }
