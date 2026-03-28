@@ -19,13 +19,14 @@ import ArgumentParser
 struct VoxtralCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "voxtral",
-        abstract: "Voxtral speech-to-text for Apple Silicon",
-        version: "1.1.0",
+        abstract: "Voxtral speech-to-text & text-to-speech for Apple Silicon",
+        version: "1.2.0",
         subcommands: [
             ListModels.self,
             Download.self,
             Transcribe.self,
-            Chat.self
+            Chat.self,
+            TTS.self
         ],
         defaultSubcommand: Transcribe.self
     )
@@ -45,7 +46,10 @@ struct ListModels: ParsableCommand {
     func run() throws {
         if downloaded {
             let downloadedModels = ModelDownloader.listDownloadedModels()
-            if downloadedModels.isEmpty {
+            let hasSttModels = !downloadedModels.isEmpty
+            let hasTtsModels = VoxtralTTSRegistry.models.contains { ModelDownloader.isTTSModelDownloaded($0) }
+
+            if !hasSttModels && !hasTtsModels {
                 print("\nNo models downloaded yet.")
                 print("Use 'voxtral download <model-id>' to download a model.")
                 print("Use 'voxtral list' to see available models.")
@@ -55,18 +59,32 @@ struct ListModels: ParsableCommand {
                 print(String(repeating: "=", count: 60))
                 for model in downloadedModels {
                     if let path = ModelDownloader.findModelPath(for: model) {
-                        print("\n  \(model.id): \(model.name)")
+                        print("\n  [STT] \(model.id): \(model.name)")
+                        print("    Path: \(path.path)")
+                    }
+                }
+                for model in VoxtralTTSRegistry.models {
+                    if let path = ModelDownloader.findTTSModelPath(for: model) {
+                        print("\n  [TTS] \(model.id): \(model.name)")
                         print("    Path: \(path.path)")
                     }
                 }
             }
         } else {
+            // STT models
             ModelRegistry.printAvailableModels()
-
-            // Also show downloaded status
-            print("\nDownload status:")
+            print("\nSTT download status:")
             for model in ModelRegistry.models {
                 let status = ModelDownloader.findModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+                print("  \(model.id): \(status)")
+            }
+
+            // TTS models
+            print("\n" + String(repeating: "-", count: 40))
+            VoxtralTTSRegistry.printAvailableModels()
+            print("\nTTS download status:")
+            for model in VoxtralTTSRegistry.models {
+                let status = ModelDownloader.findTTSModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
                 print("  \(model.id): \(status)")
             }
         }
@@ -89,16 +107,28 @@ struct Download: AsyncParsableCommand {
         print("VOXTRAL MODEL DOWNLOAD")
         print(String(repeating: "=", count: 60))
 
-        let modelPath = try await ModelDownloader.resolveModel(model) { progress, message in
-            print("[\(Int(progress * 100))%] \(message)")
+        // Check if it's a TTS model first
+        if let ttsModel = VoxtralTTSRegistry.model(withId: model) {
+            let modelPath = try await ModelDownloader.downloadTTSModel(ttsModel) { progress, message in
+                print("[\(Int(progress * 100))%] \(message)")
+            }
+            print("\n" + String(repeating: "=", count: 60))
+            print("Download complete!")
+            print("Model path: \(modelPath.path)")
+            print("\nTo synthesize speech:")
+            print("  voxtral tts \"Hello world\" -o output.wav")
+            print(String(repeating: "=", count: 60))
+        } else {
+            let modelPath = try await ModelDownloader.resolveModel(model) { progress, message in
+                print("[\(Int(progress * 100))%] \(message)")
+            }
+            print("\n" + String(repeating: "=", count: 60))
+            print("Download complete!")
+            print("Model path: \(modelPath.path)")
+            print("\nTo transcribe audio:")
+            print("  voxtral transcribe --model \(model) <audio-file>")
+            print(String(repeating: "=", count: 60))
         }
-
-        print("\n" + String(repeating: "=", count: 60))
-        print("Download complete!")
-        print("Model path: \(modelPath.path)")
-        print("\nTo transcribe audio:")
-        print("  voxtral transcribe --model \(model) <audio-file>")
-        print(String(repeating: "=", count: 60))
     }
 }
 
@@ -309,5 +339,99 @@ struct Chat: AsyncParsableCommand {
         case "small-4bit", "small4bit": return .small4bit
         default: return nil
         }
+    }
+}
+
+// MARK: - TTS Command (Uses VoxtralTTSPipeline)
+
+@available(macOS 14.0, *)
+struct TTS: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "tts",
+        abstract: "Convert text to speech using Voxtral TTS"
+    )
+
+    @Argument(help: "Text to convert to speech")
+    var text: String
+
+    @Option(name: .shortAndLong, help: "Output WAV file path")
+    var output: String = "output.wav"
+
+    @Option(name: .shortAndLong, help: "Voice preset (use 'voxtral list' to see available voices)")
+    var voice: String = "neutral_female"
+
+    @Option(name: .long, help: "Maximum audio frames to generate (12.5 frames/sec)")
+    var maxFrames: Int = 2500
+
+    @Option(name: [.customShort("a"), .long], help: "CFG alpha for flow matching (default: 1.2)")
+    var cfgAlpha: Float = 1.2
+
+    @Option(name: .long, help: "Number of Euler steps for flow matching (default: 8)")
+    var flowSteps: Int = 8
+
+    @Option(name: [.customShort("t"), .long], help: "Temperature for semantic token sampling (0 = greedy)")
+    var temperature: Float = 0.0
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL TTS (Text-to-Speech)")
+        print(String(repeating: "=", count: 60))
+
+        // Parse voice
+        guard let voicePreset = VoxtralVoice(rawValue: voice) else {
+            print("Unknown voice: \(voice)")
+            print("\nAvailable voices:")
+            for v in VoxtralVoice.allCases {
+                print("  \(v.rawValue)")
+            }
+            throw ValidationError("Unknown voice: \(voice)")
+        }
+
+        print("\nText: \(text)")
+        print("Voice: \(voicePreset.displayName)")
+        print("Output: \(output)")
+
+        // Create pipeline
+        var config = VoxtralTTSPipeline.Configuration.default
+        config.maxFrames = maxFrames
+        config.cfgAlpha = cfgAlpha
+        config.flowSteps = flowSteps
+        config.temperature = temperature
+
+        let pipeline = VoxtralTTSPipeline(configuration: config)
+
+        // Load model
+        print("\n[1/3] Loading TTS model...")
+        let startLoad = Date()
+        try await pipeline.loadModel { progress, status in
+            print("  [\(Int(progress * 100))%] \(status)")
+        }
+        let loadTime = Date().timeIntervalSince(startLoad)
+        print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+
+        // Synthesize
+        print("\n[2/3] Generating speech...")
+        let result = try await pipeline.synthesize(text: text, voice: voicePreset)
+
+        // Save WAV
+        print("\n[3/3] Saving audio...")
+        let outputURL = URL(fileURLWithPath: output)
+        try WAVWriter.write(waveform: result.waveform, to: outputURL)
+
+        // Statistics
+        print("\n" + String(repeating: "-", count: 60))
+        print("Audio saved to: \(output)")
+        print(String(repeating: "-", count: 60))
+        print("\nStatistics:")
+        print("  Duration: \(String(format: "%.2f", result.duration))s")
+        print("  Frames: \(result.numFrames)")
+        print("  Generation time: \(String(format: "%.2f", result.generationTime))s")
+        print("  Real-time factor: \(String(format: "%.2f", result.realTimeFactor))x")
+        print("  Frames/sec: \(String(format: "%.1f", result.framesPerSecond))")
+
+        // Cleanup
+        pipeline.unload()
+
+        print("\n" + String(repeating: "=", count: 60))
     }
 }

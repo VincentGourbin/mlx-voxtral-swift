@@ -363,6 +363,116 @@ public class ModelDownloader {
     public static var defaultModel: VoxtralModelInfo {
         ModelRegistry.defaultModel
     }
+
+    // MARK: - TTS Model Support
+
+    /// Check if a TTS model is downloaded (checks for params.json instead of config.json)
+    public static func isTTSModelDownloaded(_ model: VoxtralTTSModelInfo) -> Bool {
+        findTTSModelPath(for: model) != nil
+    }
+
+    /// Find a TTS model path (checks Hub cache, then local directories)
+    /// TTS models use params.json instead of config.json
+    public static func findTTSModelPath(for model: VoxtralTTSModelInfo) -> URL? {
+        let configFile = "params.json"
+
+        // Check custom models directory
+        if let customDir = customModelsDirectory {
+            let customModelPath = customDir.appendingPathComponent(model.repoId)
+            if FileManager.default.fileExists(atPath: customModelPath.appendingPathComponent(configFile).path) {
+                return customModelPath
+            }
+        }
+
+        // Check Hub cache (new location)
+        if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let newPath = cacheDir
+                .appendingPathComponent("models")
+                .appendingPathComponent(model.repoId)
+            if FileManager.default.fileExists(atPath: newPath.appendingPathComponent(configFile).path) {
+                return newPath
+            }
+        }
+
+        // Check legacy Hub cache
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let hubCache = homeDir
+            .appendingPathComponent(".cache")
+            .appendingPathComponent("huggingface")
+            .appendingPathComponent("hub")
+        let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
+        let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
+           let latestSnapshot = contents.sorted().last {
+            let modelPath = snapshotsDir.appendingPathComponent(latestSnapshot)
+            if FileManager.default.fileExists(atPath: modelPath.appendingPathComponent(configFile).path) {
+                return modelPath
+            }
+        }
+
+        // Check local models directory
+        let localDir = modelsDirectory.appendingPathComponent(
+            model.repoId.replacingOccurrences(of: "/", with: "--")
+        )
+        if FileManager.default.fileExists(atPath: localDir.appendingPathComponent(configFile).path) {
+            return localDir
+        }
+
+        return nil
+    }
+
+    /// Download a TTS model (includes voice embeddings)
+    public static func downloadTTSModel(
+        _ model: VoxtralTTSModelInfo,
+        progress: DownloadProgressCallback? = nil
+    ) async throws -> URL {
+        // Check if already downloaded
+        if let existingPath = findTTSModelPath(for: model) {
+            progress?(1.0, "TTS model already downloaded")
+            return existingPath
+        }
+
+        progress?(0.0, "Starting download of \(model.name)...")
+        print("\nDownloading \(model.name) from HuggingFace...")
+        print("Repository: \(model.repoId)")
+        print()
+
+        progress?(0.1, "Downloading model files...")
+
+        // Download safetensors, json, and voice embeddings (.pt files)
+        let modelUrl = try await hubApi.snapshot(
+            from: model.repoId,
+            matching: ["*.json", "*.safetensors", "voice_embedding/*.pt", "voice_embedding/*.safetensors", "tekken.json"]
+        )
+
+        progress?(1.0, "Download complete!")
+        print("TTS model available at: \(modelUrl.path)")
+
+        return modelUrl
+    }
+
+    /// Resolve a TTS model identifier, downloading if necessary
+    public static func resolveTTSModel(
+        _ identifier: String,
+        progress: DownloadProgressCallback? = nil
+    ) async throws -> URL {
+        // Try by ID in TTS registry
+        if let model = VoxtralTTSRegistry.model(withId: identifier) {
+            if let existingPath = findTTSModelPath(for: model) {
+                return existingPath
+            }
+            return try await downloadTTSModel(model, progress: progress)
+        }
+
+        // Check if it's a local path with params.json
+        let localURL = URL(fileURLWithPath: identifier)
+        if FileManager.default.fileExists(atPath: localURL.appendingPathComponent("params.json").path) {
+            return localURL
+        }
+
+        // Try as a direct HuggingFace repo ID
+        return try await downloadByRepoId(identifier, progress: progress)
+    }
 }
 
 /// Errors for model downloading

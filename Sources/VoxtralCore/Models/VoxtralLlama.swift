@@ -133,14 +133,24 @@ public class LlamaAttention: Module {
             finalValues = valuesTransposed
         }
 
-        // Python: output = scaled_dot_product_attention(queries, keys, values, cache=cache, scale=self.scale, mask=attention_mask)
-        let output = mlxLMScaledDotProductAttention(
+        // Match Python's mask="causal" by using MLXFast's .causal mode
+        let maskMode: MLXFast.ScaledDotProductAttentionMaskMode
+        if let mask = attentionMask {
+            maskMode = .array(mask)
+        } else if qLen > 1 {
+            // Prefill: use .causal (matches Python's mask="causal" string)
+            maskMode = .causal
+        } else {
+            // Single token decode: no mask needed
+            maskMode = .none
+        }
+
+        let output = MLXFast.scaledDotProductAttention(
             queries: finalQueries,
             keys: finalKeys,
             values: finalValues,
-            cache: cache,
             scale: scale,
-            mask: attentionMask
+            mask: maskMode
         )
 
         // Python: output = output.transpose(0, 2, 1, 3).reshape(bsz, q_len, -1)
@@ -465,37 +475,34 @@ public func mlxLMScaledDotProductAttention(
     scale: Float,
     mask: MLXArray? = nil
 ) -> MLXArray {
-    // Python: scaled_dot_product_attention(queries, keys, values, cache=cache, scale=self.scale, mask=attention_mask)
-    
-    // After cache.update_and_fetch, keys/values dimensions may have changed
-    // We need to adjust mask to match the actual key sequence length
-    let querySeqLen = queries.shape[2]  // [B, num_heads, q_len, head_dim]
-    let keySeqLen = keys.shape[2]       // [B, num_heads, k_len, head_dim] - may be > q_len due to cache
-    
-    var adjustedMask: MLXArray? = mask
-    
-    // If mask exists and key sequence is longer than query sequence (due to cache),
-    // we need to adjust the mask dimensions
-    if mask != nil, keySeqLen != querySeqLen {
-        // Python equivalent: when cache is used, mask dimensions must match key length
-        // Create causal mask for the full key sequence length
+    // Use the .causal mode when appropriate — this matches Python's mask="causal"
+    // which uses an optimized internal kernel with better numerical properties.
+    let querySeqLen = queries.shape[2]
+    let keySeqLen = keys.shape[2]
+
+    if mask != nil, querySeqLen == keySeqLen {
+        // Prefill: use .causal mode (matches Python's mask="causal")
+        return MLXFast.scaledDotProductAttention(
+            queries: queries, keys: keys, values: values,
+            scale: scale, mask: .causal
+        )
+    } else if mask != nil, keySeqLen != querySeqLen {
+        // Incremental decode with explicit mask (rare case)
         let fullMask = createCausalMask(N: keySeqLen)
-        
-        // Take only the last querySeqLen rows (corresponding to current queries)
         let startRow = keySeqLen - querySeqLen
-        adjustedMask = fullMask[startRow..<keySeqLen, 0..<keySeqLen]
-        
-        // Expand dimensions to match expected mask shape [1, 1, q_len, k_len]
-        adjustedMask = adjustedMask?.expandedDimensions(axes: [0, 1])
+        let adjustedMask = fullMask[startRow..<keySeqLen, 0..<keySeqLen]
+            .expandedDimensions(axes: [0, 1])
+        return MLXFast.scaledDotProductAttention(
+            queries: queries, keys: keys, values: values,
+            scale: scale, mask: .array(adjustedMask)
+        )
+    } else {
+        // No mask (single token decode)
+        return MLXFast.scaledDotProductAttention(
+            queries: queries, keys: keys, values: values,
+            scale: scale, mask: .none
+        )
     }
-    
-    return scaledDotProductAttention(
-        queries: queries,
-        keys: keys,
-        values: values,
-        scale: scale,
-        mask: adjustedMask
-    )
 }
 
 /**
@@ -515,28 +522,19 @@ public func createCausalMask(
     let rowIndices = MLXArray(Array(0..<N).map { Float($0) }).reshaped([N, 1])
     let colIndices = MLXArray(Array(0..<N).map { Float($0) }).reshaped([1, N])
 
-    // Python: mask = mx.tril(mx.ones((N, N)), k=offset)
-    // Causal mask: mask[i,j] = 1 if col <= row + offset, else 0
+    // Causal mask: allowed positions (col <= row + offset) get 0, masked positions get -inf
+    // This is an ADDITIVE mask for scaledDotProductAttention
     let offsetFloat = MLXArray(Float(offset))
     let causalCondition = colIndices .<= (rowIndices + offsetFloat)
-    var mask = causalCondition.asType(.float32)
+    // Start with 0 for allowed, -inf for masked
+    var mask = MLX.where(causalCondition, MLXArray(Float(0)), MLXArray(Float(-1e9)))
 
-    // Python: if window_size is not None:
+    // Apply sliding window if specified
     if let windowSize = windowSize {
-        // Python: mask = mask & mx.triu(mx.ones((N, N)), k=-window_size)
-        // Window mask: mask[i,j] = 1 if col >= row - windowSize, else 0
         let windowSizeFloat = MLXArray(Float(windowSize))
         let windowCondition = colIndices .>= (rowIndices - windowSizeFloat)
-        mask = mask * windowCondition.asType(.float32)
-    }
-
-    // Python: if lengths is not None:
-    // Note: lengths-based masking is rarely used in practice
-    // If needed, it would require more complex batched operations
-    if lengths != nil {
-        // For now, log a warning if lengths is used
-        // The previous implementation was O(N² × batchSize) which is very slow
-        print("⚠️ Warning: lengths parameter in createCausalMask is not yet optimized")
+        let windowMask = MLX.where(windowCondition, MLXArray(Float(0)), MLXArray(Float(-1e9)))
+        mask = mask + windowMask  // Both must be 0 for the position to be allowed
     }
 
     return mask
