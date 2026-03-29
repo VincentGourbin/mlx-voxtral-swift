@@ -33,11 +33,11 @@ fi
 echo "GPU Memory: ${GPU_MEM} MiB"
 
 if [ "$GPU_MEM" -gt 100000 ]; then
-    # B200 / H100-80G: go big
-    BATCH_SIZE=64
-    MAX_AUDIO_SEC=10.0
-    WHISPER_MODEL="medium"
-    NUM_WORKERS=16
+    # B200 / H100-80G
+    BATCH_SIZE=16
+    MAX_AUDIO_SEC=5.0
+    WHISPER_MODEL="small"
+    NUM_WORKERS=8
 elif [ "$GPU_MEM" -gt 60000 ]; then
     # A100-80G
     BATCH_SIZE=32
