@@ -18,8 +18,11 @@ MODEL_REPO="mistralai/Voxtral-4B-TTS-2603"
 MODEL_DIR="${WORK_DIR}/model"
 OUTPUT_DIR="${WORK_DIR}/checkpoints"
 
-# Dataset: "multilingual" for MLS+FLEURS (9 languages) or "librispeech" for English only
-DATASET="multilingual"
+# Dataset options:
+#   "mls_french"    → French only (~1K hours, fast for demo)
+#   "multilingual"  → All 9 Voxtral languages (MLS + FLEURS)
+#   "librispeech"   → English only
+DATASET="mls_french"
 
 # Detect GPU and auto-tune batch size
 GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
@@ -112,6 +115,4 @@ python train.py \
     --max_steps ${MAX_STEPS} \
     --max_audio_seconds ${MAX_AUDIO_SEC} \
     --whisper_model ${WHISPER_MODEL} \
-    --compile \
-    --use_wandb \
     --num_workers ${NUM_WORKERS}

@@ -198,7 +198,18 @@ def create_dataloader(
     """
     use_pin = torch.cuda.is_available()
 
-    if root in ("commonvoice", "multilingual"):
+    if root.startswith("mls_"):
+        # Single-language MLS: mls_french, mls_german, mls_spanish, etc.
+        lang_name = root[4:]  # "french", "german", etc.
+        print(f"Loading MLS {lang_name}...")
+        from datasets import load_dataset, Audio
+        ds = load_dataset("facebook/multilingual_librispeech", lang_name, split="train")
+        ds = ds.cast_column("audio", Audio(sampling_rate=sample_rate))
+        if max_samples_per_lang and len(ds) > max_samples_per_lang:
+            ds = ds.shuffle(seed=42).select(range(max_samples_per_lang))
+        dataset = HFAudioDataset(ds, sample_rate, max_seconds, min_seconds)
+        print(f"  → {len(dataset)} samples")
+    elif root in ("commonvoice", "multilingual"):
         print(f"Loading multilingual dataset (MLS + FLEURS)...")
         ds_list = _load_multilingual(sample_rate, max_seconds, min_seconds, max_samples_per_lang)
         if not ds_list:
