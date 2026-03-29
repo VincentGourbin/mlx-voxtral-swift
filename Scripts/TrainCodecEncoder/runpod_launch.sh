@@ -2,11 +2,12 @@
 # ================================================================
 # Voxtral Codec Encoder Training — RunPod Launch Script
 # Template: runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+# Recommended GPU: B200 (180GB VRAM) or A100 (40-80GB)
 # ================================================================
 set -e
 
 echo "============================================"
-echo "Voxtral Codec Encoder Training Setup"
+echo "Voxtral Codec Encoder Training"
 echo "============================================"
 
 # ---- Config ----
@@ -16,13 +17,45 @@ WORK_DIR="/workspace/voxtral-codec-training"
 MODEL_REPO="mistralai/Voxtral-4B-TTS-2603"
 MODEL_DIR="${WORK_DIR}/model"
 OUTPUT_DIR="${WORK_DIR}/checkpoints"
-DATASET_SPLIT="train-clean-360"  # Larger split for real training (104h)
 
-# Training params — adjust based on your GPU
-BATCH_SIZE=16          # A100-80G: 16-32, A100-40G: 8-16, 3090: 4-8
+# Dataset: "commonvoice" for multilingual (9 languages) or "librispeech" for English only
+DATASET="commonvoice"
+
+# Detect GPU and auto-tune batch size
+GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+if [ -z "$GPU_MEM" ]; then
+    echo "No GPU detected! Use --device cpu"
+    exit 1
+fi
+echo "GPU Memory: ${GPU_MEM} MiB"
+
+if [ "$GPU_MEM" -gt 100000 ]; then
+    # B200 / H100-80G: go big
+    BATCH_SIZE=64
+    MAX_AUDIO_SEC=10.0
+    WHISPER_MODEL="medium"
+    NUM_WORKERS=16
+elif [ "$GPU_MEM" -gt 60000 ]; then
+    # A100-80G
+    BATCH_SIZE=32
+    MAX_AUDIO_SEC=10.0
+    WHISPER_MODEL="small"
+    NUM_WORKERS=8
+elif [ "$GPU_MEM" -gt 30000 ]; then
+    # A100-40G / A6000
+    BATCH_SIZE=16
+    MAX_AUDIO_SEC=8.0
+    WHISPER_MODEL="small"
+    NUM_WORKERS=8
+else
+    # 3090 / 4090
+    BATCH_SIZE=8
+    MAX_AUDIO_SEC=5.0
+    WHISPER_MODEL="base"
+    NUM_WORKERS=4
+fi
+
 MAX_STEPS=100000
-MAX_AUDIO_SEC=10.0
-WHISPER_MODEL="small"  # "base" is faster, "small" is better quality
 DTYPE="bfloat16"
 
 # ---- Setup ----
@@ -38,12 +71,11 @@ cd mlx-voxtral-swift/Scripts/TrainCodecEncoder
 
 echo ""
 echo "[2/5] Installing dependencies..."
-pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper
-# torch is already in the RunPod image
+pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper datasets
 
 echo ""
-echo "[3/5] Downloading TTS model (decoder weights)..."
-if [ ! -d "${MODEL_DIR}" ]; then
+echo "[3/5] Downloading model weights..."
+if [ ! -f "${MODEL_DIR}/consolidated.safetensors" ]; then
     pip install -q huggingface_hub
     python -c "
 from huggingface_hub import snapshot_download
@@ -52,25 +84,27 @@ snapshot_download('${MODEL_REPO}', local_dir='${MODEL_DIR}',
 print('Model downloaded!')
 "
 fi
-echo "Model: $(ls -lh ${MODEL_DIR}/consolidated.safetensors 2>/dev/null | awk '{print $5}' || echo 'using sharded')"
 
 echo ""
-echo "[4/5] GPU Info"
+echo "[4/5] System info"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, Device: {torch.cuda.get_device_name(0)}')"
+python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')"
 
 echo ""
 echo "[5/5] Launching training..."
-echo "  Batch size: ${BATCH_SIZE}"
-echo "  Max steps: ${MAX_STEPS}"
-echo "  Dataset: LibriSpeech ${DATASET_SPLIT}"
-echo "  Output: ${OUTPUT_DIR}"
+echo "  GPU Memory:    ${GPU_MEM} MiB"
+echo "  Batch size:    ${BATCH_SIZE}"
+echo "  Dataset:       ${DATASET} (9 languages)"
+echo "  Whisper:       ${WHISPER_MODEL}"
+echo "  Max audio:     ${MAX_AUDIO_SEC}s"
+echo "  Max steps:     ${MAX_STEPS}"
+echo "  Dtype:         ${DTYPE}"
+echo "  Output:        ${OUTPUT_DIR}"
 echo ""
 
 python train.py \
     --tts_model_path ${MODEL_DIR} \
-    --dataset librispeech \
-    --librispeech_split ${DATASET_SPLIT} \
+    --dataset ${DATASET} \
     --output_dir ${OUTPUT_DIR} \
     --device cuda \
     --dtype ${DTYPE} \
@@ -80,11 +114,4 @@ python train.py \
     --whisper_model ${WHISPER_MODEL} \
     --compile \
     --use_wandb \
-    --num_workers 8
-
-echo ""
-echo "============================================"
-echo "Training complete!"
-echo "Encoder: ${OUTPUT_DIR}/encoder_final.safetensors"
-echo "Swift:   ${OUTPUT_DIR}/encoder_for_swift.safetensors"
-echo "============================================"
+    --num_workers ${NUM_WORKERS}

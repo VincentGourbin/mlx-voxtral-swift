@@ -8,3 +8,5 @@ pesq>=0.0.4
 pystoi>=0.4.0
 tqdm>=4.65.0
 wandb>=0.16.0
+datasets>=2.16.0
+huggingface_hub>=0.20.0
