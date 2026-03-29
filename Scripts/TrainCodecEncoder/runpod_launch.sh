@@ -74,9 +74,9 @@ cd mlx-voxtral-swift/Scripts/TrainCodecEncoder
 
 echo ""
 echo "[2/5] Installing dependencies..."
-pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper datasets
-pip uninstall -y torchcodec > /dev/null 2>&1 || true
 apt-get update -qq && apt-get install -y -qq libsndfile1 ffmpeg > /dev/null 2>&1 || true
+pip uninstall -y torchcodec > /dev/null 2>&1 || true
+pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper "datasets<3.6" huggingface_hub
 
 echo ""
 echo "[3/5] Downloading model weights..."
