@@ -458,37 +458,39 @@ class VoxtralCodec(nn.Module):
                 if key.startswith("audio_tokenizer."):
                     weights[key[len("audio_tokenizer."):]] = f.get_tensor(key)
 
-        # Map decoder_blocks
+        # Map checkpoint keys to our model keys
+        # Checkpoint: decoder_blocks.N.* → our model: blocks.N.*
+        # Checkpoint has alternating: even=conv (with parametrizations), odd=transformer (with layers)
         decoder_state = {}
         for k, v in weights.items():
             if k.startswith("decoder_blocks."):
-                # Map alternating conv/transformer blocks
-                parts = k.split(".")
-                block_idx = int(parts[1])
-                rest = ".".join(parts[2:])
-
-                # In checkpoint: even=conv, odd=transformer
-                # In our model: same structure
-                decoder_state[f"blocks.{block_idx}.{rest}"] = v
+                new_key = k.replace("decoder_blocks.", "blocks.", 1)
+                # Handle weight_norm: parametrizations.weight.originalN → our Conv1d uses same
+                decoder_state[new_key] = v
 
             elif k.startswith("output_proj."):
-                rest = k[len("output_proj."):]
-                decoder_state[f"output_proj.{rest}"] = v
+                decoder_state[k] = v
 
             elif k.startswith("quantizer.semantic_codebook."):
                 rest = k[len("quantizer.semantic_codebook."):]
                 if rest == "embedding_sum":
                     self.semantic_vq.embedding_sum.data.copy_(v.float())
+                    print(f"  Loaded semantic codebook: embedding_sum {list(v.shape)}")
                 elif rest == "cluster_usage":
                     self.semantic_vq.cluster_usage.data.copy_(v.float())
+                    print(f"  Loaded semantic codebook: cluster_usage {list(v.shape)}")
 
-        # Load decoder weights (handling weight_norm parametrizations)
+        # Load decoder weights
         missing, unexpected = self.decoder.load_state_dict(decoder_state, strict=False)
-        print(f"Decoder loaded: {len(decoder_state)} keys, {len(missing)} missing, {len(unexpected)} unexpected")
-        if missing:
-            print(f"  Missing: {missing[:5]}...")
+        # Filter out alibi_slopes from missing — they're computed buffers, not weights
+        real_missing = [k for k in missing if 'alibi_slopes' not in k]
+        print(f"Decoder loaded: {len(decoder_state)} keys, "
+              f"{len(real_missing)} missing (excl alibi_slopes), "
+              f"{len(unexpected)} unexpected")
+        if real_missing:
+            print(f"  Missing: {real_missing[:10]}...")
         if unexpected:
-            print(f"  Unexpected: {unexpected[:5]}...")
+            print(f"  Unexpected: {unexpected[:10]}...")
 
     def forward(self, x: torch.Tensor, vq_prob: float = 0.5):
         """Full forward: encode → quantize → decode.

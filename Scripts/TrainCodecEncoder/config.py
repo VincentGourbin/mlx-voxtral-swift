@@ -107,9 +107,10 @@ class TrainConfig:
     output_dir: str = "checkpoints/codec_encoder"
 
     # Hardware
-    device: str = "mps"  # Apple Silicon
-    dtype: str = "float32"  # bf16 has issues on MPS
+    device: str = "cuda"  # "cuda" for GPU, "mps" for Apple Silicon, "cpu" for CPU
+    dtype: str = "bfloat16"  # "bfloat16" for CUDA, "float32" for MPS/CPU
     num_workers: int = 4
+    compile: bool = False  # torch.compile (CUDA only, can speed up 1.5-2x)
 
     # Wandb
     use_wandb: bool = False
