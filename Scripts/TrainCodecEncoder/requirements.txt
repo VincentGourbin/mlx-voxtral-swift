@@ -1,5 +1,6 @@
 torch>=2.1.0
 torchaudio>=2.1.0
+torchcodec>=0.1.0
 safetensors>=0.4.0
 openai-whisper>=20231117
 soundfile>=0.12.0

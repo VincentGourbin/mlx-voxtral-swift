@@ -74,7 +74,7 @@ cd mlx-voxtral-swift/Scripts/TrainCodecEncoder
 
 echo ""
 echo "[2/5] Installing dependencies..."
-pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper datasets
+pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper datasets torchcodec
 
 echo ""
 echo "[3/5] Downloading model weights..."
