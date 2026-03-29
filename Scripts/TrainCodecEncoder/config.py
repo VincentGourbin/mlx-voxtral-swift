@@ -97,7 +97,7 @@ class TrainConfig:
     weight_decay: float = 0.01
     max_steps: int = 100_000
     warmup_steps: int = 1000
-    log_interval: int = 100
+    log_interval: int = 1
     eval_interval: int = 5000
     save_interval: int = 10000
     gradient_clip: float = 1.0

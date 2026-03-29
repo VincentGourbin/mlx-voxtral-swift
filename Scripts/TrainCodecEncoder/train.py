@@ -71,12 +71,12 @@ def train(cfg: TrainConfig):
     print(f"Discriminator params: {disc_params / 1e6:.1f}M")
 
     # ---- Whisper Distillation ----
+    # Everything on same device to avoid cross-device deadlocks
     whisper_loss_fn = WhisperDistillationLoss(
         whisper_model=cfg.whisper_model,
         semantic_dim=codec_cfg.semantic_dim,
         device=str(device),
     ).to(device)
-    whisper_loss_fn.whisper.eval()
 
     # ---- Optimizers ----
     optimizer_g = torch.optim.AdamW(
