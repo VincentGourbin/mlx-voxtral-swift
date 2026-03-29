@@ -75,6 +75,7 @@ cd mlx-voxtral-swift/Scripts/TrainCodecEncoder
 echo ""
 echo "[2/5] Installing dependencies..."
 pip install -q safetensors soundfile librosa pesq pystoi tqdm wandb openai-whisper datasets
+pip uninstall -y torchcodec > /dev/null 2>&1 || true
 apt-get update -qq && apt-get install -y -qq libsndfile1 ffmpeg > /dev/null 2>&1 || true
 
 echo ""
