@@ -18,8 +18,8 @@ MODEL_REPO="mistralai/Voxtral-4B-TTS-2603"
 MODEL_DIR="${WORK_DIR}/model"
 OUTPUT_DIR="${WORK_DIR}/checkpoints"
 
-# Dataset: "commonvoice" for multilingual (9 languages) or "librispeech" for English only
-DATASET="commonvoice"
+# Dataset: "multilingual" for MLS+FLEURS (9 languages) or "librispeech" for English only
+DATASET="multilingual"
 
 # Detect GPU and auto-tune batch size
 GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
