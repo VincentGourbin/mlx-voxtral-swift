@@ -10,6 +10,8 @@ All audio is resampled to 24kHz mono and normalized to [-1, 1].
 """
 
 import os
+os.environ["HF_AUDIO_DECODER"] = "soundfile"  # Force soundfile instead of torchcodec
+
 import torch
 import torch.nn.functional as F
 import torchaudio
