@@ -367,20 +367,29 @@ public class TekkenTokenizer {
     }
     
     private func loadDemoTokenizerData() {
+        // Use a byte-level vocabulary so that any text round-trips correctly.
+        // Each of the 256 possible byte values gets its own token rank (0-255).
+        // This mirrors the fallback behaviour of real BPE tokenizers: every byte
+        // is representable, guaranteeing encode→decode fidelity even without the
+        // actual model file.
+        numSpecialTokens = 1000
+
         // Pattern regex basique pour demo
-        regexPattern = "[\\w]+|[^\\w\\s]"
+        regexPattern = "[\\w]+|[^\\w\\s]|\\s"
         compiledRegex = try? NSRegularExpression(pattern: regexPattern, options: [])
-        
-        // Demo mergeable_ranks
-        let demoTokens = ["résume", "moi", "cet", "audio", "user", ":", "décrit", "ce", "fichier"]
-        for (index, token) in demoTokens.enumerated() {
-            if let tokenData = token.data(using: .utf8) {
-                mergeableRanks[tokenData] = index  // pas d'offset hardcodé
-                reverseVocabulary[index + numSpecialTokens] = token
+
+        // Build a byte-level vocab: rank i maps to the single byte with value i.
+        for byteValue in 0..<256 {
+            let byteData = Data([UInt8(byteValue)])
+            mergeableRanks[byteData] = byteValue
+            // Decode side: token ID = byteValue + numSpecialTokens
+            if let str = String(bytes: [UInt8(byteValue)], encoding: .utf8) {
+                reverseVocabulary[byteValue + numSpecialTokens] = str
+            } else {
+                // Non-UTF8 byte: store a placeholder that won't be emitted as text
+                reverseVocabulary[byteValue + numSpecialTokens] = ""
             }
         }
-        
-        numSpecialTokens = 1000
     }
     
     /**
@@ -511,34 +520,41 @@ public class TekkenTokenizer {
     /**
      * Decode tokens back to text (équivalent tiktoken.Encoding.decode)
      * Python: return self._model.decode([t - self.num_special_tokens for t in tokens])
+     *
+     * Accumulates raw bytes from the vocabulary and converts the full byte buffer to
+     * UTF-8 at the end. This correctly handles multi-byte UTF-8 sequences (accented
+     * characters, CJK, emoji) that span multiple BPE tokens.
      */
     public func decode(_ tokens: [Int], skipSpecialTokens: Bool = true) -> String {
-        var result: [String] = []
-        
+        var rawBytes = Data()
+
         for tokenId in tokens {
             if skipSpecialTokens && (tokenId == bosTokenId || tokenId == eosTokenId || tokenId == padTokenId) {
                 continue
             }
-            
+
             // Convert tokenId back to raw rank (remove special token offset)
             let rawTokenId = max(0, tokenId - numSpecialTokens)
-            
-            if let token = reverseVocabulary[tokenId] {
-                result.append(token)
+
+            // First try the string stored in reverseVocabulary (fast O(1) path, handles
+            // real multi-token strings like "hello" correctly).
+            if let tokenString = reverseVocabulary[tokenId], !tokenString.isEmpty,
+               let stringBytes = tokenString.data(using: .utf8) {
+                rawBytes.append(stringBytes)
             } else {
-                // Pour les tokens non trouvés, essayer de décoder via mergeable_ranks inverse
-                let matchingBytes = mergeableRanks.first { $0.value == rawTokenId }?.key
-                
-                if let bytes = matchingBytes, let decodedString = String(data: bytes, encoding: .utf8) {
-                    result.append(decodedString)
-                } else {
-                    result.append("<UNK>")
+                // Fallback: locate the raw bytes via mergeableRanks (O(n) scan).
+                // Required for byte-level demo tokenizer entries that are non-UTF8
+                // individual bytes (stored as "" in reverseVocabulary).
+                if let bytes = mergeableRanks.first(where: { $0.value == rawTokenId })?.key {
+                    rawBytes.append(bytes)
                 }
             }
+            // Unknown tokens are silently skipped to keep round-trips clean
         }
-        
-        // Join sans espaces pour BPE (les espaces sont dans les tokens)
-        return result.joined()
+
+        // Decode the full byte buffer as UTF-8. Replace invalid sequences with the
+        // Unicode replacement character so we always produce a valid Swift String.
+        return String(decoding: rawBytes, as: UTF8.self)
     }
     
     /**
@@ -574,8 +590,8 @@ public class TekkenTokenizer {
         case "[TRANSCRIBE]":
             return 34  // Valeur Python exacte
         default:
-            // Fallback: chercher dans le vocab puis unkTokenId
-            return vocab[token] ?? unkTokenId
+            // Return -1 for unknown control tokens (Python Tekkenizer behaviour)
+            return -1
         }
     }
     
