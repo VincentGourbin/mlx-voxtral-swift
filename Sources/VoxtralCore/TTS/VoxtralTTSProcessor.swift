@@ -72,10 +72,9 @@ public struct WAVWriter {
         data.append(contentsOf: "data".utf8)
         data.append(contentsOf: withUnsafeBytes(of: UInt32(dataSize).littleEndian) { Array($0) })
 
-        let int16Array: [Int16] = (0..<numSamples).map { i in
-            scaled[i].item(Int16.self)
-        }
-        int16Array.withUnsafeBufferPointer { buffer in
+        // Bulk transfer GPU→CPU: single copy instead of per-sample .item() calls
+        MLX.eval(scaled)
+        scaled.asArray(Int16.self).withUnsafeBufferPointer { buffer in
             data.append(buffer)
         }
 
