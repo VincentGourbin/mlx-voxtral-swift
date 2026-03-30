@@ -71,6 +71,8 @@ public class VoxtralTTSModel: Module {
 
     // Computed constants
     let nSpecial: Int32 = 2  // empty_audio=0, end_audio=1
+    // Pre-computed codebook offset array (avoids rebuilding per frame)
+    let codebookOffsets: MLXArray
 
     public init(config: VoxtralTTSConfiguration) {
         self.config = config
@@ -85,6 +87,15 @@ public class VoxtralTTSModel: Module {
 
         self._acousticTransformer.wrappedValue = FlowMatchingAudioTransformer(config: config)
         self._audioTokenizer.wrappedValue = VoxtralCodecDecoder(config: config.audioTokenizer)
+
+        // Pre-compute codebook offset array: [0, 8194, 8217, 8240, ...]
+        let semanticSize = config.audioModel.semanticCodebookSize + Int(nSpecial)
+        let acousticSize = config.audioModel.acousticCodebookSize + Int(nSpecial)
+        var offsets: [Int32] = [0]
+        for i in 0..<config.audioModel.nAcousticCodebook {
+            offsets.append(Int32(semanticSize + i * acousticSize))
+        }
+        self.codebookOffsets = MLXArray(offsets).reshaped(1, offsets.count)
 
         super.init()
     }
@@ -174,20 +185,11 @@ public class VoxtralTTSModel: Module {
     ///
     /// Layout: [semantic_cb (8194 entries)] [acoustic_cb_0 (23 entries)] [acoustic_cb_1 (23 entries)] ...
     /// Codes already include +2 special token offset from decodeOneFrame.
+    /// Uses pre-computed codebookOffsets array (built once at init).
     ///
     /// Reference: voxtral_tts.py lines 621-644
     public func codesToGlobalIndices(_ codes: MLXArray) -> MLXArray {
-        let semanticSize = config.audioModel.semanticCodebookSize + Int(nSpecial)   // 8194
-        let acousticSize = config.audioModel.acousticCodebookSize + Int(nSpecial)   // 23
-
-        // Build offset array: [0, 8194, 8217, 8240, ...]
-        var offsets: [Int32] = [0]  // semantic starts at 0
-        for i in 0..<config.audioModel.nAcousticCodebook {
-            offsets.append(Int32(semanticSize + i * acousticSize))
-        }
-        let offsetsArray = MLXArray(offsets).reshaped(1, offsets.count)  // (1, 37)
-
-        return codes + offsetsArray
+        codes + codebookOffsets
     }
 
     // MARK: - Generation

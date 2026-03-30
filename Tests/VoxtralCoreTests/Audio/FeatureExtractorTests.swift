@@ -92,10 +92,17 @@ final class FeatureExtractorTests: XCTestCase {
         let window = hanning(size)
         eval(window)
 
-        // Hanning window should be symmetric
+        // hanning() implements a periodic Hanning window (np.hanning(size+1)[:-1]),
+        // which is used for STFT/FFT analysis. A periodic window is NOT symmetric at
+        // the endpoints: window[0] = 0.0, but window[size-1] ≈ small positive value.
+        // Instead, verify the window is zero at index 0 (the periodic boundary condition).
         let first = window[0].item(Float.self)
+        XCTAssertEqual(first, 0.0, accuracy: 1e-6, "Periodic Hanning window should be zero at index 0")
+
+        // The near-last value should be very small (periodic wrap) but not exactly zero
         let last = window[size - 1].item(Float.self)
-        XCTAssertEqual(first, last, accuracy: 1e-5, "Hanning window should be symmetric")
+        XCTAssertGreaterThanOrEqual(last, 0.0, "Hanning values should be non-negative")
+        XCTAssertLessThan(last, 0.01, "Near-last value of periodic Hanning should be close to zero")
     }
 
     func testHanningPeakAtCenter() {
@@ -154,9 +161,10 @@ final class FeatureExtractorTests: XCTestCase {
         let (logMel, _) = logMelSpectrogram(audio)
         eval(logMel)
 
-        // Expected shape: [n_frames, n_mels]
-        XCTAssertEqual(logMel.shape[1], N_MELS, "Should have 128 mel bins")
-        XCTAssertGreaterThan(logMel.shape[0], 0, "Should have some frames")
+        // logMelSpectrogram returns [n_mels, n_frames] (periodic window for STFT/FFT).
+        // The encoder then transposes to [n_frames, n_mels] for Conv1d processing.
+        XCTAssertEqual(logMel.shape[0], N_MELS, "Should have 128 mel bins")
+        XCTAssertGreaterThan(logMel.shape[1], 0, "Should have some frames")
     }
 
     func testLogMelSpectrogramWithSyntheticAudio() {
@@ -166,7 +174,8 @@ final class FeatureExtractorTests: XCTestCase {
         let (logMel, _) = logMelSpectrogram(audio)
         eval(logMel)
 
-        XCTAssertEqual(logMel.shape[1], N_MELS, "Should have 128 mel bins")
+        // logMelSpectrogram returns [n_mels, n_frames]
+        XCTAssertEqual(logMel.shape[0], N_MELS, "Should have 128 mel bins")
     }
 
     func testLogMelSpectrogramWithSilence() {
