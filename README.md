@@ -1,6 +1,6 @@
 # MLX Voxtral Swift
 
-A native Swift implementation of [Voxtral](https://huggingface.co/mistralai/Voxtral-mini-3B-2507) speech-to-text model, running on Apple Silicon with [MLX](https://github.com/ml-explore/mlx-swift).
+A native Swift implementation of [Voxtral](https://huggingface.co/mistralai/Voxtral-mini-3B-2507) speech-to-text and [Voxtral TTS](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603) text-to-speech models, running on Apple Silicon with [MLX](https://github.com/ml-explore/mlx-swift).
 
 This is a Swift port of the excellent Python implementation by [@mzbac](https://github.com/mzbac): **[mlx.voxtral](https://github.com/mzbac/mlx.voxtral)**
 
@@ -16,6 +16,7 @@ This is a Swift port of the excellent Python implementation by [@mzbac](https://
 - **MLX Acceleration** - Leverages Apple's MLX framework for optimal Apple Silicon performance
 - **Quantized Models** - Supports 4-bit and 8-bit quantized models for reduced memory usage
 - **Streaming Output** - Real-time token-by-token transcription
+- **Text-to-Speech (TTS)** - Generate natural speech from text using Voxtral TTS 4B with 20 voice presets across 9 languages
 - **SwiftUI App** - Ready-to-use macOS application with drag-and-drop interface
 - **Library Integration** - Import `VoxtralCore` into your own Swift projects
 - **Chat Mode** - Ask questions about audio content (like the Python `voxtral_chat.py`)
@@ -223,29 +224,157 @@ print("Speed: \(result.tokensPerSecond) tok/s")
 manager.unloadModel()
 ```
 
+## Text-to-Speech (TTS)
+
+Voxtral TTS 4B generates natural, expressive speech from text. It supports **9 languages** (English, French, German, Spanish, Dutch, Portuguese, Italian, Hindi, Arabic) and comes with **20 voice presets**.
+
+### TTS Models
+
+| Model ID | HuggingFace Repo | Size | Format |
+|----------|------------------|------|--------|
+| `tts-4b-mlx` | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` | ~8 GB | bfloat16 (recommended) |
+| `tts-4b` | `mistralai/Voxtral-4B-TTS-2603` | ~8 GB | bfloat16 (original) |
+
+### Available Voice Presets
+
+| Language | Voices |
+|----------|--------|
+| English | `casual_female`, `casual_male`, `cheerful_female`, `neutral_female`, `neutral_male` |
+| French | `fr_male`, `fr_female` |
+| German | `de_male`, `de_female` |
+| Spanish | `es_male`, `es_female` |
+| Italian | `it_male`, `it_female` |
+| Portuguese | `pt_male`, `pt_female` |
+| Dutch | `nl_male`, `nl_female` |
+| Arabic | `ar_male` |
+| Hindi | `hi_male`, `hi_female` |
+
+### TTS CLI Usage
+
+```bash
+# Download the TTS model
+./.build/debug/VoxtralCLI download tts-4b-mlx
+
+# Basic text-to-speech
+./.build/debug/VoxtralCLI tts "Hello, this is a test." -o output.wav
+
+# Choose a specific voice
+./.build/debug/VoxtralCLI tts "Bonjour le monde!" -v fr_female -o bonjour.wav
+
+# Advanced options
+./.build/debug/VoxtralCLI tts "Some text" \
+    -v neutral_male \
+    -o output.wav \
+    --max-frames 2500 \
+    --cfg-alpha 1.2 \
+    --flow-steps 8 \
+    --temperature 0.0
+```
+
+### TTS Library Integration
+
+Using the high-level `VoxtralTTSPipeline` API:
+
+```swift
+import VoxtralCore
+
+let pipeline = VoxtralTTSPipeline()
+
+// Load model (downloads automatically from HuggingFace)
+try await pipeline.loadModel { progress, status in
+    print("[\(Int(progress * 100))%] \(status)")
+}
+
+// Synthesize speech
+let result = try await pipeline.synthesize(text: "Hello world!", voice: .neutralFemale)
+print("Generated \(result.duration)s of audio in \(result.generationTime)s")
+
+// Save to WAV file
+try WAVWriter.write(waveform: result.waveform, to: outputURL)
+
+// Or use synthesizeToFile for a one-liner
+try await pipeline.synthesizeToFile(text: "Hello!", voice: .frMale, outputURL: url)
+
+pipeline.unload()
+```
+
+Using the simplified `VoxtralTTSSynthesisManager`:
+
+```swift
+import VoxtralCore
+
+let manager = VoxtralTTSSynthesisManager(voice: .cheerfulFemale)
+try await manager.loadModel()
+
+let result = try await manager.synthesize(text: "How are you today?")
+try await manager.synthesizeToFile(text: "Bonjour!", outputURL: url, voice: .frFemale)
+
+manager.unloadModel()
+```
+
+### TTS Configuration
+
+```swift
+var config = VoxtralTTSPipeline.Configuration.default
+config.maxFrames = 2500       // Max audio frames (12.5 frames/sec → ~200s max)
+config.temperature = 0.0      // 0 = greedy, higher = more variation
+config.cfgAlpha = 1.2         // Classifier-free guidance strength
+config.flowSteps = 8          // Euler flow matching steps (more = higher quality)
+
+let pipeline = VoxtralTTSPipeline(configuration: config)
+```
+
+### TTS Architecture
+
+The TTS pipeline consists of:
+
+1. **LLM Backbone** (28-layer transformer, 3072-dim) - Predicts semantic audio tokens from text
+2. **Flow Matching Transformer** (3-layer bidirectional) - Generates acoustic codes from LLM hidden states using 8-step Euler sampling with classifier-free guidance
+3. **Codec Decoder** - Converts quantized audio codes (1 semantic + 36 acoustic per frame) to a 24kHz mono waveform
+
+### Audio Samples
+
+Pre-generated audio samples are available in the `samples/` directory:
+
+| File | Language | Voice | Description |
+|------|----------|-------|-------------|
+| `samples/en_voxtral_tts_demo.wav` | English | neutral_female | Voxtral TTS capabilities overview |
+| `samples/fr_voxtral_tts_demo.wav` | French | fr_female | Same text translated to French |
+
 ## Architecture
 
 ```
 mlx-voxtral-swift/
 ├── Sources/
 │   ├── VoxtralCore/           # Core library
-│   │   ├── VoxtralModeling.swift      # Main model architecture
+│   │   ├── VoxtralModeling.swift      # Main STT model architecture
 │   │   ├── VoxtralProcessor.swift     # Audio & text processing
 │   │   ├── VoxtralFeatureExtractor.swift  # Mel-spectrogram extraction
 │   │   ├── VoxtralComponents.swift    # Tokenizer, encoder components
 │   │   ├── VoxtralConfiguration.swift # Model config parsing
 │   │   ├── Models/                    # LLM model definitions
+│   │   ├── TTS/                       # Text-to-Speech module
+│   │   │   ├── VoxtralTTSModeling.swift       # TTS model (LLM + flow matching + codec)
+│   │   │   ├── VoxtralTTSConfiguration.swift  # params.json parsing
+│   │   │   ├── VoxtralCodecDecoder.swift      # Audio codec decoder (24kHz)
+│   │   │   ├── VoxtralFlowMatching.swift      # Bidirectional flow matching
+│   │   │   ├── VoxtralVoicePresets.swift       # 20 voice presets management
+│   │   │   ├── VoxtralTTSProcessor.swift      # WAV writer & synthesis result
+│   │   │   └── Pipeline/                      # High-level TTS API
 │   │   └── Utils/                     # Loading & utility functions
 │   ├── VoxtralApp/            # SwiftUI macOS application
 │   │   ├── VoxtralAppMain.swift
 │   │   ├── ContentView.swift
 │   │   └── TranscriptionManager.swift
-│   └── VoxtralTranscriptionTest/  # CLI example
-└── Tests/
-    └── VoxtralCoreTests/      # Unit tests
+│   └── VoxtralTranscriptionTest/  # CLI (STT + TTS commands)
+├── Tests/
+│   └── VoxtralCoreTests/      # Unit tests (STT + TTS)
+└── samples/                   # Pre-generated audio samples
 ```
 
 ## Key Components
+
+### Speech-to-Text (STT)
 
 | Component | Description |
 |-----------|-------------|
@@ -254,6 +383,18 @@ mlx-voxtral-swift/
 | `VoxtralEncoder` | Whisper-style audio encoder (conv layers + transformer) |
 | `MultiModalProjector` | Projects audio embeddings to LLM hidden dimension |
 | `TekkenTokenizer` | Mistral's tiktoken-based tokenizer |
+
+### Text-to-Speech (TTS)
+
+| Component | Description |
+|-----------|-------------|
+| `VoxtralTTSModel` | Main TTS model: LLM backbone + flow matching + codec decoder |
+| `VoxtralTTSPipeline` | High-level facade API with state machine and progress callbacks |
+| `VoxtralTTSSynthesisManager` | Simplified wrapper for quick synthesis tasks |
+| `VoxtralCodecDecoder` | Decodes quantized audio codes to 24kHz mono waveform |
+| `VoxtralFlowMatching` | 3-layer bidirectional transformer for acoustic code generation |
+| `VoxtralVoicePresetManager` | Downloads and loads voice embeddings from HuggingFace |
+| `WAVWriter` | Writes 16-bit PCM WAV files at configurable sample rate |
 
 ## Supported Audio Formats
 

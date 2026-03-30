@@ -93,7 +93,7 @@ public class VoxtralTTSModel: Module {
 
     /// Forward through LLM backbone (layers + norm only, no lm_head).
     /// Passes nil mask — LlamaAttention uses .causal mode internally for T > 1.
-    /// Evaluates after each layer to match Python's graph evaluation behavior.
+    /// Relies on MLX lazy evaluation to batch GPU operations across layers.
     public func llmForward(
         inputEmbeds: MLXArray,
         cache: [any KVCache]
@@ -101,7 +101,6 @@ public class VoxtralTTSModel: Module {
         var h = inputEmbeds
         for (layer, c) in zip(layers, cache) {
             h = layer(h, attentionMask: nil, cache: c)
-            MLX.eval(h)  // Force evaluation per-layer (matches Python's lazy eval pattern)
         }
         return norm(h)
     }

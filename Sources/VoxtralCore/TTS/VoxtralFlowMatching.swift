@@ -49,7 +49,7 @@ public class BidirectionalAttention: Module {
         let B = x.dim(0)
         let T = x.dim(1)
 
-        var q = wq(x).reshaped(B, T, nHeads, headDim).transposed(0, 2, 1, 3)
+        let q = wq(x).reshaped(B, T, nHeads, headDim).transposed(0, 2, 1, 3)
         var k = wk(x).reshaped(B, T, nKVHeads, headDim).transposed(0, 2, 1, 3)
         var v = wv(x).reshaped(B, T, nKVHeads, headDim).transposed(0, 2, 1, 3)
 
@@ -258,20 +258,19 @@ public class FlowMatchingAudioTransformer: Module {
             }
             print()
         }
-        // Mask padding positions (>= semantic_codebook_size + 2)
+        // Mask padding and empty_audio in a single pass to reduce GPU allocations
+        let totalDim = logits.dim(-1)
         let maskStart = semanticCodebookSize + 2
-        let padSize = logits.dim(-1) - maskStart
+        let padSize = totalDim - maskStart
+        // Build mask: index 0 = -inf (empty_audio), indices >= maskStart = -inf (padding)
+        var maskValues = [Float](repeating: 0.0, count: totalDim)
+        maskValues[0] = -1e9
         if padSize > 0 {
-            logits = logits + MLX.concatenated([
-                MLX.zeros([logits.dim(0), maskStart]),
-                MLX.full([logits.dim(0), padSize], values: MLXArray(Float(-1e9)))
-            ], axis: -1)
+            for i in maskStart..<totalDim {
+                maskValues[i] = -1e9
+            }
         }
-        // Mask empty_audio token (index 0)
-        logits = logits + MLX.concatenated([
-            MLX.full([logits.dim(0), 1], values: MLXArray(Float(-1e9))),
-            MLX.zeros([logits.dim(0), logits.dim(-1) - 1])
-        ], axis: -1)
+        logits = logits + MLXArray(maskValues)
         return MLX.argMax(logits, axis: -1)
     }
 
@@ -307,6 +306,7 @@ public class FlowMatchingAudioTransformer: Module {
             let v = MLXArray(cfgAlpha) * vCond + MLXArray(1.0 - cfgAlpha) * vUncond
 
             xt = xt + v * MLXArray(dt)
+            MLX.eval(xt)  // Evaluate per Euler step to avoid deep computation graph
         }
 
         // Quantize to FSQ + add special token offset
