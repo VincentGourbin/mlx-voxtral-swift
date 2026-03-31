@@ -11,17 +11,17 @@ import AVFoundation
 
 // Constants - Direct Python equivalents
 let SAMPLE_RATE: Int = 16000
-let N_FFT: Int = 400
-let HOP_LENGTH: Int = 160
+public let N_FFT: Int = 400
+public let HOP_LENGTH: Int = 160
 let CHUNK_LENGTH: Int = 30  // seconds
 let N_SAMPLES: Int = CHUNK_LENGTH * SAMPLE_RATE  // 480000
 let N_FRAMES: Int = N_SAMPLES / HOP_LENGTH  // 3000
-let N_MELS: Int = 128
+public let N_MELS: Int = 128
 
 /**
  * Direct Python equivalent: def load_audio(file: str) -> np.ndarray
  */
-func loadAudio(_ file: String) throws -> MLXArray {
+public func loadAudio(_ file: String) throws -> MLXArray {
     // Python equivalent: soundfile.read(file, dtype="float32")
     // Use AVFoundation instead of ffmpeg for native audio loading
     
@@ -281,7 +281,7 @@ func getMelFilters(nMels: Int = N_MELS) -> MLXArray {
 /**
  * Direct Python equivalent: def log_mel_spectrogram(audio: mx.array, n_mels: int, n_fft: int, hop_length: int, global_max: Optional[float]) -> Union[mx.array, Tuple[mx.array, float]]
  */
-func logMelSpectrogram(
+public func logMelSpectrogram(
     _ audio: MLXArray, 
     nMels: Int = N_MELS, 
     nFft: Int = N_FFT, 

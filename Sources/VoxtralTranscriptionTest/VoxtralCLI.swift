@@ -26,7 +26,8 @@ struct VoxtralCLI: AsyncParsableCommand {
             Download.self,
             Transcribe.self,
             Chat.self,
-            TTS.self
+            TTS.self,
+            Realtime.self
         ],
         defaultSubcommand: Transcribe.self
     )
@@ -69,6 +70,12 @@ struct ListModels: ParsableCommand {
                         print("    Path: \(path.path)")
                     }
                 }
+                for model in VoxtralRealtimeRegistry.models {
+                    if let path = ModelDownloader.findRealtimeModelPath(for: model) {
+                        print("\n  [REALTIME] \(model.id): \(model.name)")
+                        print("    Path: \(path.path)")
+                    }
+                }
             }
         } else {
             // STT models
@@ -85,6 +92,15 @@ struct ListModels: ParsableCommand {
             print("\nTTS download status:")
             for model in VoxtralTTSRegistry.models {
                 let status = ModelDownloader.findTTSModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+                print("  \(model.id): \(status)")
+            }
+
+            // Realtime models
+            print("\n" + String(repeating: "-", count: 40))
+            VoxtralRealtimeRegistry.printAvailableModels()
+            print("\nRealtime download status:")
+            for model in VoxtralRealtimeRegistry.models {
+                let status = ModelDownloader.findRealtimeModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
                 print("  \(model.id): \(status)")
             }
         }
@@ -107,8 +123,19 @@ struct Download: AsyncParsableCommand {
         print("VOXTRAL MODEL DOWNLOAD")
         print(String(repeating: "=", count: 60))
 
-        // Check if it's a TTS model first
-        if let ttsModel = VoxtralTTSRegistry.model(withId: model) {
+        // Check if it's a Realtime model
+        if let realtimeModel = VoxtralRealtimeRegistry.model(withId: model) {
+            let modelPath = try await ModelDownloader.downloadRealtimeModel(realtimeModel) { progress, message in
+                print("[\(Int(progress * 100))%] \(message)")
+            }
+            print("\n" + String(repeating: "=", count: 60))
+            print("Download complete!")
+            print("Model path: \(modelPath.path)")
+            print("\nTo transcribe audio:")
+            print("  voxtral realtime <audio-file>")
+            print(String(repeating: "=", count: 60))
+        // Check if it's a TTS model
+        } else if let ttsModel = VoxtralTTSRegistry.model(withId: model) {
             let modelPath = try await ModelDownloader.downloadTTSModel(ttsModel) { progress, message in
                 print("[\(Int(progress * 100))%] \(message)")
             }
@@ -432,6 +459,89 @@ struct TTS: AsyncParsableCommand {
         // Cleanup
         pipeline.unload()
 
+        print("\n" + String(repeating: "=", count: 60))
+    }
+}
+
+// MARK: - Realtime Command (Uses VoxtralRealtimePipeline)
+
+@available(macOS 14.0, *)
+struct Realtime: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "realtime",
+        abstract: "Transcribe using Voxtral Realtime 4B (streaming model)"
+    )
+
+    @Argument(help: "Path to audio file (MP3, WAV, M4A, etc.)")
+    var audioFile: String
+
+    @Option(name: .shortAndLong, help: "Model: realtime-4b-4bit, realtime-4b-fp16, realtime-4b")
+    var model: String = "realtime-4b-4bit"
+
+    @Option(name: .long, help: "Maximum tokens to generate")
+    var maxTokens: Int = 4096
+
+    @Option(name: .long, help: "Transcription delay in ms (default: 480)")
+    var delay: Int = 480
+
+    @Option(name: [.customShort("t"), .long], help: "Temperature (0.0 = greedy)")
+    var temperature: Float = 0.0
+
+    @Flag(name: .long, help: "Extract and print audio embeddings shape")
+    var embeddings = false
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL REALTIME (Streaming STT)")
+        print(String(repeating: "=", count: 60))
+
+        guard FileManager.default.fileExists(atPath: audioFile) else {
+            throw ValidationError("Audio file not found: \(audioFile)")
+        }
+
+        print("\nModel: \(model)")
+        print("Delay: \(delay)ms")
+
+        var config = VoxtralRealtimePipeline.Configuration.default
+        config.maxTokens = maxTokens
+        config.temperature = temperature
+        config.transcriptionDelayMs = delay
+
+        let pipeline = VoxtralRealtimePipeline(configuration: config)
+
+        // Load model
+        print("\n[1/3] Loading Realtime model...")
+        let startLoad = Date()
+        try await pipeline.loadModel(modelId: model) { progress, status in
+            print("  [\(Int(progress * 100))%] \(status)")
+        }
+        let loadTime = Date().timeIntervalSince(startLoad)
+        print("  Model loaded in \(String(format: "%.2f", loadTime))s")
+
+        // Extract embeddings if requested
+        if embeddings {
+            print("\n[2/3] Extracting audio embeddings...")
+            let audioURL = URL(fileURLWithPath: audioFile)
+            let embeds = try await pipeline.extractAudioEmbeddings(audio: audioURL)
+            print("  Embeddings shape: \(embeds.shape)")
+            print("  dtype: \(embeds.dtype)")
+        }
+
+        // Transcribe
+        print("\n[\(embeddings ? "3" : "2")/3] Transcribing...")
+        let startGen = Date()
+        let audioURL = URL(fileURLWithPath: audioFile)
+        let transcription = try await pipeline.transcribe(audio: audioURL)
+        let genTime = Date().timeIntervalSince(startGen)
+
+        print("\n" + String(repeating: "-", count: 60))
+        print(transcription)
+        print(String(repeating: "-", count: 60))
+
+        print("\nStatistics:")
+        print("  Time: \(String(format: "%.2f", genTime))s")
+
+        pipeline.unload()
         print("\n" + String(repeating: "=", count: 60))
     }
 }

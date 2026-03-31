@@ -473,6 +473,87 @@ public class ModelDownloader {
         // Try as a direct HuggingFace repo ID
         return try await downloadByRepoId(identifier, progress: progress)
     }
+
+    // MARK: - Realtime Model Methods
+
+    public static func isRealtimeModelDownloaded(_ model: VoxtralRealtimeModelInfo) -> Bool {
+        findRealtimeModelPath(for: model) != nil
+    }
+
+    /// Find a Realtime model path (checks Hub cache, then local directories)
+    public static func findRealtimeModelPath(for model: VoxtralRealtimeModelInfo) -> URL? {
+        // Realtime models may have config.json (mlx-community) or params.json (Mistral)
+        let configFiles = ["config.json", "params.json"]
+
+        // Check custom models directory
+        if let customDir = customModelsDirectory {
+            let customModelPath = customDir.appendingPathComponent(model.repoId)
+            for configFile in configFiles {
+                if FileManager.default.fileExists(atPath: customModelPath.appendingPathComponent(configFile).path) {
+                    return customModelPath
+                }
+            }
+        }
+
+        // Check Hub cache (new location)
+        if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let newPath = cacheDir.appendingPathComponent("models").appendingPathComponent(model.repoId)
+            for configFile in configFiles {
+                if FileManager.default.fileExists(atPath: newPath.appendingPathComponent(configFile).path) {
+                    return newPath
+                }
+            }
+        }
+
+        // Check legacy Hub cache
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let hubCache = homeDir.appendingPathComponent(".cache/huggingface/hub")
+        let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
+        let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
+           let latestSnapshot = contents.sorted().last {
+            let modelPath = snapshotsDir.appendingPathComponent(latestSnapshot)
+            for configFile in configFiles {
+                if FileManager.default.fileExists(atPath: modelPath.appendingPathComponent(configFile).path) {
+                    return modelPath
+                }
+            }
+        }
+
+        // Check local models directory
+        let localDir = modelsDirectory.appendingPathComponent(
+            model.repoId.replacingOccurrences(of: "/", with: "--")
+        )
+        for configFile in configFiles {
+            if FileManager.default.fileExists(atPath: localDir.appendingPathComponent(configFile).path) {
+                return localDir
+            }
+        }
+
+        return nil
+    }
+
+    /// Download a Realtime model
+    public static func downloadRealtimeModel(
+        _ model: VoxtralRealtimeModelInfo,
+        progress: DownloadProgressCallback? = nil
+    ) async throws -> URL {
+        if let existingPath = findRealtimeModelPath(for: model) {
+            progress?(1.0, "Realtime model already downloaded")
+            return existingPath
+        }
+
+        progress?(0.0, "Starting download of \(model.name)...")
+        progress?(0.1, "Downloading model files...")
+
+        let modelUrl = try await hubApi.snapshot(
+            from: model.repoId,
+            matching: ["*.json", "*.safetensors", "tekken.json"]
+        )
+
+        progress?(1.0, "Download complete!")
+        return modelUrl
+    }
 }
 
 /// Errors for model downloading
