@@ -188,25 +188,28 @@ public class VoxtralRealtimeDecoder: Module {
         MLX.matmul(h, tokEmbeddings.weight.transposed())
     }
 
+    /// Create fresh KV caches for all layers.
+    public func createCache() -> [any KVCache] {
+        layers.map { _ in KVCacheSimple() }
+    }
+
     /// Forward pass through all layers.
     /// embeds: [seq, dim] input embeddings (audio + text summed)
+    /// cache: KV caches (must always be provided — use createCache() to initialize)
     /// Returns: hidden states [seq, dim]
     public func forward(
         embeds: MLXArray,
-        cache: [any KVCache]? = nil
-    ) -> (MLXArray, [any KVCache]) {
+        cache: [any KVCache]
+    ) -> MLXArray {
         // Add batch dimension: [seq, dim] → [1, seq, dim]
         var h = embeds.expandedDimensions(axis: 0)
 
-        var newCache: [any KVCache] = []
         for (i, layer) in layers.enumerated() {
-            let layerCache: (any KVCache)? = cache.map { $0[i] }
             let adaScale = i < adaScales.count ? adaScales[i] : nil
-            h = layer(h, cache: layerCache, adaScale: adaScale)
-            newCache.append(layerCache ?? KVCacheSimple())
+            h = layer(h, cache: cache[i], adaScale: adaScale)
         }
 
         h = norm(h)
-        return (h.squeezed(axis: 0), newCache)  // back to [seq, dim]
+        return h.squeezed(axis: 0)  // back to [seq, dim]
     }
 }

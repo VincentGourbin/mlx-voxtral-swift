@@ -27,16 +27,30 @@ public func loadVoxtralRealtimeModel(
     progressCallback?(0.2, "Creating model structure...")
     let model = VoxtralRealtimeModel(config: config)
 
-    // Step 3: Load weights
+    // Step 3: Apply quantization if config specifies it
+    if let quantConfig = config.quantization {
+        progressCallback?(0.25, "Applying quantization (bits=\(quantConfig.bits))...")
+        // Skip quantization on norms, embeddings, conv layers, and adapter projections
+        MLXNN.quantize(
+            model: model,
+            groupSize: quantConfig.groupSize,
+            bits: quantConfig.bits
+        ) { path, module in
+            let skipPatterns = ["norm", "ada_rms_norm", "tok_embeddings", "conv_layers", "audio_language_projection"]
+            return module is Linear && !skipPatterns.contains(where: { path.contains($0) })
+        }
+    }
+
+    // Step 4: Load weights
     progressCallback?(0.3, "Loading weights...")
     let rawWeights = try loadAllRealtimeWeights(from: modelDirectory)
     progressCallback?(0.6, "Mapping weight names...")
 
-    // Step 4: Sanitize
+    // Step 5: Sanitize
     let sanitizedWeights = sanitizeRealtimeWeights(rawWeights)
     progressCallback?(0.7, "Applying weights to model...")
 
-    // Step 5: Apply
+    // Step 6: Apply
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
     try model.update(parameters: parameters, verify: .none)
 
@@ -183,8 +197,20 @@ func sanitizeRealtimeWeights(_ weights: [String: MLXArray]) -> [String: MLXArray
             }
 
         } else {
-            // Format B: mlx-community pre-sanitized — pass through
-            newKey = key
+            // Format B: mlx-community pre-sanitized
+            // Map decoder attention keys: wq→q_proj, wk→k_proj, wv→v_proj, wo→o_proj
+            // (LlamaAttention uses HuggingFace naming, weights use Mistral naming)
+            var mapped = key
+            if mapped.contains("decoder.layers.") && mapped.contains(".attention.w") {
+                mapped = mapped.replacingOccurrences(of: ".attention.wq.", with: ".attention.q_proj.")
+                mapped = mapped.replacingOccurrences(of: ".attention.wk.", with: ".attention.k_proj.")
+                mapped = mapped.replacingOccurrences(of: ".attention.wv.", with: ".attention.v_proj.")
+                mapped = mapped.replacingOccurrences(of: ".attention.wo.", with: ".attention.o_proj.")
+            }
+            // Map decoder FFN keys: feed_forward_w1→mlp.gate_proj, etc.
+            // Actually LlamaAttention's layer uses @ModuleInfo keys — but our RealtimeDecoderLayer
+            // has feed_forward_w1/w2/w3 directly, so those already match.
+            newKey = mapped
         }
 
         if let newKey {

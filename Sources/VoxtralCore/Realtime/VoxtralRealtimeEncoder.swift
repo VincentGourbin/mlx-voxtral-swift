@@ -192,18 +192,26 @@ public class RealtimeEncoderFFN: Module {
 // MARK: - Encoder Layer
 
 /// Single causal encoder transformer layer: RMSNorm + attention + SwiGLU FFN.
+/// FFN weights are flat on the layer (feed_forward_w1/w2/w3), matching Python structure.
 public class RealtimeEncoderLayer: Module {
 
     @ModuleInfo(key: "attention_norm") var attentionNorm: RMSNorm
     @ModuleInfo var attention: RealtimeEncoderAttention
     @ModuleInfo(key: "ffn_norm") var ffnNorm: RMSNorm
-    let ffn: RealtimeEncoderFFN
+
+    // SwiGLU FFN directly on layer (not nested in sub-module)
+    @ModuleInfo(key: "feed_forward_w1") var w1: Linear
+    @ModuleInfo(key: "feed_forward_w2") var w2: Linear
+    @ModuleInfo(key: "feed_forward_w3") var w3: Linear
 
     public init(config: RealtimeEncoderConfig) {
         self._attentionNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.normEps)
         self._attention.wrappedValue = RealtimeEncoderAttention(config: config)
         self._ffnNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.normEps)
-        self.ffn = RealtimeEncoderFFN(dim: config.dim, hiddenDim: config.hiddenDim)
+        // w1=gate (no bias), w3=up (no bias), w2=down (bias)
+        self._w1.wrappedValue = Linear(config.dim, config.hiddenDim, bias: false)
+        self._w3.wrappedValue = Linear(config.dim, config.hiddenDim, bias: false)
+        self._w2.wrappedValue = Linear(config.hiddenDim, config.dim, bias: true)
         super.init()
     }
 
@@ -221,8 +229,9 @@ public class RealtimeEncoderLayer: Module {
 
         // SwiGLU FFN with pre-norm
         h = ffnNorm(out)
-        h = ffn(h)
-        out = out + h
+        let gate = silu(w1(h))
+        let up = w3(h)
+        out = out + w2(gate * up)
 
         return out
     }

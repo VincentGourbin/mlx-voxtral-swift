@@ -95,8 +95,11 @@ public class VoxtralRealtimeModel: Module {
             prefixEmbeds = MLX.concatenated([combinedPart, textOnlyPart], axis: 0)
         }
 
+        // Create KV caches for all decoder layers
+        let cache = decoder.createCache()
+
         // Prefill
-        var (hidden, cache) = decoder.forward(embeds: prefixEmbeds)
+        var hidden = decoder.forward(embeds: prefixEmbeds, cache: cache)
         var logits = decoder.logits(hidden[hidden.dim(0) - 1])
         MLX.eval(logits)
 
@@ -116,10 +119,7 @@ public class VoxtralRealtimeModel: Module {
             let tokEmb = decoder.embedToken(token)
             let embed = audioEmb + tokEmb
 
-            (hidden, cache) = decoder.forward(
-                embeds: embed.expandedDimensions(axis: 0),
-                cache: cache
-            )
+            hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
             logits = decoder.logits(hidden[0])
             MLX.eval(logits)
 

@@ -98,15 +98,27 @@ public struct RealtimeDecoderConfig: Codable, Sendable {
 
 // MARK: - Top-Level Configuration (mlx-community format)
 
+public struct RealtimeQuantizationConfig: Codable, Sendable {
+    public let groupSize: Int
+    public let bits: Int
+
+    enum CodingKeys: String, CodingKey {
+        case groupSize = "group_size"
+        case bits
+    }
+}
+
 public struct VoxtralRealtimeConfiguration: Codable, Sendable {
     public let decoder: RealtimeDecoderConfig
     public let encoderArgs: RealtimeEncoderConfig
     public let modelType: String
+    public let quantization: RealtimeQuantizationConfig?
 
     enum CodingKeys: String, CodingKey {
         case decoder
         case encoderArgs = "encoder_args"
         case modelType = "model_type"
+        case quantization
     }
 }
 
@@ -233,7 +245,8 @@ public extension VoxtralRealtimeConfiguration {
         return VoxtralRealtimeConfiguration(
             decoder: decoderConfig,
             encoderArgs: encoderConfig,
-            modelType: "voxtral_realtime"
+            modelType: "voxtral_realtime",
+            quantization: nil
         )
     }
 }

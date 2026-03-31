@@ -113,12 +113,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         state = .processing
 
         do {
-            // Extract mel spectrogram (variable length, no 30s chunking)
-            let audioData = try loadAudio(audio.path)
-            let (mel, _) = logMelSpectrogram(
-                audioData,
-                globalMax: model.config.audioEncoding.globalLogMelMax
-            )
+            let mel = try prepareMel(from: audio, config: model.config)
 
             // Generate transcription
             let (tokens, _) = model.generate(
@@ -148,11 +143,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
             throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
         }
 
-        let audioData = try loadAudio(audio.path)
-        let (mel, _) = logMelSpectrogram(
-            audioData,
-            globalMax: model.config.audioEncoding.globalLogMelMax
-        )
+        let mel = try prepareMel(from: audio, config: model.config)
         let embeddings = model.extractAudioEmbeddings(mel)
         MLX.eval(embeddings)
         return embeddings
@@ -168,4 +159,42 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     }
 
     public var isReady: Bool { state.isReady }
+
+    // MARK: - Audio Preparation
+
+    /// Prepare mel spectrogram with streaming padding protocol.
+    /// Pads audio with silence on both sides, computes mel, ensures even frame count.
+    private func prepareMel(from audioURL: URL, config: VoxtralRealtimeConfiguration) throws -> MLXArray {
+        let audioData = try loadAudio(audioURL.path)
+
+        let nDelay = config.numDelayTokens(delayMs: configuration.transcriptionDelayMs)
+        let nLeft = config.nLeftPadTokens
+        let nRight = nDelay + 1 + 10
+        let rawLen = config.rawAudioLengthPerToken  // 1280
+
+        // Pad audio: left silence + audio + alignment + right silence
+        let nSamples = audioData.dim(0)
+        let alignPad = (rawLen - (nSamples % rawLen)) % rawLen
+        let leftPad = nLeft * rawLen
+        let rightPad = alignPad + nRight * rawLen
+
+        let padded = MLX.concatenated([
+            MLX.zeros([leftPad]),
+            audioData,
+            MLX.zeros([rightPad])
+        ])
+
+        // Compute mel spectrogram with fixed global max
+        var (mel, _) = logMelSpectrogram(
+            padded,
+            globalMax: config.audioEncoding.globalLogMelMax
+        )
+
+        // Ensure even frame count (drop first frame if odd)
+        if mel.dim(1) % 2 != 0 {
+            mel = mel[0..., 1...]
+        }
+
+        return mel
+    }
 }
