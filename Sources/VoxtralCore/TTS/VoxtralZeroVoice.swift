@@ -64,8 +64,10 @@ public struct VoiceRecipe: Sendable {
 public class VoxtralZeroVoice: @unchecked Sendable {
 
     private let voiceEmbeddings: [String: MLXArray]
-    /// Maximum SLERP blend weight (prevents voice identity from collapsing)
-    public let maxBlendWeight: Float = 0.20
+    /// Maximum SLERP blend weight for cross-family blends.
+    /// Benchmark shows cross-family degrades above 0.05.
+    /// Intra-language (FR, IT, PT) is stable up to 0.10–0.15.
+    public let maxBlendWeight: Float = 0.05
 
     public init(voiceEmbeddings: [String: MLXArray]) {
         self.voiceEmbeddings = voiceEmbeddings
