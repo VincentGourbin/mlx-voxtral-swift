@@ -20,7 +20,7 @@ struct VoxtralCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "voxtral",
         abstract: "Voxtral speech-to-text & text-to-speech for Apple Silicon",
-        version: "1.2.0",
+        version: "2.0.0",
         subcommands: [
             ListModels.self,
             Download.self,
