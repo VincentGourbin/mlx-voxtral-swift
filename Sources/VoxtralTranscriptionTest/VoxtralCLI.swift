@@ -387,6 +387,12 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Voice preset (use 'voxtral list' to see available voices)")
     var voice: String = "neutral_female"
 
+    @Option(name: .long, help: "ZeroVoice 3D coordinate 'x,y,z' for procedural voice (overrides --voice)")
+    var voiceXyz: String?
+
+    @Option(name: .long, help: "Blend two voices 'voiceA+voiceB:weight' (e.g. 'neutral_female+fr_male:0.15')")
+    var blend: String?
+
     @Option(name: .long, help: "Maximum audio frames to generate (12.5 frames/sec)")
     var maxFrames: Int = 2500
 
@@ -404,18 +410,7 @@ struct TTS: AsyncParsableCommand {
         print("VOXTRAL TTS (Text-to-Speech)")
         print(String(repeating: "=", count: 60))
 
-        // Parse voice
-        guard let voicePreset = VoxtralVoice(rawValue: voice) else {
-            print("Unknown voice: \(voice)")
-            print("\nAvailable voices:")
-            for v in VoxtralVoice.allCases {
-                print("  \(v.rawValue)")
-            }
-            throw ValidationError("Unknown voice: \(voice)")
-        }
-
         print("\nText: \(text)")
-        print("Voice: \(voicePreset.displayName)")
         print("Output: \(output)")
 
         // Create pipeline
@@ -436,9 +431,52 @@ struct TTS: AsyncParsableCommand {
         let loadTime = Date().timeIntervalSince(startLoad)
         print("  Model loaded in \(String(format: "%.2f", loadTime))s")
 
-        // Synthesize
+        // Synthesize with appropriate voice mode
         print("\n[2/3] Generating speech...")
-        let result = try await pipeline.synthesize(text: text, voice: voicePreset)
+        let result: TTSSynthesisResult
+
+        if let xyz = voiceXyz {
+            // ZeroVoice coordinate mode
+            let parts = xyz.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            guard parts.count == 3 else {
+                throw ValidationError("--voice-xyz must be 'x,y,z' (e.g. '50,50,50')")
+            }
+            let coord = (x: parts[0], y: parts[1], z: parts[2])
+            if let recipe = pipeline.voiceRecipe(x: coord.x, y: coord.y, z: coord.z) {
+                print("  ZeroVoice: \(recipe.voiceA.rawValue) + \(recipe.voiceB.rawValue) @ \(String(format: "%.2f", recipe.blendWeight))")
+            }
+            result = try await pipeline.synthesize(text: text, voiceCoordinate: coord)
+
+        } else if let blendSpec = blend {
+            // Manual blend mode: "voiceA+voiceB:weight"
+            let mainParts = blendSpec.split(separator: ":")
+            guard mainParts.count == 2,
+                  let weight = Float(mainParts[1]) else {
+                throw ValidationError("--blend must be 'voiceA+voiceB:weight' (e.g. 'neutral_female+fr_male:0.15')")
+            }
+            let voiceParts = mainParts[0].split(separator: "+")
+            guard voiceParts.count == 2,
+                  let voiceA = VoxtralVoice(rawValue: String(voiceParts[0])),
+                  let voiceB = VoxtralVoice(rawValue: String(voiceParts[1])) else {
+                throw ValidationError("Unknown voice names in blend spec. Use 'voxtral list' to see available voices.")
+            }
+            guard let blended = pipeline.blendVoicePresets(voiceA, voiceB, t: weight) else {
+                throw ValidationError("Voice embeddings not loaded for blend")
+            }
+            print("  Blend: \(voiceA.rawValue) + \(voiceB.rawValue) @ \(String(format: "%.2f", weight))")
+            result = try await pipeline.synthesize(text: text, voiceEmbedding: blended)
+
+        } else {
+            // Standard preset voice mode
+            guard let voicePreset = VoxtralVoice(rawValue: voice) else {
+                print("Unknown voice: \(voice)")
+                print("\nAvailable voices:")
+                for v in VoxtralVoice.allCases { print("  \(v.rawValue)") }
+                throw ValidationError("Unknown voice: \(voice)")
+            }
+            print("  Voice: \(voicePreset.displayName)")
+            result = try await pipeline.synthesize(text: text, voice: voicePreset)
+        }
 
         // Save WAV
         print("\n[3/3] Saving audio...")

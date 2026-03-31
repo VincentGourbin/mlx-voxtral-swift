@@ -98,6 +98,16 @@ public class VoxtralTTSSynthesisManager: @unchecked Sendable {
         )
     }
 
+    // MARK: - ZeroVoice
+
+    /// Synthesize speech using a ZeroVoice 3D coordinate.
+    public func synthesize(
+        text: String,
+        voiceCoordinate: (x: Int, y: Int, z: Int)
+    ) async throws -> TTSSynthesisResult {
+        try await pipeline.synthesize(text: text, voiceCoordinate: voiceCoordinate)
+    }
+
     /// Available voices in the loaded model.
     public var availableVoices: [VoxtralVoice] {
         pipeline.availableVoices
