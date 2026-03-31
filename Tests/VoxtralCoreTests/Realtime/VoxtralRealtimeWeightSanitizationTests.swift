@@ -99,16 +99,24 @@ final class VoxtralRealtimeWeightSanitizationTests: XCTestCase {
 
     // MARK: - Format B (mlx-community)
 
-    func testFormatBPassThrough() {
+    func testFormatBDecoderAttentionRemap() {
         let weights = makeWeights([
             "encoder.conv_layers_0_conv.conv.weight": [1, 1, 1],
             "decoder.layers.0.attention.wq.weight": [1, 1],
+            "decoder.layers.0.attention.wk.weight": [1, 1],
+            "decoder.layers.0.attention.wv.weight": [1, 1],
+            "decoder.layers.0.attention.wo.weight": [1, 1],
             "decoder.tok_embeddings.weight": [1, 1],
         ])
         let sanitized = sanitizeRealtimeWeights(weights)
+        // Encoder keys pass through
         XCTAssertNotNil(sanitized["encoder.conv_layers_0_conv.conv.weight"])
-        XCTAssertNotNil(sanitized["decoder.layers.0.attention.wq.weight"])
         XCTAssertNotNil(sanitized["decoder.tok_embeddings.weight"])
+        // Decoder attention keys are remapped: wq→q_proj, etc.
+        XCTAssertNotNil(sanitized["decoder.layers.0.attention.q_proj.weight"])
+        XCTAssertNotNil(sanitized["decoder.layers.0.attention.k_proj.weight"])
+        XCTAssertNotNil(sanitized["decoder.layers.0.attention.v_proj.weight"])
+        XCTAssertNotNil(sanitized["decoder.layers.0.attention.o_proj.weight"])
     }
 
     // MARK: - Filtering
