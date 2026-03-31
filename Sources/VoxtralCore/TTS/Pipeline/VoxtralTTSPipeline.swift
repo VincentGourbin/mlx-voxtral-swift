@@ -177,6 +177,80 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         return result
     }
 
+    // MARK: - ZeroVoice Synthesis
+
+    /// Synthesize speech using a ZeroVoice coordinate (procedural voice).
+    public func synthesize(
+        text: String,
+        voiceCoordinate: (x: Int, y: Int, z: Int)
+    ) async throws -> TTSSynthesisResult {
+        guard let voiceEmb = zeroVoice?.voiceAt(x: voiceCoordinate.x, y: voiceCoordinate.y, z: voiceCoordinate.z) else {
+            throw VoxtralTTSError.voiceNotFound("Could not generate voice for coordinate (\(voiceCoordinate.x), \(voiceCoordinate.y), \(voiceCoordinate.z))")
+        }
+        return try await synthesize(text: text, voiceEmbedding: voiceEmb)
+    }
+
+    /// Synthesize speech using a pre-computed blended voice embedding.
+    public func synthesize(
+        text: String,
+        voiceEmbedding: MLXArray
+    ) async throws -> TTSSynthesisResult {
+        guard state.isReady, let model = ttsModel, let tokenizer else {
+            throw VoxtralTTSError.invalidConfiguration("Model not loaded")
+        }
+
+        state = .synthesizing
+        let startTime = Date()
+
+        do {
+            let (codes, numFrames) = model.generate(
+                text: text,
+                voiceEmbedding: voiceEmbedding,
+                tokenizer: tokenizer,
+                maxTokens: configuration.maxFrames
+            )
+
+            guard numFrames > 0 else {
+                state = .ready
+                throw VoxtralTTSError.synthesisError("No audio frames generated")
+            }
+
+            let waveform = model.decodeToWaveform(codes)
+            MLX.eval(waveform)
+
+            let generationTime = Date().timeIntervalSince(startTime)
+            state = .ready
+
+            return TTSSynthesisResult(
+                waveform: waveform,
+                numFrames: numFrames,
+                sampleRate: sampleRate,
+                generationTime: generationTime
+            )
+        } catch {
+            state = .ready
+            throw error
+        }
+    }
+
+    /// ZeroVoice generator (lazy-initialized from loaded voice embeddings).
+    public var zeroVoice: VoxtralZeroVoice? {
+        guard !voiceEmbeddings.isEmpty else { return nil }
+        return VoxtralZeroVoice(voiceEmbeddings: voiceEmbeddings)
+    }
+
+    /// Get the recipe for a ZeroVoice coordinate (metadata, no computation).
+    public func voiceRecipe(x: Int, y: Int, z: Int) -> VoiceRecipe? {
+        zeroVoice?.voiceRecipe(x: x, y: y, z: z)
+    }
+
+    /// Blend two named voice presets.
+    public func blendVoicePresets(_ voiceA: VoxtralVoice, _ voiceB: VoxtralVoice, t: Float) -> MLXArray? {
+        guard let embA = voiceEmbeddings[voiceA.rawValue],
+              let embB = voiceEmbeddings[voiceB.rawValue] else { return nil }
+        return blendVoices(voiceA: embA, voiceB: embB, t: t)
+    }
+
     // MARK: - Resource Management
 
     public func unload() {
