@@ -26,13 +26,18 @@ let package = Package(
             name: "VoxtralCLI",
             targets: ["VoxtralTranscriptionTest"]
         ),
+        // Performance benchmark tool
+        .executable(
+            name: "VoxtralBenchmark",
+            targets: ["VoxtralBenchmark"]
+        ),
     ],
     dependencies: [
         // Aligned with flux-2-swift-mlx dependency versions
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.2"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.6"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.29.0")
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.30.6")
     ],
     targets: [
         // Core library containing all Voxtral model implementations
@@ -65,6 +70,14 @@ let package = Package(
             name: "VoxtralTranscriptionTest",
             dependencies: [
                 "VoxtralCore"
+            ]
+        ),
+        // Performance benchmark
+        .executableTarget(
+            name: "VoxtralBenchmark",
+            dependencies: [
+                "VoxtralCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
         // Unit tests
