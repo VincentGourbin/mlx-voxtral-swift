@@ -31,6 +31,40 @@ public struct TTSSynthesisResult: @unchecked Sendable {
     }
 }
 
+// MARK: - Lead-in Silence Trimming
+
+/// Trim low-energy lead-in frames from waveform.
+/// Voxtral TTS often generates a few silence/transition frames before speech starts,
+/// especially noticeable with non-English voices. This removes them for cleaner output.
+public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, threshold: Float = 0.025) -> MLXArray {
+    let samplesPerFrame = 1920  // 80ms at 24kHz (8x upsample * 240 patch)
+    let totalSamples = waveform.dim(0)
+    let totalFrames = totalSamples / samplesPerFrame
+
+    // Scan frame-by-frame, find the first frame above threshold RMS
+    let samples = waveform.asType(.float32)
+    var trimFrames = 0
+
+    for i in 0..<min(totalFrames, 20) {  // Check at most first 20 frames (1.6s)
+        let start = i * samplesPerFrame
+        let end = min(start + samplesPerFrame, totalSamples)
+        let chunk = samples[start..<end]
+        let rms = MLX.sqrt(MLX.mean(chunk * chunk)).item(Float.self)
+        if rms >= threshold {
+            break
+        }
+        trimFrames += 1
+    }
+
+    if trimFrames > 0 {
+        let trimSamples = trimFrames * samplesPerFrame
+        if trimSamples < totalSamples {
+            return waveform[trimSamples...]
+        }
+    }
+    return waveform
+}
+
 // MARK: - TTS Streaming Chunk
 
 /// A chunk of decoded audio from the streaming TTS pipeline.

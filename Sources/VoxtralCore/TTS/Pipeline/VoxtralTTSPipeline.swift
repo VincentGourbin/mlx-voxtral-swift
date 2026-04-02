@@ -147,9 +147,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
-            // Decode to waveform
-            let waveform = model.decodeToWaveform(codes)
-            MLX.eval(waveform)
+            // Decode to waveform and trim lead-in silence
+            let rawWaveform = model.decodeToWaveform(codes)
+            MLX.eval(rawWaveform)
+            let waveform = trimLeadInSilence(rawWaveform, sampleRate: sampleRate)
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
@@ -215,8 +216,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
-            let waveform = model.decodeToWaveform(codes)
-            MLX.eval(waveform)
+            let rawWaveform = model.decodeToWaveform(codes)
+            MLX.eval(rawWaveform)
+            let waveform = trimLeadInSilence(rawWaveform, sampleRate: sampleRate)
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
