@@ -83,33 +83,61 @@ private let terminalPunctuation: Set<Character> = [".", "!", "?", ":", ";", "\u{
 /// The complete Voxtral TTS model.
 public class VoxtralTTSModel: Module {
 
-    /// Sanitize text for TTS: collapse whitespace, normalize unicode hyphens,
-    /// and ensure terminal punctuation (critical for EOA detection).
-    /// Matches Python sanitize_tts_input_text_for_demo.
+    /// Sanitize text for TTS with prosody-aware structural handling.
+    ///
+    /// Phase 1 converts structural formatting (paragraphs, headers, bullets) into
+    /// punctuation that produces natural pauses. Phase 2 normalizes characters.
+    /// Voxtral TTS infers all prosody from punctuation — there are no special tokens.
     public static func sanitizeTextForTTS(_ text: String) -> String {
         var t = text
-        // Collapse whitespace and line breaks to single space
-        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
-        // Convert ALL-CAPS words to capitalized — TTS models stutter/spell out full-caps text
+
+        // === Phase 1: Structural transformations (multi-line, before whitespace collapse) ===
+
+        // 1. Strip markdown formatting artifacts
+        t = stripMarkdownFormatting(t)
+
+        // 2. Convert bullet points to standalone sentences
+        t = convertBulletPoints(t)
+
+        // 3. Convert ALL-CAPS section headers to announced topics
+        t = convertSectionHeaders(t)
+
+        // 4. Convert paragraph breaks (double newlines) to sentence boundaries
+        t = convertParagraphBreaks(t)
+
+        // 5. Convert remaining single newlines to spaces
+        t = t.replacingOccurrences(of: "\\n", with: " ", options: .regularExpression)
+
+        // === Phase 2: Character-level sanitization (single-line) ===
+
+        // 6. Collapse whitespace
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+
+        // 7. Convert ALL-CAPS words to Capitalized
         t = convertAllCapsWords(t)
-        // Verbalize symbols that TTS reads literally
+
+        // 8. Verbalize symbols
         t = t.replacingOccurrences(of: "&", with: " and ")
         t = t.replacingOccurrences(of: "=", with: " equals ")
         t = t.replacingOccurrences(of: "+", with: " plus ")
         t = t.replacingOccurrences(of: " / ", with: " or ")
-        // Convert em-dashes and long dashes to natural pauses (comma + space)
-        // Without this, the model reads "—" as "minus/moins"
+
+        // 9. Normalize dashes
         t = t.replacingOccurrences(of: "\\s*[\u{2014}\u{2015}\u{2012}\u{2013}]\\s*", with: ", ", options: .regularExpression)
-        // Convert standalone hyphens surrounded by spaces to pauses too
         t = t.replacingOccurrences(of: " - ", with: ", ")
-        // Normalize remaining unicode hyphens to ASCII (inside words: e.g. "auto-saved")
         t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
-        // Collapse repeated punctuation
+
+        // 10. Collapse repeated/artifact punctuation
         t = t.replacingOccurrences(of: "([.!?;:])\\1+", with: "$1", options: .regularExpression)
-        // Collapse repeated commas/spaces from dash conversion
         t = t.replacingOccurrences(of: ",\\s*,", with: ",")
-        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
-        // Ensure terminal punctuation — without it the model fails to predict EOA
+        t = t.replacingOccurrences(of: "\\.\\s*\\.", with: ".", options: .regularExpression)
+
+        // 11. Final whitespace collapse
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+
+        // 12. Ensure terminal punctuation (critical for EOA detection)
         if let last = t.last, !terminalPunctuation.contains(last) {
             t += "."
         }
@@ -117,13 +145,97 @@ public class VoxtralTTSModel: Module {
         return t
     }
 
+    // MARK: - Phase 1 Helpers
+
+    /// Strip markdown formatting: # headers, **bold**, *italic*, > blockquotes.
+    private static func stripMarkdownFormatting(_ text: String) -> String {
+        var t = text
+        t = t.replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: "\\*{1,2}([^*]+)\\*{1,2}", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "_{1,2}([^_]+)_{1,2}", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "(?m)^>\\s*", with: "", options: .regularExpression)
+        return t
+    }
+
+    /// Convert bullet point lines to standalone sentences.
+    private static func convertBulletPoints(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let bulletPattern = try! NSRegularExpression(pattern: "^\\s*(?:[-*+•]|\\d+[.)]) +")
+        let result = lines.map { line -> String in
+            let range = NSRange(location: 0, length: line.utf16.count)
+            if let match = bulletPattern.firstMatch(in: line, range: range) {
+                let afterBullet = String(line[line.index(line.startIndex, offsetBy: match.range.upperBound)...])
+                    .trimmingCharacters(in: .whitespaces)
+                guard !afterBullet.isEmpty else { return line }
+                if let last = afterBullet.last, terminalPunctuation.contains(last) {
+                    return afterBullet
+                }
+                return afterBullet + "."
+            }
+            return line
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Convert ALL-CAPS section header lines to announced topics with sentence boundary.
+    private static func convertSectionHeaders(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var result: [String] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else {
+                result.append(line)
+                continue
+            }
+
+            let alphas = trimmed.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+            let isAllCaps = alphas.count >= 2
+                && trimmed == trimmed.uppercased()
+                && trimmed != trimmed.lowercased()
+            let isShortLine = trimmed.count <= 80
+
+            if isAllCaps && isShortLine {
+                // Ensure previous non-empty line ends with terminal punctuation
+                if let lastIdx = result.lastIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                    var prev = result[lastIdx].trimmingCharacters(in: .whitespaces)
+                    if let lastChar = prev.last, !terminalPunctuation.contains(lastChar) {
+                        prev += "."
+                        result[lastIdx] = prev
+                    }
+                }
+                // Header as its own sentence
+                var header = trimmed
+                if let last = header.last, !terminalPunctuation.contains(last) {
+                    header += "."
+                }
+                result.append(header)
+            } else {
+                result.append(line)
+            }
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Convert paragraph breaks (double newlines) to sentence boundaries.
+    private static func convertParagraphBreaks(_ text: String) -> String {
+        var t = text
+        // Normalize multiple blank lines to double newline
+        t = t.replacingOccurrences(of: "\\n\\s*\\n+", with: "\n\n", options: .regularExpression)
+        // Paragraph break after terminal punctuation → just a space
+        t = t.replacingOccurrences(of: "([.!?;:\u{2026}])\\s*\\n\\n", with: "$1 ", options: .regularExpression)
+        // Paragraph break without terminal punctuation → add period + space
+        t = t.replacingOccurrences(of: "\\n\\n", with: ". ", options: .regularExpression)
+        return t
+    }
+
+    // MARK: - Phase 2 Helpers
+
     /// Convert ALL-CAPS words (2+ letters) to Capitalized.
-    /// E.g. "FORGE YOUR IDEA" → "Forge Your Idea"
     private static func convertAllCapsWords(_ text: String) -> String {
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
         let converted = words.map { word -> String in
             let s = String(word)
-            // Check if the word (ignoring punctuation) is all uppercase and 2+ alpha chars
             let alphas = s.unicodeScalars.filter { CharacterSet.letters.contains($0) }
             if alphas.count >= 2 && s == s.uppercased() && s != s.lowercased() {
                 return s.capitalized
@@ -277,7 +389,8 @@ public class VoxtralTTSModel: Module {
         maxTokens: Int = 4096,
         sanitize: Bool = true,
         onFrame: ((Int, MLXArray) -> Void)? = nil
-    ) -> (codes: MLXArray, numFrames: Int) {
+    ) -> (codes: MLXArray, numFrames: Int, ttft: TimeInterval) {
+        let genStart = Date()
         let voiceFrameCount = voiceEmbedding.dim(0)
 
         // 1. Encode text to token IDs
@@ -300,12 +413,17 @@ public class VoxtralTTSModel: Module {
 
         // 5. Autoregressive generation
         var allCodes: [MLXArray] = []
+        var ttft: TimeInterval = 0
 
         for i in 0..<maxTokens {
             let h = hidden[0..., -1, 0...]  // (1, dim) — last position
 
             // Generate one frame: semantic + acoustic codes
             let codes = acousticTransformer.decodeOneFrame(h)  // (1, 37)
+            if i == 0 {
+                MLX.eval(codes)
+                ttft = Date().timeIntervalSince(genStart)
+            }
 
             // EOA check: semantic_code <= 1 means empty_audio (0) or end_audio (1)
             let semanticCode = codes[0, 0].item(Int32.self)
@@ -332,12 +450,12 @@ public class VoxtralTTSModel: Module {
         }
 
         guard !allCodes.isEmpty else {
-            return (MLXArray([Int32]()), 0)
+            return (MLXArray([Int32]()), 0, ttft)
         }
 
         // Stack all codes: (1, N_frames, 37)
         let audioCodes = MLX.stacked(allCodes, axis: 1)
-        return (audioCodes, allCodes.count)
+        return (audioCodes, allCodes.count, ttft)
     }
 
     /// Decode audio codes to waveform.
