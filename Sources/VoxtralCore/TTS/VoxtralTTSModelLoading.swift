@@ -51,6 +51,19 @@ private func loadWithConfig(
 
     // Step 4: Detect format and sanitize
     let sanitizedWeights = sanitizeTTSWeights(rawWeights)
+
+    // Step 4b: If quantized weights detected, quantize model layers that have scales
+    if let quantConfig = loadQuantizationConfig(from: modelDirectory) {
+        progressCallback?(0.65, "Applying \(quantConfig.bits)-bit quantization...")
+        let mode: QuantizationMode = quantConfig.mode == "affine" ? .affine : .affine
+        // Build set of quantized layer prefixes from weight keys
+        let quantizedPrefixes = detectQuantizedLayers(in: sanitizedWeights)
+        quantize(model: model, groupSize: quantConfig.groupSize, bits: quantConfig.bits, mode: mode) { path, module in
+            // Only quantize layers that actually have scales in the weights
+            quantizedPrefixes.contains(where: { path.hasSuffix($0) || path.contains($0) })
+        }
+    }
+
     progressCallback?(0.7, "Applying weights to model...")
 
     // Step 5: Apply
@@ -59,6 +72,45 @@ private func loadWithConfig(
 
     progressCallback?(1.0, "Model loaded successfully")
     return model
+}
+
+// MARK: - Quantization Config
+
+private struct QuantizationConfig: Codable {
+    let groupSize: Int
+    let bits: Int
+    let mode: String
+
+    enum CodingKeys: String, CodingKey {
+        case groupSize = "group_size"
+        case bits
+        case mode
+    }
+}
+
+private func loadQuantizationConfig(from modelDirectory: URL) -> QuantizationConfig? {
+    let configURL = modelDirectory.appendingPathComponent("config.json")
+    guard let data = try? Data(contentsOf: configURL),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let quantDict = json["quantization"] as? [String: Any],
+          let groupSize = quantDict["group_size"] as? Int,
+          let bits = quantDict["bits"] as? Int else {
+        return nil
+    }
+    let mode = quantDict["mode"] as? String ?? "affine"
+    return QuantizationConfig(groupSize: groupSize, bits: bits, mode: mode)
+}
+
+/// Detect which layers have quantized weights by finding keys with `.scales` suffix.
+/// Returns layer path prefixes (after sanitization) that should be quantized in the model.
+private func detectQuantizedLayers(in weights: [String: MLXArray]) -> Set<String> {
+    var prefixes = Set<String>()
+    for key in weights.keys where key.hasSuffix(".scales") {
+        // "layers.0.self_attn.q_proj.scales" → "layers.0.self_attn.q_proj"
+        let layerPath = String(key.dropLast(".scales".count))
+        prefixes.insert(layerPath)
+    }
+    return prefixes
 }
 
 // MARK: - Load All Weights (single or sharded)
@@ -79,7 +131,12 @@ private func loadAllWeights(from directory: URL) throws -> [String: MLXArray] {
         return weights
     }
 
-    // Single file
+    // Single file: model.safetensors (quantized mlx-community) or consolidated.safetensors (original Mistral)
+    let singleModel = directory.appendingPathComponent("model.safetensors")
+    if FileManager.default.fileExists(atPath: singleModel.path) {
+        return try MLX.loadArrays(url: singleModel)
+    }
+
     let consolidated = directory.appendingPathComponent("consolidated.safetensors")
     guard FileManager.default.fileExists(atPath: consolidated.path) else {
         throw VoxtralTTSError.fileNotFound("No safetensors files found in \(directory.path)")

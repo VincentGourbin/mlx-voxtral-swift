@@ -24,7 +24,8 @@ import MLXLMCommon
 public class MMAudioEmbeddings: Module {
 
     @ModuleInfo(key: "audio_codebook_embeddings") var audioCodebookEmbeddings: AudioCodebookEmbeddingsContainer
-    @ModuleInfo(key: "tok_embeddings") var tokEmbeddings: Embedding
+    // Module type to support both Embedding and QuantizedEmbedding
+    @ModuleInfo(key: "tok_embeddings") var tokEmbeddings: Module
 
     public init(config: VoxtralTTSConfiguration) {
         // 9088 = (8192+2=8194 semantic) + pad to 8320 + (21+2)*36=828 + pad to 768 → 8320+768=9088
@@ -41,10 +42,21 @@ public class MMAudioEmbeddings: Module {
         )
         super.init()
     }
+
+    /// Call tok_embeddings, handling both Embedding and QuantizedEmbedding
+    public func embedTokens(_ indices: MLXArray) -> MLXArray {
+        if let qEmb = tokEmbeddings as? QuantizedEmbedding {
+            return qEmb(indices)
+        } else if let emb = tokEmbeddings as? Embedding {
+            return emb(indices)
+        }
+        fatalError("Unsupported tok_embeddings type: \(type(of: tokEmbeddings))")
+    }
 }
 
 public class AudioCodebookEmbeddingsContainer: Module {
-    @ModuleInfo(key: "embeddings") var embeddings: Embedding
+    // Module type to support both Embedding and QuantizedEmbedding
+    @ModuleInfo(key: "embeddings") var embeddings: Module
 
     public init(totalSize: Int, dim: Int) {
         self._embeddings.wrappedValue = Embedding(embeddingCount: totalSize, dimensions: dim)
@@ -52,7 +64,12 @@ public class AudioCodebookEmbeddingsContainer: Module {
     }
 
     public func callAsFunction(_ indices: MLXArray) -> MLXArray {
-        embeddings(indices)
+        if let qEmb = embeddings as? QuantizedEmbedding {
+            return qEmb(indices)
+        } else if let emb = embeddings as? Embedding {
+            return emb(indices)
+        }
+        fatalError("Unsupported embeddings type: \(type(of: embeddings))")
     }
 }
 
@@ -123,7 +140,7 @@ public class VoxtralTTSModel: Module {
 
     /// Embed text token IDs using the shared text embedding table.
     public func embedTokens(_ tokenIds: MLXArray) -> MLXArray {
-        mmAudioEmbeddings.tokEmbeddings(tokenIds)
+        mmAudioEmbeddings.embedTokens(tokenIds)
     }
 
     // MARK: - Input Construction
