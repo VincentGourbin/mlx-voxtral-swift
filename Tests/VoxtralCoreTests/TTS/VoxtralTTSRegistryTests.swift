@@ -54,7 +54,7 @@ final class VoxtralTTSRegistryTests: XCTestCase {
     }
 
     func testRegistryHasExpectedModelCount() {
-        XCTAssertEqual(VoxtralTTSRegistry.models.count, 2)
+        XCTAssertEqual(VoxtralTTSRegistry.models.count, 4)
     }
 
     func testAllModelsHaveRequiredFields() {
@@ -144,9 +144,23 @@ final class VoxtralTTSRegistryTests: XCTestCase {
         }
     }
 
-    func testAllModelsAreBFloat16() {
+    func testAllModelsAreValidQuantization() {
+        let validQuantizations = Set(["bfloat16", "4-bit", "6-bit"])
         for model in VoxtralTTSRegistry.models {
-            XCTAssertEqual(model.quantization, "bfloat16")
+            XCTAssertTrue(validQuantizations.contains(model.quantization),
+                          "Unexpected quantization: \(model.quantization)")
         }
+    }
+
+    func testQuantizedModelLookup() {
+        XCTAssertNotNil(VoxtralTTSRegistry.model(withId: "tts-4b-4bit"))
+        XCTAssertNotNil(VoxtralTTSRegistry.model(withId: "tts-4b-6bit"))
+    }
+
+    func testQuantizedModelRepoIds() {
+        let m4bit = VoxtralTTSRegistry.model(withId: "tts-4b-4bit")
+        XCTAssertEqual(m4bit?.repoId, "mlx-community/Voxtral-4B-TTS-2603-mlx-4bit")
+        let m6bit = VoxtralTTSRegistry.model(withId: "tts-4b-6bit")
+        XCTAssertEqual(m6bit?.repoId, "mlx-community/Voxtral-4B-TTS-2603-mlx-6bit")
     }
 }

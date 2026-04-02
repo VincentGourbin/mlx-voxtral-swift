@@ -24,16 +24,23 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         public var temperature: Float
         public var cfgAlpha: Float
         public var flowSteps: Int
+        /// Sanitize text before synthesis (lowercase ALL-CAPS, add terminal punctuation, etc.)
+        /// Disable if you need precise control over intonation via casing/punctuation.
+        public var sanitizeText: Bool
+        /// Trim low-energy lead-in silence frames from the beginning of generated audio.
+        public var trimLeadIn: Bool
 
         public static var `default`: Configuration {
-            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8)
+            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8) {
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true) {
             self.maxFrames = maxFrames
             self.temperature = temperature
             self.cfgAlpha = cfgAlpha
             self.flowSteps = flowSteps
+            self.sanitizeText = sanitizeText
+            self.trimLeadIn = trimLeadIn
         }
     }
 
@@ -139,7 +146,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 text: text,
                 voiceEmbedding: voiceEmb,
                 tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames
+                maxTokens: configuration.maxFrames,
+                sanitize: configuration.sanitizeText
             )
 
             guard numFrames > 0 else {
@@ -147,9 +155,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
-            // Decode to waveform
-            let waveform = model.decodeToWaveform(codes)
-            MLX.eval(waveform)
+            // Decode to waveform, optionally trim lead-in silence
+            let rawWaveform = model.decodeToWaveform(codes)
+            MLX.eval(rawWaveform)
+            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
@@ -207,7 +216,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 text: text,
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames
+                maxTokens: configuration.maxFrames,
+                sanitize: configuration.sanitizeText
             )
 
             guard numFrames > 0 else {
@@ -215,8 +225,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
-            let waveform = model.decodeToWaveform(codes)
-            MLX.eval(waveform)
+            let rawWaveform = model.decodeToWaveform(codes)
+            MLX.eval(rawWaveform)
+            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
@@ -249,6 +260,105 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         guard let embA = voiceEmbeddings[voiceA.rawValue],
               let embB = voiceEmbeddings[voiceB.rawValue] else { return nil }
         return blendVoices(voiceA: embA, voiceB: embB, t: t)
+    }
+
+    // MARK: - Streaming Synthesis
+
+    /// Synthesize speech as a stream of audio chunks, enabling real-time playback.
+    ///
+    /// Each chunk contains decoded PCM audio that can be immediately scheduled on an audio player.
+    /// The first chunk measures time-to-first-token (TTFT).
+    ///
+    /// - Parameters:
+    ///   - text: Text to synthesize
+    ///   - voice: Voice preset
+    ///   - chunkSize: Number of frames per chunk (1 frame = 80ms audio). Default 10 = 800ms chunks.
+    public func synthesizeStreaming(
+        text: String,
+        voice: VoxtralVoice = .neutralFemale,
+        chunkSize: Int = 10
+    ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
+        guard state.isReady, let model = ttsModel, let tokenizer else {
+            return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
+        }
+        guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
+            return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")) }
+        }
+
+        state = .synthesizing
+        let startTime = Date()
+
+        let capturedMaxFrames = configuration.maxFrames
+        let capturedSampleRate = sampleRate
+        let capturedSanitize = configuration.sanitizeText
+
+        // Box non-Sendable captures for Swift 6 strict concurrency
+        final class StreamContext: @unchecked Sendable {
+            let model: VoxtralTTSModel
+            let tokenizer: TekkenTokenizer
+            let voiceEmb: MLXArray
+            let pipeline: VoxtralTTSPipeline
+            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline) {
+                self.model = model; self.tokenizer = tokenizer; self.voiceEmb = voiceEmb; self.pipeline = pipeline
+            }
+        }
+        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self)
+
+        return AsyncThrowingStream { continuation in
+            Task {
+                var previousSampleCount = 0
+                var isFirst = true
+
+                do {
+                    let codeStream = ctx.model.generateStreaming(
+                        text: text,
+                        voiceEmbedding: ctx.voiceEmb,
+                        tokenizer: ctx.tokenizer,
+                        maxTokens: capturedMaxFrames,
+                        chunkSize: chunkSize,
+                        sanitize: capturedSanitize
+                    )
+
+                    for try await chunk in codeStream {
+                        // Decode all accumulated codes to get full waveform
+                        let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
+                        MLX.eval(fullWaveform)
+
+                        let totalSamples = fullWaveform.dim(0)
+
+                        // Extract only the new samples
+                        let newWaveform: MLXArray
+                        if previousSampleCount > 0 && previousSampleCount < totalSamples {
+                            newWaveform = fullWaveform[previousSampleCount...]
+                        } else {
+                            newWaveform = fullWaveform
+                        }
+
+                        let elapsed = Date().timeIntervalSince(startTime)
+
+                        continuation.yield(TTSStreamingChunk(
+                            waveform: newWaveform,
+                            frameIndex: chunk.totalFrames - chunk.newFrameCount,
+                            frameCount: chunk.newFrameCount,
+                            totalFrames: chunk.totalFrames,
+                            sampleRate: capturedSampleRate,
+                            isFirst: isFirst,
+                            isFinal: chunk.isFinal,
+                            elapsed: elapsed
+                        ))
+
+                        previousSampleCount = totalSamples
+                        isFirst = false
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+
+                ctx.pipeline.state = .ready
+            }
+        }
     }
 
     // MARK: - Resource Management

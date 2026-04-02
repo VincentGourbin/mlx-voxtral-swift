@@ -73,10 +73,177 @@ public class AudioCodebookEmbeddingsContainer: Module {
     }
 }
 
+// MARK: - Text Sanitization
+
+/// Normalize text for TTS input, matching Python reference (sanitize_tts_input_text_for_demo).
+private let terminalPunctuation: Set<Character> = [".", "!", "?", ":", ";", "\u{2026}"]
+
 // MARK: - VoxtralTTSModel
 
 /// The complete Voxtral TTS model.
 public class VoxtralTTSModel: Module {
+
+    /// Sanitize text for TTS with prosody-aware structural handling.
+    ///
+    /// Phase 1 converts structural formatting (paragraphs, headers, bullets) into
+    /// punctuation that produces natural pauses. Phase 2 normalizes characters.
+    /// Voxtral TTS infers all prosody from punctuation — there are no special tokens.
+    public static func sanitizeTextForTTS(_ text: String) -> String {
+        var t = text
+
+        // === Phase 1: Structural transformations (multi-line, before whitespace collapse) ===
+
+        // 1. Strip markdown formatting artifacts
+        t = stripMarkdownFormatting(t)
+
+        // 2. Convert bullet points to standalone sentences
+        t = convertBulletPoints(t)
+
+        // 3. Convert ALL-CAPS section headers to announced topics
+        t = convertSectionHeaders(t)
+
+        // 4. Convert paragraph breaks (double newlines) to sentence boundaries
+        t = convertParagraphBreaks(t)
+
+        // 5. Convert remaining single newlines to spaces
+        t = t.replacingOccurrences(of: "\\n", with: " ", options: .regularExpression)
+
+        // === Phase 2: Character-level sanitization (single-line) ===
+
+        // 6. Collapse whitespace
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+
+        // 7. Convert ALL-CAPS words to Capitalized
+        t = convertAllCapsWords(t)
+
+        // 8. Verbalize symbols
+        t = t.replacingOccurrences(of: "&", with: " and ")
+        t = t.replacingOccurrences(of: "=", with: " equals ")
+        t = t.replacingOccurrences(of: "+", with: " plus ")
+        t = t.replacingOccurrences(of: " / ", with: " or ")
+
+        // 9. Normalize dashes
+        t = t.replacingOccurrences(of: "\\s*[\u{2014}\u{2015}\u{2012}\u{2013}]\\s*", with: ", ", options: .regularExpression)
+        t = t.replacingOccurrences(of: " - ", with: ", ")
+        t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
+
+        // 10. Collapse repeated/artifact punctuation
+        t = t.replacingOccurrences(of: "([.!?;:])\\1+", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: ",\\s*,", with: ",")
+        t = t.replacingOccurrences(of: "\\.\\s*\\.", with: ".", options: .regularExpression)
+
+        // 11. Final whitespace collapse
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+
+        // 12. Ensure terminal punctuation (critical for EOA detection)
+        if let last = t.last, !terminalPunctuation.contains(last) {
+            t += "."
+        }
+        if t.isEmpty { t = "." }
+        return t
+    }
+
+    // MARK: - Phase 1 Helpers
+
+    /// Strip markdown formatting: # headers, **bold**, *italic*, > blockquotes.
+    private static func stripMarkdownFormatting(_ text: String) -> String {
+        var t = text
+        t = t.replacingOccurrences(of: "(?m)^#{1,6}\\s+", with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: "\\*{1,2}([^*]+)\\*{1,2}", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "_{1,2}([^_]+)_{1,2}", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "(?m)^>\\s*", with: "", options: .regularExpression)
+        return t
+    }
+
+    /// Convert bullet point lines to standalone sentences.
+    private static func convertBulletPoints(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let bulletPattern = try! NSRegularExpression(pattern: "^\\s*(?:[-*+•]|\\d+[.)]) +")
+        let result = lines.map { line -> String in
+            let range = NSRange(location: 0, length: line.utf16.count)
+            if let match = bulletPattern.firstMatch(in: line, range: range) {
+                let afterBullet = String(line[line.index(line.startIndex, offsetBy: match.range.upperBound)...])
+                    .trimmingCharacters(in: .whitespaces)
+                guard !afterBullet.isEmpty else { return line }
+                if let last = afterBullet.last, terminalPunctuation.contains(last) {
+                    return afterBullet
+                }
+                return afterBullet + "."
+            }
+            return line
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Convert ALL-CAPS section header lines to announced topics with sentence boundary.
+    private static func convertSectionHeaders(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var result: [String] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else {
+                result.append(line)
+                continue
+            }
+
+            let alphas = trimmed.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+            let isAllCaps = alphas.count >= 2
+                && trimmed == trimmed.uppercased()
+                && trimmed != trimmed.lowercased()
+            let isShortLine = trimmed.count <= 80
+
+            if isAllCaps && isShortLine {
+                // Ensure previous non-empty line ends with terminal punctuation
+                if let lastIdx = result.lastIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                    var prev = result[lastIdx].trimmingCharacters(in: .whitespaces)
+                    if let lastChar = prev.last, !terminalPunctuation.contains(lastChar) {
+                        prev += "."
+                        result[lastIdx] = prev
+                    }
+                }
+                // Header as its own sentence
+                var header = trimmed
+                if let last = header.last, !terminalPunctuation.contains(last) {
+                    header += "."
+                }
+                result.append(header)
+            } else {
+                result.append(line)
+            }
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Convert paragraph breaks (double newlines) to sentence boundaries.
+    private static func convertParagraphBreaks(_ text: String) -> String {
+        var t = text
+        // Normalize multiple blank lines to double newline
+        t = t.replacingOccurrences(of: "\\n\\s*\\n+", with: "\n\n", options: .regularExpression)
+        // Paragraph break after terminal punctuation → just a space
+        t = t.replacingOccurrences(of: "([.!?;:\u{2026}])\\s*\\n\\n", with: "$1 ", options: .regularExpression)
+        // Paragraph break without terminal punctuation → add period + space
+        t = t.replacingOccurrences(of: "\\n\\n", with: ". ", options: .regularExpression)
+        return t
+    }
+
+    // MARK: - Phase 2 Helpers
+
+    /// Convert ALL-CAPS words (2+ letters) to Capitalized.
+    private static func convertAllCapsWords(_ text: String) -> String {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
+        let converted = words.map { word -> String in
+            let s = String(word)
+            let alphas = s.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+            if alphas.count >= 2 && s == s.uppercased() && s != s.lowercased() {
+                return s.capitalized
+            }
+            return s
+        }
+        return converted.joined(separator: " ")
+    }
 
     public let config: VoxtralTTSConfiguration
 
@@ -151,8 +318,9 @@ public class VoxtralTTSModel: Module {
     /// From paper Section 3.1: segments are interleaved with <next> between A1 and T2,
     /// and <repeat> between T2 and A2.
     /// Verified against mistral_common.SpeechRequest output.
-    public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer) -> [Int32] {
-        let textTokens = tokenizer.encode(text).map { Int32($0) }
+    public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer, sanitize: Bool = true) -> [Int32] {
+        let processedText = sanitize ? Self.sanitizeTextForTTS(text) : text
+        let textTokens = tokenizer.encode(processedText).map { Int32($0) }
 
         let NEXT_TOKEN: Int32 = 36      // <next> — separates voice reference from text
         let REPEAT_TOKEN: Int32 = 35    // <repeat> — separates text from audio generation
@@ -219,12 +387,14 @@ public class VoxtralTTSModel: Module {
         voiceEmbedding: MLXArray,
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
+        sanitize: Bool = true,
         onFrame: ((Int, MLXArray) -> Void)? = nil
-    ) -> (codes: MLXArray, numFrames: Int) {
+    ) -> (codes: MLXArray, numFrames: Int, ttft: TimeInterval) {
+        let genStart = Date()
         let voiceFrameCount = voiceEmbedding.dim(0)
 
         // 1. Encode text to token IDs
-        let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer)
+        let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer, sanitize: sanitize)
         let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
         // 2. Build input embeddings with voice replacement
         let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
@@ -243,12 +413,17 @@ public class VoxtralTTSModel: Module {
 
         // 5. Autoregressive generation
         var allCodes: [MLXArray] = []
+        var ttft: TimeInterval = 0
 
         for i in 0..<maxTokens {
             let h = hidden[0..., -1, 0...]  // (1, dim) — last position
 
             // Generate one frame: semantic + acoustic codes
             let codes = acousticTransformer.decodeOneFrame(h)  // (1, 37)
+            if i == 0 {
+                MLX.eval(codes)
+                ttft = Date().timeIntervalSince(genStart)
+            }
 
             // EOA check: semantic_code <= 1 means empty_audio (0) or end_audio (1)
             let semanticCode = codes[0, 0].item(Int32.self)
@@ -275,17 +450,132 @@ public class VoxtralTTSModel: Module {
         }
 
         guard !allCodes.isEmpty else {
-            return (MLXArray([Int32]()), 0)
+            return (MLXArray([Int32]()), 0, ttft)
         }
 
         // Stack all codes: (1, N_frames, 37)
         let audioCodes = MLX.stacked(allCodes, axis: 1)
-        return (audioCodes, allCodes.count)
+        return (audioCodes, allCodes.count, ttft)
     }
 
     /// Decode audio codes to waveform.
     public func decodeToWaveform(_ codes: MLXArray) -> MLXArray {
         let waveform = audioTokenizer.decode(codes)
         return waveform.squeezed(axis: 0)  // (samples,)
+    }
+
+    // MARK: - Streaming Generation
+
+    /// Streaming chunk yielded during generation.
+    public struct GenerationChunk: @unchecked Sendable {
+        /// All accumulated codes so far: (1, totalFrames, 37)
+        public let accumulatedCodes: MLXArray
+        /// Number of new frames in this chunk
+        public let newFrameCount: Int
+        /// Total frames generated so far
+        public let totalFrames: Int
+        /// Whether this is the final chunk
+        public let isFinal: Bool
+    }
+
+    /// Generate speech codes as a stream, yielding chunks of accumulated codes every `chunkSize` frames.
+    ///
+    /// The caller can decode each chunk incrementally using `decodeToWaveform`.
+    public func generateStreaming(
+        text: String,
+        voiceEmbedding: MLXArray,
+        tokenizer: TekkenTokenizer,
+        maxTokens: Int = 4096,
+        chunkSize: Int = 10,
+        sanitize: Bool = true
+    ) -> AsyncThrowingStream<GenerationChunk, Error> {
+        AsyncThrowingStream { continuation in
+            let voiceFrameCount = voiceEmbedding.dim(0)
+
+            // 1. Encode text to token IDs
+            let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer, sanitize: sanitize)
+            let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
+
+            // 2. Build input embeddings with voice replacement
+            let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
+
+            // 3. Create KV cache and prefill
+            let cache = createCache()
+            var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
+            MLX.eval(hidden)
+
+            // 4. First decode step: inject AUDIO token
+            let audioTokenId = config.multimodal.audioModelArgs.audioTokenId
+            let audioTokEmb = embedTokens(MLXArray([Int32(audioTokenId)]).reshaped(1, 1))
+            hidden = llmForward(inputEmbeds: audioTokEmb, cache: cache)
+            MLX.eval(hidden)
+
+            // 5. Autoregressive generation with streaming
+            var allCodes: [MLXArray] = []
+            var chunkFrameCount = 0
+
+            for i in 0..<maxTokens {
+                // Check for cancellation
+                if Task.isCancelled {
+                    continuation.finish()
+                    return
+                }
+
+                let h = hidden[0..., -1, 0...]
+                let codes = acousticTransformer.decodeOneFrame(h)
+
+                // EOA check
+                let semanticCode = codes[0, 0].item(Int32.self)
+                if semanticCode <= 1 {
+                    print("  [GEN] EOA at frame \(i)")
+                    // Yield final chunk if there are pending frames
+                    if !allCodes.isEmpty {
+                        let audioCodes = MLX.stacked(allCodes, axis: 1)
+                        continuation.yield(GenerationChunk(
+                            accumulatedCodes: audioCodes,
+                            newFrameCount: chunkFrameCount,
+                            totalFrames: allCodes.count,
+                            isFinal: true
+                        ))
+                    }
+                    continuation.finish()
+                    return
+                }
+
+                allCodes.append(codes)
+                chunkFrameCount += 1
+
+                // Yield chunk every chunkSize frames
+                if chunkFrameCount >= chunkSize {
+                    let audioCodes = MLX.stacked(allCodes, axis: 1)
+                    continuation.yield(GenerationChunk(
+                        accumulatedCodes: audioCodes,
+                        newFrameCount: chunkFrameCount,
+                        totalFrames: allCodes.count,
+                        isFinal: false
+                    ))
+                    chunkFrameCount = 0
+                }
+
+                // Embed codes back as LLM input for next step
+                let globalCodes = codesToGlobalIndices(codes)
+                let codeEmbeddings = mmAudioEmbeddings.audioCodebookEmbeddings(globalCodes)
+                let nextEmbedding = codeEmbeddings.sum(axis: 1, keepDims: true)
+                hidden = llmForward(inputEmbeds: nextEmbedding, cache: cache)
+                MLX.eval(hidden)
+            }
+
+            // Max tokens reached — yield final
+            if !allCodes.isEmpty {
+                let audioCodes = MLX.stacked(allCodes, axis: 1)
+                continuation.yield(GenerationChunk(
+                    accumulatedCodes: audioCodes,
+                    newFrameCount: chunkFrameCount,
+                    totalFrames: allCodes.count,
+                    isFinal: true
+                ))
+            }
+            continuation.finish()
+        }
     }
 }
