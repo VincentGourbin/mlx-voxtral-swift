@@ -92,10 +92,23 @@ public class VoxtralTTSModel: Module {
         t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
         // Convert ALL-CAPS words to capitalized — TTS models stutter/spell out full-caps text
         t = convertAllCapsWords(t)
-        // Normalize unicode hyphens to ASCII
-        t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
+        // Verbalize symbols that TTS reads literally
+        t = t.replacingOccurrences(of: "&", with: " and ")
+        t = t.replacingOccurrences(of: "=", with: " equals ")
+        t = t.replacingOccurrences(of: "+", with: " plus ")
+        t = t.replacingOccurrences(of: " / ", with: " or ")
+        // Convert em-dashes and long dashes to natural pauses (comma + space)
+        // Without this, the model reads "—" as "minus/moins"
+        t = t.replacingOccurrences(of: "\\s*[\u{2014}\u{2015}\u{2012}\u{2013}]\\s*", with: ", ", options: .regularExpression)
+        // Convert standalone hyphens surrounded by spaces to pauses too
+        t = t.replacingOccurrences(of: " - ", with: ", ")
+        // Normalize remaining unicode hyphens to ASCII (inside words: e.g. "auto-saved")
+        t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
         // Collapse repeated punctuation
         t = t.replacingOccurrences(of: "([.!?;:])\\1+", with: "$1", options: .regularExpression)
+        // Collapse repeated commas/spaces from dash conversion
+        t = t.replacingOccurrences(of: ",\\s*,", with: ",")
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
         // Ensure terminal punctuation — without it the model fails to predict EOA
         if let last = t.last, !terminalPunctuation.contains(last) {
             t += "."
