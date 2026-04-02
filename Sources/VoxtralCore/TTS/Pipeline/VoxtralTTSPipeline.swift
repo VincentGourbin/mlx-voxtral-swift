@@ -69,7 +69,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     // MARK: - Model Loading
 
-    public func loadModel(progress: ProgressCallback? = nil) async throws {
+    public func loadModel(modelInfo: VoxtralTTSModelInfo? = nil, progress: ProgressCallback? = nil) async throws {
         guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
             throw VoxtralTTSError.invalidConfiguration("Model already loaded or loading")
         }
@@ -78,7 +78,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         do {
             progress?(0.05, "Resolving TTS model...")
-            let modelInfo = VoxtralTTSRegistry.defaultModel
+            let modelInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
             let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
                 progress?(0.05 + p * 0.35, msg)
             }

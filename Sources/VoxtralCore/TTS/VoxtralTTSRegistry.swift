@@ -45,6 +45,24 @@ public enum VoxtralTTSRegistry {
             quantization: "bfloat16",
             parameters: "4B"
         ),
+        VoxtralTTSModelInfo(
+            id: "tts-4b-4bit",
+            repoId: "mlx-community/Voxtral-4B-TTS-2603-mlx-4bit",
+            name: "Voxtral TTS 4B (4-bit)",
+            description: "MLX 4-bit quantized, smallest footprint",
+            size: "~2.5 GB",
+            quantization: "4-bit",
+            parameters: "4B"
+        ),
+        VoxtralTTSModelInfo(
+            id: "tts-4b-6bit",
+            repoId: "mlx-community/Voxtral-4B-TTS-2603-mlx-6bit",
+            name: "Voxtral TTS 4B (6-bit)",
+            description: "MLX 6-bit quantized, balanced quality/size",
+            size: "~3.5 GB",
+            quantization: "6-bit",
+            parameters: "4B"
+        ),
     ]
 
     public static var defaultModel: VoxtralTTSModelInfo {

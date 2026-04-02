@@ -384,6 +384,9 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output WAV file path")
     var output: String = "output.wav"
 
+    @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b-4bit, tts-4b-6bit")
+    var model: String = "tts-4b-mlx"
+
     @Option(name: .shortAndLong, help: "Voice preset (use 'voxtral list' to see available voices)")
     var voice: String = "neutral_female"
 
@@ -410,7 +413,13 @@ struct TTS: AsyncParsableCommand {
         print("VOXTRAL TTS (Text-to-Speech)")
         print(String(repeating: "=", count: 60))
 
-        print("\nText: \(text)")
+        // Resolve TTS model
+        guard let ttsModelInfo = VoxtralTTSRegistry.model(withId: model) else {
+            throw ValidationError("Unknown TTS model: \(model). Available: \(VoxtralTTSRegistry.models.map(\.id).joined(separator: ", "))")
+        }
+
+        print("\nModel: \(ttsModelInfo.name)")
+        print("Text: \(text)")
         print("Output: \(output)")
 
         // Create pipeline
@@ -425,7 +434,7 @@ struct TTS: AsyncParsableCommand {
         // Load model
         print("\n[1/3] Loading TTS model...")
         let startLoad = Date()
-        try await pipeline.loadModel { progress, status in
+        try await pipeline.loadModel(modelInfo: ttsModelInfo) { progress, status in
             print("  [\(Int(progress * 100))%] \(status)")
         }
         let loadTime = Date().timeIntervalSince(startLoad)
