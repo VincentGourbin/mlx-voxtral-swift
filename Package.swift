@@ -31,6 +31,11 @@ let package = Package(
             name: "VoxtralBenchmark",
             targets: ["VoxtralBenchmark"]
         ),
+        // TTS Streaming demo app
+        .executable(
+            name: "VoxtralTTSStreamingDemo",
+            targets: ["VoxtralTTSStreamingDemo"]
+        ),
     ],
     dependencies: [
         // Aligned with flux-2-swift-mlx dependency versions
@@ -78,6 +83,13 @@ let package = Package(
             dependencies: [
                 "VoxtralCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ]
+        ),
+        // TTS Streaming demo app
+        .executableTarget(
+            name: "VoxtralTTSStreamingDemo",
+            dependencies: [
+                "VoxtralCore"
             ]
         ),
         // Unit tests

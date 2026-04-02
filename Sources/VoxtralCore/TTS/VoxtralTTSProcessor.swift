@@ -31,6 +31,33 @@ public struct TTSSynthesisResult: @unchecked Sendable {
     }
 }
 
+// MARK: - TTS Streaming Chunk
+
+/// A chunk of decoded audio from the streaming TTS pipeline.
+public struct TTSStreamingChunk: @unchecked Sendable {
+    /// Decoded waveform samples for this chunk (float32 PCM, 24kHz mono)
+    public let waveform: MLXArray
+    /// Index of the first frame in this chunk
+    public let frameIndex: Int
+    /// Number of new frames decoded in this chunk
+    public let frameCount: Int
+    /// Total frames generated so far
+    public let totalFrames: Int
+    /// Sample rate
+    public let sampleRate: Int
+    /// Whether this is the first chunk (use for TTFT measurement)
+    public let isFirst: Bool
+    /// Whether this is the final chunk
+    public let isFinal: Bool
+    /// Time elapsed since generation started
+    public let elapsed: TimeInterval
+
+    /// Duration of audio in this chunk
+    public var duration: TimeInterval {
+        Double(waveform.dim(0)) / Double(sampleRate)
+    }
+}
+
 // MARK: - WAV File Writer
 
 public struct WAVWriter {

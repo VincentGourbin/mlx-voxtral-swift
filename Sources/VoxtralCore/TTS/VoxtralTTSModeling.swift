@@ -73,10 +73,34 @@ public class AudioCodebookEmbeddingsContainer: Module {
     }
 }
 
+// MARK: - Text Sanitization
+
+/// Normalize text for TTS input, matching Python reference (sanitize_tts_input_text_for_demo).
+private let terminalPunctuation: Set<Character> = [".", "!", "?", ":", ";", "\u{2026}"]
+
 // MARK: - VoxtralTTSModel
 
 /// The complete Voxtral TTS model.
 public class VoxtralTTSModel: Module {
+
+    /// Sanitize text for TTS: collapse whitespace, normalize unicode hyphens,
+    /// and ensure terminal punctuation (critical for EOA detection).
+    /// Matches Python sanitize_tts_input_text_for_demo.
+    public static func sanitizeTextForTTS(_ text: String) -> String {
+        var t = text
+        // Collapse whitespace and line breaks to single space
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+        // Normalize unicode hyphens to ASCII
+        t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
+        // Collapse repeated punctuation
+        t = t.replacingOccurrences(of: "([.!?;:])\\1+", with: "$1", options: .regularExpression)
+        // Ensure terminal punctuation — without it the model fails to predict EOA
+        if let last = t.last, !terminalPunctuation.contains(last) {
+            t += "."
+        }
+        if t.isEmpty { t = "." }
+        return t
+    }
 
     public let config: VoxtralTTSConfiguration
 
@@ -152,7 +176,8 @@ public class VoxtralTTSModel: Module {
     /// and <repeat> between T2 and A2.
     /// Verified against mistral_common.SpeechRequest output.
     public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer) -> [Int32] {
-        let textTokens = tokenizer.encode(text).map { Int32($0) }
+        let sanitized = Self.sanitizeTextForTTS(text)
+        let textTokens = tokenizer.encode(sanitized).map { Int32($0) }
 
         let NEXT_TOKEN: Int32 = 36      // <next> — separates voice reference from text
         let REPEAT_TOKEN: Int32 = 35    // <repeat> — separates text from audio generation
@@ -287,5 +312,119 @@ public class VoxtralTTSModel: Module {
     public func decodeToWaveform(_ codes: MLXArray) -> MLXArray {
         let waveform = audioTokenizer.decode(codes)
         return waveform.squeezed(axis: 0)  // (samples,)
+    }
+
+    // MARK: - Streaming Generation
+
+    /// Streaming chunk yielded during generation.
+    public struct GenerationChunk: @unchecked Sendable {
+        /// All accumulated codes so far: (1, totalFrames, 37)
+        public let accumulatedCodes: MLXArray
+        /// Number of new frames in this chunk
+        public let newFrameCount: Int
+        /// Total frames generated so far
+        public let totalFrames: Int
+        /// Whether this is the final chunk
+        public let isFinal: Bool
+    }
+
+    /// Generate speech codes as a stream, yielding chunks of accumulated codes every `chunkSize` frames.
+    ///
+    /// The caller can decode each chunk incrementally using `decodeToWaveform`.
+    public func generateStreaming(
+        text: String,
+        voiceEmbedding: MLXArray,
+        tokenizer: TekkenTokenizer,
+        maxTokens: Int = 4096,
+        chunkSize: Int = 10
+    ) -> AsyncThrowingStream<GenerationChunk, Error> {
+        AsyncThrowingStream { continuation in
+            let voiceFrameCount = voiceEmbedding.dim(0)
+
+            // 1. Encode text to token IDs
+            let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer)
+            let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
+
+            // 2. Build input embeddings with voice replacement
+            let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
+
+            // 3. Create KV cache and prefill
+            let cache = createCache()
+            var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
+            MLX.eval(hidden)
+
+            // 4. First decode step: inject AUDIO token
+            let audioTokenId = config.multimodal.audioModelArgs.audioTokenId
+            let audioTokEmb = embedTokens(MLXArray([Int32(audioTokenId)]).reshaped(1, 1))
+            hidden = llmForward(inputEmbeds: audioTokEmb, cache: cache)
+            MLX.eval(hidden)
+
+            // 5. Autoregressive generation with streaming
+            var allCodes: [MLXArray] = []
+            var chunkFrameCount = 0
+
+            for i in 0..<maxTokens {
+                // Check for cancellation
+                if Task.isCancelled {
+                    continuation.finish()
+                    return
+                }
+
+                let h = hidden[0..., -1, 0...]
+                let codes = acousticTransformer.decodeOneFrame(h)
+
+                // EOA check
+                let semanticCode = codes[0, 0].item(Int32.self)
+                if semanticCode <= 1 {
+                    print("  [GEN] EOA at frame \(i)")
+                    // Yield final chunk if there are pending frames
+                    if !allCodes.isEmpty {
+                        let audioCodes = MLX.stacked(allCodes, axis: 1)
+                        continuation.yield(GenerationChunk(
+                            accumulatedCodes: audioCodes,
+                            newFrameCount: chunkFrameCount,
+                            totalFrames: allCodes.count,
+                            isFinal: true
+                        ))
+                    }
+                    continuation.finish()
+                    return
+                }
+
+                allCodes.append(codes)
+                chunkFrameCount += 1
+
+                // Yield chunk every chunkSize frames
+                if chunkFrameCount >= chunkSize {
+                    let audioCodes = MLX.stacked(allCodes, axis: 1)
+                    continuation.yield(GenerationChunk(
+                        accumulatedCodes: audioCodes,
+                        newFrameCount: chunkFrameCount,
+                        totalFrames: allCodes.count,
+                        isFinal: false
+                    ))
+                    chunkFrameCount = 0
+                }
+
+                // Embed codes back as LLM input for next step
+                let globalCodes = codesToGlobalIndices(codes)
+                let codeEmbeddings = mmAudioEmbeddings.audioCodebookEmbeddings(globalCodes)
+                let nextEmbedding = codeEmbeddings.sum(axis: 1, keepDims: true)
+                hidden = llmForward(inputEmbeds: nextEmbedding, cache: cache)
+                MLX.eval(hidden)
+            }
+
+            // Max tokens reached — yield final
+            if !allCodes.isEmpty {
+                let audioCodes = MLX.stacked(allCodes, axis: 1)
+                continuation.yield(GenerationChunk(
+                    accumulatedCodes: audioCodes,
+                    newFrameCount: chunkFrameCount,
+                    totalFrames: allCodes.count,
+                    isFinal: true
+                ))
+            }
+            continuation.finish()
+        }
     }
 }
