@@ -1,14 +1,14 @@
 # Voxtral TTS Benchmark
 
-Benchmark comparing Voxtral TTS 4B generation speed across three quantization levels on Apple Silicon, in English and French.
+Bilingual (EN/FR) benchmark of Voxtral TTS 4B across three quantization levels on Apple Silicon, with prosody-aware text sanitization.
 
 ## Setup
 
 - **Hardware:** Apple M3 Max, 96 GB unified memory
 - **Model:** Voxtral-4B-TTS-2603 (mlx-community variants)
-- **Voices:** `neutral_male` (EN), `fr_male` (FR)
+- **Voices:** `neutral_male` (EN), `fr_female` (FR)
 - **Config:** cfgAlpha=1.2, flowSteps=8, temperature=0.0
-- **Features:** Text sanitization + lead-in silence trimming enabled
+- **Features:** Prosody-aware sanitization, lead-in silence trimming, TTFT measurement
 - **Date:** 2026-04-02
 
 ### Model variants
@@ -19,87 +19,92 @@ Benchmark comparing Voxtral TTS 4B generation speed across three quantization le
 | 6-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit` | ~3.5 GB | 6-bit affine, group_size=64 |
 | 4-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` | ~2.5 GB | 4-bit affine, group_size=64 |
 
-> Note: The audio tokenizer (codec decoder) is **not** quantized in any variant -- it always runs in bf16.
+> The audio tokenizer (codec decoder) is **not** quantized — it always runs in bf16.
 
 ## Test texts
 
-**Short EN:** "FORGE YOUR IDEA -- COMPLETELY REDESIGNED."
+**Short EN:** "Fluxforge Studio turns your Mac into a complete AI creative studio."
 
-**Short FR:** "FORGEZ VOTRE IDEE -- ENTIEREMENT REPENSE."
+**Short FR:** "Fluxforge Studio transforme votre Mac en un studio de creation IA complet."
 
-**Long EN / Long FR (~200 words):** Full feature changelog text covering video generation, animation, canvas extension, new model, interface redesign, and quality improvements. See [Reproducing](#reproducing) for the full text.
+**Long (~350 words):** Full Fluxforge app description with 11 sections (Forge, Image Generation, Video, Animation, Canvas, LoRA, Training, Background Removal, Library, Privacy, Requirements). See [full text below](#full-test-texts).
 
 ## Results
 
 ### Short text (1 sentence)
 
-| Text | Model | Voice | Load | Audio | GenTime | RTF | FPS |
+| Text | Model | Voice | TTFT | Frames | Audio | GenTime | RTF |
 |---|---|---|---|---|---|---|---|
-| Short EN | **4-bit** | neutral_male | 0.12s | 7.68s | **3.17s** | **0.41x** | 30.3 |
-| Short EN | 6-bit | neutral_male | 0.12s | 3.20s | 2.03s | 0.63x | 19.7 |
-| Short EN | bf16 | neutral_male | 0.06s | 3.12s | 10.60s | 3.40x | 3.8 |
-| Short FR | **4-bit** | fr_male | 0.11s | 5.84s | **2.58s** | **0.44x** | 30.3 |
-| Short FR | 6-bit | fr_male | 0.11s | 4.24s | 2.77s | 0.65x | 20.9 |
-| Short FR | bf16 | fr_male | 0.05s | 4.96s | 17.50s | 3.53x | 3.8 |
+| EN | **4-bit** | neutral_male | **400ms** | 72 | 5.68s | 6.63s | **1.17x** |
+| EN | 6-bit | neutral_male | 616ms | 63 | 5.04s | 9.46s | 1.88x |
+| EN | bf16 | neutral_male | 1454ms | 76 | 5.60s | 38.43s | 6.86x |
+| FR | **4-bit** | fr_female | **224ms** | 53 | 4.16s | 3.54s | **0.85x** |
+| FR | 6-bit | fr_female | 338ms | 65 | 4.80s | 6.69s | 1.39x |
+| FR | bf16 | fr_female | 864ms | 63 | 4.96s | 25.81s | 5.20x |
 
-### Long text (~200 words)
+### Long text (Fluxforge full description, ~350 words)
 
-| Text | Model | Voice | Load | Audio | GenTime | RTF | FPS |
+| Text | Model | Voice | TTFT | Frames | Audio | GenTime | RTF |
 |---|---|---|---|---|---|---|---|
-| Long EN | **4-bit** | neutral_male | 0.12s | 89.20s | **40.76s** | **0.46x** | 27.6 |
-| Long EN | 6-bit | neutral_male | 0.18s | 96.80s | 73.86s | 0.76x | 16.4 |
-| Long EN | bf16 | neutral_male | 0.06s | 90.96s | 542.10s | 5.96x | 2.1 |
-| Long FR | 4-bit | fr_male | 0.12s | 200.00s* | 113.80s | 0.57x | 22.0 |
-| Long FR | **6-bit** | fr_male | 0.13s | 113.04s | **143.95s** | **1.27x** | 9.8 |
-| Long FR | bf16 | fr_male | 0.06s | 116.24s | 551.76s | 4.75x | 2.6 |
+| EN | **4-bit** | neutral_male | **909ms** | 2266 | 181.28s | 120.61s | **0.67x** |
+| EN | 6-bit | neutral_male | 795ms | 2101 | 166.96s | 155.46s | 0.93x |
+| EN | bf16 | neutral_male | 1523ms | 2314 | 185.04s | 902.26s | 4.88x |
+| FR | 4-bit* | fr_female | 1412ms | 2500* | 200.00s* | 158.75s | 0.79x |
+| FR | **6-bit** | fr_female | **1132ms** | 2175 | 173.76s | 194.41s | **1.12x** |
+| FR | bf16* | fr_female | 1696ms | 2500* | 200.00s* | 971.31s | 4.86x |
 
-> \* 4-bit FR Long hit maxFrames (2500) without finding EOA -- the 4-bit quantization is too aggressive for long French sequences with `fr_male`. Use 6-bit for French.
+> \* 4-bit and bf16 FR hit maxFrames (2500) on this very long text. **6-bit is the reliable choice for long French content.**
 
-### RTF comparison (lower is better, <1.0 = faster than real-time)
+### TTFT for conversational use (<500ms target)
 
 ```
-                           EN Short    EN Long    FR Short    FR Long
-4-bit                       0.41x      0.46x      0.44x      0.57x*
-6-bit                       0.63x      0.76x      0.65x      1.27x
-bf16                        3.40x      5.96x      3.53x      4.75x
-                                                         ↑ real-time
-* 4-bit FR Long: hit maxFrames, duration unreliable
+                    Short EN    Short FR    Long EN    Long FR
+4-bit                400ms      224ms       909ms      1412ms
+6-bit                616ms      338ms       795ms      1132ms
+bf16                1454ms      864ms      1523ms      1696ms
 ```
 
-### Speedup vs bf16
-
-| | EN Short | EN Long | FR Short | FR Long |
-|---|---|---|---|---|
-| **4-bit** | **8.3x** | **13.3x** | **8.0x** | 4.8x* |
-| **6-bit** | 5.4x | 7.3x | 6.3x | **3.8x** |
+4-bit FR short achieves **224ms TTFT** — well within the 500ms conversational threshold.
 
 ## Key findings
 
-### Performance
+1. **4-bit delivers 224ms TTFT on French short text** — viable for real-time conversation on Apple Silicon.
 
-1. **4-bit is 8-13x faster than bf16** in English, running well under real-time (RTF 0.41-0.46x). Audio is generated 2x faster than it can be played back.
+2. **6-bit is the best choice for long French text** — reliable EOA detection (no maxFrames overflow), sub-real-time generation (1.12x RTF).
 
-2. **6-bit is 4-7x faster than bf16** and the best choice for French -- reliable EOA detection with sub-real-time generation (RTF 0.65-1.27x).
+3. **4-bit EN is fastest overall** — 0.67x RTF on long text (audio generated 1.5x faster than playback).
 
-3. **bf16 is 3.4-6.0x slower than real-time** -- unusable for interactive/conversational applications.
+4. **bf16 is 5-7x slower than real-time** — unsuitable for interactive use, but serves as quality baseline.
 
-### Language-specific observations
+5. **Prosody-aware sanitization** converts structural formatting (paragraphs, headers, bullets) into punctuation that produces natural pauses. Without it, multi-section text reads robotically.
 
-4. **4-bit degrades EOA detection for long French text**: the 4-bit model hit maxFrames (2500) on the 200-word French test, producing 200s of audio instead of ~113s. The 6-bit and bf16 models handled it correctly.
-
-5. **French voices have shorter embeddings** (97 frames vs 169 for English), which makes the model more sensitive to quantization artifacts.
-
-6. **Recommendation: use 6-bit for French, 4-bit for English.** Both run in real-time on M3 Max.
-
-### Audio quality improvements
-
-7. **Text sanitization** (auto-append terminal punctuation) is critical -- without it, the model fails to predict `end_audio` and loops indefinitely, especially for non-English text.
-
-8. **Lead-in silence trimming** removes 2-7 transition frames (160-560ms) that the model generates before speech starts. French voices benefit most (up to 560ms of near-silence removed).
+6. **Text sanitization is critical** — ALL-CAPS text, missing terminal punctuation, and em-dashes all degrade quality. The sanitizer handles all of these automatically (disable with `--no-sanitize`).
 
 ## Audio samples
 
-Generated WAV files (24kHz mono, 16-bit) are available in [`docs/examples/`](examples/).
+Generated WAV files (24kHz mono, 16-bit) are in [`docs/examples/`](examples/):
+
+### Short text samples
+
+| File | Model | Language |
+|---|---|---|
+| [`fluxforge_short_en_4bit.wav`](examples/fluxforge_short_en_4bit.wav) | 4-bit | EN |
+| [`fluxforge_short_en_6bit.wav`](examples/fluxforge_short_en_6bit.wav) | 6-bit | EN |
+| [`fluxforge_short_en_bf16.wav`](examples/fluxforge_short_en_bf16.wav) | bf16 | EN |
+| [`fluxforge_short_fr_4bit.wav`](examples/fluxforge_short_fr_4bit.wav) | 4-bit | FR |
+| [`fluxforge_short_fr_6bit.wav`](examples/fluxforge_short_fr_6bit.wav) | 6-bit | FR |
+| [`fluxforge_short_fr_bf16.wav`](examples/fluxforge_short_fr_bf16.wav) | bf16 | FR |
+
+### Long text samples
+
+| File | Model | Language |
+|---|---|---|
+| [`fluxforge_long_en_4bit.wav`](examples/fluxforge_long_en_4bit.wav) | 4-bit | EN |
+| [`fluxforge_long_en_6bit.wav`](examples/fluxforge_long_en_6bit.wav) | 6-bit | EN |
+| [`fluxforge_long_en_bf16.wav`](examples/fluxforge_long_en_bf16.wav) | bf16 | EN |
+| [`fluxforge_long_fr_4bit.wav`](examples/fluxforge_long_fr_4bit.wav) | 4-bit | FR |
+| [`fluxforge_long_fr_6bit.wav`](examples/fluxforge_long_fr_6bit.wav) | 6-bit | FR |
+| [`fluxforge_long_fr_bf16.wav`](examples/fluxforge_long_fr_bf16.wav) | bf16 | FR |
 
 ## Reproducing
 
@@ -113,21 +118,34 @@ xcodebuild -scheme VoxtralCLI -configuration Release \
 .build/xcode/Build/Products/Release/VoxtralCLI download tts-4b-4bit
 .build/xcode/Build/Products/Release/VoxtralCLI download tts-4b-6bit
 
-# Run benchmark (English)
+# Short text
 .build/xcode/Build/Products/Release/VoxtralCLI tts \
-  "FORGE YOUR IDEA — COMPLETELY REDESIGNED." \
-  -o output.wav --voice neutral_male --model tts-4b-4bit
+  "Fluxforge Studio transforme votre Mac en un studio de création IA complet." \
+  -o output.wav --voice fr_female --model tts-4b-6bit
 
-# Run benchmark (French)
-.build/xcode/Build/Products/Release/VoxtralCLI tts \
-  "FORGEZ VOTRE IDÉE — ENTIÈREMENT REPENSÉ." \
-  -o output.wav --voice fr_male --model tts-4b-6bit
+# Long text (pass the full multi-paragraph text)
+.build/xcode/Build/Products/Release/VoxtralCLI tts "$(cat long_text.txt)" \
+  -o output.wav --voice fr_female --model tts-4b-6bit
+
+# Disable sanitization for raw text control
+.build/xcode/Build/Products/Release/VoxtralCLI tts "YOUR TEXT" \
+  -o output.wav --voice fr_female --model tts-4b-6bit --no-sanitize
 ```
 
-### Full long text (EN)
+## Full test texts
 
-> FORGE YOUR IDEA — COMPLETELY REDESIGNED. The creation screen becomes a full creative workshop with branching history. Every variation, animation, or edit creates a branch — navigate freely via an interactive timeline with action badges. Projects are auto-saved and accessible from the library. New input modes: text, image, audio with Voxtral, or audio plus image combined. Six generation scenarios with automatic GPU memory management. VIDEO GENERATION. New LTX 2.3 engine to create videos from text, images, or other videos. Distilled fast and Dev quality variants. Built-in audio generation. Retake mode to regenerate video segments with new prompts. ANIMATION. Animate your images from the creation tree. Combinable presets: camera, action, nature, expression, style. Automatic prompt enrichment via Gemma 3. CANVAS EXTENSION. Outpainting: extend your images beyond their borders. AI completes the scene automatically. NEW MODEL: KLEIN 9B KV. Model optimized for creative iteration, auto-selected in Forge. REDESIGNED INTERFACE. Unified image and animation panel with multi-select. Lag-free prompt input. Liquid Glass styling on macOS 26. Improved image and video previews. Per-category cache management. Multi-image upscale. QUALITY AND STABILITY. Aspect ratio preservation, no more forced square cropping. sRGB conversion for iPhone photos. Built-in help with full documentation. Over 1300 automated tests.
+### Long FR
 
-### Full long text (FR)
+> Fluxforge Studio transforme votre Mac en un studio de creation IA complet. Generez des images et des videos de haute qualite a partir de texte, entrainez vos propres modeles personnalises, et gerez votre bibliotheque creative, le tout en local sur votre Apple Silicon, sans cloud ni abonnement.
+>
+> FORGE TON IDEE. Un atelier creatif complet pour explorer vos idees visuelles. Decrivez votre concept en texte, importez une image ou un audio, puis iterez librement : variations, changements de style, animations video. Chaque etape est sauvegardee dans un arbre de branches facon Git, rien ne se perd, tout se retrouve.
+>
+> GENERATION D'IMAGES AVANCEE. Quatre modeles Flux 2 au choix selon vos besoins. GENERATION VIDEO. Creez des videos a partir de texte ou d'images grace au modele LTX-2.3. ANIMATION. Animez n'importe quelle image generee en un clic. EXTENSION DE CANVAS. Etendez vos images au-dela de leurs bordures grace a l'outpainting. ADAPTATEURS LoRA. Importez des adaptateurs LoRA depuis HuggingFace en un clic. ENTRAINEMENT LoRA. Creez vos propres adaptateurs personnalises directement dans l'app. SUPPRESSION D'ARRIERE-PLAN. Retirez l'arriere-plan de vos images en un clic. BIBLIOTHEQUE ET EXPORT. Retrouvez toutes vos creations dans une galerie organisee. 100% LOCAL ET PRIVE. Aucun compte requis. Aucune donnee envoyee dans le cloud.
 
-> FORGEZ VOTRE IDÉE — ENTIÈREMENT REPENSÉ. L'écran de création devient un véritable atelier créatif avec historique en branches. Chaque variation, animation ou modification crée une branche — naviguez librement via une timeline interactive avec badges d'action. Les projets sont sauvegardés automatiquement et accessibles depuis la bibliothèque. Nouveaux modes d'entrée : texte, image, audio avec Voxtral, ou audio plus image combinés. Six scénarios de génération avec gestion automatique de la mémoire GPU. GÉNÉRATION VIDÉO. Nouveau moteur LTX 2.3 pour créer des vidéos à partir de texte, d'images ou d'autres vidéos. Variantes distillée rapide et Dev qualité. Génération audio intégrée. Mode reprise pour régénérer des segments vidéo avec de nouveaux prompts. ANIMATION. Animez vos images depuis l'arbre de création. Préréglages combinables : caméra, action, nature, expression, style. Enrichissement automatique du prompt via Gemma 3. EXTENSION DE CANVAS. Outpainting : étendez vos images au-delà de leurs bords. L'IA complète la scène automatiquement. NOUVEAU MODÈLE : KLEIN 9B KV. Modèle optimisé pour l'itération créative, auto-sélectionné dans Forge. INTERFACE REPENSÉE. Panneau unifié image et animation avec sélection multiple. Saisie de prompt sans latence. Style Liquid Glass sur macOS 26. Aperçus d'images et de vidéos améliorés. Gestion du cache par catégorie. Upscale multi-images. QUALITÉ ET STABILITÉ. Préservation du ratio d'aspect, plus de recadrage carré forcé. Conversion sRGB pour les photos iPhone. Aide intégrée avec documentation complète. Plus de 1300 tests automatisés.
+### Long EN
+
+> Fluxforge Studio turns your Mac into a complete AI creative studio. Generate high-quality images and videos from text, train your own custom models, and manage your creative library, all locally on your Apple Silicon, with no cloud or subscription required.
+>
+> FORGE YOUR IDEA. A full creative workshop for exploring your visual ideas. Every step is saved in a Git-style branch tree, nothing is lost, everything is recoverable.
+>
+> ADVANCED IMAGE GENERATION. Four Flux 2 models to choose from. VIDEO GENERATION. Create videos from text or images using the LTX-2.3 model. ANIMATION. Animate any generated image in one click. CANVAS EXTENSION. Extend your images beyond their borders with outpainting. LoRA ADAPTERS. Import LoRA adapters from HuggingFace in one click. LoRA TRAINING. Create your own custom adapters directly in the app. BACKGROUND REMOVAL. Remove the background from your images in one click. LIBRARY AND EXPORT. Find all your creations in an organized gallery. 100% LOCAL AND PRIVATE. No account required. No data sent to the cloud.
