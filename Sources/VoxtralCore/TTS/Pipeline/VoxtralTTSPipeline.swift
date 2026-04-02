@@ -24,16 +24,23 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         public var temperature: Float
         public var cfgAlpha: Float
         public var flowSteps: Int
+        /// Sanitize text before synthesis (lowercase ALL-CAPS, add terminal punctuation, etc.)
+        /// Disable if you need precise control over intonation via casing/punctuation.
+        public var sanitizeText: Bool
+        /// Trim low-energy lead-in silence frames from the beginning of generated audio.
+        public var trimLeadIn: Bool
 
         public static var `default`: Configuration {
-            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8)
+            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8) {
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true) {
             self.maxFrames = maxFrames
             self.temperature = temperature
             self.cfgAlpha = cfgAlpha
             self.flowSteps = flowSteps
+            self.sanitizeText = sanitizeText
+            self.trimLeadIn = trimLeadIn
         }
     }
 
@@ -139,7 +146,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 text: text,
                 voiceEmbedding: voiceEmb,
                 tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames
+                maxTokens: configuration.maxFrames,
+                sanitize: configuration.sanitizeText
             )
 
             guard numFrames > 0 else {
@@ -147,10 +155,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
-            // Decode to waveform and trim lead-in silence
+            // Decode to waveform, optionally trim lead-in silence
             let rawWaveform = model.decodeToWaveform(codes)
             MLX.eval(rawWaveform)
-            let waveform = trimLeadInSilence(rawWaveform, sampleRate: sampleRate)
+            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
@@ -208,7 +216,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 text: text,
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames
+                maxTokens: configuration.maxFrames,
+                sanitize: configuration.sanitizeText
             )
 
             guard numFrames > 0 else {
@@ -218,7 +227,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
             let rawWaveform = model.decodeToWaveform(codes)
             MLX.eval(rawWaveform)
-            let waveform = trimLeadInSilence(rawWaveform, sampleRate: sampleRate)
+            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
 
             let generationTime = Date().timeIntervalSince(startTime)
             state = .ready
@@ -281,6 +290,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         let capturedMaxFrames = configuration.maxFrames
         let capturedSampleRate = sampleRate
+        let capturedSanitize = configuration.sanitizeText
 
         // Box non-Sendable captures for Swift 6 strict concurrency
         final class StreamContext: @unchecked Sendable {
@@ -305,7 +315,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         voiceEmbedding: ctx.voiceEmb,
                         tokenizer: ctx.tokenizer,
                         maxTokens: capturedMaxFrames,
-                        chunkSize: chunkSize
+                        chunkSize: chunkSize,
+                        sanitize: capturedSanitize
                     )
 
                     for try await chunk in codeStream {

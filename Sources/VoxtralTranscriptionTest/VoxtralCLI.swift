@@ -408,6 +408,12 @@ struct TTS: AsyncParsableCommand {
     @Option(name: [.customShort("t"), .long], help: "Temperature for semantic token sampling (0 = greedy)")
     var temperature: Float = 0.0
 
+    @Flag(name: .long, help: "Disable text sanitization (ALL-CAPS conversion, auto-punctuation)")
+    var noSanitize = false
+
+    @Flag(name: .long, help: "Disable lead-in silence trimming")
+    var noTrim = false
+
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TTS (Text-to-Speech)")
@@ -428,6 +434,8 @@ struct TTS: AsyncParsableCommand {
         config.cfgAlpha = cfgAlpha
         config.flowSteps = flowSteps
         config.temperature = temperature
+        config.sanitizeText = !noSanitize
+        config.trimLeadIn = !noTrim
 
         let pipeline = VoxtralTTSPipeline(configuration: config)
 

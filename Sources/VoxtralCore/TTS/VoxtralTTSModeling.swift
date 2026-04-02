@@ -90,6 +90,8 @@ public class VoxtralTTSModel: Module {
         var t = text
         // Collapse whitespace and line breaks to single space
         t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+        // Convert ALL-CAPS words to capitalized — TTS models stutter/spell out full-caps text
+        t = convertAllCapsWords(t)
         // Normalize unicode hyphens to ASCII
         t = t.replacingOccurrences(of: "[\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{FE58}\u{FE63}\u{FF0D}]", with: "-", options: .regularExpression)
         // Collapse repeated punctuation
@@ -100,6 +102,22 @@ public class VoxtralTTSModel: Module {
         }
         if t.isEmpty { t = "." }
         return t
+    }
+
+    /// Convert ALL-CAPS words (2+ letters) to Capitalized.
+    /// E.g. "FORGE YOUR IDEA" → "Forge Your Idea"
+    private static func convertAllCapsWords(_ text: String) -> String {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
+        let converted = words.map { word -> String in
+            let s = String(word)
+            // Check if the word (ignoring punctuation) is all uppercase and 2+ alpha chars
+            let alphas = s.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+            if alphas.count >= 2 && s == s.uppercased() && s != s.lowercased() {
+                return s.capitalized
+            }
+            return s
+        }
+        return converted.joined(separator: " ")
     }
 
     public let config: VoxtralTTSConfiguration
@@ -175,9 +193,9 @@ public class VoxtralTTSModel: Module {
     /// From paper Section 3.1: segments are interleaved with <next> between A1 and T2,
     /// and <repeat> between T2 and A2.
     /// Verified against mistral_common.SpeechRequest output.
-    public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer) -> [Int32] {
-        let sanitized = Self.sanitizeTextForTTS(text)
-        let textTokens = tokenizer.encode(sanitized).map { Int32($0) }
+    public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer, sanitize: Bool = true) -> [Int32] {
+        let processedText = sanitize ? Self.sanitizeTextForTTS(text) : text
+        let textTokens = tokenizer.encode(processedText).map { Int32($0) }
 
         let NEXT_TOKEN: Int32 = 36      // <next> — separates voice reference from text
         let REPEAT_TOKEN: Int32 = 35    // <repeat> — separates text from audio generation
@@ -244,12 +262,13 @@ public class VoxtralTTSModel: Module {
         voiceEmbedding: MLXArray,
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
+        sanitize: Bool = true,
         onFrame: ((Int, MLXArray) -> Void)? = nil
     ) -> (codes: MLXArray, numFrames: Int) {
         let voiceFrameCount = voiceEmbedding.dim(0)
 
         // 1. Encode text to token IDs
-        let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer)
+        let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer, sanitize: sanitize)
         let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
         // 2. Build input embeddings with voice replacement
         let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
@@ -336,13 +355,14 @@ public class VoxtralTTSModel: Module {
         voiceEmbedding: MLXArray,
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
-        chunkSize: Int = 10
+        chunkSize: Int = 10,
+        sanitize: Bool = true
     ) -> AsyncThrowingStream<GenerationChunk, Error> {
         AsyncThrowingStream { continuation in
             let voiceFrameCount = voiceEmbedding.dim(0)
 
             // 1. Encode text to token IDs
-            let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer)
+            let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer, sanitize: sanitize)
             let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
 
             // 2. Build input embeddings with voice replacement
