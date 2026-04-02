@@ -17,6 +17,8 @@ final class VoxtralTTSPipelineTests: XCTestCase {
         XCTAssertEqual(config.temperature, 0.0)
         XCTAssertEqual(config.cfgAlpha, 1.2)
         XCTAssertEqual(config.flowSteps, 8)
+        XCTAssertTrue(config.sanitizeText)
+        XCTAssertTrue(config.trimLeadIn)
     }
 
     func testCustomConfiguration() {
@@ -185,5 +187,19 @@ final class VoxtralTTSPipelineTests: XCTestCase {
 
         XCTAssertEqual(manager.defaultVoice, .deMale)
         XCTAssertFalse(manager.isLoaded)
+    }
+
+    // MARK: - Sanitization Configuration Tests
+
+    func testSanitizeTextDisabled() {
+        let config = VoxtralTTSPipeline.Configuration(sanitizeText: false)
+        XCTAssertFalse(config.sanitizeText)
+        XCTAssertTrue(config.trimLeadIn) // default still true
+    }
+
+    func testTrimLeadInDisabled() {
+        let config = VoxtralTTSPipeline.Configuration(trimLeadIn: false)
+        XCTAssertTrue(config.sanitizeText) // default still true
+        XCTAssertFalse(config.trimLeadIn)
     }
 }

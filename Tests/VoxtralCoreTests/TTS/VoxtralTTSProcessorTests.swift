@@ -16,7 +16,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 13,
             sampleRate: 24000,
-            generationTime: 0.5
+            generationTime: 0.5,
+            timeToFirstToken: 0.1
         )
 
         XCTAssertEqual(result.numFrames, 13)
@@ -30,7 +31,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 25,
             sampleRate: 24000,
-            generationTime: 1.0
+            generationTime: 1.0,
+            timeToFirstToken: 0.1
         )
 
         XCTAssertEqual(result.duration, 2.0, accuracy: 0.001)
@@ -42,7 +44,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 13,
             sampleRate: 24000,
-            generationTime: 0.5
+            generationTime: 0.5,
+            timeToFirstToken: 0.1
         )
 
         // RTF = generationTime / duration = 0.5 / 1.0 = 0.5
@@ -55,7 +58,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 0,
             sampleRate: 24000,
-            generationTime: 1.0
+            generationTime: 1.0,
+            timeToFirstToken: 0
         )
 
         XCTAssertEqual(result.realTimeFactor, 0)
@@ -67,7 +71,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 25,
             sampleRate: 24000,
-            generationTime: 2.0
+            generationTime: 2.0,
+            timeToFirstToken: 0.1
         )
 
         // FPS = 25 / 2.0 = 12.5
@@ -80,7 +85,8 @@ final class VoxtralTTSProcessorTests: XCTestCase {
             waveform: waveform,
             numFrames: 25,
             sampleRate: 24000,
-            generationTime: 0
+            generationTime: 0,
+            timeToFirstToken: 0
         )
 
         XCTAssertEqual(result.framesPerSecond, 0)
