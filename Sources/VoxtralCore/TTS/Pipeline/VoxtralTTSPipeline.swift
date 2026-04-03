@@ -142,7 +142,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         do {
             // Generate audio codes
-            let (codes, numFrames) = model.generate(
+            let (codes, numFrames, ttft) = model.generate(
                 text: text,
                 voiceEmbedding: voiceEmb,
                 tokenizer: tokenizer,
@@ -167,7 +167,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 waveform: waveform,
                 numFrames: numFrames,
                 sampleRate: sampleRate,
-                generationTime: generationTime
+                generationTime: generationTime,
+                timeToFirstToken: ttft
             )
         } catch {
             state = .ready
@@ -212,7 +213,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let startTime = Date()
 
         do {
-            let (codes, numFrames) = model.generate(
+            let (codes, numFrames, ttft) = model.generate(
                 text: text,
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
@@ -236,7 +237,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 waveform: waveform,
                 numFrames: numFrames,
                 sampleRate: sampleRate,
-                generationTime: generationTime
+                generationTime: generationTime,
+                timeToFirstToken: ttft
             )
         } catch {
             state = .ready

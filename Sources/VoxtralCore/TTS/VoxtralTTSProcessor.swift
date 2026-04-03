@@ -15,6 +15,8 @@ public struct TTSSynthesisResult: @unchecked Sendable {
     public let numFrames: Int
     public let sampleRate: Int
     public let generationTime: TimeInterval
+    /// Time to first token: prefill + first frame generation
+    public let timeToFirstToken: TimeInterval
 
     public var duration: TimeInterval {
         Double(waveform.dim(0)) / Double(sampleRate)

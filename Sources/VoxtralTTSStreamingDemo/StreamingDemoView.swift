@@ -17,17 +17,19 @@ struct StreamingDemoView: View {
 
             // Controls
             VStack(spacing: 12) {
-                // Model picker + load
-                HStack {
-                    Text("Model:")
-                        .frame(width: 50, alignment: .trailing)
-                    Picker("", selection: $vm.selectedModelId) {
-                        ForEach(vm.availableModels, id: \.id) { model in
-                            Text(model.name).tag(model.id)
+                // Model + Voice row
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        Text("Model:")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Picker("", selection: $vm.selectedModelId) {
+                            ForEach(vm.availableModels, id: \.id) { model in
+                                Text(model.name).tag(model.id)
+                            }
                         }
+                        .labelsHidden()
+                        .frame(width: 140)
                     }
-                    .labelsHidden()
-                    .frame(width: 160)
 
                     Button(vm.isModelLoaded ? "Loaded" : "Load") {
                         Task { await vm.loadModel() }
@@ -37,79 +39,83 @@ struct StreamingDemoView: View {
                         vm.isModelLoaded = false
                     }
 
+                    HStack(spacing: 6) {
+                        Text("Voice:")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Picker("", selection: $vm.selectedVoice) {
+                            ForEach(vm.availableVoices, id: \.id) { voice in
+                                Text(voice.label).tag(voice.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                    }
+
+                    Toggle("Sanitize", isOn: $vm.sanitizeEnabled)
+                        .toggleStyle(.checkbox)
+                        .font(.caption)
+
                     if vm.isLoading {
                         ProgressView(value: vm.loadProgress)
-                            .frame(width: 100)
-                        Text(vm.loadStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .frame(width: 80)
                     }
 
                     Spacer()
                 }
 
-                // Voice picker
-                HStack {
-                    Text("Voice:")
-                        .frame(width: 50, alignment: .trailing)
-                    Picker("", selection: $vm.selectedVoice) {
-                        ForEach(["neutral_male", "neutral_female", "casual_male", "casual_female", "fr_male", "fr_female"], id: \.self) { v in
-                            Text(v).tag(v)
+                // Text presets
+                HStack(spacing: 8) {
+                    Text("Presets:")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(vm.textPresets, id: \.label) { preset in
+                        Button(preset.label) {
+                            vm.text = preset.text
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .font(.caption)
                     }
-                    .labelsHidden()
-                    .frame(width: 160)
                     Spacer()
                 }
 
                 // Text input
                 TextEditor(text: $vm.text)
-                    .font(.body)
-                    .frame(height: 80)
+                    .font(.system(.body, design: .default))
+                    .frame(height: 90)
                     .border(Color.gray.opacity(0.3))
+                    .cornerRadius(4)
 
                 // Play button
-                HStack(spacing: 16) {
-                    Button(action: {
-                        if vm.isSynthesizing {
-                            vm.stop()
-                        } else {
-                            vm.startStreaming()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: vm.isSynthesizing ? "stop.fill" : "play.fill")
-                            Text(vm.isSynthesizing ? "Stop" : "Play Streaming")
-                        }
-                        .frame(width: 180, height: 36)
+                Button(action: {
+                    if vm.isSynthesizing { vm.stop() } else { vm.startStreaming() }
+                }) {
+                    HStack {
+                        Image(systemName: vm.isSynthesizing ? "stop.fill" : "play.fill")
+                        Text(vm.isSynthesizing ? "Stop" : "Play Streaming")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(vm.isSynthesizing ? .red : .blue)
-                    .disabled(!vm.isModelLoaded || vm.isLoading)
+                    .frame(width: 200, height: 36)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(vm.isSynthesizing ? .red : .accentColor)
+                .disabled(!vm.isModelLoaded || vm.isLoading)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
 
             Divider()
 
             // Metrics
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Metrics")
-                    .font(.headline)
-
-                HStack(spacing: 32) {
-                    metricView(label: "TTFT", value: vm.ttft.map { String(format: "%.0f ms", $0 * 1000) } ?? "—", highlight: true)
-                    metricView(label: "Total", value: vm.totalTime.map { String(format: "%.2fs", $0) } ?? "—")
-                    metricView(label: "Audio", value: vm.audioDuration > 0 ? String(format: "%.2fs", vm.audioDuration) : "—")
-                    metricView(label: "RTF", value: vm.rtf.map { String(format: "%.2fx", $0) } ?? "—")
-                    metricView(label: "Frames", value: vm.framesGenerated > 0 ? "\(vm.framesGenerated)" : "—")
-                    metricView(label: "Chunks", value: vm.chunksReceived > 0 ? "\(vm.chunksReceived)" : "—")
-                }
+            HStack(spacing: 24) {
+                metricView(label: "TTFT", value: vm.ttft.map { String(format: "%.0fms", $0 * 1000) } ?? "—", highlight: true)
+                metricView(label: "Total", value: vm.totalTime.map { String(format: "%.2fs", $0) } ?? "—")
+                metricView(label: "Audio", value: vm.audioDuration > 0 ? String(format: "%.2fs", vm.audioDuration) : "—")
+                metricView(label: "RTF", value: vm.rtf.map { String(format: "%.2fx", $0) } ?? "—")
+                metricView(label: "FPS", value: vm.fps > 0 ? String(format: "%.1f", vm.fps) : "—")
+                metricView(label: "Frames", value: vm.framesGenerated > 0 ? "\(vm.framesGenerated)" : "—")
+                metricView(label: "Chunks", value: vm.chunksReceived > 0 ? "\(vm.chunksReceived)" : "—")
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
 
             Divider()
 
@@ -130,7 +136,11 @@ struct StreamingDemoView: View {
                             ForEach(Array(vm.logLines.enumerated()), id: \.offset) { idx, line in
                                 Text(line)
                                     .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(line.contains("TTFT") ? .green : line.contains("Error") ? .red : .primary)
+                                    .foregroundStyle(
+                                        line.contains("TTFT") ? .green :
+                                        line.contains("Error") ? .red :
+                                        line.contains("Done") ? .blue : .primary
+                                    )
                                     .id(idx)
                             }
                         }
@@ -151,10 +161,10 @@ struct StreamingDemoView: View {
     private func metricView(label: String, value: String, highlight: Bool = false) -> some View {
         VStack(spacing: 2) {
             Text(label)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(.body, design: .monospaced).bold())
+                .font(.system(.callout, design: .monospaced).bold())
                 .foregroundStyle(highlight && vm.ttft != nil ? .green : .primary)
         }
     }

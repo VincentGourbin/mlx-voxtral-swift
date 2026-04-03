@@ -9,9 +9,10 @@ final class StreamingDemoViewModel: ObservableObject {
 
     // MARK: - User inputs
 
-    @Published var text: String = "Voice was humanity's first interface. Long before writing or typing, it let us share ideas, coordinate work, and build relationships."
+    @Published var text: String = "Fluxforge Studio transforme votre Mac en un studio de création IA complet. Générez des images et des vidéos de haute qualité à partir de texte, entraînez vos propres modèles personnalisés, et gérez votre bibliothèque créative — le tout en local sur votre Apple Silicon, sans cloud ni abonnement."
     @Published var selectedModelId: String = "tts-4b-4bit"
-    @Published var selectedVoice: String = "neutral_male"
+    @Published var selectedVoice: String = "fr_female"
+    @Published var sanitizeEnabled: Bool = true
 
     // MARK: - State
 
@@ -31,6 +32,7 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var framesGenerated: Int = 0
     @Published var chunksReceived: Int = 0
     @Published var currentModelName: String = ""
+    @Published var fps: Double = 0
 
     // MARK: - Log
 
@@ -50,6 +52,50 @@ final class StreamingDemoViewModel: ObservableObject {
         ("tts-4b-mlx", "bf16 (8 GB)")
     ]
 
+    let availableVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
+        ($0.rawValue, $0.displayName)
+    }
+
+    struct TextPreset {
+        let label: String
+        let text: String
+    }
+
+    let textPresets: [TextPreset] = [
+        TextPreset(label: "Short FR", text: "Fluxforge Studio transforme votre Mac en un studio de création IA complet."),
+        TextPreset(label: "Short EN", text: "Fluxforge Studio turns your Mac into a complete AI creative studio."),
+        TextPreset(label: "Long FR", text: """
+Fluxforge Studio transforme votre Mac en un studio de création IA complet. Générez des images et des vidéos de haute qualité à partir de texte, entraînez vos propres modèles personnalisés, et gérez votre bibliothèque créative — le tout en local sur votre Apple Silicon, sans cloud ni abonnement.
+
+FORGE TON IDÉE
+Un atelier créatif complet pour explorer vos idées visuelles. Décrivez votre concept en texte, importez une image ou un audio, puis itérez librement : variations, changements de style, animations vidéo. Chaque étape est sauvegardée dans un arbre de branches façon Git — rien ne se perd, tout se retrouve.
+
+GÉNÉRATION D'IMAGES AVANCÉE
+Quatre modèles Flux 2 au choix selon vos besoins. Ajustez la résolution, les étapes d'inférence, le guidance, utilisez des images de référence, et activez l'amélioration automatique du prompt.
+
+GÉNÉRATION VIDÉO
+Créez des vidéos à partir de texte ou d'images grâce au modèle LTX-2.3. Deux variantes : Distilled (rapide) et Dev (haute qualité). Ajoutez une bande-son générée automatiquement.
+
+100% LOCAL ET PRIVÉ
+Aucun compte requis. Aucune donnée envoyée dans le cloud. Tous les modèles tournent localement sur votre GPU Apple Silicon. Vos créations restent les vôtres.
+"""),
+        TextPreset(label: "Long EN", text: """
+Fluxforge Studio turns your Mac into a complete AI creative studio. Generate high-quality images and videos from text, train your own custom models, and manage your creative library — all locally on your Apple Silicon, with no cloud or subscription required.
+
+FORGE YOUR IDEA
+A full creative workshop for exploring your visual ideas. Describe your concept in text, import an image or audio, then iterate freely: variations, style changes, video animations. Every step is saved in a Git-style branch tree — nothing is lost, everything is recoverable.
+
+ADVANCED IMAGE GENERATION
+Four Flux 2 models to choose from based on your needs. Adjust resolution, inference steps, guidance, use reference images, and enable automatic prompt enhancement.
+
+VIDEO GENERATION
+Create videos from text or images using the LTX-2.3 model. Two variants: Distilled (fast) and Dev (high quality). Add an automatically generated soundtrack.
+
+100% LOCAL AND PRIVATE
+No account required. No data sent to the cloud. All models run locally on your Apple Silicon GPU. Your creations remain yours.
+"""),
+    ]
+
     // MARK: - Model Loading
 
     func loadModel() async {
@@ -59,7 +105,6 @@ final class StreamingDemoViewModel: ObservableObject {
             return
         }
 
-        // If same model already loaded, skip
         if isModelLoaded && currentModelId == modelId { return }
 
         isLoading = true
@@ -68,9 +113,11 @@ final class StreamingDemoViewModel: ObservableObject {
         loadStatus = "Loading \(modelInfo.name)..."
         log("Loading \(modelInfo.name)...")
 
-        // Unload previous
         pipeline?.unload()
-        pipeline = VoxtralTTSPipeline()
+
+        var config = VoxtralTTSPipeline.Configuration.default
+        config.sanitizeText = sanitizeEnabled
+        pipeline = VoxtralTTSPipeline(configuration: config)
 
         do {
             try await pipeline!.loadModel(modelInfo: modelInfo) { [weak self] progress, status in
@@ -99,23 +146,25 @@ final class StreamingDemoViewModel: ObservableObject {
             return
         }
 
+        // Update sanitize setting
+        pipeline.configuration.sanitizeText = sanitizeEnabled
+
         // Reset metrics
         ttft = nil
         totalTime = nil
         audioDuration = 0
         rtf = nil
+        fps = 0
         framesGenerated = 0
         chunksReceived = 0
         isSynthesizing = true
 
-        // Record button click
         let clickTime = Date()
         buttonClickTime = clickTime
         log("--- Play clicked at \(formatTime(clickTime)) ---")
-        log("Text: \"\(text.prefix(60))...\"")
-        log("Model: \(currentModelName), Voice: \(selectedVoice)")
+        log("Text: \"\(text.prefix(80))...\"")
+        log("Model: \(currentModelName), Voice: \(selectedVoice), Sanitize: \(sanitizeEnabled ? "ON" : "OFF")")
 
-        // Setup audio engine
         setupAudioEngine()
 
         streamingTask = Task {
@@ -137,19 +186,21 @@ final class StreamingDemoViewModel: ObservableObject {
                         self.log("TTFT: \(String(format: "%.0f", ttftMs)) ms (first \(chunk.frameCount) frames)")
                     }
 
-                    // Schedule audio on player
                     scheduleAudioChunk(chunk.waveform)
                     totalSamplesScheduled += chunk.waveform.dim(0)
 
-                    // Update metrics
                     self.framesGenerated = chunk.totalFrames
                     self.chunksReceived += 1
                     self.audioDuration = Double(totalSamplesScheduled) / 24000.0
+                    if chunk.elapsed > 0 {
+                        self.fps = Double(chunk.totalFrames) / chunk.elapsed
+                    }
 
                     if chunk.isFinal {
                         self.totalTime = chunk.elapsed
                         self.rtf = chunk.elapsed / self.audioDuration
-                        self.log("Done: \(chunk.totalFrames) frames, \(String(format: "%.2f", self.audioDuration))s audio in \(String(format: "%.2f", chunk.elapsed))s (RTF \(String(format: "%.2f", self.rtf!))x)")
+                        self.log("Done: \(chunk.totalFrames) frames, \(String(format: "%.2f", self.audioDuration))s audio in \(String(format: "%.2f", chunk.elapsed))s")
+                        self.log("RTF: \(String(format: "%.2f", self.rtf!))x, FPS: \(String(format: "%.1f", self.fps))")
                     }
                 }
             } catch {
@@ -208,7 +259,6 @@ final class StreamingDemoViewModel: ObservableObject {
 
     static let logFileURL: URL = {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voxtral_streaming_bench.log")
-        // Clear previous log
         try? "".write(to: url, atomically: true, encoding: .utf8)
         return url
     }()
@@ -217,14 +267,12 @@ final class StreamingDemoViewModel: ObservableObject {
         let ts = formatTime(Date())
         let line = "[\(ts)] \(message)"
         logLines.append(line)
-        // Also write to file for retrieval
         if let data = (line + "\n").data(using: .utf8),
            let fh = try? FileHandle(forWritingTo: Self.logFileURL) {
             fh.seekToEndOfFile()
             fh.write(data)
             fh.closeFile()
         }
-        // Also print to stdout
         print(line)
     }
 

@@ -505,6 +505,7 @@ struct TTS: AsyncParsableCommand {
         print("Audio saved to: \(output)")
         print(String(repeating: "-", count: 60))
         print("\nStatistics:")
+        print("  TTFT: \(String(format: "%.0f", result.timeToFirstToken * 1000))ms")
         print("  Duration: \(String(format: "%.2f", result.duration))s")
         print("  Frames: \(result.numFrames)")
         print("  Generation time: \(String(format: "%.2f", result.generationTime))s")
