@@ -12,6 +12,10 @@ This is a Swift port of the excellent Python implementation by [@mzbac](https://
 |:--:|:--:|
 | ![Transcription](screenshots/voxtral-transcribe.png) | ![Chat](screenshots/voxtral-chat.png) |
 
+| TTS Streaming Benchmark |
+|:--:|
+| ![TTS Streaming Demo](screenshots/voxtral-tts-streaming-demo.png) |
+
 ## Features
 
 - **Native Swift** - Pure Swift implementation, no Python dependencies at runtime
