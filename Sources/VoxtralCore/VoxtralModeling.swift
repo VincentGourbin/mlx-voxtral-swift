@@ -978,9 +978,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         let maskExpanded = expandedDimensions(audioTokenMask, axis: -1)  // [batch, seqLen, 1]
         let finalEmbeddings = which(maskExpanded, audioEmbedsGathered, embeddings)  // [batch, seqLen, hiddenSize]
 
-        // Force evaluation
-        eval(finalEmbeddings)
-
         return finalEmbeddings
     }
     
@@ -996,45 +993,13 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         pastKeyValues: [KVCache]? = nil,
         returnDict: Bool = true
     ) -> VoxtralModelOutput {
-        // 🎯 CRITICAL DEBUG: Monitor the forward pass for position 385
-        var forwardDebugMessage = ""
-        let isFirstIteration = pastKeyValues?.first?.offset == 0
-        let hasCache = pastKeyValues != nil && !pastKeyValues!.isEmpty
-        
-        if isFirstIteration {
-            forwardDebugMessage += "\n🔥 FORWARD PASS DEBUG (First iteration - Position 385):\n"
-        } else if hasCache {
-            forwardDebugMessage += "\n🔥 FORWARD PASS DEBUG (Subsequent iteration):\n"
-        }
-        
         // Python: inputs_embeds = self._merge_input_embeddings(input_ids=input_ids, input_features=input_features, inputs_embeds=inputs_embeds)
         let inputsEmbeds = mergeInputEmbeddings(
             inputIds: inputIds,
             inputFeatures: inputFeatures,
             inputsEmbeds: inputsEmbeds
         )
-        
-        if isFirstIteration || hasCache {
-            let embedsStats = "min=\(inputsEmbeds.min().item(Float.self)), max=\(inputsEmbeds.max().item(Float.self)), mean=\(inputsEmbeds.mean().item(Float.self))"
-            forwardDebugMessage += "  Inputs embeds shape: \(inputsEmbeds.shape), stats: \(embedsStats)\n"
-            
-            // 🎯 CRITICAL: Capture exact embedding values at position 384 (last position before 385)
-            let sequenceLength = inputsEmbeds.shape[1]
-            if sequenceLength >= 384 {
-                let lastPositionEmbed = inputsEmbeds[0, sequenceLength - 1]  // [3072]
-                let embedFlat = lastPositionEmbed.flattened()
-                var embedFirst10: [String] = []
-                for i in 0..<min(10, embedFlat.count) {
-                    let val = embedFlat[i].item(Float.self)
-                    embedFirst10.append(String(format: "%.8f", val))
-                }
-                forwardDebugMessage += "  🎯 Position \(sequenceLength-1) embedding first 10: \(embedFirst10)\n"
-                
-                let lastEmbedStats = "min=\(lastPositionEmbed.min().item(Float.self)), max=\(lastPositionEmbed.max().item(Float.self)), mean=\(lastPositionEmbed.mean().item(Float.self))"
-                forwardDebugMessage += "  🎯 Position \(sequenceLength-1) embed stats: \(lastEmbedStats)\n"
-            }
-        }
-        
+
         // Python: hidden_states = self.language_model(inputs_embeds=inputs_embeds, mask=attention_mask, cache=past_key_values)
         let hiddenStates = callLanguageModel(
             inputs: nil,
