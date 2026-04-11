@@ -43,7 +43,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.30.6"),
-        .package(path: "../swift-mlx-profiler")
+        .package(url: "https://github.com/VincentGourbin/swift-mlx-profiler", from: "1.2.0")
     ],
     targets: [
         // Core library containing all Voxtral model implementations
