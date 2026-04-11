@@ -456,7 +456,7 @@ public class VoxtralTTSModel: Module {
                     if semanticCode <= 1 {
                         // Trim codes up to (but not including) the EOA frame
                         allCodes = Array(allCodes.prefix(j))
-                        print("  [GEN] EOA at frame \(checkStart + (j - checkStart))")
+                        print("  [GEN] EOA at frame \(j)")
                         eoaReached = true
                         break
                     }
