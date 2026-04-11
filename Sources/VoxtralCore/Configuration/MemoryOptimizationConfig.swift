@@ -36,15 +36,24 @@ public struct MemoryOptimizationConfig: Sendable {
         maxKVCacheSize: nil
     )
 
+    /// Light - minimal optimization for large RAM (64+ GB)
+    /// Uses RotatingKVCache to cap memory growth on long sequences
+    public static let light = MemoryOptimizationConfig(
+        evalFrequency: 16,
+        clearCacheOnEval: false,
+        resetPeakMemory: true,
+        maxKVCacheSize: 8192
+    )
+
     /// Moderate - balanced optimization (recommended for 32-64GB RAM)
     public static let moderate = MemoryOptimizationConfig(
         evalFrequency: 8,
         clearCacheOnEval: false,
         resetPeakMemory: true,
-        maxKVCacheSize: nil
+        maxKVCacheSize: 6144
     )
 
-    /// Aggressive - maximum memory savings (for <32GB RAM)
+    /// Aggressive - maximum memory savings (for 16-32GB RAM)
     public static let aggressive = MemoryOptimizationConfig(
         evalFrequency: 4,
         clearCacheOnEval: true,
@@ -76,7 +85,7 @@ public struct MemoryOptimizationConfig: Sendable {
         case 32..<64:
             return .moderate
         default:
-            return .disabled
+            return .light
         }
     }
 
