@@ -1158,18 +1158,43 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
         for tokenIndex in 0..<maxNewTokens {
             let stepStart = CFAbsoluteTimeGetCurrent()
-            let modelOutput: VoxtralModelOutput
+            var modelOutput: VoxtralModelOutput!
 
             if cache![0].offset == 0 {
-                // Prefill: first forward pass with full embeddings
+                // Chunked prefill: process embeddings in chunks to reduce peak memory
+                // Instead of one massive forward pass (which allocates attention matrices
+                // proportional to seqLen²), process in chunks of prefillChunkSize.
+                // The KV cache accumulates across chunks via cache.offset.
                 profiler.startPrefill()
-                modelOutput = self.callAsFunction(
-                    inputIds: nil,
-                    attentionMask: currentAttentionMask,
-                    inputFeatures: nil,
-                    inputsEmbeds: inputsEmbeds,
-                    pastKeyValues: cache
-                )
+                let prefillChunkSize = 512
+                let totalSeqLen = inputsEmbeds.shape[1]
+
+                if totalSeqLen > prefillChunkSize {
+                    for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                        let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                        let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
+
+                        let chunkOutput = self.callAsFunction(
+                            inputIds: nil,
+                            attentionMask: nil,
+                            inputFeatures: nil,
+                            inputsEmbeds: embedsChunk,
+                            pastKeyValues: cache
+                        )
+                        modelOutput = chunkOutput
+
+                        // Eval between chunks to materialize KV cache and free intermediates
+                        eval(chunkOutput.logits)
+                    }
+                } else {
+                    modelOutput = self.callAsFunction(
+                        inputIds: nil,
+                        attentionMask: currentAttentionMask,
+                        inputFeatures: nil,
+                        inputsEmbeds: inputsEmbeds,
+                        pastKeyValues: cache
+                    )
+                }
             } else {
                 let seqLen = generated.shape[1]
                 let lastToken = generated[0..., (seqLen-1)..<seqLen]
@@ -1319,17 +1344,38 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
         for tokenIndex in 0..<maxNewTokens {
             let stepStart = CFAbsoluteTimeGetCurrent()
-            let modelOutput: VoxtralModelOutput
+            var modelOutput: VoxtralModelOutput!
 
             if cache![0].offset == 0 {
+                // Chunked prefill (same as generateStream)
                 profiler.startPrefill()
-                modelOutput = self.callAsFunction(
-                    inputIds: nil,
-                    attentionMask: currentAttentionMask,
-                    inputFeatures: nil,
-                    inputsEmbeds: inputsEmbeds,
-                    pastKeyValues: cache
-                )
+                let prefillChunkSize = 512
+                let totalSeqLen = inputsEmbeds.shape[1]
+
+                if totalSeqLen > prefillChunkSize {
+                    for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                        let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                        let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
+
+                        let chunkOutput = self.callAsFunction(
+                            inputIds: nil,
+                            attentionMask: nil,
+                            inputFeatures: nil,
+                            inputsEmbeds: embedsChunk,
+                            pastKeyValues: cache
+                        )
+                        modelOutput = chunkOutput
+                        eval(chunkOutput.logits)
+                    }
+                } else {
+                    modelOutput = self.callAsFunction(
+                        inputIds: nil,
+                        attentionMask: currentAttentionMask,
+                        inputFeatures: nil,
+                        inputsEmbeds: inputsEmbeds,
+                        pastKeyValues: cache
+                    )
+                }
             } else {
                 let seqLen = generated.shape[1]
                 let lastToken = generated[0..., (seqLen-1)..<seqLen]
