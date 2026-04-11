@@ -13,6 +13,7 @@
 
 import Foundation
 import MLX
+import MLXProfiler
 
 @available(macOS 14.0, *)
 public class VoxtralRealtimePipeline: @unchecked Sendable {
@@ -75,24 +76,30 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         state = .loading
 
         do {
+            let session = MLXProfiler.shared.activeSession
+
             progress?(0.05, "Resolving Realtime model...")
+            session?.beginPhase("1. Model Download", category: .modelLoad)
             let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
                 ?? VoxtralRealtimeRegistry.defaultModel
             let modelDir = try await ModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
                 progress?(0.05 + p * 0.35, msg)
             }
             self.modelDirectory = modelDir
+            session?.endPhase("1. Model Download", category: .modelLoad)
 
             progress?(0.40, "Loading Realtime model...")
+            session?.beginPhase("2. Model Loading", category: .modelLoad)
             let loadedModel = try loadVoxtralRealtimeModel(from: modelDir) { p, msg in
                 progress?(0.40 + Double(p) * 0.40, msg)
             }
             self.model = loadedModel
+            session?.endPhase("2. Model Loading", category: .modelLoad)
 
             progress?(0.85, "Loading tokenizer...")
+            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
             self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
-
-            progress?(0.90, "Ready...")
+            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
             progress?(1.0, "Realtime model ready")
             state = .ready
@@ -111,11 +118,15 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         }
 
         state = .processing
+        let session = MLXProfiler.shared.activeSession
 
         do {
+            session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
             let mel = try prepareMel(from: audio, config: model.config)
+            session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
 
             // Generate transcription
+            session?.beginPhase("Realtime Generation", category: .generation)
             let (tokens, _) = model.generate(
                 mel: mel,
                 tokenizer: tokenizer,
@@ -123,8 +134,11 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 temperature: configuration.temperature,
                 delayMs: configuration.transcriptionDelayMs
             )
+            session?.endPhase("Realtime Generation", category: .generation)
 
+            session?.beginPhase("Token Decoding", category: .decoding)
             let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
+            session?.endPhase("Token Decoding", category: .decoding)
             state = .ready
             return text
 
@@ -143,9 +157,17 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
             throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
         }
 
+        let session = MLXProfiler.shared.activeSession
+
+        session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
         let mel = try prepareMel(from: audio, config: model.config)
+        session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
+
+        session?.beginPhase("Audio Encoding", category: .audioEncode)
         let embeddings = model.extractAudioEmbeddings(mel)
         MLX.eval(embeddings)
+        session?.endPhase("Audio Encoding", category: .audioEncode)
+
         return embeddings
     }
 

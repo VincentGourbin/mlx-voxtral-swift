@@ -16,6 +16,7 @@ import MLX
 import MLXNN
 import MLXRandom
 import MLXLMCommon
+import MLXProfiler
 
 // MARK: - VoxtralRealtimeModel
 
@@ -62,15 +63,18 @@ public class VoxtralRealtimeModel: Module {
     ) -> (tokens: [Int], audioEmbeddings: MLXArray) {
         let nDelay = config.numDelayTokens(delayMs: delayMs)
         let nLeft = config.nLeftPadTokens
+        let session = MLXProfiler.shared.activeSession
 
         // Precompute Ada RMS-Norm scales for chosen delay
         let tCond = computeTimeEmbedding(tValue: Float(nDelay), dim: config.decoder.dim)
         decoder.precomputeAdaScales(tCond: tCond)
 
         // Encode audio
+        session?.beginPhase("Audio Encoding", category: .audioEncode)
         let adapterOut = encodeAudio(mel)  // [n_audio_total, decoder_dim]
         let nAudioTotal = adapterOut.dim(0)
         MLX.eval(adapterOut)
+        session?.endPhase("Audio Encoding", category: .audioEncode)
 
         let promptLen = 1 + nLeft + nDelay  // BOS + padding + delay
 
@@ -99,18 +103,23 @@ public class VoxtralRealtimeModel: Module {
         let cache = decoder.createCache()
 
         // Prefill
+        session?.beginPhase("Prefill", category: .prefill)
         var hidden = decoder.forward(embeds: prefixEmbeds, cache: cache)
         var logits = decoder.logits(hidden[hidden.dim(0) - 1])
         MLX.eval(logits)
+        session?.endPhase("Prefill", category: .prefill)
 
         // Autoregressive decode
         var generated: [Int] = []
 
         for pos in promptLen..<nAudioTotal {
+            let stepStart = CFAbsoluteTimeGetCurrent()
             let token = nextToken(logits: logits, temperature: temperature)
             generated.append(token)
 
             if token == config.eosTokenId || generated.count > maxTokens {
+                let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+                session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
                 break
             }
 
@@ -122,6 +131,9 @@ public class VoxtralRealtimeModel: Module {
             hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
             logits = decoder.logits(hidden[0])
             MLX.eval(logits)
+
+            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+            session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
 
             if generated.count % 256 == 0 {
                 MLX.GPU.clearCache()

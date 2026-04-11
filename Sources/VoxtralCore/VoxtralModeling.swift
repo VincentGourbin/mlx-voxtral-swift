@@ -12,6 +12,7 @@ import MLXNN
 import MLXLMCommon  // For LanguageModel protocol and KVCacheSimple
 import MLXLLM       // For official LlamaModel
 import MLXRandom
+import MLXProfiler
 
 // Global debug dump function - can be set by VoxtralTest2
 // Swift 6: nonisolated(unsafe) for debug callback
@@ -1187,10 +1188,16 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Reset memory optimization cycle counter
         VoxtralMemoryManager.shared.resetOptimizationCycle()
 
+        let profiler = MLXProfiler.shared
+        let session = profiler.activeSession
+
         for tokenIndex in 0..<maxNewTokens {
+            let stepStart = CFAbsoluteTimeGetCurrent()
             let modelOutput: VoxtralModelOutput
 
             if cache![0].offset == 0 {
+                // Prefill: first forward pass with full embeddings
+                profiler.startPrefill()
                 modelOutput = self.callAsFunction(
                     inputIds: nil,
                     attentionMask: currentAttentionMask,
@@ -1228,6 +1235,16 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             tokenIds.append(currentTokenId)
             recentTokenIds.append(currentTokenId)
 
+            // End prefill phase after first token is generated
+            if tokenIndex == 0 {
+                profiler.endPrefill()
+                profiler.startGeneration()
+            }
+
+            // Record per-token step timing
+            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+            session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
+
             // Python: generated = mx.concatenate([generated, next_tokens], axis=1)
             generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
 
@@ -1264,6 +1281,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 }
             }
         }
+
+        profiler.endGeneration(tokenCount: tokenIds.count)
 
         // 🧹 Clear KV cache and intermediate tensors
         cache = nil
@@ -1330,10 +1349,15 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Reset memory optimization cycle counter
         VoxtralMemoryManager.shared.resetOptimizationCycle()
 
+        let profiler = MLXProfiler.shared
+        let session = profiler.activeSession
+
         for tokenIndex in 0..<maxNewTokens {
+            let stepStart = CFAbsoluteTimeGetCurrent()
             let modelOutput: VoxtralModelOutput
 
             if cache![0].offset == 0 {
+                profiler.startPrefill()
                 modelOutput = self.callAsFunction(
                     inputIds: nil,
                     attentionMask: currentAttentionMask,
@@ -1370,6 +1394,15 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             tokenIds.append(currentTokenId)
             recentTokenIds.append(currentTokenId)
 
+            // End prefill phase after first token is generated
+            if tokenIndex == 0 {
+                profiler.endPrefill()
+                profiler.startGeneration()
+            }
+
+            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+            session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
+
             generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
 
             if currentAttentionMask != nil {
@@ -1402,6 +1435,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 }
             }
         }
+
+        profiler.endGeneration(tokenCount: tokenIds.count)
 
         cache = nil
         Memory.clearCache()

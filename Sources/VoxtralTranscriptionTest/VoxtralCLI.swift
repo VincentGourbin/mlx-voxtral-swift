@@ -14,6 +14,7 @@
 import Foundation
 import VoxtralCore
 import ArgumentParser
+import MLXProfiler
 
 @main
 struct VoxtralCLI: AsyncParsableCommand {
@@ -27,7 +28,8 @@ struct VoxtralCLI: AsyncParsableCommand {
             Transcribe.self,
             Chat.self,
             TTS.self,
-            Realtime.self
+            Realtime.self,
+            Profile.self
         ],
         defaultSubcommand: Transcribe.self
     )

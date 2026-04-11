@@ -17,6 +17,7 @@ import MLX
 import MLXNN
 import MLXRandom
 import MLXLMCommon
+import MLXProfiler
 
 // MARK: - mm_audio_embeddings
 
@@ -392,14 +393,21 @@ public class VoxtralTTSModel: Module {
     ) -> (codes: MLXArray, numFrames: Int, ttft: TimeInterval) {
         let genStart = Date()
         let voiceFrameCount = voiceEmbedding.dim(0)
+        let session = MLXProfiler.shared.activeSession
 
         // 1. Encode text to token IDs
+        session?.beginPhase("Text Tokenization", category: .tokenization)
         let inputIds = encodeText(text, voiceFrameCount: voiceFrameCount, tokenizer: tokenizer, sanitize: sanitize)
         let inputIdsMx = MLXArray(inputIds).reshaped(1, inputIds.count)
+        session?.endPhase("Text Tokenization", category: .tokenization)
+
         // 2. Build input embeddings with voice replacement
+        session?.beginPhase("Voice Embedding Merge", category: .voiceEmbedding)
         let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
+        session?.endPhase("Voice Embedding Merge", category: .voiceEmbedding)
 
         // 3. Create KV cache and prefill
+        session?.beginPhase("Prefill", category: .prefill)
         let cache = createCache()
 
         var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
@@ -410,12 +418,14 @@ public class VoxtralTTSModel: Module {
         let audioTokEmb = embedTokens(MLXArray([Int32(audioTokenId)]).reshaped(1, 1))
         hidden = llmForward(inputEmbeds: audioTokEmb, cache: cache)
         MLX.eval(hidden)
+        session?.endPhase("Prefill", category: .prefill)
 
         // 5. Autoregressive generation
         var allCodes: [MLXArray] = []
         var ttft: TimeInterval = 0
 
         for i in 0..<maxTokens {
+            let stepStart = CFAbsoluteTimeGetCurrent()
             let h = hidden[0..., -1, 0...]  // (1, dim) — last position
 
             // Generate one frame: semantic + acoustic codes
@@ -434,6 +444,10 @@ public class VoxtralTTSModel: Module {
 
             allCodes.append(codes)
             onFrame?(i, codes)
+
+            // Record per-frame step timing
+            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+            session?.recordStep(index: i + 1, total: maxTokens, durationUs: stepDurationUs, category: .semanticCodeGen)
 
             // Embed codes back as LLM input for next step
             let globalCodes = codesToGlobalIndices(codes)  // (1, 37)
