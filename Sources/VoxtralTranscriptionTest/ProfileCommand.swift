@@ -60,6 +60,9 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "Maximum tokens to generate")
     var maxTokens: Int = 500
 
+    @Option(name: [.customShort("t"), .long], help: "Temperature (0.0 = greedy, default 0.7 for chat)")
+    var temperature: Float?
+
     @Flag(name: .long, help: "Track memory per token/frame")
     var perStepMemory: Bool = false
 
@@ -165,7 +168,7 @@ struct ProfileRun: AsyncParsableCommand {
 
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
-        config.temperature = 0.0
+        config.temperature = temperature ?? 0.0
 
         let sttPipeline = VoxtralPipeline(model: pipelineModel, configuration: config)
 
@@ -198,7 +201,7 @@ struct ProfileRun: AsyncParsableCommand {
 
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
-        config.temperature = 0.7
+        config.temperature = temperature ?? 0.7
 
         let chatPipeline = VoxtralPipeline(model: pipelineModel, configuration: config)
 

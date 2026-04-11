@@ -1462,69 +1462,43 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         if logits.ndim == 3 && logits.shape[1] == 1 {
             processedLogits = logits.squeezed(axis: 1)  // [1, 1, vocab_size] -> [1, vocab_size]
         }
-        
-        // Python: if temperature == 0: return mx.argmax(logits, axis=-1, keepdims=True)
+
         if temperature == 0.0 {
             return argMax(processedLogits, axis: -1, keepDims: true)
         }
-        
-        // Python: if temperature != 1.0: logits = logits / temperature
+
         if temperature != 1.0 {
             processedLogits = processedLogits / temperature
         }
-        
-        // Python: logprobs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
-        let logprobs = processedLogits - logSumExp(processedLogits, axes: [-1], keepDims: true)
-        
-        // Python top-p (nucleus) sampling - exact conversion from modeling_voxtral.py lines 535-552
+
         if topP < 1.0 {
-            // Python: probs = mx.exp(logprobs)
-            let probs = exp(logprobs)
+            // Optimized top-p: threshold-based masking without full sort
+            // Instead of sorting the full 130K vocab, compute softmax and mask
+            // tokens below a probability threshold, then sample from the masked distribution.
+            let probs = softmax(processedLogits, axis: -1)
 
-            // Python: sorted_indices = mx.argsort(logprobs, axis=-1)
-            let sortedIndices = argSort(logprobs, axis: -1)
+            // Find the min probability that would be in the top-p nucleus:
+            // top(probs, k) returns the k largest values (unsorted).
+            // We use a conservative k to find the probability cutoff.
+            let vocabSize = processedLogits.shape.last!
+            let k = min(1000, vocabSize)
+            let topKProbs = top(probs, k: k, axis: -1)  // [batch, K] — O(n) partial sort
+            let topKSum = topKProbs.sum(axis: -1, keepDims: true)  // [batch, 1]
 
-            // Python: sorted_probs = mx.take_along_axis(probs, sorted_indices, axis=-1)
-            let sortedProbs = takeAlong(probs, sortedIndices, axis: -1)
+            // If top-K already exceeds top-p mass, use the K-th value as cutoff
+            // Otherwise fall back to a small cutoff to include more tokens
+            let kthProb = topKProbs.min(axis: -1, keepDims: true)  // smallest in top-K
+            let cutoff = which(topKSum .>= topP, kthProb, MLXArray(Float(1e-9)))
 
-            // Python: cumulative_probs = mx.cumsum(sorted_probs, axis=-1)
-            let cumulativeProbs = cumsum(sortedProbs, axis: -1)
+            // Mask tokens below cutoff
+            let maskedLogits = which(probs .>= cutoff, processedLogits, -Float.infinity)
 
-            // Python: inverse_indices = mx.zeros_like(sorted_indices)
-            let inverseIndices = zeros(like: sortedIndices)
-
-            // Python: batch_indices = mx.arange(batch_size)[:, None]
-            let batchIndices = MLXArray(0 ..< sortedIndices.shape[0])[0..., .newAxis]
-
-            // Python: inverse_indices[batch_indices, sorted_indices] = mx.arange(sorted_indices.shape[-1])
-            // Fix: use .last instead of [-1] for Swift Array
-            let rangeValues = MLXArray(0 ..< sortedIndices.shape.last!)
-            inverseIndices[batchIndices, sortedIndices] = rangeValues
-            
-            // Python: cumulative_probs = mx.take_along_axis(cumulative_probs, inverse_indices, axis=-1)
-            let remappedCumulativeProbs = takeAlong(cumulativeProbs, inverseIndices, axis: -1)
-            
-            // Python: logprobs = mx.where(cumulative_probs > 1 - top_p, logprobs, -float("inf"))
-            let threshold = 1.0 - topP
-            let maskedLogprobs = which(
-                remappedCumulativeProbs .> threshold,
-                logprobs,
-                -Float.infinity
-            )
-            
-            // Python: return mx.random.categorical(logprobs)[:, None]
-            let sample = categorical(maskedLogprobs, axis: -1)
-            
-            // Defensive check: if sample is empty, fall back to original logits
-            if sample.size == 0 {
-                let fallbackSample = argMax(processedLogits, axis: -1, keepDims: false)
-                return expandedDimensions(fallbackSample, axes: [-1])
-            }
-            
+            let sample = categorical(maskedLogits, axis: -1)
             return expandedDimensions(sample, axes: [-1])
         }
-        
-        // Python: return mx.random.categorical(logprobs)[:, None]
+
+        // Pure temperature sampling without top-p
+        let logprobs = processedLogits - logSumExp(processedLogits, axes: [-1], keepDims: true)
         let sample = categorical(logprobs, axis: -1)
         return expandedDimensions(sample, axes: [-1])
     }
