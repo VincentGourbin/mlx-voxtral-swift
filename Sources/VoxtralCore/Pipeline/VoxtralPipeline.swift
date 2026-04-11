@@ -238,19 +238,26 @@ public class VoxtralPipeline: @unchecked Sendable {
             self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
             session?.endPhase("2. Model Loading", category: .modelLoad)
 
-            // Load processor (includes tokenizer loading which can be slow)
-            progress?(0.6, "Loading tokenizer...")
+            // Load tokenizer and setup encoder IN PARALLEL
+            // CoreML compilation (encoder setup) can take 1-2 min on first run,
+            // so we overlap it with tokenizer loading to reduce total wait time.
+            progress?(0.6, "Loading tokenizer & compiling encoder...")
+
             session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
-            self.processor = try VoxtralProcessor.fromPretrained(modelPath.path) { processorProgress, status in
-                // Map processor progress (0-1) to pipeline progress (0.6-0.85)
-                progress?(0.6 + processorProgress * 0.25, status)
-            }
+            session?.beginPhase("4. Encoder Setup", category: .modelLoad)
+
+            let capturedModelPath = modelPath.path
+            async let tokenizerTask: VoxtralProcessor = {
+                try VoxtralProcessor.fromPretrained(capturedModelPath) { processorProgress, status in
+                    progress?(0.6 + processorProgress * 0.15, status)
+                }
+            }()
+            async let encoderTask: Void = setupEncoder()
+
+            self.processor = try await tokenizerTask
             session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
-            // Setup hybrid encoder if needed (downloads Core ML model for hybrid mode)
-            progress?(0.85, "Configuring encoder...")
-            session?.beginPhase("4. Encoder Setup", category: .modelLoad)
-            try await setupEncoder()
+            try await encoderTask
             session?.endPhase("4. Encoder Setup", category: .modelLoad)
 
             state = .ready
