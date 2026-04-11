@@ -23,72 +23,62 @@ public let N_MELS: Int = 128
  */
 public func loadAudio(_ file: String) throws -> MLXArray {
     // Python equivalent: soundfile.read(file, dtype="float32")
-    // Use AVFoundation instead of ffmpeg for native audio loading
-    
+    // Use AVFoundation with hardware-accelerated resampling + mono conversion
+
     let fileURL = URL(fileURLWithPath: file)
-    
-    // Load audio file using AVFoundation
+
+    // Load audio file
     let audioFile = try AVAudioFile(forReading: fileURL)
-    let format = audioFile.processingFormat
-    let frameCount = UInt32(audioFile.length)
-    
-    // Create buffer for audio data
-    guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-        throw VoxtralError.audioProcessingFailed("Failed to create audio buffer")
+
+    // Request output in target format: mono, 16kHz, Float32
+    // AVFoundation handles resampling and channel mixing in hardware/Accelerate
+    guard let targetFormat = AVAudioFormat(
+        commonFormat: .pcmFormatFloat32,
+        sampleRate: Double(SAMPLE_RATE),
+        channels: 1,
+        interleaved: false
+    ) else {
+        throw VoxtralError.audioProcessingFailed("Failed to create target audio format")
     }
-    
-    // Read audio data into buffer
-    try audioFile.read(into: buffer)
-    buffer.frameLength = frameCount
-    
-    // Get audio data as Float32 array
-    guard let floatChannelData = buffer.floatChannelData else {
-        throw VoxtralError.audioProcessingFailed("Failed to get float channel data")
+
+    // Use AVAudioConverter for hardware-accelerated conversion
+    guard let converter = AVAudioConverter(from: audioFile.processingFormat, to: targetFormat) else {
+        throw VoxtralError.audioProcessingFailed("Failed to create audio converter")
     }
-    
-    let channelCount = Int(format.channelCount)
-    let samples = Int(frameCount)
-    var audioData: [Float] = []
-    
-    // Convert to mono if needed (average channels)
-    if channelCount > 1 {
-        // Average all channels to mono
-        audioData = Array(repeating: 0, count: samples)
-        for sample in 0..<samples {
-            var sum: Float = 0
-            for channel in 0..<channelCount {
-                sum += floatChannelData[channel][sample]
-            }
-            audioData[sample] = sum / Float(channelCount)
-        }
-    } else {
-        // Already mono
-        audioData = Array(UnsafeBufferPointer(start: floatChannelData[0], count: samples))
+
+    // Calculate output frame count based on sample rate ratio
+    let ratio = Double(SAMPLE_RATE) / audioFile.processingFormat.sampleRate
+    let outputFrameCount = AVAudioFrameCount(Double(audioFile.length) * ratio)
+
+    guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputFrameCount) else {
+        throw VoxtralError.audioProcessingFailed("Failed to create output buffer")
     }
-    
-    // Resample to SAMPLE_RATE (16000 Hz) if needed
-    let currentSampleRate = format.sampleRate
-    if currentSampleRate != Double(SAMPLE_RATE) {
-        // Simple linear interpolation resampling
-        let ratio = Double(SAMPLE_RATE) / currentSampleRate
-        let newLength = Int(Double(audioData.count) * ratio)
-        var resampled = Array<Float>(repeating: 0, count: newLength)
-        
-        for i in 0..<newLength {
-            let srcIndex = Double(i) / ratio
-            let index = Int(srcIndex)
-            let fraction = Float(srcIndex - Double(index))
-            
-            if index < audioData.count - 1 {
-                resampled[i] = audioData[index] * (1 - fraction) + audioData[index + 1] * fraction
-            } else if index < audioData.count {
-                resampled[i] = audioData[index]
-            }
-        }
-        
-        audioData = resampled
+
+    // Read source audio
+    let sourceFrameCount = UInt32(audioFile.length)
+    guard let sourceBuffer = AVAudioPCMBuffer(pcmFormat: audioFile.processingFormat, frameCapacity: sourceFrameCount) else {
+        throw VoxtralError.audioProcessingFailed("Failed to create source buffer")
     }
-    
+    try audioFile.read(into: sourceBuffer)
+    sourceBuffer.frameLength = sourceFrameCount
+
+    // Convert: decode + resample + mono mix in one pass
+    var conversionError: NSError?
+    converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
+        outStatus.pointee = .haveData
+        return sourceBuffer
+    }
+    if let error = conversionError {
+        throw VoxtralError.audioProcessingFailed("Audio conversion failed: \(error.localizedDescription)")
+    }
+
+    // Zero-copy transfer to MLXArray
+    guard let floatData = outputBuffer.floatChannelData else {
+        throw VoxtralError.audioProcessingFailed("Failed to get converted audio data")
+    }
+    let samples = Int(outputBuffer.frameLength)
+    let audioData = Array(UnsafeBufferPointer(start: floatData[0], count: samples))
+
     return MLXArray(audioData)
 }
 
