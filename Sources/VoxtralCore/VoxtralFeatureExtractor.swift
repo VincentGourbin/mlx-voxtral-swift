@@ -77,6 +77,9 @@ public func loadAudio(_ file: String) throws -> MLXArray {
         throw VoxtralError.audioProcessingFailed("Failed to get converted audio data")
     }
     let samples = Int(outputBuffer.frameLength)
+    guard samples > 0 else {
+        throw VoxtralError.audioProcessingFailed("Audio conversion produced 0 samples")
+    }
     let audioData = Array(UnsafeBufferPointer(start: floatData[0], count: samples))
 
     return MLXArray(audioData)
