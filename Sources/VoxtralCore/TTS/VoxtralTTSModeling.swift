@@ -421,8 +421,13 @@ public class VoxtralTTSModel: Module {
         session?.endPhase("Prefill", category: .prefill)
 
         // 5. Autoregressive generation
+        // Optimization: check EOA every N frames to reduce GPU→CPU syncs.
+        // Between checks, GPU pipelines LLM forward passes without blocking.
+        // May generate up to (eoaCheckInterval-1) extra frames after EOA — trimmed below.
+        let eoaCheckInterval = 4
         var allCodes: [MLXArray] = []
         var ttft: TimeInterval = 0
+        var eoaReached = false
 
         for i in 0..<maxTokens {
             let stepStart = CFAbsoluteTimeGetCurrent()
@@ -435,13 +440,6 @@ public class VoxtralTTSModel: Module {
                 ttft = Date().timeIntervalSince(genStart)
             }
 
-            // EOA check: semantic_code <= 1 means empty_audio (0) or end_audio (1)
-            let semanticCode = codes[0, 0].item(Int32.self)
-            if semanticCode <= 1 {
-                print("  [GEN] EOA at frame \(i)")
-                break
-            }
-
             allCodes.append(codes)
             onFrame?(i, codes)
 
@@ -449,17 +447,34 @@ public class VoxtralTTSModel: Module {
             let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
             session?.recordStep(index: i + 1, total: maxTokens, durationUs: stepDurationUs, category: .semanticCodeGen)
 
+            // Periodic EOA check — sync GPU only every N frames
+            if (i + 1) % eoaCheckInterval == 0 || i == 0 {
+                // Check the last eoaCheckInterval frames for EOA
+                let checkStart = max(0, allCodes.count - eoaCheckInterval)
+                for j in checkStart..<allCodes.count {
+                    let semanticCode = allCodes[j][0, 0].item(Int32.self)
+                    if semanticCode <= 1 {
+                        // Trim codes up to (but not including) the EOA frame
+                        allCodes = Array(allCodes.prefix(j))
+                        print("  [GEN] EOA at frame \(checkStart + (j - checkStart))")
+                        eoaReached = true
+                        break
+                    }
+                }
+                if eoaReached { break }
+            }
+
             // Embed codes back as LLM input for next step
             let globalCodes = codesToGlobalIndices(codes)  // (1, 37)
             let codeEmbeddings = mmAudioEmbeddings.audioCodebookEmbeddings(globalCodes)  // (1, 37, dim)
             let nextEmbedding = codeEmbeddings.sum(axis: 1, keepDims: true)  // (1, 1, dim)
 
-            // Feed through LLM
+            // Feed through LLM — no eval() sync between EOA checks
             hidden = llmForward(inputEmbeds: nextEmbedding, cache: cache)
-            MLX.eval(hidden)
 
-            if i % 50 == 0 {
-                // Memory management handled externally
+            // Sync GPU periodically to prevent unbounded compute graph growth
+            if (i + 1) % eoaCheckInterval == 0 {
+                MLX.eval(hidden)
             }
         }
 
