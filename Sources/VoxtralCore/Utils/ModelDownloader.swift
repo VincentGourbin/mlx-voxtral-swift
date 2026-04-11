@@ -12,6 +12,15 @@ import Hub
 /// Swift 6: @Sendable for safe cross-isolation usage
 public typealias DownloadProgressCallback = @Sendable (Double, String) -> Void
 
+/// Cross-platform home directory (macOS: ~/, iOS: app container Documents)
+private func platformHomeDirectory() -> URL {
+    #if os(iOS) || os(tvOS) || os(visionOS)
+    return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+    #else
+    return FileManager.default.homeDirectoryForCurrentUser
+    #endif
+}
+
 /// Model downloader with HuggingFace Hub integration
 public class ModelDownloader {
 
@@ -57,7 +66,7 @@ public class ModelDownloader {
     /// Models directory (uses customModelsDirectory if set, otherwise ~/.voxtral/models/)
     public static var modelsDirectory: URL {
         if let custom = customModelsDirectory { return custom }
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let homeDir = platformHomeDirectory()
         return homeDir.appendingPathComponent(".voxtral").appendingPathComponent("models")
     }
 
@@ -98,7 +107,7 @@ public class ModelDownloader {
         }
 
         // Then check the legacy location: ~/.cache/huggingface/hub/models--{org}--{repo}/snapshots/...
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let homeDir = platformHomeDirectory()
         let hubCache = homeDir
             .appendingPathComponent(".cache")
             .appendingPathComponent("huggingface")
@@ -395,7 +404,7 @@ public class ModelDownloader {
         }
 
         // Check legacy Hub cache
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let homeDir = platformHomeDirectory()
         let hubCache = homeDir
             .appendingPathComponent(".cache")
             .appendingPathComponent("huggingface")
@@ -506,7 +515,7 @@ public class ModelDownloader {
         }
 
         // Check legacy Hub cache
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let homeDir = platformHomeDirectory()
         let hubCache = homeDir.appendingPathComponent(".cache/huggingface/hub")
         let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
         let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
