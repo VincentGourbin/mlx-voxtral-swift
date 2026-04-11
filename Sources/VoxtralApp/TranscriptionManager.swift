@@ -12,6 +12,7 @@ import Foundation
 import SwiftUI
 import VoxtralCore
 import MLX
+import MLXProfiler
 
 @MainActor
 class TranscriptionManager: ObservableObject {
@@ -55,10 +56,10 @@ class TranscriptionManager: ObservableObject {
         }
     }
 
-    // Profiling
-    @Published var lastProfileSummary: ProfileSummary?
+    // Profiling (uses MLXProfiler framework)
+    @Published var lastProfilingReport: String?
+    @Published var lastProfilingPhases: [ProfilingPhaseResult] = []
     @Published var profilingEnabled = true  // Enable profiling by default
-    private var profiler = VoxtralProfiler()
 
     // Mode and settings
     @Published var mode: VoxtralMode = .transcription
@@ -333,7 +334,8 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = true
         transcription = ""
         lastGenerationStats = nil
-        lastProfileSummary = nil
+        lastProfilingReport = nil
+        lastProfilingPhases = []
         currentTokenCount = 0
         currentStep = .processingAudio
 
@@ -343,8 +345,14 @@ class TranscriptionManager: ObservableObject {
         pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
 
         // Start profiling
+        let profiler = MLXProfiler.shared
+        var session: ProfilingSession? = nil
         if profilingEnabled {
-            profiler.start()
+            session = ProfilingSession(config: ProfilingConfig(trackMemory: true, exportChromeTrace: false, printSummary: false))
+            session?.title = "VOXTRAL STT PROFILING"
+            session?.metadata["mode"] = "transcription"
+            profiler.enable()
+            profiler.activeSession = session
         }
 
         let startTime = Date()
@@ -354,7 +362,7 @@ class TranscriptionManager: ObservableObject {
             await Task.yield()  // Allow UI to update
 
             let audioURL = URL(fileURLWithPath: audioPath)
-            
+
             // Use high-level pipeline API
             let result = try await pipeline.transcribe(audio: audioURL, language: "en")
 
@@ -365,14 +373,20 @@ class TranscriptionManager: ObservableObject {
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)
 
-            // Get profile summary
-            if profilingEnabled {
-                lastProfileSummary = profiler.summary()
-                print(lastProfileSummary!.description)
+            // Get profile report
+            if profilingEnabled, let session {
+                let report = session.generateReport()
+                lastProfilingReport = report
+                lastProfilingPhases = extractPhases(from: session)
+                print(report)
+                profiler.activeSession = nil
+                profiler.disable()
             }
 
         } catch {
             transcription = "Error: \(error.localizedDescription)"
+            profiler.activeSession = nil
+            profiler.disable()
         }
 
         currentStep = .idle
@@ -391,7 +405,8 @@ class TranscriptionManager: ObservableObject {
         isTranscribing = true
         transcription = ""
         lastGenerationStats = nil
-        lastProfileSummary = nil
+        lastProfilingReport = nil
+        lastProfilingPhases = []
         currentTokenCount = 0
         currentStep = .processingAudio
 
@@ -401,8 +416,14 @@ class TranscriptionManager: ObservableObject {
         pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
 
         // Start profiling
+        let profiler = MLXProfiler.shared
+        var session: ProfilingSession? = nil
         if profilingEnabled {
-            profiler.start()
+            session = ProfilingSession(config: ProfilingConfig(trackMemory: true, exportChromeTrace: false, printSummary: false))
+            session?.title = "VOXTRAL CHAT PROFILING"
+            session?.metadata["mode"] = "chat"
+            profiler.enable()
+            profiler.activeSession = session
         }
 
         let startTime = Date()
@@ -423,14 +444,20 @@ class TranscriptionManager: ObservableObject {
             let duration = Date().timeIntervalSince(startTime)
             lastGenerationStats = GenerationStats(tokenCount: currentTokenCount, duration: duration)
 
-            // Get profile summary
-            if profilingEnabled {
-                lastProfileSummary = profiler.summary()
-                print(lastProfileSummary!.description)
+            // Get profile report
+            if profilingEnabled, let session {
+                let report = session.generateReport()
+                lastProfilingReport = report
+                lastProfilingPhases = extractPhases(from: session)
+                print(report)
+                profiler.activeSession = nil
+                profiler.disable()
             }
 
         } catch {
             transcription = "Error: \(error.localizedDescription)"
+            profiler.activeSession = nil
+            profiler.disable()
         }
 
         currentStep = .idle
@@ -439,4 +466,57 @@ class TranscriptionManager: ObservableObject {
         // 🧹 Release GPU memory after generation
         Memory.clearCache()
     }
+
+    // MARK: - Profiling Helpers
+
+    private func extractPhases(from session: ProfilingSession) -> [ProfilingPhaseResult] {
+        let events = session.getEvents()
+        let timeline = session.getMemoryTimeline()
+
+        var beginTimestamps: [String: UInt64] = [:]
+        var beginMemory: [String: Double] = [:]
+        var phases: [ProfilingPhaseResult] = []
+
+        // Build memory lookup
+        var memoryAtPoint: [String: Double] = [:]
+        for entry in timeline {
+            memoryAtPoint[entry.context] = entry.mlxActiveMB
+        }
+
+        for event in events {
+            switch event.phase {
+            case .begin:
+                beginTimestamps[event.name] = event.timestampUs
+                beginMemory[event.name] = memoryAtPoint["begin:\(event.name)"] ?? 0
+            case .end:
+                if let beginTs = beginTimestamps[event.name] {
+                    let durationMs = Double(event.timestampUs - beginTs) / 1000.0
+                    let startMB = beginMemory[event.name] ?? 0
+                    let endMB = memoryAtPoint["end:\(event.name)"] ?? 0
+                    phases.append(ProfilingPhaseResult(
+                        name: event.name,
+                        durationSeconds: durationMs / 1000.0,
+                        mlxMemoryStartMB: startMB,
+                        mlxMemoryEndMB: endMB
+                    ))
+                    beginTimestamps.removeValue(forKey: event.name)
+                }
+            default: break
+            }
+        }
+
+        return phases
+    }
+}
+
+// MARK: - Profiling Phase Result (for SwiftUI display)
+
+public struct ProfilingPhaseResult: Identifiable {
+    public let id = UUID()
+    public let name: String
+    public let durationSeconds: TimeInterval
+    public let mlxMemoryStartMB: Double
+    public let mlxMemoryEndMB: Double
+
+    public var mlxMemoryDeltaMB: Double { mlxMemoryEndMB - mlxMemoryStartMB }
 }

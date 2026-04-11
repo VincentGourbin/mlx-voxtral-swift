@@ -495,7 +495,7 @@ struct OutputPanelView: View {
                 LiveStatsBarView(tokenCount: manager.currentTokenCount, currentStep: manager.currentStep)
             } else if let stats = manager.lastGenerationStats {
                 Divider()
-                StatsBarView(stats: stats, profileSummary: manager.lastProfileSummary)
+                StatsBarView(stats: stats, profilingPhases: manager.lastProfilingPhases)
             }
         }
     }
@@ -545,7 +545,7 @@ struct LiveStatsBarView: View {
 
 struct StatsBarView: View {
     let stats: GenerationStats
-    let profileSummary: ProfileSummary?
+    let profilingPhases: [ProfilingPhaseResult]
     @State private var showProfileDetails = false
 
     var body: some View {
@@ -557,7 +557,7 @@ struct StatsBarView: View {
 
                 Spacer()
 
-                if profileSummary != nil {
+                if !profilingPhases.isEmpty {
                     Button(action: { showProfileDetails.toggle() }) {
                         Label(showProfileDetails ? "Hide Profile" : "Show Profile",
                               systemImage: showProfileDetails ? "chevron.up" : "chevron.down")
@@ -571,8 +571,8 @@ struct StatsBarView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
 
-            if showProfileDetails, let summary = profileSummary {
-                ProfileDetailsView(summary: summary)
+            if showProfileDetails, !profilingPhases.isEmpty {
+                ProfileDetailsView(phases: profilingPhases)
             }
         }
         .background(.ultraThinMaterial)
@@ -582,92 +582,58 @@ struct StatsBarView: View {
 // MARK: - Profile Details View
 
 struct ProfileDetailsView: View {
-    let summary: ProfileSummary
+    let phases: [ProfilingPhaseResult]
+
+    private var totalDuration: TimeInterval {
+        phases.reduce(0) { $0 + $1.durationSeconds }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Divider()
 
-            // Device info
+            // Phase table header
             HStack {
-                Text("Device:")
-                    .foregroundStyle(.secondary)
-                Text(summary.deviceInfo.architecture)
-                    .fontWeight(.medium)
-                Spacer()
-                Text("RAM: \(formatBytes(summary.deviceInfo.memorySize))")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
-
-            Divider()
-
-            // Steps table header
-            HStack {
-                Text("Step")
-                    .frame(width: 140, alignment: .leading)
+                Text("Phase")
+                    .frame(width: 160, alignment: .leading)
                 Text("Time")
                     .frame(width: 70, alignment: .trailing)
-                Text("MLX Δ")
-                    .frame(width: 80, alignment: .trailing)
-                Text("Process Δ")
+                Text("%")
+                    .frame(width: 50, alignment: .trailing)
+                Text("MLX \u{0394}")
                     .frame(width: 80, alignment: .trailing)
             }
             .font(.caption2.bold())
             .foregroundStyle(.secondary)
 
-            // Steps
-            ForEach(Array(summary.steps.enumerated()), id: \.offset) { _, step in
+            // Phases
+            ForEach(phases) { phase in
                 HStack {
-                    Text(step.name)
-                        .frame(width: 140, alignment: .leading)
+                    Text(phase.name)
+                        .frame(width: 160, alignment: .leading)
                         .lineLimit(1)
-                    Text(String(format: "%.3fs", step.duration))
+                    Text(formatDurationCompact(phase.durationSeconds))
                         .frame(width: 70, alignment: .trailing)
-                    Text(formatDeltaBytes(step.endMemory.mlxActive - step.startMemory.mlxActive))
+                    Text(String(format: "%.1f%%", totalDuration > 0 ? (phase.durationSeconds / totalDuration) * 100 : 0))
+                        .frame(width: 50, alignment: .trailing)
+                        .foregroundStyle(.secondary)
+                    Text(formatMemoryDelta(phase.mlxMemoryDeltaMB))
                         .frame(width: 80, alignment: .trailing)
-                        .foregroundStyle(step.endMemory.mlxActive > step.startMemory.mlxActive ? .orange : .green)
-                    Text(formatDeltaBytes(Int(step.endMemory.processFootprint - step.startMemory.processFootprint)))
-                        .frame(width: 80, alignment: .trailing)
-                        .foregroundStyle(step.endMemory.processFootprint > step.startMemory.processFootprint ? .orange : .green)
+                        .foregroundStyle(phase.mlxMemoryDeltaMB > 0 ? .orange : .green)
                 }
                 .font(.caption)
             }
 
             Divider()
 
-            // Totals
-            HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MLX Peak")
-                        .foregroundStyle(.secondary)
-                    Text(formatBytes(summary.peakMemoryUsed))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.orange)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MLX Active")
-                        .foregroundStyle(.secondary)
-                    Text(formatBytes(summary.finalSnapshot.mlxActive))
-                        .fontWeight(.medium)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MLX Cache")
-                        .foregroundStyle(.secondary)
-                    Text(formatBytes(summary.finalSnapshot.mlxCache))
-                        .fontWeight(.medium)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Process")
-                        .foregroundStyle(.secondary)
-                    Text(formatBytes(Int(summary.finalSnapshot.processFootprint)))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.blue)
-                }
-
+            // Total
+            HStack {
+                Text("TOTAL")
+                    .fontWeight(.medium)
+                    .frame(width: 160, alignment: .leading)
+                Text(formatDurationCompact(totalDuration))
+                    .fontWeight(.medium)
+                    .frame(width: 70, alignment: .trailing)
                 Spacer()
             }
             .font(.caption)
@@ -675,24 +641,21 @@ struct ProfileDetailsView: View {
         .padding(.horizontal)
         .padding(.bottom, 8)
     }
-}
 
-// Helper functions for formatting
-private func formatBytes(_ bytes: Int) -> String {
-    let absBytes = abs(bytes)
-    if absBytes >= 1024 * 1024 * 1024 {
-        return String(format: "%.2f GB", Double(bytes) / (1024 * 1024 * 1024))
-    } else if absBytes >= 1024 * 1024 {
-        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
-    } else if absBytes >= 1024 {
-        return String(format: "%.1f KB", Double(bytes) / 1024)
+    private func formatDurationCompact(_ duration: TimeInterval) -> String {
+        if duration < 0.1 {
+            return String(format: "%.1fms", duration * 1000)
+        }
+        return String(format: "%.3fs", duration)
     }
-    return "\(bytes) B"
-}
 
-private func formatDeltaBytes(_ bytes: Int) -> String {
-    let sign = bytes >= 0 ? "+" : ""
-    return sign + formatBytes(bytes)
+    private func formatMemoryDelta(_ deltaMB: Double) -> String {
+        let sign = deltaMB >= 0 ? "+" : ""
+        if abs(deltaMB) >= 1024 {
+            return String(format: "%@%.2f GB", sign, deltaMB / 1024)
+        }
+        return String(format: "%@%.1f MB", sign, deltaMB)
+    }
 }
 
 // MARK: - Generation Stats

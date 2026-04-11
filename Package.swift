@@ -8,7 +8,7 @@ import PackageDescription
 let package = Package(
     name: "MLXVoxtralSwift",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         // Core library for integration into other projects
@@ -42,7 +42,8 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.6"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.30.6")
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.30.6"),
+        .package(url: "https://github.com/VincentGourbin/swift-mlx-profiler", from: "1.2.0")
     ],
     targets: [
         // Core library containing all Voxtral model implementations
@@ -56,7 +57,8 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Transformers", package: "swift-transformers"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "MLXLLM", package: "mlx-swift-lm")
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXProfiler", package: "swift-mlx-profiler")
             ]
         ),
         // SwiftUI macOS application
@@ -74,7 +76,8 @@ let package = Package(
         .executableTarget(
             name: "VoxtralTranscriptionTest",
             dependencies: [
-                "VoxtralCore"
+                "VoxtralCore",
+                .product(name: "MLXProfiler", package: "swift-mlx-profiler")
             ]
         ),
         // Performance benchmark

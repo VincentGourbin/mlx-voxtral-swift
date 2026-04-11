@@ -13,6 +13,7 @@
 
 import Foundation
 import MLX
+import MLXProfiler
 
 @available(macOS 14.0, *)
 public class VoxtralTTSPipeline: @unchecked Sendable {
@@ -84,25 +85,34 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         state = .loading
 
         do {
+            let session = MLXProfiler.shared.activeSession
+
             progress?(0.05, "Resolving TTS model...")
+            session?.beginPhase("1. Model Download", category: .modelLoad)
             let modelInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
             let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
                 progress?(0.05 + p * 0.35, msg)
             }
             self.modelDirectory = modelDir
+            session?.endPhase("1. Model Download", category: .modelLoad)
 
             progress?(0.40, "Loading TTS model...")
+            session?.beginPhase("2. Model Loading", category: .modelLoad)
             let model = try loadVoxtralTTSModel(from: modelDir) { p, msg in
                 progress?(0.40 + Double(p) * 0.40, msg)
             }
             self.ttsModel = model
+            session?.endPhase("2. Model Loading", category: .modelLoad)
 
             progress?(0.85, "Loading tokenizer...")
+            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
             // TekkenTokenizer expects the MODEL DIRECTORY, not the tekken.json file path
             self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
             // Load voice embeddings
             progress?(0.90, "Loading voice embeddings...")
+            session?.beginPhase("4. Voice Embeddings", category: .voiceEmbedding)
             let voiceDir = modelDir.appendingPathComponent("voice_embedding")
             for voice in VoxtralVoice.allCases {
                 let safetensorsPath = voiceDir.appendingPathComponent("\(voice.rawValue).safetensors")
@@ -113,6 +123,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     }
                 }
             }
+            session?.endPhase("4. Voice Embeddings", category: .voiceEmbedding)
 
             progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
             state = .ready
@@ -139,9 +150,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         state = .synthesizing
         let startTime = Date()
+        let profiler = MLXProfiler.shared
+        let session = profiler.activeSession
 
         do {
-            // Generate audio codes
+            // Generate audio codes (semantic code generation + flow matching inside)
+            profiler.startSemanticGen()
             let (codes, numFrames, ttft) = model.generate(
                 text: text,
                 voiceEmbedding: voiceEmb,
@@ -149,6 +163,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 maxTokens: configuration.maxFrames,
                 sanitize: configuration.sanitizeText
             )
+            profiler.endSemanticGen(frameCount: numFrames)
+            profiler.setTTFT(ttft)
 
             guard numFrames > 0 else {
                 state = .ready
@@ -156,11 +172,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             }
 
             // Decode to waveform, optionally trim lead-in silence
+            profiler.startCodecDecode()
             let rawWaveform = model.decodeToWaveform(codes)
             MLX.eval(rawWaveform)
+            profiler.endCodecDecode()
+
+            session?.beginPhase("Audio Post-processing", category: .postProcess)
             let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
+            session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
+            let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
+            profiler.setAudioDuration(audioDuration)
             state = .ready
 
             return TTSSynthesisResult(
@@ -211,8 +234,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         state = .synthesizing
         let startTime = Date()
+        let profiler = MLXProfiler.shared
+        let session = profiler.activeSession
 
         do {
+            profiler.startSemanticGen()
             let (codes, numFrames, ttft) = model.generate(
                 text: text,
                 voiceEmbedding: voiceEmbedding,
@@ -220,17 +246,26 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 maxTokens: configuration.maxFrames,
                 sanitize: configuration.sanitizeText
             )
+            profiler.endSemanticGen(frameCount: numFrames)
+            profiler.setTTFT(ttft)
 
             guard numFrames > 0 else {
                 state = .ready
                 throw VoxtralTTSError.synthesisError("No audio frames generated")
             }
 
+            profiler.startCodecDecode()
             let rawWaveform = model.decodeToWaveform(codes)
             MLX.eval(rawWaveform)
+            profiler.endCodecDecode()
+
+            session?.beginPhase("Audio Post-processing", category: .postProcess)
             let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
+            session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
+            let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
+            profiler.setAudioDuration(audioDuration)
             state = .ready
 
             return TTSSynthesisResult(

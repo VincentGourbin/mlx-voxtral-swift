@@ -16,6 +16,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXProfiler
 
 /// Simplified facade for Voxtral speech-to-text
 @available(macOS 13.0, iOS 16.0, *)
@@ -216,30 +217,41 @@ public class VoxtralPipeline: @unchecked Sendable {
         progress?(0.0, "Starting model download...")
 
         do {
+            let profiler = MLXProfiler.shared
+            let session = profiler.activeSession
+
             // Download/resolve model path
             progress?(0.1, "Downloading model...")
+            session?.beginPhase("1. Model Download", category: .modelLoad)
             let modelPath = try await ModelDownloader.resolveModel(model.repoId) { downloadProgress, status in
                 progress?(0.1 + downloadProgress * 0.4, status)
             }
+            session?.endPhase("1. Model Download", category: .modelLoad)
 
             // Load model using the working loadVoxtralStandardModel approach
             progress?(0.5, "Loading model...")
+            session?.beginPhase("2. Model Loading", category: .modelLoad)
             let (standardModel, _) = try loadVoxtralStandardModel(
                 modelPath: modelPath.path,
                 dtype: .float16
             )
             self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
+            session?.endPhase("2. Model Loading", category: .modelLoad)
 
             // Load processor (includes tokenizer loading which can be slow)
             progress?(0.6, "Loading tokenizer...")
+            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
             self.processor = try VoxtralProcessor.fromPretrained(modelPath.path) { processorProgress, status in
                 // Map processor progress (0-1) to pipeline progress (0.6-0.85)
                 progress?(0.6 + processorProgress * 0.25, status)
             }
+            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
             // Setup hybrid encoder if needed (downloads Core ML model for hybrid mode)
             progress?(0.85, "Configuring encoder...")
+            session?.beginPhase("4. Encoder Setup", category: .modelLoad)
             try await setupEncoder()
+            session?.endPhase("4. Encoder Setup", category: .modelLoad)
 
             state = .ready
             progress?(1.0, "Model ready!")
@@ -296,6 +308,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
 
         state = .processing
+        let session = MLXProfiler.shared.activeSession
         defer {
             state = .ready
             // Apply memory optimization
@@ -303,17 +316,23 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
 
         // Create transcription request (note: method name has typo in original)
+        session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
         let inputs = try processor.applyTranscritionRequest(
             audio: audio.path,
             language: language
         )
+        session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
 
         // Generate transcription
         let tokenIds: [Int]
 
         if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
             // Hybrid mode: use Core ML for audio encoding
+            session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
             let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+            session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
+
+            session?.beginPhase("Generation", category: .generation)
             tokenIds = try model.generateStreamWithAudioEmbeds(
                 inputIds: inputs.inputIds,
                 audioEmbeds: audioEmbeds,
@@ -323,8 +342,10 @@ public class VoxtralPipeline: @unchecked Sendable {
                 repetitionPenalty: configuration.repetitionPenalty,
                 contextSize: configuration.memoryOptimization.maxKVCacheSize
             )
+            session?.endPhase("Generation", category: .generation)
         } else {
             // Pure MLX mode
+            session?.beginPhase("Generation", category: .generation)
             tokenIds = try model.generateStream(
                 inputIds: inputs.inputIds,
                 inputFeatures: inputs.inputFeatures,
@@ -334,10 +355,13 @@ public class VoxtralPipeline: @unchecked Sendable {
                 repetitionPenalty: configuration.repetitionPenalty,
                 contextSize: configuration.memoryOptimization.maxKVCacheSize
             )
+            session?.endPhase("Generation", category: .generation)
         }
 
         // Decode tokens to text
+        session?.beginPhase("Token Decoding", category: .decoding)
         let transcription = try processor.decode(tokenIds, skipSpecialTokens: true)
+        session?.endPhase("Token Decoding", category: .decoding)
 
         return transcription
     }
@@ -358,12 +382,14 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
 
         state = .processing
+        let session = MLXProfiler.shared.activeSession
         defer {
             state = .ready
             VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0)
         }
 
         // Create chat conversation with audio
+        session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
         let conversation: [[String: Any]] = [
             [
                 "role": "user",
@@ -384,12 +410,17 @@ public class VoxtralPipeline: @unchecked Sendable {
               let inputFeatures = chatResult["input_features"] else {
             throw VoxtralPipelineError.processingFailed("Failed to process chat template")
         }
+        session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
 
         // Generate response
         let tokenIds: [Int]
 
         if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
+            session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
             let audioEmbeds = try hybrid.encode(inputFeatures)
+            session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
+
+            session?.beginPhase("Generation", category: .generation)
             tokenIds = try model.generateStreamWithAudioEmbeds(
                 inputIds: inputIds,
                 audioEmbeds: audioEmbeds,
@@ -399,7 +430,9 @@ public class VoxtralPipeline: @unchecked Sendable {
                 repetitionPenalty: configuration.repetitionPenalty,
                 contextSize: configuration.memoryOptimization.maxKVCacheSize
             )
+            session?.endPhase("Generation", category: .generation)
         } else {
+            session?.beginPhase("Generation", category: .generation)
             tokenIds = try model.generateStream(
                 inputIds: inputIds,
                 inputFeatures: inputFeatures,
@@ -409,9 +442,12 @@ public class VoxtralPipeline: @unchecked Sendable {
                 repetitionPenalty: configuration.repetitionPenalty,
                 contextSize: configuration.memoryOptimization.maxKVCacheSize
             )
+            session?.endPhase("Generation", category: .generation)
         }
 
+        session?.beginPhase("Token Decoding", category: .decoding)
         let response = try processor.decode(tokenIds, skipSpecialTokens: true)
+        session?.endPhase("Token Decoding", category: .decoding)
 
         return response
     }
