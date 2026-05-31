@@ -303,9 +303,14 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// Transcribe audio file
     /// - Parameters:
     ///   - audio: URL to audio file
-    ///   - language: Language code (default: "en")
+    ///   - language: Optional language code (e.g. `"fr"`, `"en"`). Pass `nil`
+    ///     to let the model auto-detect the spoken language (the processor
+    ///     omits the `lang:xx` prompt token in that case — cf.
+    ///     `VoxtralProcessor.applyTranscritionRequest`). Defaults to `nil`
+    ///     so dubbing / multilingual workflows can rely on auto-detection
+    ///     without hardcoding a source language.
     /// - Returns: Transcribed text
-    public func transcribe(audio: URL, language: String = "en") async throws -> String {
+    public func transcribe(audio: URL, language: String? = nil) async throws -> String {
         guard state.isReady else {
             throw VoxtralPipelineError.invalidState("Model not loaded")
         }
@@ -377,9 +382,10 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// - Parameters:
     ///   - audio: URL to audio file
     ///   - prompt: User prompt about the audio
-    ///   - language: Language code (default: "en")
+    ///   - language: Optional language code. Same semantics as `transcribe(audio:language:)`
+    ///     — `nil` lets the model auto-detect the spoken language.
     /// - Returns: Model response
-    public func chat(audio: URL, prompt: String, language: String = "en") async throws -> String {
+    public func chat(audio: URL, prompt: String, language: String? = nil) async throws -> String {
         guard state.isReady else {
             throw VoxtralPipelineError.invalidState("Model not loaded")
         }
