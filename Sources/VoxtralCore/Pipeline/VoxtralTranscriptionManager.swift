@@ -108,9 +108,11 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
     /// Transcribe audio file
     /// - Parameters:
     ///   - audioURL: URL to the audio file
-    ///   - language: Language code (default: "en")
+    ///   - language: Optional language code (e.g. `"fr"`, `"en"`). Pass `nil`
+    ///     (the default) to let the model auto-detect the spoken language,
+    ///     matching the `VoxtralPipeline.transcribe(audio:language:)` semantics.
     /// - Returns: Transcription result with text and metadata
-    public func transcribe(audioURL: URL, language: String = "en") async throws -> TranscriptionResult {
+    public func transcribe(audioURL: URL, language: String? = nil) async throws -> TranscriptionResult {
         guard let pipeline = pipeline, isLoaded else {
             throw VoxtralTranscriptionError.modelNotLoaded
         }
@@ -132,9 +134,10 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
     /// - Parameters:
     ///   - audioURL: URL to the audio file
     ///   - prompt: Question or instruction about the audio
-    ///   - language: Language code (default: "en")
+    ///   - language: Optional language code. Same semantics as `transcribe(audioURL:language:)`
+    ///     — `nil` (the default) lets the model auto-detect the spoken language.
     /// - Returns: Model's response
-    public func chat(audioURL: URL, prompt: String, language: String = "en") async throws -> String {
+    public func chat(audioURL: URL, prompt: String, language: String? = nil) async throws -> String {
         guard let pipeline = pipeline, isLoaded else {
             throw VoxtralTranscriptionError.modelNotLoaded
         }
