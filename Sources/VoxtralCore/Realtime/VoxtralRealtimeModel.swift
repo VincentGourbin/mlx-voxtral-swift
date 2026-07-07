@@ -136,7 +136,7 @@ public class VoxtralRealtimeModel: Module {
             session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
 
             if generated.count % 256 == 0 {
-                MLX.GPU.clearCache()
+                Memory.clearCache()
             }
         }
 
