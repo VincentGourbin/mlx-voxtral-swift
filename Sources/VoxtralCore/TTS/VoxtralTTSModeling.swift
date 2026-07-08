@@ -72,6 +72,19 @@ public class AudioCodebookEmbeddingsContainer: Module {
         }
         fatalError("Unsupported embeddings type: \(type(of: embeddings))")
     }
+
+    /// Full (V, dim) embedding table in float32 — used by voice enrollment
+    /// to build a voice embedding as a sum of per-codebook rows.
+    public func weightTable() -> MLXArray {
+        if let qEmb = embeddings as? QuantizedEmbedding {
+            // Dequantize by embedding every row index.
+            let all = MLXArray(0 ..< Int32(qEmb.weight.dim(0)))
+            return qEmb(all).asType(.float32)
+        } else if let emb = embeddings as? Embedding {
+            return emb.weight.asType(.float32)
+        }
+        fatalError("Unsupported embeddings type: \(type(of: embeddings))")
+    }
 }
 
 // MARK: - Text Sanitization

@@ -29,6 +29,7 @@ struct VoxtralCLI: AsyncParsableCommand {
             Transcribe.self,
             Chat.self,
             TTS.self,
+            Enroll.self,
             Realtime.self,
             Profile.self
         ],
@@ -535,6 +536,72 @@ struct TTS: AsyncParsableCommand {
         pipeline.unload()
 
         print("\n" + String(repeating: "=", count: 60))
+    }
+}
+
+// MARK: - Enroll Command (voice cloning)
+
+@available(macOS 14.0, *)
+struct Enroll: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "enroll",
+        abstract: "Clone a voice from a reference recording (offline, ~30 min for 5000 epochs)"
+    )
+
+    @Argument(help: "Reference audio file (wav/mp3/m4a/...), at least ~8s")
+    var reference: String
+
+    @Option(name: .shortAndLong, help: "Output voice embedding .safetensors path")
+    var output: String = "voice.safetensors"
+
+    @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b, tts-4b-4bit, tts-4b-6bit")
+    var model: String = "tts-4b"
+
+    @Option(name: .shortAndLong, help: "Optimization epochs (5000 ok, 15000 better)")
+    var epochs: Int = 5000
+
+    @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5)")
+    var duration: Double = 8.0
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL VOICE ENROLLMENT (cloning)")
+        print(String(repeating: "=", count: 60))
+
+        guard let ttsModelInfo = VoxtralTTSRegistry.model(withId: model) else {
+            throw ValidationError("Unknown TTS model: \(model)")
+        }
+
+        var config = VoxtralVoiceEnrollment.Config()
+        config.numFrames = Int(duration * 12.5)
+        config.epochs = epochs
+
+        let pipeline = VoxtralTTSPipeline()
+        print("\n[1/2] Loading TTS model...")
+        try await pipeline.loadModel(modelInfo: ttsModelInfo) { p, status in
+            if Int(p * 100) % 20 == 0 { print("  [\(Int(p * 100))%] \(status)") }
+        }
+
+        print("\n[2/2] Optimizing codes (\(epochs) epochs, ~\(Int(Double(epochs) * 0.35 / 60)) min)...")
+        let start = Date()
+        let outputURL = URL(fileURLWithPath: output)
+        try pipeline.enrollVoice(
+            referenceURL: URL(fileURLWithPath: reference),
+            outputURL: outputURL,
+            config: config
+        ) { progress in
+            let elapsed = Date().timeIntervalSince(start)
+            print(String(format: "  epoch %d/%d | loss %.4f | recon %.4f | %.0fs",
+                         progress.epoch, epochs, progress.totalLoss, progress.reconLoss, elapsed))
+        }
+
+        print("\n" + String(repeating: "-", count: 60))
+        print("Voice enrolled: \(output)")
+        print(String(repeating: "-", count: 60))
+        print("\nTry it:")
+        print("  voxtral tts \"Hello, this is my cloned voice.\" \\")
+        print("      -o test.wav --model \(model) --voice-embedding \(output)")
+        pipeline.unload()
     }
 }
 
