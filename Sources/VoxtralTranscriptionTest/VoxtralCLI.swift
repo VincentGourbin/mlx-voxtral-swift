@@ -14,6 +14,7 @@
 import Foundation
 import VoxtralCore
 import ArgumentParser
+import MLX
 import MLXProfiler
 
 @main
@@ -398,6 +399,9 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .long, help: "Blend two voices 'voiceA+voiceB:weight' (e.g. 'neutral_female+fr_male:0.15')")
     var blend: String?
 
+    @Option(name: .long, help: "Path to a custom voice embedding .safetensors [T, 3072] (e.g. a cloned voice; overrides --voice)")
+    var voiceEmbedding: String?
+
     @Option(name: .long, help: "Maximum audio frames to generate (12.5 frames/sec)")
     var maxFrames: Int = 2500
 
@@ -454,7 +458,20 @@ struct TTS: AsyncParsableCommand {
         print("\n[2/3] Generating speech...")
         let result: TTSSynthesisResult
 
-        if let xyz = voiceXyz {
+        if let embeddingPath = voiceEmbedding {
+            // Custom voice embedding mode (e.g. cloned voice)
+            let embeddingURL = URL(fileURLWithPath: embeddingPath)
+            let arrays = try MLX.loadArrays(url: embeddingURL)
+            guard let embedding = arrays["embedding"] ?? arrays.values.first else {
+                throw ValidationError("No array found in \(embeddingPath)")
+            }
+            guard embedding.ndim == 2, embedding.dim(1) == 3072 else {
+                throw ValidationError("Voice embedding must be [T, 3072], got \(embedding.shape)")
+            }
+            print("  Custom voice: \(embeddingPath) (\(embedding.dim(0)) frames)")
+            result = try await pipeline.synthesize(text: text, voiceEmbedding: embedding)
+
+        } else if let xyz = voiceXyz {
             // ZeroVoice coordinate mode
             let parts = xyz.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
             guard parts.count == 3 else {

@@ -1,0 +1,15 @@
+# Voice cloning research workspace — generated/downloaded artifacts.
+# NOTHING heavy or voice-derived ever goes to GitHub: no model weights,
+# no checkpoints, no voice embeddings, no audio.
+.venv/
+upstream/
+voxtral-tts-weights/
+checkpoints/
+outputs/
+voices/
+inputs/
+*.log
+*.pt
+*.safetensors
+*.wav
+.DS_Store
