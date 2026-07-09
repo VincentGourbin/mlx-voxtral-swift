@@ -655,9 +655,10 @@ public class ModelDownloader {
         progress?(0.0, "Starting download of \(model.name)...")
         progress?(0.1, "Downloading model files...")
 
-        let modelUrl = try await hubApi.snapshot(
-            from: model.repoId,
-            matching: ["*.json", "*.safetensors", "tekken.json"]
+        let modelUrl = try await downloadRepoDirect(
+            repoId: model.repoId,
+            matching: ["*.json", "*.safetensors", "tekken.json"],
+            progress: progress
         )
 
         progress?(1.0, "Download complete!")
