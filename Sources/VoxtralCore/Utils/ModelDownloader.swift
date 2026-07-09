@@ -125,14 +125,30 @@ public class ModelDownloader {
             if case let .fixed(token) = tokenProviderValue, !token.isEmpty {
                 req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
-            let (tmp, resp) = try await URLSession.shared.download(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
-                throw VoxtralError.loadingFailed("Download failed for \(file.path) (HTTP \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+
+            // Retry transient network failures (connection lost / offline) with
+            // backoff — a brief drop shouldn't fail a multi-GB model download.
+            let maxAttempts = 5
+            var attempt = 0
+            while true {
+                attempt += 1
+                do {
+                    let (tmp, resp) = try await URLSession.shared.download(for: req)
+                    guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                        throw VoxtralError.loadingFailed("Download failed for \(file.path) (HTTP \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+                    }
+                    if FileManager.default.fileExists(atPath: dest.path) {
+                        try FileManager.default.removeItem(at: dest)
+                    }
+                    try FileManager.default.moveItem(at: tmp, to: dest)
+                    break
+                } catch let error as URLError where Self.isTransient(error) && attempt < maxAttempts {
+                    let backoff = UInt64(pow(2.0, Double(attempt))) // 2,4,8,16 s
+                    progress?(fraction(doneBytes, totalBytes),
+                              "Network dropped on \(file.path), retry \(attempt)/\(maxAttempts - 1) in \(backoff)s…")
+                    try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
+                }
             }
-            if FileManager.default.fileExists(atPath: dest.path) {
-                try FileManager.default.removeItem(at: dest)
-            }
-            try FileManager.default.moveItem(at: tmp, to: dest)
             doneBytes += file.size ?? 0
             progress?(fraction(doneBytes, totalBytes), "Downloaded \(file.path)")
         }
@@ -143,6 +159,19 @@ public class ModelDownloader {
 
     private static func fraction(_ done: Int, _ total: Int) -> Double {
         total > 0 ? min(1.0, Double(done) / Double(total)) : 1.0
+    }
+
+    /// Transient network errors worth retrying (connection lost, offline,
+    /// timeout, DNS/host lookup).
+    private static func isTransient(_ error: URLError) -> Bool {
+        switch error.code {
+        case .networkConnectionLost, .notConnectedToInternet, .timedOut,
+             .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+             .resourceUnavailable, .dataNotAllowed:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Optional HF token for gated/private repos (from HF_TOKEN env).
