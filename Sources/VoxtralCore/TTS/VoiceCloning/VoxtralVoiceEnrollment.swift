@@ -35,6 +35,7 @@ public final class VoxtralVoiceEnrollment {
         public var temperature: Float = 2.0
         public var temperatureDecay: Float = 0.99
         public var minTemperature: Float = 0.3
+        public var gradClip: Float = 1.0        // global-norm gradient clip
         public var logEvery: Int = 500
         public init() {}
     }
@@ -67,35 +68,15 @@ public final class VoxtralVoiceEnrollment {
     /// trailing silence). A reference cut mid-speech destabilizes the start
     /// of later syntheses.
     public func prepareReference(url: URL) throws -> MLXArray {
-        let file = try AVAudioFile(forReading: url)
-        guard let target = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false
-        ), let converter = AVAudioConverter(from: file.processingFormat, to: target) else {
-            throw VoxtralTTSError.invalidConfiguration("Cannot create 24 kHz audio converter")
-        }
-        let ratio = 24_000 / file.processingFormat.sampleRate
-        let outCap = AVAudioFrameCount(Double(file.length) * ratio) + 24_000
-        guard let outBuf = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: outCap),
-              let srcBuf = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                            frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw VoxtralTTSError.invalidConfiguration("Cannot allocate audio buffers")
-        }
-        try file.read(into: srcBuf)
-        var err: NSError?
-        var fed = false
-        converter.convert(to: outBuf, error: &err) { _, status in
-            if fed { status.pointee = .noDataNow; return nil }
-            fed = true; status.pointee = .haveData; return srcBuf
-        }
-        if let err { throw VoxtralTTSError.invalidConfiguration("Resample failed: \(err.localizedDescription)") }
-
-        guard let ptr = outBuf.floatChannelData else {
-            throw VoxtralTTSError.invalidConfiguration("No audio samples")
-        }
-        var samples = Array(UnsafeBufferPointer(start: ptr[0], count: Int(outBuf.frameLength)))
+        // Read the file at its NATIVE rate as mono float32 (channel mix only —
+        // no sample-rate conversion here, which is where AVAudioConverter is
+        // unreliable for upsampling), then resample to 24 kHz ourselves.
+        let native = try readMonoFloat(url: url)
+        var samples = resampleLinear(native.samples, from: native.sampleRate, to: 24_000)
         if samples.count < numSamples {
             throw VoxtralTTSError.invalidConfiguration(
-                "Reference too short: \(samples.count) < \(numSamples) samples required"
+                "Reference too short: \(String(format: "%.1f", Double(samples.count) / 24_000))s "
+                + "< \(String(format: "%.1f", Double(numSamples) / 24_000))s required"
             )
         }
         samples = Array(samples[0 ..< numSamples])
@@ -118,6 +99,51 @@ public final class VoxtralVoiceEnrollment {
         }
         for i in cut ..< numSamples { samples[i] = 0 }
         return MLXArray(samples)
+    }
+
+    /// Read an audio file as mono float32 at its native sample rate.
+    /// Only mixes channels — no sample-rate conversion (done separately).
+    private func readMonoFloat(url: URL) throws -> (samples: [Float], sampleRate: Double) {
+        let file = try AVAudioFile(forReading: url)
+        let fmt = file.processingFormat
+        guard let buf = AVAudioPCMBuffer(pcmFormat: fmt,
+                                         frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw VoxtralTTSError.invalidConfiguration("Cannot allocate audio buffer")
+        }
+        try file.read(into: buf)
+        let n = Int(buf.frameLength)
+        guard n > 0, let chans = buf.floatChannelData else {
+            throw VoxtralTTSError.invalidConfiguration("Empty or non-float audio: \(url.lastPathComponent)")
+        }
+        let channelCount = Int(fmt.channelCount)
+        var mono = [Float](repeating: 0, count: n)
+        for c in 0 ..< channelCount {
+            let ch = chans[c]
+            for i in 0 ..< n { mono[i] += ch[i] }
+        }
+        if channelCount > 1 {
+            let inv = 1 / Float(channelCount)
+            for i in 0 ..< n { mono[i] *= inv }
+        }
+        return (mono, fmt.sampleRate)
+    }
+
+    /// Linear-interpolation resample. Adequate for enrollment references
+    /// (the reference is an optimization target, not played back).
+    private func resampleLinear(_ x: [Float], from srcRate: Double, to dstRate: Double) -> [Float] {
+        if srcRate == dstRate || x.isEmpty { return x }
+        let ratio = srcRate / dstRate
+        let outCount = Int(Double(x.count) / ratio)
+        var out = [Float](repeating: 0, count: outCount)
+        for i in 0 ..< outCount {
+            let pos = Double(i) * ratio
+            let i0 = Int(pos)
+            let frac = Float(pos - Double(i0))
+            let a = x[i0]
+            let b = i0 + 1 < x.count ? x[i0 + 1] : a
+            out[i] = a + (b - a) * frac
+        }
+        return out
     }
 
     // MARK: - Forward (STE relaxation → decoder → waveform)
@@ -210,17 +236,26 @@ public final class VoxtralVoiceEnrollment {
                 [semanticLogits, acousticValues]
             )
 
+            // Global-norm gradient clipping (matches the Python reference's
+            // grad_clip=1.0). Without it the semantic logits diverge on long
+            // runs and the codes collapse to a single repeated frame.
+            var gS = grads[0], gA = grads[1]
+            let globalNorm = MLX.sqrt(MLX.sum(gS * gS) + MLX.sum(gA * gA))
+            let scale = MLXArray(config.gradClip) / MLX.maximum(globalNorm, MLXArray(config.gradClip))
+            gS = gS * scale
+            gA = gA * scale
+
             // Cosine-annealed learning rate.
             let cos = 0.5 * (1 + Foundation.cos(Float.pi * Float(epoch) / Float(config.epochs)))
             let lr = minLR + (config.learningRate - minLR) * cos
             let t = Float(epoch + 1)
 
             (semanticLogits, mS, vS) = adamStep(
-                param: semanticLogits, grad: grads[0], m: mS, v: vS,
+                param: semanticLogits, grad: gS, m: mS, v: vS,
                 lr: lr, beta1: beta1, beta2: beta2, eps: eps, t: t
             )
             (acousticValues, mA, vA) = adamStep(
-                param: acousticValues, grad: grads[1], m: mA, v: vA,
+                param: acousticValues, grad: gA, m: mA, v: vA,
                 lr: lr, beta1: beta1, beta2: beta2, eps: eps, t: t
             )
 
