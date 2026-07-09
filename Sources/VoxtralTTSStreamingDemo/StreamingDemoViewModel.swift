@@ -66,7 +66,8 @@ final class StreamingDemoViewModel: ObservableObject {
     let availableModels: [(id: String, name: String)] = [
         ("tts-4b-4bit", "4-bit (2.5 GB)"),
         ("tts-4b-6bit", "6-bit (3.5 GB)"),
-        ("tts-4b-mlx", "bf16 (8 GB)")
+        ("tts-4b", "bf16 original (8 GB)"),
+        ("tts-4b-mlx", "bf16 MLX (8 GB)")
     ]
 
     let presetVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
