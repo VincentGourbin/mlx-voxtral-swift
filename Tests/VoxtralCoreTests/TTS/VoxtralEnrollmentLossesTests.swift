@@ -32,36 +32,36 @@ final class VoxtralEnrollmentLossesTests: XCTestCase {
 
     func testL1MatchesPyTorch() {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(signalLength: N, sampleRate: sr)
-        let value = computer.l1Loss(pred, targ).item(Float.self)
+        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let value = computer.l1Loss(pred).item(Float.self)
         XCTAssertEqual(value, 0.092424, accuracy: 1e-4)
     }
 
     func testMultiResSTFTMatchesPyTorch() {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(signalLength: N, sampleRate: sr)
-        let value = computer.multiResolutionSTFTLoss(pred, targ).item(Float.self)
+        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let value = computer.multiResolutionSTFTLoss(pred).item(Float.self)
         // Tolerance covers FFT/window float32 differences across backends.
         XCTAssertEqual(value, 0.986005, accuracy: 0.03)
     }
 
     func testMelMatchesPyTorch() {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(signalLength: N, sampleRate: sr)
-        let value = computer.melLoss(pred, targ).item(Float.self)
+        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let value = computer.melLoss(pred).item(Float.self)
         XCTAssertEqual(value, 0.625629, accuracy: 0.03)
     }
 
     /// The whole loss chain must remain differentiable end to end.
     func testLossesAreDifferentiable() {
         let (_, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(signalLength: N, sampleRate: sr)
+        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
 
         func loss(_ inputs: [MLXArray]) -> [MLXArray] {
             let p = inputs[0]
-            return [computer.l1Loss(p, targ)
-                + computer.multiResolutionSTFTLoss(p, targ)
-                + computer.melLoss(p, targ)]
+            return [computer.l1Loss(p)
+                + computer.multiResolutionSTFTLoss(p)
+                + computer.melLoss(p)]
         }
 
         let x = MLXRandom.normal([N]) * 0.1

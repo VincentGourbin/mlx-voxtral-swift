@@ -45,6 +45,20 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
         XCTAssertGreaterThan(rms(out), 0.2)
     }
 
+    /// Downsampling must attenuate content above the target Nyquist instead
+    /// of aliasing it back into the band.
+    func testDownsampleAntiAliases() {
+        // 16 kHz tone at 48 kHz — above the 12 kHz Nyquist of 24 kHz.
+        let src = sine(16_000, seconds: 0.5, rate: 48_000)
+        let out = VoxtralVoiceEnrollment.resampleLinear(src, from: 48_000, to: 24_000)
+        // The low-pass should strongly attenuate a >Nyquist tone.
+        XCTAssertLessThan(rms(out), rms(src) * 0.5, "16kHz tone not attenuated — aliasing")
+        // A tone comfortably in-band must survive.
+        let inBand = sine(1_000, seconds: 0.5, rate: 48_000)
+        let inBandOut = VoxtralVoiceEnrollment.resampleLinear(inBand, from: 48_000, to: 24_000)
+        XCTAssertGreaterThan(rms(inBandOut), rms(inBand) * 0.7, "1kHz tone wrongly attenuated")
+    }
+
     /// Equal rates are a no-op.
     func testSameRateIsIdentity() {
         let src = sine(220, seconds: 0.5, rate: 24_000)

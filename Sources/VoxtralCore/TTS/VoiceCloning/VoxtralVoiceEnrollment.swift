@@ -47,18 +47,25 @@ public final class VoxtralVoiceEnrollment {
     }
 
     static let samplesPerFrame = 1920  // 24000 / 12.5
-    static let semanticVocab = 8192
-    static let nAcoustic = 36
-    static let nSpecial = 2
+    static let nSpecial = 2             // EMPTY_AUDIO=0, END_AUDIO=1 per codebook
 
     let model: VoxtralTTSModel
     let config: Config
     let numSamples: Int
 
+    // Codebook geometry read from the model config, not hardcoded, so variant
+    // checkpoints produce correct offsets.
+    let semanticVocab: Int   // e.g. 8192
+    let nAcoustic: Int       // number of acoustic codebooks, e.g. 36
+    let acousticLevels: Int  // FSQ levels per acoustic codebook, e.g. 21
+
     public init(model: VoxtralTTSModel, config: Config = Config()) {
         self.model = model
         self.config = config
         self.numSamples = config.numFrames * Self.samplesPerFrame
+        self.semanticVocab = model.config.audioModel.semanticCodebookSize
+        self.nAcoustic = model.config.audioModel.nAcousticCodebook
+        self.acousticLevels = model.config.audioModel.acousticCodebookSize
     }
 
     // MARK: - Reference preparation
@@ -128,22 +135,57 @@ public final class VoxtralVoiceEnrollment {
         return (mono, fmt.sampleRate)
     }
 
-    /// Linear-interpolation resample. Adequate for enrollment references
-    /// (the reference is an optimization target, not played back).
-    /// Static + internal so it can be unit-tested without loading the model —
-    /// this is the path that must never silence the signal when upsampling.
+    /// Resample to `dstRate`. When downsampling, a windowed-sinc low-pass is
+    /// applied first so content above the target Nyquist doesn't alias into
+    /// the band — the reference IS the optimization target, so aliasing would
+    /// bake artifacts into the cloned voice. Static + internal so it can be
+    /// unit-tested without loading the model; must never silence the signal.
     static func resampleLinear(_ x: [Float], from srcRate: Double, to dstRate: Double) -> [Float] {
         if srcRate == dstRate || x.isEmpty { return x }
+        let source = dstRate < srcRate
+            ? lowPass(x, cutoff: dstRate / 2, sampleRate: srcRate)
+            : x
         let ratio = srcRate / dstRate
-        let outCount = Int(Double(x.count) / ratio)
+        let outCount = Int(Double(source.count) / ratio)
         var out = [Float](repeating: 0, count: outCount)
         for i in 0 ..< outCount {
             let pos = Double(i) * ratio
             let i0 = Int(pos)
             let frac = Float(pos - Double(i0))
-            let a = x[i0]
-            let b = i0 + 1 < x.count ? x[i0 + 1] : a
+            let a = source[i0]
+            let b = i0 + 1 < source.count ? source[i0 + 1] : a
             out[i] = a + (b - a) * frac
+        }
+        return out
+    }
+
+    /// Zero-phase-ish FIR low-pass (Hann-windowed sinc, 64 taps) applied as a
+    /// centered convolution. Cutoff and sampleRate are in Hz.
+    static func lowPass(_ x: [Float], cutoff: Double, sampleRate: Double) -> [Float] {
+        let taps = 64
+        let fc = cutoff / sampleRate  // normalized cutoff (cycles/sample)
+        let half = taps / 2
+        var kernel = [Float](repeating: 0, count: taps + 1)
+        var sum: Float = 0
+        for i in 0 ... taps {
+            let m = Double(i - half)
+            let sinc = m == 0 ? 2 * fc : sin(2 * .pi * fc * m) / (.pi * m)
+            let hann = 0.5 - 0.5 * cos(2 * .pi * Double(i) / Double(taps))
+            let v = Float(sinc * hann)
+            kernel[i] = v
+            sum += v
+        }
+        for i in 0 ... taps { kernel[i] /= sum }  // unity DC gain
+
+        let n = x.count
+        var out = [Float](repeating: 0, count: n)
+        for i in 0 ..< n {
+            var acc: Float = 0
+            for k in 0 ... taps {
+                let j = i + k - half
+                if j >= 0 && j < n { acc += x[j] * kernel[k] }
+            }
+            out[i] = acc
         }
         return out
     }
@@ -154,43 +196,45 @@ public final class VoxtralVoiceEnrollment {
     /// parameters using straight-through estimators, then decode to a
     /// waveform. Gradients flow to `semanticLogits` / `acousticValues`.
     private func synthesize(
-        semanticLogits: MLXArray,   // (T, 8192)
-        acousticValues: MLXArray,   // (T, 36)
-        temperature: Float,
-        training: Bool
+        semanticLogits: MLXArray,   // (T, semanticVocab)
+        acousticValues: MLXArray,   // (T, nAcoustic)
+        semCodebook: MLXArray,      // (semanticVocab, semanticDim) — precomputed once
+        temperature: Float
     ) -> MLXArray {
         let T = config.numFrames
 
         // --- Semantic: Gumbel-Softmax + STE ---
-        var logits = semanticLogits
-        if training {
-            let u = MLXRandom.uniform(0.0 ..< 1.0, [T, Self.semanticVocab])
-            let gumbel = -MLX.log(-MLX.log(u + 1e-10) + 1e-10)
-            logits = (semanticLogits + gumbel) / temperature
-        } else {
-            logits = semanticLogits / temperature
-        }
-        let probs = MLX.softmax(logits, axis: -1)                 // (T, 8192)
+        let u = MLXRandom.uniform(0.0 ..< 1.0, [T, semanticVocab])
+        let gumbel = -MLX.log(-MLX.log(u + 1e-10) + 1e-10)
+        let logits = (semanticLogits + gumbel) / temperature
+        let probs = MLX.softmax(logits, axis: -1)                 // (T, semanticVocab)
 
-        let semCodebook = model.audioTokenizer.quantizer.semanticCodebook.codebook  // (8192, 256)
-        let softEmb = MLX.matmul(probs, semCodebook)              // (T, 256)
+        let softEmb = MLX.matmul(probs, semCodebook)              // (T, semanticDim)
         let hardCodes = probs.argMax(axis: -1)                    // (T)
-        let hardEmb = MLX.take(semCodebook, hardCodes, axis: 0)   // (T, 256)
+        let hardEmb = MLX.take(semCodebook, hardCodes, axis: 0)   // (T, semanticDim)
         let semanticEmb = softEmb + MLX.stopGradient(hardEmb - softEmb)
 
         // --- Acoustic: FSQ with tanh + STE ---
-        let levels = Float(model.config.audioModel.acousticCodebookSize)  // 21
-        let normalized = MLX.tanh(acousticValues)                 // (T, 36) in [-1, 1]
-        let scaled = ((normalized + 1) / 2) * (levels - 1)        // [0, 20]
-        let quantized = MLX.round(scaled)
+        let levels = Float(acousticLevels)
+        let (scaled, quantized) = acousticScaledQuantized(acousticValues)
         let acousticCodes = scaled + MLX.stopGradient(quantized - scaled)
-        let acousticEmb = (acousticCodes * 2 / (levels - 1)) - 1  // (T, 36)
+        let acousticEmb = (acousticCodes * 2 / (levels - 1)) - 1  // (T, nAcoustic)
 
         // --- Combine → (1, T, 292) → frozen decoder ---
         let fullEmb = MLX.concatenated([semanticEmb, acousticEmb], axis: -1)  // (T, 292)
         let embeddings = MLX.expandedDimensions(fullEmb, axis: 0)             // (1, T, 292)
         let waveform = model.audioTokenizer.forwardEmbeddings(embeddings)     // (1, T*1920)
         return waveform.reshaped(-1)
+    }
+
+    /// Shared FSQ mapping used by both the STE forward and the final discrete
+    /// export, so the codes written to disk always match what was optimized.
+    /// Returns the continuous `scaled` value and its rounded `quantized` form.
+    private func acousticScaledQuantized(_ acousticValues: MLXArray) -> (scaled: MLXArray, quantized: MLXArray) {
+        let levels = Float(acousticLevels)
+        let normalized = MLX.tanh(acousticValues)                 // [-1, 1]
+        let scaled = ((normalized + 1) / 2) * (levels - 1)        // [0, levels-1]
+        return (scaled, MLX.round(scaled))
     }
 
     // MARK: - Optimization
@@ -201,12 +245,18 @@ public final class VoxtralVoiceEnrollment {
         progress: ((Progress) -> Void)? = nil
     ) -> MLXArray {
         let T = config.numFrames
+        precondition(reference.dim(0) >= numSamples,
+                     "reference must have at least \(numSamples) samples, got \(reference.dim(0))")
         let ref = reference[0 ..< numSamples]
-        let losses = EnrollmentLossComputer(signalLength: numSamples)
+        let losses = EnrollmentLossComputer(reference: ref)
+
+        // Semantic centroid table is constant across the run — compute once.
+        let semCodebook = model.audioTokenizer.quantizer.semanticCodebook.codebook  // (semanticVocab, semanticDim)
+        MLX.eval(semCodebook)
 
         // Learnable parameters (match Python init).
-        var semanticLogits = MLXRandom.normal([T, Self.semanticVocab])
-        var acousticValues = MLXRandom.normal([T, Self.nAcoustic]) * 0.1
+        var semanticLogits = MLXRandom.normal([T, semanticVocab])
+        var acousticValues = MLXRandom.normal([T, nAcoustic]) * 0.1
 
         // Adam state.
         var mS = MLX.zeros(like: semanticLogits), vS = MLX.zeros(like: semanticLogits)
@@ -222,11 +272,11 @@ public final class VoxtralVoiceEnrollment {
             func lossFn(_ p: [MLXArray]) -> [MLXArray] {
                 let wav = synthesize(
                     semanticLogits: p[0], acousticValues: p[1],
-                    temperature: temp, training: true
+                    semCodebook: semCodebook, temperature: temp
                 )
-                let recon = losses.l1Loss(wav, ref)
-                let percept = losses.multiResolutionSTFTLoss(wav, ref)
-                let mel = losses.melLoss(wav, ref)
+                let recon = losses.l1Loss(wav)
+                let percept = losses.multiResolutionSTFTLoss(wav)
+                let mel = losses.melLoss(wav)
                 let total = config.reconstructionWeight * recon
                     + config.perceptualWeight * percept
                     + config.melWeight * mel
@@ -292,12 +342,10 @@ public final class VoxtralVoiceEnrollment {
     /// Purely discrete codes (T, 37): [semantic | 36 acoustic], no offset.
     private func discreteCodes(semanticLogits: MLXArray, acousticValues: MLXArray) -> MLXArray {
         let semantic = semanticLogits.argMax(axis: -1)               // (T)
-        let levels = Float(model.config.audioModel.acousticCodebookSize)
-        let normalized = MLX.tanh(acousticValues)
-        let scaled = ((normalized + 1) / 2) * (levels - 1)
-        let acoustic = MLX.round(scaled).asType(.int32)              // (T, 36)
+        let (_, quantized) = acousticScaledQuantized(acousticValues)
+        let acoustic = quantized.asType(.int32)                      // (T, nAcoustic)
         let sem2d = MLX.expandedDimensions(semantic.asType(.int32), axis: -1)
-        let codes = MLX.concatenated([sem2d, acoustic], axis: -1)    // (T, 37)
+        let codes = MLX.concatenated([sem2d, acoustic], axis: -1)    // (T, 1+nAcoustic)
         MLX.eval(codes)
         return codes
     }
@@ -308,34 +356,37 @@ public final class VoxtralVoiceEnrollment {
     /// END_AUDIO terminator frame (required — all official presets have it).
     /// Mirrors upstream codes_to_embeddings.py --add-end-token.
     public func codesToVoiceEmbedding(_ codes: MLXArray) -> MLXArray {
-        let table = model.mmAudioEmbeddings.audioCodebookEmbeddings.weightTable()  // (9088, 3072)
         let T = codes.dim(0)
+        let cb = 1 + nAcoustic  // codebooks per frame
 
-        // Per-codebook base offsets: semantic block (8192+2) then 36 acoustic
-        // blocks of (21+2). Codes carry a +2 special-token offset at lookup.
-        let acousticSize = model.config.audioModel.acousticCodebookSize + Self.nSpecial  // 23
-        var offsets = [Int32](repeating: 0, count: 1 + Self.nAcoustic)
+        // Per-codebook base offsets: semantic block (semanticVocab+2) then
+        // nAcoustic blocks of (acousticLevels+2). Codes carry a +2 special-
+        // token offset at lookup.
+        let acousticSize = acousticLevels + Self.nSpecial
+        var offsets = [Int32](repeating: 0, count: cb)
         offsets[0] = 0
-        var running: Int32 = Int32(Self.semanticVocab + Self.nSpecial)  // 8194
-        for k in 1 ... Self.nAcoustic {
+        var running = Int32(semanticVocab + Self.nSpecial)
+        for k in 1 ..< cb {
             offsets[k] = running
             running += Int32(acousticSize)
         }
-        let offsetsMx = MLXArray(offsets)  // (37)
+        let offsetsMx = MLXArray(offsets)
 
-        // Absolute row = offset_k + code_k + 2, summed over the 37 codebooks.
-        let rows = codes + offsetsMx + MLXArray(Int32(Self.nSpecial))     // (T, 37)
-        let looked = MLX.take(table, rows.reshaped(-1), axis: 0)          // (T*37, 3072)
-        let voiceEmb = looked.reshaped(T, 1 + Self.nAcoustic, -1).sum(axis: 1)  // (T, 3072)
-
-        // END_AUDIO frame: semantic=END(1), all acoustic=EMPTY(0).
-        var endRows = [Int32](repeating: 0, count: 1 + Self.nAcoustic)
+        // Absolute row = offset_k + code_k + 2 for every codebook, plus the
+        // END_AUDIO frame (semantic=END(1), acoustic=EMPTY(0)). Gather all the
+        // needed rows in one shot so only those are dequantized (not the whole
+        // 9088-row table).
+        let codeRows = (codes + offsetsMx + MLXArray(Int32(Self.nSpecial))).reshaped(-1)  // (T*cb)
+        var endRows = [Int32](repeating: 0, count: cb)
         endRows[0] = offsets[0] + 1
-        for k in 1 ... Self.nAcoustic { endRows[k] = offsets[k] + 0 }
-        let endFrame = MLX.take(table, MLXArray(endRows), axis: 0)
-            .sum(axis: 0, keepDims: true)                                  // (1, 3072)
+        for k in 1 ..< cb { endRows[k] = offsets[k] + 0 }
+        let allRows = MLX.concatenated([codeRows, MLXArray(endRows)], axis: 0)             // (T*cb + cb)
 
-        let result = MLX.concatenated([voiceEmb, endFrame], axis: 0)       // (T+1, 3072)
+        let looked = model.mmAudioEmbeddings.audioCodebookEmbeddings.rows(allRows).asType(.float32)
+        let voiceEmb = looked[0 ..< (T * cb)].reshaped(T, cb, -1).sum(axis: 1)   // (T, dim)
+        let endFrame = looked[(T * cb)...].sum(axis: 0, keepDims: true)          // (1, dim)
+
+        let result = MLX.concatenated([voiceEmb, endFrame], axis: 0)             // (T+1, dim)
         MLX.eval(result)
         return result
     }

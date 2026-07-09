@@ -463,8 +463,12 @@ struct TTS: AsyncParsableCommand {
             // Custom voice embedding mode (e.g. cloned voice)
             let embeddingURL = URL(fileURLWithPath: embeddingPath)
             let arrays = try MLX.loadArrays(url: embeddingURL)
-            guard let embedding = arrays["embedding"] ?? arrays.values.first else {
-                throw ValidationError("No array found in \(embeddingPath)")
+            // Require the explicit "embedding" key — do not silently accept an
+            // arbitrary array from a multi-array file.
+            guard let embedding = arrays["embedding"] else {
+                throw ValidationError(
+                    "\(embeddingPath) has no 'embedding' array (keys: \(arrays.keys.sorted())). "
+                    + "Produce one with `voxtral enroll`.")
             }
             guard embedding.ndim == 2, embedding.dim(1) == 3072 else {
                 throw ValidationError("Voice embedding must be [T, 3072], got \(embedding.shape)")
@@ -554,14 +558,16 @@ struct Enroll: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output voice embedding .safetensors path")
     var output: String = "voice.safetensors"
 
+    // Default matches the `tts` command so an enrolled voice is synthesized
+    // through the same decoder/embedding table it was optimized against.
     @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b, tts-4b-4bit, tts-4b-6bit")
-    var model: String = "tts-4b"
+    var model: String = "tts-4b-mlx"
 
     @Option(name: .shortAndLong, help: "Optimization epochs (5000 ok, 15000 better)")
     var epochs: Int = 5000
 
-    @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5)")
-    var duration: Double = 8.0
+    @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5, min 2s)")
+    var duration: Double = 16.0
 
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
@@ -570,6 +576,23 @@ struct Enroll: AsyncParsableCommand {
 
         guard let ttsModelInfo = VoxtralTTSRegistry.model(withId: model) else {
             throw ValidationError("Unknown TTS model: \(model)")
+        }
+        guard duration >= 2.0 else {
+            throw ValidationError("--duration must be at least 2 seconds (got \(duration))")
+        }
+        guard epochs >= 1 else {
+            throw ValidationError("--epochs must be >= 1 (got \(epochs))")
+        }
+
+        // Fail fast on a bad output path before the multi-minute optimization.
+        let outputURL = URL(fileURLWithPath: output)
+        guard outputURL.pathExtension == "safetensors" else {
+            throw ValidationError("--output must end in .safetensors (got \(output))")
+        }
+        let outDir = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+        guard FileManager.default.isWritableFile(atPath: outDir.path) else {
+            throw ValidationError("Output directory is not writable: \(outDir.path)")
         }
 
         var config = VoxtralVoiceEnrollment.Config()
@@ -582,9 +605,8 @@ struct Enroll: AsyncParsableCommand {
             if Int(p * 100) % 20 == 0 { print("  [\(Int(p * 100))%] \(status)") }
         }
 
-        print("\n[2/2] Optimizing codes (\(epochs) epochs, ~\(Int(Double(epochs) * 0.35 / 60)) min)...")
+        print("\n[2/2] Optimizing codes (\(epochs) epochs)...")
         let start = Date()
-        let outputURL = URL(fileURLWithPath: output)
         try pipeline.enrollVoice(
             referenceURL: URL(fileURLWithPath: reference),
             outputURL: outputURL,

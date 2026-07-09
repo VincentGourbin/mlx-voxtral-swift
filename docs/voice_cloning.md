@@ -62,10 +62,14 @@ Practical guidance:
 | Option | Default | Meaning |
 |---|---|---|
 | `<reference>` | — | Reference audio file (required) |
-| `-o, --output` | `voice.safetensors` | Output voice embedding path |
-| `-m, --model` | `tts-4b` | TTS model (`tts-4b`, `tts-4b-mlx`, `tts-4b-4bit`, `tts-4b-6bit`) |
+| `-o, --output` | `voice.safetensors` | Output voice embedding path (must end in `.safetensors`) |
+| `-m, --model` | `tts-4b-mlx` | TTS model (matches the `tts` command's default so the voice is synthesized through the same weights) |
 | `-e, --epochs` | `5000` | Optimization epochs (5000 good, more helps slightly) |
-| `--duration` | `8.0` | Reference seconds to use (**16 recommended**) |
+| `--duration` | `16.0` | Reference seconds to use (min 2 s; ~16 s is the sweet spot) |
+
+> Use the **same `--model`** for `enroll` and `tts` — a voice embedding is
+> tied to the decoder/embedding table it was optimized against. The defaults
+> already match (`tts-4b-mlx`).
 
 Enrollment is offline and one-time per voice. On an unloaded M-series GPU
 it runs at roughly 15× the speed of the original PyTorch reference.

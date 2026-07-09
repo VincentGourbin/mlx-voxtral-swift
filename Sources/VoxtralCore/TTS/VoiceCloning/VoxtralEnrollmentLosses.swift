@@ -9,6 +9,10 @@
  * hop=n_fft/4, hann window); the mel filterbank mirrors torchaudio's
  * default (HTK scale, no normalization, power=1.0).
  *
+ * The reference (target) is fixed for the whole optimization, so its
+ * magnitude spectrograms are computed once at construction and reused
+ * every epoch — the loss methods only take the current prediction.
+ *
  * Everything is built from basic differentiable ops (gather, matmul,
  * rfft) so gradients flow back to the learnable codes. Note that MLX on
  * Apple Silicon does not share the PyTorch MPS bug where torch.stft
@@ -27,7 +31,6 @@ struct STFTResolution {
     let window: MLXArray        // (nFFT)
     let frameIndices: MLXArray  // (numFrames * nFFT) gather indices into the padded signal
     let numFrames: Int
-    let paddedLength: Int
 
     init(nFFT: Int, signalLength: Int) {
         self.nFFT = nFFT
@@ -42,7 +45,6 @@ struct STFTResolution {
 
         // torch.stft(center=true): pad nFFT/2 on both sides,
         // frames start at k*hop in the padded signal.
-        self.paddedLength = signalLength + nFFT
         self.numFrames = 1 + signalLength / hop
 
         var indices = [Int32]()
@@ -57,8 +59,9 @@ struct STFTResolution {
     }
 }
 
-/// Differentiable losses over a fixed-length waveform pair.
-/// Index tables and filterbanks are precomputed once for the signal length.
+/// Differentiable losses against a fixed reference waveform.
+/// Index tables, filterbank and the reference's magnitudes are precomputed
+/// once for the signal length; each epoch only re-derives the prediction.
 public final class EnrollmentLossComputer {
 
     public let signalLength: Int
@@ -68,37 +71,61 @@ public final class EnrollmentLossComputer {
     static let fftSizes = [2296, 1418, 876, 542, 334, 206, 126, 76]
 
     private let resolutions: [STFTResolution]
-
-    // Mel loss configuration (torchaudio MelSpectrogram defaults, power=1.0)
     private let melResolution: STFTResolution
     private let melFilterbank: MLXArray  // (nFreqs, nMels)
 
-    public init(signalLength: Int, sampleRate: Int = 24_000, nMels: Int = 128) {
+    // The fixed reference and its precomputed magnitude spectrograms.
+    private let reference: MLXArray
+    private let targetMags: [MLXArray]   // per resolution
+    private let targetMel: MLXArray
+
+    /// - Parameter reference: the target waveform (signalLength,), constant
+    ///   for the whole optimization.
+    public init(reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) {
+        let signalLength = reference.dim(0)
+        precondition(signalLength >= Self.fftSizes.last!,
+                     "reference too short for spectral losses (\(signalLength) samples)")
         self.signalLength = signalLength
         self.sampleRate = sampleRate
+
         self.resolutions = Self.fftSizes
             .filter { $0 <= signalLength }
             .map { STFTResolution(nFFT: $0, signalLength: signalLength) }
-        self.melResolution = STFTResolution(nFFT: 2048, signalLength: signalLength)
+
+        // Mel nFFT is normally 2048; clamp down if the signal is shorter so
+        // reflect padding never indexes out of bounds.
+        let melNFFT = signalLength >= 2048
+            ? 2048
+            : (Self.fftSizes.first { $0 <= signalLength } ?? Self.fftSizes.last!)
+        self.melResolution = STFTResolution(nFFT: melNFFT, signalLength: signalLength)
         self.melFilterbank = Self.makeHTKMelFilterbank(
-            nFreqs: 2048 / 2 + 1, nMels: nMels, sampleRate: sampleRate
+            nFreqs: melNFFT / 2 + 1, nMels: nMels, sampleRate: sampleRate
         )
+
+        self.reference = reference
+        // Precompute the reference magnitudes once — they never change.
+        self.targetMags = resolutions.map { Self.magnitudeSpectrogram(reference, resolution: $0) }
+        self.targetMel = MLX.matmul(
+            Self.magnitudeSpectrogram(reference, resolution: melResolution), melFilterbank
+        )
+        MLX.eval([reference, targetMel] + targetMags)
     }
 
-    // MARK: - Public losses
+    // MARK: - Public losses (prediction vs. the stored reference)
 
-    /// Mean absolute error between raw waveforms.
-    public func l1Loss(_ pred: MLXArray, _ target: MLXArray) -> MLXArray {
-        MLX.mean(MLX.abs(pred - target))
+    /// Mean absolute error between the prediction and the reference waveform.
+    public func l1Loss(_ pred: MLXArray) -> MLXArray {
+        MLX.mean(MLX.abs(pred - reference))
     }
 
     /// Multi-resolution STFT loss: spectral convergence + log-magnitude L1,
     /// averaged over resolutions. Mirrors multi_resolution_stft_loss.
-    public func multiResolutionSTFTLoss(_ pred: MLXArray, _ target: MLXArray) -> MLXArray {
+    public func multiResolutionSTFTLoss(_ pred: MLXArray) -> MLXArray {
+        guard !resolutions.isEmpty else { return MLXArray(Float(0)) }
         var total = MLXArray(Float(0))
-        for res in resolutions {
-            let magPred = magnitudeSpectrogram(pred, resolution: res)
-            let magTrue = magnitudeSpectrogram(target, resolution: res)
+        for (i, res) in resolutions.enumerated() {
+            let magPred = Self.magnitudeSpectrogram(pred, resolution: res)
+            let magTrue = targetMags[i]
 
             let scLoss = frobeniusNorm(magTrue - magPred) / (frobeniusNorm(magTrue) + 1e-8)
             let logMagLoss = MLX.mean(MLX.abs(
@@ -111,18 +138,17 @@ public final class EnrollmentLossComputer {
 
     /// L1 over log-mel spectrograms. Mirrors mel_spectrogram_loss
     /// (n_fft 2048, hop 512, 128 HTK mels, power 1.0).
-    public func melLoss(_ pred: MLXArray, _ target: MLXArray) -> MLXArray {
-        let melPred = MLX.matmul(magnitudeSpectrogram(pred, resolution: melResolution), melFilterbank)
-        let melTrue = MLX.matmul(magnitudeSpectrogram(target, resolution: melResolution), melFilterbank)
+    public func melLoss(_ pred: MLXArray) -> MLXArray {
+        let melPred = MLX.matmul(Self.magnitudeSpectrogram(pred, resolution: melResolution), melFilterbank)
         return MLX.mean(MLX.abs(
-            MLX.log(melPred + 1e-5) - MLX.log(melTrue + 1e-5)
+            MLX.log(melPred + 1e-5) - MLX.log(targetMel + 1e-5)
         ))
     }
 
     // MARK: - Internals
 
     /// (numFrames, nFFT/2+1) magnitude spectrogram of a (signalLength,) waveform.
-    private func magnitudeSpectrogram(_ x: MLXArray, resolution: STFTResolution) -> MLXArray {
+    static func magnitudeSpectrogram(_ x: MLXArray, resolution: STFTResolution) -> MLXArray {
         let padded = reflectPad(x, pad: resolution.nFFT / 2)
         let frames = MLX.take(padded, resolution.frameIndices, axis: 0)
             .reshaped(resolution.numFrames, resolution.nFFT)
@@ -131,7 +157,7 @@ public final class EnrollmentLossComputer {
     }
 
     /// Reflect padding on both sides (torch pad_mode="reflect").
-    private func reflectPad(_ x: MLXArray, pad: Int) -> MLXArray {
+    static func reflectPad(_ x: MLXArray, pad: Int) -> MLXArray {
         let n = x.dim(0)
         let leftIdx = MLXArray((1...pad).reversed().map { Int32($0) })
         let rightIdx = MLXArray(((n - pad - 1)..<(n - 1)).reversed().map { Int32($0) })
