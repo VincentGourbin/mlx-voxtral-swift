@@ -330,12 +330,17 @@ public class SemanticCodebook: Module {
         super.init()
     }
 
-    public func decode(_ indices: MLXArray) -> MLXArray {
-        // Compute centroids in float32 for precision
-        let codebook = embedding_sum.asType(.float32) / MLX.maximum(
+    /// Centroid table (codebookSize, dim) in float32.
+    /// Exposed for voice enrollment, which needs a differentiable
+    /// soft lookup (probabilities × codebook) alongside the hard one.
+    public var codebook: MLXArray {
+        embedding_sum.asType(.float32) / MLX.maximum(
             MLX.expandedDimensions(cluster_usage.asType(.float32), axis: -1),
             MLXArray(Float(1e-8))
         )
+    }
+
+    public func decode(_ indices: MLXArray) -> MLXArray {
         return codebook[indices]
     }
 }
@@ -434,7 +439,16 @@ public class VoxtralCodecDecoder: Module {
     /// Decode audio codes to waveform.
     /// codes: (B, T, 37) — with +2 special token offset
     public func decode(_ codes: MLXArray) -> MLXArray {
-        var x = quantizer.decode(codes)  // (B, T, 292)
+        return forwardEmbeddings(quantizer.decode(codes))
+    }
+
+    /// Run the decoder network on continuous quantizer-space embeddings.
+    /// Equivalent to Python's `_forward_decoder` — this is the entry point
+    /// used by voice enrollment, where gradients flow through `embeddings`
+    /// while the decoder weights stay frozen.
+    /// embeddings: (B, T, 292) → waveform (B, T*1920)
+    public func forwardEmbeddings(_ embeddings: MLXArray) -> MLXArray {
+        var x = embeddings
 
         // Sliding windows: [2, 4, 8, 16] — encoder reversed
         let windowSizes = [2, 4, 8, 16]

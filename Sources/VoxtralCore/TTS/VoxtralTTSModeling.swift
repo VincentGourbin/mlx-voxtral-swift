@@ -72,6 +72,13 @@ public class AudioCodebookEmbeddingsContainer: Module {
         }
         fatalError("Unsupported embeddings type: \(type(of: embeddings))")
     }
+
+    /// Gather specific rows of the embedding table, dequantizing only those
+    /// rows (not the whole table). Used by voice enrollment to build a voice
+    /// embedding as a sum of per-codebook rows.
+    public func rows(_ indices: MLXArray) -> MLXArray {
+        callAsFunction(indices)
+    }
 }
 
 // MARK: - Text Sanitization

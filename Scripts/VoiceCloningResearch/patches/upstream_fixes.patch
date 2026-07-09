@@ -1,0 +1,79 @@
+diff --git a/audio_tokenizer.py b/audio_tokenizer.py
+index 50b812c..4d00f28 100644
+--- a/audio_tokenizer.py
++++ b/audio_tokenizer.py
+@@ -466,7 +466,7 @@ class Attention(nn.Module):
+         else:
+             output = self._native_attention(xq, xk, xv)
+ 
+-        output = output.view(bsz, seqlen, self.n_local_heads * self.args.head_dim)
++        output = output.reshape(bsz, seqlen, self.n_local_heads * self.args.head_dim)
+         return self.wo(output).squeeze(0)
+ 
+ 
+diff --git a/training_script.py b/training_script.py
+index 2ee2720..a8347d0 100644
+--- a/training_script.py
++++ b/training_script.py
+@@ -199,7 +199,7 @@ class LearnableCodesModel(nn.Module):
+         # For compatibility with quantizer.decode(), use integer codes
+         semantic_codes = hard_codes.float()  # [T]
+ 
+-        logger.info(f"Semantic codes: {hard_codes}")
++        logger.debug(f"Semantic codes: {hard_codes}")
+         
+         # ===== Acoustic part: FSQ with tanh + STE =====
+         # Apply tanh normalization
+@@ -214,7 +214,7 @@ class LearnableCodesModel(nn.Module):
+ 
+         num_extreme_acoustic = torch.sum(acoustic_codes==0)+torch.sum(acoustic_codes==21)
+ 
+-        logger.info(f"Number of extreme acoustic tokens: {num_extreme_acoustic}")
++        logger.debug(f"Number of extreme acoustic tokens: {num_extreme_acoustic}")
+         
+         # ===== Combine codes: [T, 1] + [T, 36] = [T, 37] =====
+         codes = torch.cat([semantic_codes.unsqueeze(1), acoustic_codes], dim=1)  # [T, 37]
+@@ -329,7 +329,14 @@ def multi_resolution_stft_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> to
+     min_len = min(len(y_pred), len(y_true))
+     y_pred = y_pred[:min_len]
+     y_true = y_true[:min_len]
+-    
++
++    # MPS workaround: torch.stft backward on MPS silently produces garbage
++    # gradients beyond ~2.5s of signal (verified torch 2.12) — compute on CPU,
++    # autograd moves gradients back across devices.
++    if y_pred.device.type == "mps":
++        y_pred = y_pred.cpu()
++        y_true = y_true.cpu()
++
+     # Multi-resolution FFT sizes (as suggested)
+     fft_sizes = [2296, 1418, 876, 542, 334, 206, 126, 76]
+     
+@@ -377,7 +384,12 @@ def mel_spectrogram_loss(y_pred: torch.Tensor, y_true: torch.Tensor, n_mels: int
+         min_len = min(len(y_pred), len(y_true))
+         y_pred = y_pred[:min_len]
+         y_true = y_true[:min_len]
+-        
++
++        # MPS workaround: torch.stft backward broken on MPS for long signals
++        if y_pred.device.type == "mps":
++            y_pred = y_pred.cpu()
++            y_true = y_true.cpu()
++
+         # Compute Mel spectrograms
+         mel_transform = torchaudio.transforms.MelSpectrogram(
+             sample_rate=SAMPLING_RATE,
+@@ -411,7 +423,12 @@ def mfcc_loss(y_pred: torch.Tensor, y_true: torch.Tensor, n_mfcc: int = 40) -> t
+         min_len = min(len(y_pred), len(y_true))
+         y_pred = y_pred[:min_len]
+         y_true = y_true[:min_len]
+-        
++
++        # MPS workaround: torch.stft backward broken on MPS for long signals
++        if y_pred.device.type == "mps":
++            y_pred = y_pred.cpu()
++            y_true = y_true.cpu()
++
+         # Compute MFCCs
+         mfcc_transform = torchaudio.transforms.MFCC(
+             sample_rate=SAMPLING_RATE,

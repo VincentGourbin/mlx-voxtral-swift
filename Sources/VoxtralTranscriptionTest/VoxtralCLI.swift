@@ -14,6 +14,7 @@
 import Foundation
 import VoxtralCore
 import ArgumentParser
+import MLX
 import MLXProfiler
 
 @main
@@ -28,6 +29,7 @@ struct VoxtralCLI: AsyncParsableCommand {
             Transcribe.self,
             Chat.self,
             TTS.self,
+            Enroll.self,
             Realtime.self,
             Profile.self
         ],
@@ -398,6 +400,9 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .long, help: "Blend two voices 'voiceA+voiceB:weight' (e.g. 'neutral_female+fr_male:0.15')")
     var blend: String?
 
+    @Option(name: .long, help: "Path to a custom voice embedding .safetensors [T, 3072] (e.g. a cloned voice; overrides --voice)")
+    var voiceEmbedding: String?
+
     @Option(name: .long, help: "Maximum audio frames to generate (12.5 frames/sec)")
     var maxFrames: Int = 2500
 
@@ -454,7 +459,24 @@ struct TTS: AsyncParsableCommand {
         print("\n[2/3] Generating speech...")
         let result: TTSSynthesisResult
 
-        if let xyz = voiceXyz {
+        if let embeddingPath = voiceEmbedding {
+            // Custom voice embedding mode (e.g. cloned voice)
+            let embeddingURL = URL(fileURLWithPath: embeddingPath)
+            let arrays = try MLX.loadArrays(url: embeddingURL)
+            // Require the explicit "embedding" key — do not silently accept an
+            // arbitrary array from a multi-array file.
+            guard let embedding = arrays["embedding"] else {
+                throw ValidationError(
+                    "\(embeddingPath) has no 'embedding' array (keys: \(arrays.keys.sorted())). "
+                    + "Produce one with `voxtral enroll`.")
+            }
+            guard embedding.ndim == 2, embedding.dim(1) == 3072 else {
+                throw ValidationError("Voice embedding must be [T, 3072], got \(embedding.shape)")
+            }
+            print("  Custom voice: \(embeddingPath) (\(embedding.dim(0)) frames)")
+            result = try await pipeline.synthesize(text: text, voiceEmbedding: embedding)
+
+        } else if let xyz = voiceXyz {
             // ZeroVoice coordinate mode
             let parts = xyz.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
             guard parts.count == 3 else {
@@ -518,6 +540,90 @@ struct TTS: AsyncParsableCommand {
         pipeline.unload()
 
         print("\n" + String(repeating: "=", count: 60))
+    }
+}
+
+// MARK: - Enroll Command (voice cloning)
+
+@available(macOS 14.0, *)
+struct Enroll: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "enroll",
+        abstract: "Clone a voice from a reference recording (offline, ~30 min for 5000 epochs)"
+    )
+
+    @Argument(help: "Reference audio file (wav/mp3/m4a/...), at least ~8s")
+    var reference: String
+
+    @Option(name: .shortAndLong, help: "Output voice embedding .safetensors path")
+    var output: String = "voice.safetensors"
+
+    // Default matches the `tts` command so an enrolled voice is synthesized
+    // through the same decoder/embedding table it was optimized against.
+    @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b, tts-4b-4bit, tts-4b-6bit")
+    var model: String = "tts-4b-mlx"
+
+    @Option(name: .shortAndLong, help: "Optimization epochs (5000 ok, 15000 better)")
+    var epochs: Int = 5000
+
+    @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5, min 2s)")
+    var duration: Double = 16.0
+
+    func run() async throws {
+        print("\n" + String(repeating: "=", count: 60))
+        print("VOXTRAL VOICE ENROLLMENT (cloning)")
+        print(String(repeating: "=", count: 60))
+
+        guard let ttsModelInfo = VoxtralTTSRegistry.model(withId: model) else {
+            throw ValidationError("Unknown TTS model: \(model)")
+        }
+        guard duration >= 2.0 else {
+            throw ValidationError("--duration must be at least 2 seconds (got \(duration))")
+        }
+        guard epochs >= 1 else {
+            throw ValidationError("--epochs must be >= 1 (got \(epochs))")
+        }
+
+        // Fail fast on a bad output path before the multi-minute optimization.
+        let outputURL = URL(fileURLWithPath: output)
+        guard outputURL.pathExtension == "safetensors" else {
+            throw ValidationError("--output must end in .safetensors (got \(output))")
+        }
+        let outDir = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+        guard FileManager.default.isWritableFile(atPath: outDir.path) else {
+            throw ValidationError("Output directory is not writable: \(outDir.path)")
+        }
+
+        var config = VoxtralVoiceEnrollment.Config()
+        config.numFrames = Int(duration * 12.5)
+        config.epochs = epochs
+
+        let pipeline = VoxtralTTSPipeline()
+        print("\n[1/2] Loading TTS model...")
+        try await pipeline.loadModel(modelInfo: ttsModelInfo) { p, status in
+            if Int(p * 100) % 20 == 0 { print("  [\(Int(p * 100))%] \(status)") }
+        }
+
+        print("\n[2/2] Optimizing codes (\(epochs) epochs)...")
+        let start = Date()
+        try pipeline.enrollVoice(
+            referenceURL: URL(fileURLWithPath: reference),
+            outputURL: outputURL,
+            config: config
+        ) { progress in
+            let elapsed = Date().timeIntervalSince(start)
+            print(String(format: "  epoch %d/%d | loss %.4f | recon %.4f | %.0fs",
+                         progress.epoch, epochs, progress.totalLoss, progress.reconLoss, elapsed))
+        }
+
+        print("\n" + String(repeating: "-", count: 60))
+        print("Voice enrolled: \(output)")
+        print(String(repeating: "-", count: 60))
+        print("\nTry it:")
+        print("  voxtral tts \"Hello, this is my cloned voice.\" \\")
+        print("      -o test.wav --model \(model) --voice-embedding \(output)")
+        pipeline.unload()
     }
 }
 

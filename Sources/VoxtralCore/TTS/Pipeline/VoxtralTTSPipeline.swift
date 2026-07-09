@@ -292,6 +292,30 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         zeroVoice?.voiceRecipe(x: x, y: y, z: z)
     }
 
+    // MARK: - Voice Enrollment (cloning)
+
+    /// Clone a voice from a reference recording and write a voice embedding
+    /// `.safetensors` (key "embedding", shape [T+1, 3072]) usable with
+    /// `synthesize(text:voiceEmbedding:)` or `--voice-embedding`.
+    /// Offline: ~30 min for 5000 epochs on an M-series Mac.
+    @discardableResult
+    public func enrollVoice(
+        referenceURL: URL,
+        outputURL: URL,
+        config: VoxtralVoiceEnrollment.Config = .init(),
+        progress: ((VoxtralVoiceEnrollment.Progress) -> Void)? = nil
+    ) throws -> MLXArray {
+        guard state.isReady, let model = ttsModel else {
+            throw VoxtralTTSError.invalidConfiguration("Model not loaded")
+        }
+        let enroller = VoxtralVoiceEnrollment(model: model, config: config)
+        let reference = try enroller.prepareReference(url: referenceURL)
+        let codes = enroller.optimize(reference: reference, progress: progress)
+        let embedding = enroller.codesToVoiceEmbedding(codes)
+        try MLX.save(arrays: ["embedding": embedding], url: outputURL)
+        return embedding
+    }
+
     /// Blend two named voice presets.
     public func blendVoicePresets(_ voiceA: VoxtralVoice, _ voiceB: VoxtralVoice, t: Float) -> MLXArray? {
         guard let embA = voiceEmbeddings[voiceA.rawValue],

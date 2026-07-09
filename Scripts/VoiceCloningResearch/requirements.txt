@@ -1,0 +1,9 @@
+torch>=2.12
+torchaudio
+accelerate
+speechbrain
+soundfile
+safetensors
+numpy
+einops
+huggingface_hub

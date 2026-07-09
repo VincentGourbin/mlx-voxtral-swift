@@ -22,6 +22,7 @@ This is a Swift port of the excellent Python implementation by [@mzbac](https://
 - **MLX Acceleration** - Leverages Apple's MLX framework for optimal Apple Silicon performance
 - **Speech-to-Text** - Transcribe audio with Mini 3B and Small 24B models (4-bit, 8-bit, fp16)
 - **Text-to-Speech** - Generate natural speech with Voxtral TTS 4B in 9 languages, 20 voice presets
+- **Voice Cloning** - Clone a voice from ~16s of reference audio, natively in Swift ([guide](docs/voice_cloning.md))
 - **Quantized TTS** - 4-bit and 6-bit TTS models for fast on-device generation (up to 19 fps)
 - **Streaming TTS** - Real-time audio playback with TTFT measurement for conversational use
 - **Prosody-aware sanitization** - Automatic text preprocessing for natural speech with proper pauses
@@ -158,6 +159,33 @@ for try await chunk in stream {
 | Dutch | `nl_male`, `nl_female` |
 | Arabic | `ar_male` |
 | Hindi | `hi_male`, `hi_female` |
+
+### Voice Cloning
+
+Beyond the 20 built-in presets, you can **clone a voice** from a short
+reference recording — entirely in Swift, no Python at runtime. Enroll a
+voice once (offline), then reuse it like any preset.
+
+```bash
+# 1. Enroll a voice from ~16s of clean single-speaker audio (offline, one time)
+.build/xcode/Build/Products/Release/VoxtralCLI enroll my_voice.wav \
+  -o my_voice.safetensors --model tts-4b --duration 16
+
+# 2. Make that cloned voice say anything
+.build/xcode/Build/Products/Release/VoxtralCLI tts "Hello, this is my cloned voice." \
+  -o hello.wav --model tts-4b --voice-embedding my_voice.safetensors
+```
+
+Reference guidance: aim for **10–16 s** of clean speech, one speaker, no
+background music. Any format (wav/mp3/m4a) works. See the full guide,
+including quality expectations and bilingual examples, in
+**[docs/voice_cloning.md](docs/voice_cloning.md)**.
+
+> Voice cloning recovers the voice by optimizing codec codes through the
+> frozen decoder (Mistral never released the codec encoder). Cloned voices
+> are clearly recognizable but slightly less crisp than the official
+> presets. TTS weights are CC BY-NC 4.0 — clone only voices you have the
+> right to use, with the speaker's consent.
 
 ## Speech-to-Text (STT)
 
