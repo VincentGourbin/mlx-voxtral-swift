@@ -31,6 +31,32 @@ final class StreamingDemoViewModel: ObservableObject {
         var id: String { "cloned:\(name)" }
     }
 
+    // MARK: - Reference builder (video/audio → extracts → reference)
+
+    struct RefExtract: Identifiable, Hashable {
+        let id = UUID()
+        let start: Double
+        let end: Double
+        var duration: Double { end - start }
+    }
+
+    @Published var refSourceURL: URL?
+    @Published var refSourceDuration: Double = 0
+    @Published var refExtracts: [RefExtract] = []
+    @Published var segStart: Double = 0
+    @Published var segEnd: Double = 8
+    @Published var refBuilderBusy = false
+    @Published var refBuilderStatus: String = ""
+    let ffmpegAvailable = FFmpeg.isAvailable
+
+    var refExtractsTotal: Double { refExtracts.reduce(0) { $0 + $1.duration } }
+    private var previewPlayer: AVAudioPlayer?
+    private static let refWorkDir: URL = {
+        let d = FileManager.default.temporaryDirectory.appendingPathComponent("VoxtralRefBuilder", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
     // MARK: - State
 
     @Published var isModelLoaded = false
@@ -158,6 +184,96 @@ No account required. No data sent to the cloud. All models run locally on your A
         }
 
         isLoading = false
+    }
+
+    // MARK: - Reference builder actions
+
+    /// Load a video/audio file and read its total duration (via ffprobe).
+    func loadRefSource(_ url: URL) {
+        refSourceURL = url
+        refExtracts = []
+        refSourceDuration = 0
+        segStart = 0
+        segEnd = min(cloneDuration, 8)
+        refBuilderStatus = "Reading \(url.lastPathComponent)…"
+        Task {
+            do {
+                let dur = try await FFmpeg.duration(of: url)
+                await MainActor.run {
+                    self.refSourceDuration = dur
+                    self.segEnd = min(self.segStart + self.cloneDuration, dur)
+                    self.refBuilderStatus = String(format: "Source: %.0f s", dur)
+                }
+            } catch {
+                await MainActor.run { self.refBuilderStatus = "Error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    /// Preview the current [segStart, segEnd] selection (extract + play).
+    func previewSegment() {
+        guard let src = refSourceURL, segEnd > segStart else { return }
+        let (start, end) = (segStart, segEnd)
+        refBuilderStatus = "Extracting preview…"
+        Task {
+            do {
+                let out = Self.refWorkDir.appendingPathComponent("preview.wav")
+                try await FFmpeg.extractSegment(from: src, start: start, end: end, to: out)
+                let data = try Data(contentsOf: out)
+                await MainActor.run {
+                    self.previewPlayer = try? AVAudioPlayer(data: data)
+                    self.previewPlayer?.play()
+                    self.refBuilderStatus = String(format: "Preview %.1f–%.1f s", start, end)
+                }
+            } catch {
+                await MainActor.run { self.refBuilderStatus = "Error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    func addExtract() {
+        guard segEnd > segStart else { return }
+        refExtracts.append(RefExtract(start: segStart, end: segEnd))
+        // Advance the selector past this extract for convenience.
+        let next = min(segEnd, refSourceDuration)
+        segStart = next
+        segEnd = min(next + cloneDuration, refSourceDuration)
+    }
+
+    func removeExtract(_ id: RefExtract.ID) {
+        refExtracts.removeAll { $0.id == id }
+    }
+
+    /// Concatenate the chosen extracts into a single reference WAV and set it
+    /// as the enrollment reference. Returns via `referenceURL`.
+    func buildReference() {
+        guard let src = refSourceURL, !refExtracts.isEmpty, !refBuilderBusy else { return }
+        refBuilderBusy = true
+        refBuilderStatus = "Building reference…"
+        let extracts = refExtracts
+        Task {
+            do {
+                var parts: [URL] = []
+                for (i, e) in extracts.enumerated() {
+                    let part = Self.refWorkDir.appendingPathComponent("part_\(i).wav")
+                    try await FFmpeg.extractSegment(from: src, start: e.start, end: e.end, to: part)
+                    parts.append(part)
+                }
+                let out = Self.refWorkDir.appendingPathComponent("reference_\(UUID().uuidString).wav")
+                try await FFmpeg.concat(parts, to: out)
+                await MainActor.run {
+                    self.referenceURL = out
+                    self.refBuilderBusy = false
+                    self.refBuilderStatus = String(format: "Reference ready (%.1f s)", self.refExtractsTotal)
+                    self.log("Built reference from \(extracts.count) extract(s), \(String(format: "%.1f", self.refExtractsTotal))s")
+                }
+            } catch {
+                await MainActor.run {
+                    self.refBuilderBusy = false
+                    self.refBuilderStatus = "Error: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     // MARK: - Voice Cloning

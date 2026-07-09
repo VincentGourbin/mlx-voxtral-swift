@@ -6,6 +6,7 @@ import VoxtralCore
 @available(macOS 14.0, *)
 struct StreamingDemoView: View {
     @StateObject private var vm = StreamingDemoViewModel()
+    @State private var showRefBuilder = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -106,6 +107,9 @@ struct StreamingDemoView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .sheet(isPresented: $showRefBuilder) {
+                ReferenceBuilderView(vm: vm)
+            }
 
             Divider()
 
@@ -177,7 +181,9 @@ struct StreamingDemoView: View {
                             .font(.caption2).foregroundStyle(.secondary)
                             .lineLimit(1).truncationMode(.middle)
                     }
-                    Button("Reference…") { pickReference() }
+                    Button("Audio…") { pickReference() }
+                        .controlSize(.small)
+                    Button("Build from video…") { showRefBuilder = true }
                         .controlSize(.small)
                 }
 
