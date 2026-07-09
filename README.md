@@ -22,6 +22,7 @@ This is a Swift port of the excellent Python implementation by [@mzbac](https://
 - **MLX Acceleration** - Leverages Apple's MLX framework for optimal Apple Silicon performance
 - **Speech-to-Text** - Transcribe audio with Mini 3B and Small 24B models (4-bit, 8-bit, fp16)
 - **Text-to-Speech** - Generate natural speech with Voxtral TTS 4B in 9 languages, 20 voice presets
+- **Voice Cloning** - Clone a voice from ~16s of reference audio, natively in Swift ([guide](docs/voice_cloning.md))
 - **Quantized TTS** - 4-bit and 6-bit TTS models for fast on-device generation (up to 19 fps)
 - **Streaming TTS** - Real-time audio playback with TTFT measurement for conversational use
 - **Prosody-aware sanitization** - Automatic text preprocessing for natural speech with proper pauses

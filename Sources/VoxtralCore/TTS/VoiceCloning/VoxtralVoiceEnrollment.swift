@@ -72,7 +72,7 @@ public final class VoxtralVoiceEnrollment {
         // no sample-rate conversion here, which is where AVAudioConverter is
         // unreliable for upsampling), then resample to 24 kHz ourselves.
         let native = try readMonoFloat(url: url)
-        var samples = resampleLinear(native.samples, from: native.sampleRate, to: 24_000)
+        var samples = Self.resampleLinear(native.samples, from: native.sampleRate, to: 24_000)
         if samples.count < numSamples {
             throw VoxtralTTSError.invalidConfiguration(
                 "Reference too short: \(String(format: "%.1f", Double(samples.count) / 24_000))s "
@@ -130,7 +130,9 @@ public final class VoxtralVoiceEnrollment {
 
     /// Linear-interpolation resample. Adequate for enrollment references
     /// (the reference is an optimization target, not played back).
-    private func resampleLinear(_ x: [Float], from srcRate: Double, to dstRate: Double) -> [Float] {
+    /// Static + internal so it can be unit-tested without loading the model —
+    /// this is the path that must never silence the signal when upsampling.
+    static func resampleLinear(_ x: [Float], from srcRate: Double, to dstRate: Double) -> [Float] {
         if srcRate == dstRate || x.isEmpty { return x }
         let ratio = srcRate / dstRate
         let outCount = Int(Double(x.count) / ratio)

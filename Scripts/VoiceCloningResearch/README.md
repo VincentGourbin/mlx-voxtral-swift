@@ -1,4 +1,11 @@
-# Voice Cloning Research — Voxtral TTS
+# Voice Cloning Research — Voxtral TTS (Python annex)
+
+> **This is the research annex.** The supported, production path is the
+> native Swift command `voxtral enroll` — see
+> [`docs/voice_cloning.md`](../../docs/voice_cloning.md). These Python
+> scripts are the original proof-of-concept, kept for reference and
+> reproducibility; they require a separate PyTorch/speechbrain toolchain
+> and are **not** needed to use voice cloning.
 
 Offline voice enrollment for Voxtral TTS, working around the fact that
 Mistral never published the codec **encoder** weights of
