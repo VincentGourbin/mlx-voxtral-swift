@@ -67,6 +67,103 @@ public class ModelDownloader {
         _hubApi = createHubApi()
     }
 
+    // MARK: - Direct downloader (URLSession)
+
+    /// swift-huggingface's downloader stalls on HuggingFace's cross-host LFS
+    /// redirect for large weight files (it fetches metadata, then hangs at 0
+    /// bytes on the CDN GET). A plain URLSession download follows that redirect
+    /// and streams the file fine, so we do the byte transfer ourselves: list
+    /// the repo tree via the Hub API, then download each matching file with
+    /// URLSession into ~/Library/Caches/models/{org}/{repo}/{path}.
+    /// Portable (no Python/curl), resumable-by-skip (completed files are kept).
+    public static func downloadRepoDirect(
+        repoId: String,
+        revision: String = "main",
+        matching globs: [String],
+        progress: DownloadProgressCallback? = nil
+    ) async throws -> URL {
+        struct TreeEntry: Decodable { let type: String; let path: String; let size: Int? }
+
+        let destDir = modelsDirectory.appendingPathComponent(repoId)
+        try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+        // 1. List the repo files.
+        let treeURL = URL(string: "https://huggingface.co/api/models/\(repoId)/tree/\(revision)?recursive=true")!
+        var treeReq = URLRequest(url: treeURL)
+        if case let .fixed(token) = tokenProviderValue, !token.isEmpty {
+            treeReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (treeData, treeResp) = try await URLSession.shared.data(for: treeReq)
+        guard (treeResp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw VoxtralError.loadingFailed("Cannot list files for \(repoId) (HTTP \((treeResp as? HTTPURLResponse)?.statusCode ?? -1))")
+        }
+        let entries = try JSONDecoder().decode([TreeEntry].self, from: treeData)
+        let files = entries.filter { entry in
+            entry.type == "file" && globs.contains { matchesGlob(entry.path, $0) }
+        }
+        guard !files.isEmpty else {
+            throw VoxtralError.loadingFailed("No matching files for \(repoId)")
+        }
+        let totalBytes = files.reduce(0) { $0 + ($1.size ?? 0) }
+
+        // 2. Download each file (skip ones already complete).
+        var doneBytes = 0
+        for file in files {
+            let dest = destDir.appendingPathComponent(file.path)
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: dest.path),
+               let size = attrs[.size] as? Int, size == (file.size ?? -1) {
+                doneBytes += file.size ?? 0
+                progress?(fraction(doneBytes, totalBytes), "Skipped \(file.path)")
+                continue
+            }
+
+            progress?(fraction(doneBytes, totalBytes), "Downloading \(file.path)…")
+            let fileURL = URL(string: "https://huggingface.co/\(repoId)/resolve/\(revision)/\(file.path)")!
+            var req = URLRequest(url: fileURL)
+            if case let .fixed(token) = tokenProviderValue, !token.isEmpty {
+                req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            let (tmp, resp) = try await URLSession.shared.download(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                throw VoxtralError.loadingFailed("Download failed for \(file.path) (HTTP \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+            }
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.moveItem(at: tmp, to: dest)
+            doneBytes += file.size ?? 0
+            progress?(fraction(doneBytes, totalBytes), "Downloaded \(file.path)")
+        }
+
+        progress?(1.0, "Download complete")
+        return destDir
+    }
+
+    private static func fraction(_ done: Int, _ total: Int) -> Double {
+        total > 0 ? min(1.0, Double(done) / Double(total)) : 1.0
+    }
+
+    /// Optional HF token for gated/private repos (from HF_TOKEN env).
+    private static var tokenProviderValue: TokenProvider {
+        if let t = ProcessInfo.processInfo.environment["HF_TOKEN"], !t.isEmpty {
+            return .fixed(t)
+        }
+        return .none
+    }
+
+    private enum TokenProvider { case none, fixed(String) }
+
+    /// fnmatch-style glob match with FNM_PATHNAME semantics (`*` does not cross `/`).
+    static func matchesGlob(_ path: String, _ pattern: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: pattern)
+            .replacingOccurrences(of: "\\*", with: "[^/]*")
+            .replacingOccurrences(of: "\\?", with: "[^/]")
+        guard let re = try? NSRegularExpression(pattern: "^\(escaped)$") else { return false }
+        return re.firstMatch(in: path, range: NSRange(path.startIndex..., in: path)) != nil
+    }
+
     /// Models directory. Canonical location for all downloaded models:
     /// ~/Library/Caches/models (the same base HubApi downloads to), unless
     /// overridden via customModelsDirectory.
@@ -232,10 +329,10 @@ public class ModelDownloader {
 
         progress?(0.1, "Downloading model files...")
 
-        // Use Hub API to download the snapshot
-        let modelUrl = try await hubApi.snapshot(
-            from: model.repoId,
-            matching: ["*.json", "*.safetensors"]
+        let modelUrl = try await downloadRepoDirect(
+            repoId: model.repoId,
+            matching: ["*.json", "*.safetensors"],
+            progress: progress
         )
 
         // Verify the download is complete
@@ -259,9 +356,10 @@ public class ModelDownloader {
         progress?(0.0, "Starting download...")
         print("\nDownloading from HuggingFace: \(repoId)")
 
-        let modelUrl = try await hubApi.snapshot(
-            from: repoId,
-            matching: ["*.json", "*.safetensors"]
+        let modelUrl = try await downloadRepoDirect(
+            repoId: repoId,
+            matching: ["*.json", "*.safetensors"],
+            progress: progress
         )
 
         progress?(1.0, "Download complete!")
@@ -452,9 +550,10 @@ public class ModelDownloader {
         progress?(0.1, "Downloading model files...")
 
         // Download safetensors, json, and voice embeddings (.pt files)
-        let modelUrl = try await hubApi.snapshot(
-            from: model.repoId,
-            matching: ["*.json", "*.safetensors", "voice_embedding/*.pt", "voice_embedding/*.safetensors", "tekken.json"]
+        let modelUrl = try await downloadRepoDirect(
+            repoId: model.repoId,
+            matching: ["*.json", "*.safetensors", "voice_embedding/*.pt", "voice_embedding/*.safetensors", "tekken.json"],
+            progress: progress
         )
 
         progress?(1.0, "Download complete!")
