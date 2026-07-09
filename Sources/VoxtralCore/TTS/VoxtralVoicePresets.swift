@@ -88,12 +88,9 @@ public class VoxtralVoicePresetManager: @unchecked Sendable {
         if let cacheDirectory {
             self.cacheDirectory = cacheDirectory
         } else {
-            #if os(iOS) || os(tvOS) || os(visionOS)
+            // Under ~/Library/Caches, consistent with the model cache.
             let baseDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            #else
-            let baseDir = FileManager.default.homeDirectoryForCurrentUser
-            #endif
-            self.cacheDirectory = baseDir.appendingPathComponent(".voxtral/voices")
+            self.cacheDirectory = baseDir.appendingPathComponent("models/voices")
         }
         self.modelRepoId = modelRepoId
     }

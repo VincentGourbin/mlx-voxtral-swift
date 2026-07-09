@@ -51,8 +51,12 @@ public class ModelDownloader {
             base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         }
 
+        // cache: nil disables swift-transformers' content-addressed blob cache
+        // (~/.cache/huggingface/hub), so downloads land directly under
+        // downloadBase — i.e. everything lives under ~/Library/Caches/models.
         return HubApi(
             downloadBase: base,
+            cache: nil,
             useOfflineMode: false
         )
     }
@@ -63,11 +67,13 @@ public class ModelDownloader {
         _hubApi = createHubApi()
     }
 
-    /// Models directory (uses customModelsDirectory if set, otherwise ~/.voxtral/models/)
+    /// Models directory. Canonical location for all downloaded models:
+    /// ~/Library/Caches/models (the same base HubApi downloads to), unless
+    /// overridden via customModelsDirectory.
     public static var modelsDirectory: URL {
         if let custom = customModelsDirectory { return custom }
-        let homeDir = platformHomeDirectory()
-        return homeDir.appendingPathComponent(".voxtral").appendingPathComponent("models")
+        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return cachesDir.appendingPathComponent("models")
     }
 
     /// Check if a model is already downloaded
@@ -80,9 +86,8 @@ public class ModelDownloader {
     /// Get local path for a model
     public static func localPath(for model: VoxtralModelInfo, in directory: URL? = nil) -> URL {
         let baseDir = directory ?? modelsDirectory
-        // Use repo ID as folder name, replacing "/" with "--"
-        let folderName = model.repoId.replacingOccurrences(of: "/", with: "--")
-        return baseDir.appendingPathComponent(folderName)
+        // {org}/{repo} subdirectories — the layout HubApi resolves models into.
+        return baseDir.appendingPathComponent(model.repoId)
     }
 
     /// List all downloaded models
@@ -154,7 +159,7 @@ public class ModelDownloader {
             }
         }
 
-        // Check local models directory (default ~/.voxtral/models/)
+        // Check local models directory (~/Library/Caches/models)
         let localDir = localPath(for: model)
         if FileManager.default.fileExists(atPath: localDir.appendingPathComponent("config.json").path) {
             let verification = verifyShardedModel(at: localDir)
@@ -420,9 +425,7 @@ public class ModelDownloader {
         }
 
         // Check local models directory
-        let localDir = modelsDirectory.appendingPathComponent(
-            model.repoId.replacingOccurrences(of: "/", with: "--")
-        )
+        let localDir = modelsDirectory.appendingPathComponent(model.repoId)
         if FileManager.default.fileExists(atPath: localDir.appendingPathComponent(configFile).path) {
             return localDir
         }
@@ -530,9 +533,7 @@ public class ModelDownloader {
         }
 
         // Check local models directory
-        let localDir = modelsDirectory.appendingPathComponent(
-            model.repoId.replacingOccurrences(of: "/", with: "--")
-        )
+        let localDir = modelsDirectory.appendingPathComponent(model.repoId)
         for configFile in configFiles {
             if FileManager.default.fileExists(atPath: localDir.appendingPathComponent(configFile).path) {
                 return localDir
