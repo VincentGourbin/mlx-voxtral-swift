@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import VoxtralCore
 
 @available(macOS 14.0, *)
@@ -12,6 +14,7 @@ struct StreamingDemoView: View {
                 .font(.title2.bold())
                 .padding(.top, 16)
                 .padding(.bottom, 8)
+                .onAppear { vm.refreshClonedVoices() }
 
             Divider()
 
@@ -43,12 +46,12 @@ struct StreamingDemoView: View {
                         Text("Voice:")
                             .font(.caption).foregroundStyle(.secondary)
                         Picker("", selection: $vm.selectedVoice) {
-                            ForEach(vm.availableVoices, id: \.id) { voice in
+                            ForEach(vm.voicePickerOptions, id: \.id) { voice in
                                 Text(voice.label).tag(voice.id)
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 150)
+                        .frame(width: 170)
                     }
 
                     Toggle("Sanitize", isOn: $vm.sanitizeEnabled)
@@ -98,6 +101,8 @@ struct StreamingDemoView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(vm.isSynthesizing ? .red : .accentColor)
                 .disabled(!vm.isModelLoaded || vm.isLoading)
+
+                voiceCloningSection
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -154,6 +159,77 @@ struct StreamingDemoView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Voice cloning
+
+    @ViewBuilder
+    private var voiceCloningSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Voice Cloning")
+                        .font(.caption.bold())
+                    Spacer()
+                    if let ref = vm.referenceURL {
+                        Text(ref.lastPathComponent)
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Button("Reference…") { pickReference() }
+                        .controlSize(.small)
+                }
+
+                HStack(spacing: 10) {
+                    HStack(spacing: 4) {
+                        Text("Name:").font(.caption).foregroundStyle(.secondary)
+                        TextField("my_voice", text: $vm.cloneName)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                    }
+                    HStack(spacing: 4) {
+                        Text("Ref \(Int(vm.cloneDuration))s").font(.caption).foregroundStyle(.secondary)
+                        Stepper("", value: $vm.cloneDuration, in: 4...24, step: 2).labelsHidden()
+                    }
+                    HStack(spacing: 4) {
+                        Text("Epochs").font(.caption).foregroundStyle(.secondary)
+                        TextField("3000", value: $vm.cloneEpochs, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 60)
+                    }
+
+                    Button(action: { vm.enroll() }) {
+                        Text(vm.isEnrolling ? "Enrolling…" : "Enroll")
+                    }
+                    .controlSize(.small)
+                    .disabled(!vm.isModelLoaded || vm.isEnrolling || vm.isSynthesizing || vm.referenceURL == nil)
+
+                    Spacer()
+                }
+
+                if vm.isEnrolling || !vm.enrollStatus.isEmpty {
+                    HStack(spacing: 8) {
+                        if vm.isEnrolling {
+                            ProgressView(value: vm.enrollProgress).frame(width: 120)
+                        }
+                        Text(vm.enrollStatus)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(4)
+        }
+    }
+
+    private func pickReference() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio, .mpeg, .wav, .mp3, .mpeg4Audio, .aiff]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            vm.referenceURL = url
         }
     }
 

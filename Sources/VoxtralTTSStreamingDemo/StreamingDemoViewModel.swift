@@ -14,6 +14,23 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var selectedVoice: String = "fr_female"
     @Published var sanitizeEnabled: Bool = true
 
+    // MARK: - Voice cloning inputs
+
+    @Published var referenceURL: URL?
+    @Published var cloneName: String = "my_voice"
+    @Published var cloneDuration: Double = 16
+    @Published var cloneEpochs: Int = 3000
+    @Published var isEnrolling = false
+    @Published var enrollStatus: String = ""
+    @Published var enrollProgress: Double = 0        // 0…1 over epochs
+    @Published var clonedVoices: [ClonedVoice] = []
+
+    struct ClonedVoice: Identifiable, Hashable {
+        let name: String
+        let url: URL
+        var id: String { "cloned:\(name)" }
+    }
+
     // MARK: - State
 
     @Published var isModelLoaded = false
@@ -52,8 +69,13 @@ final class StreamingDemoViewModel: ObservableObject {
         ("tts-4b-mlx", "bf16 (8 GB)")
     ]
 
-    let availableVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
+    let presetVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
         ($0.rawValue, $0.displayName)
+    }
+
+    /// Preset voices plus any enrolled (cloned) voices, for the voice picker.
+    var voicePickerOptions: [(id: String, label: String)] {
+        presetVoices + clonedVoices.map { ($0.id, "🎙️ \($0.name) (cloned)") }
     }
 
     struct TextPreset {
@@ -137,11 +159,102 @@ No account required. No data sent to the cloud. All models run locally on your A
         isLoading = false
     }
 
+    // MARK: - Voice Cloning
+
+    /// Directory where enrolled (cloned) voice embeddings are stored.
+    static let clonedVoicesDir: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("VoxtralClonedVoices", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Load the list of previously enrolled voices from disk.
+    func refreshClonedVoices() {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: Self.clonedVoicesDir, includingPropertiesForKeys: nil)) ?? []
+        clonedVoices = files
+            .filter { $0.pathExtension == "safetensors" }
+            .map { ClonedVoice(name: $0.deletingPathExtension().lastPathComponent, url: $0) }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// Enroll a voice from `referenceURL` using the currently loaded model.
+    /// Runs the (long) optimization off the main actor and streams progress.
+    func enroll() {
+        guard isModelLoaded, let pipeline, !isEnrolling, !isSynthesizing else { return }
+        guard let ref = referenceURL else { log("No reference audio selected"); return }
+        let name = cloneName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { log("Enter a name for the cloned voice"); return }
+
+        isEnrolling = true
+        enrollProgress = 0
+        enrollStatus = "Preparing…"
+        let epochs = cloneEpochs
+        let duration = cloneDuration
+        let outURL = Self.clonedVoicesDir.appendingPathComponent("\(name).safetensors")
+        log("--- Enrolling '\(name)' from \(ref.lastPathComponent) (\(epochs) epochs, \(Int(duration))s) ---")
+
+        // The pipeline is not Sendable; box it to run the sync, GPU-heavy
+        // enrollment off the main actor without blocking the UI.
+        final class Box: @unchecked Sendable { let p: VoxtralTTSPipeline; init(_ p: VoxtralTTSPipeline) { self.p = p } }
+        let box = Box(pipeline)
+
+        Task.detached { [weak self] in
+            var config = VoxtralVoiceEnrollment.Config()
+            config.numFrames = Int(duration * 12.5)
+            config.epochs = epochs
+            config.logEvery = 100
+            do {
+                try box.p.enrollVoice(referenceURL: ref, outputURL: outURL, config: config) { progress in
+                    // Extract Sendable value types before hopping to the main actor.
+                    let epoch = progress.epoch
+                    let loss = progress.totalLoss
+                    Task { @MainActor in
+                        self?.enrollProgress = Double(epoch) / Double(epochs)
+                        self?.enrollStatus = "epoch \(epoch)/\(epochs) · loss \(String(format: "%.3f", loss))"
+                    }
+                }
+                await MainActor.run {
+                    self?.log("Voice enrolled: \(name)")
+                    self?.enrollStatus = "Done"
+                    self?.isEnrolling = false
+                    self?.refreshClonedVoices()
+                    self?.selectedVoice = "cloned:\(name)"
+                }
+            } catch {
+                await MainActor.run {
+                    self?.log("Enrollment failed: \(error.localizedDescription)")
+                    self?.enrollStatus = "Failed"
+                    self?.isEnrolling = false
+                }
+            }
+        }
+    }
+
+    private func loadClonedEmbedding(_ url: URL) throws -> MLXArray {
+        let arrays = try MLX.loadArrays(url: url)
+        guard let embedding = arrays["embedding"] else {
+            throw VoxtralTTSError.invalidConfiguration("No 'embedding' array in \(url.lastPathComponent)")
+        }
+        return embedding
+    }
+
     // MARK: - Streaming Playback
 
     func startStreaming() {
         guard isModelLoaded, let pipeline, !isSynthesizing else { return }
-        guard let voice = VoxtralVoice(rawValue: selectedVoice) else {
+
+        // Resolve the selected voice: a cloned voice (embedding) or a preset.
+        let clonedVoice = clonedVoices.first { $0.id == selectedVoice }
+        var voiceEmbedding: MLXArray?
+        var presetVoice: VoxtralVoice?
+        if let clonedVoice {
+            do { voiceEmbedding = try loadClonedEmbedding(clonedVoice.url) }
+            catch { log("Failed to load cloned voice: \(error.localizedDescription)"); return }
+        } else if let v = VoxtralVoice(rawValue: selectedVoice) {
+            presetVoice = v
+        } else {
             log("Unknown voice: \(selectedVoice)")
             return
         }
@@ -171,11 +284,12 @@ No account required. No data sent to the cloud. All models run locally on your A
             var totalSamplesScheduled = 0
 
             do {
-                let stream = pipeline.synthesizeStreaming(
-                    text: text,
-                    voice: voice,
-                    chunkSize: 10
-                )
+                let stream: AsyncThrowingStream<TTSStreamingChunk, Error>
+                if let voiceEmbedding {
+                    stream = pipeline.synthesizeStreaming(text: text, voiceEmbedding: voiceEmbedding, chunkSize: 10)
+                } else {
+                    stream = pipeline.synthesizeStreaming(text: text, voice: presetVoice!, chunkSize: 10)
+                }
 
                 for try await chunk in stream {
                     if Task.isCancelled { break }
