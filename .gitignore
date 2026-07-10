@@ -113,3 +113,9 @@ temp_*.mp3
 benchmark_results/
 test_outputs/
 *.xcresult
+
+releases/
+default.profraw
+.serena/
+voxtral_tts_trace.json
+*.pdf

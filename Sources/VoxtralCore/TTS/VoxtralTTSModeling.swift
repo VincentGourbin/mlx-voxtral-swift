@@ -417,8 +417,10 @@ public class VoxtralTTSModel: Module {
         session?.beginPhase("Prefill", category: .prefill)
         let cache = createCache()
 
+        // Fuse the full-prompt prefill and the first AUDIO-token forward into a
+        // single graph: no intermediate sync between them (the 1-token forward
+        // reads the KV cache the prefill fills, and MLX resolves that lazily).
         var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
-        MLX.eval(hidden)
 
         // 4. First decode step: inject AUDIO token to trigger first frame
         let audioTokenId = config.multimodal.audioModelArgs.audioTokenId
@@ -549,6 +551,11 @@ public class VoxtralTTSModel: Module {
             // 5. Autoregressive generation with streaming
             var allCodes: [MLXArray] = []
             var chunkFrameCount = 0
+            // Emit the first audio chunk early (fewer frames) to minimize
+            // perceived time-to-first-audio; generation (~31 fps) outpaces
+            // playback (12.5 fps) so later, larger chunks keep the buffer full.
+            let firstChunkFrames = min(3, chunkSize)
+            var firstChunkYielded = false
 
             for i in 0..<maxTokens {
                 // Check for cancellation
@@ -581,8 +588,9 @@ public class VoxtralTTSModel: Module {
                 allCodes.append(codes)
                 chunkFrameCount += 1
 
-                // Yield chunk every chunkSize frames
-                if chunkFrameCount >= chunkSize {
+                // Yield a small first chunk early, then every chunkSize frames.
+                let chunkTarget = firstChunkYielded ? chunkSize : firstChunkFrames
+                if chunkFrameCount >= chunkTarget {
                     let audioCodes = MLX.stacked(allCodes, axis: 1)
                     continuation.yield(GenerationChunk(
                         accumulatedCodes: audioCodes,
@@ -591,6 +599,7 @@ public class VoxtralTTSModel: Module {
                         isFinal: false
                     ))
                     chunkFrameCount = 0
+                    firstChunkYielded = true
                 }
 
                 // Embed codes back as LLM input for next step

@@ -296,18 +296,29 @@ public class FlowMatchingAudioTransformer: Module {
 
         let timesteps: [Float] = (0..<nDenoisingSteps).map { Float($0) / Float(nDenoisingSteps - 1) }
 
+        // Classifier-free guidance: the conditional and unconditional velocity
+        // passes are independent, so run them as a single batch-2 forward
+        // instead of two sequential passes (halves the transformer forwards).
+        let llmZeros = MLX.zeros(like: llmF32)
+        let llmBoth = MLX.concatenated([llmF32, llmZeros], axis: 0)  // (2B, dim)
+
         for step in 0..<(nDenoisingSteps - 1) {
             let tVal = timesteps[step]
             let dt = timesteps[step + 1] - tVal
-            let t = MLX.full([B], values: MLXArray(tVal))
+            let tBoth = MLX.full([2 * B], values: MLXArray(tVal))
+            let xtBoth = MLX.concatenated([xt, xt], axis: 0)          // (2B, nAcoustic)
 
-            let vCond = predictVelocity(xt: xt, t: t, llmOutput: llmF32).asType(.float32)
-            let vUncond = predictVelocity(xt: xt, t: t, llmOutput: MLX.zeros(like: llmF32)).asType(.float32)
+            let vBoth = predictVelocity(xt: xtBoth, t: tBoth, llmOutput: llmBoth).asType(.float32)
+            let vCond = vBoth[0 ..< B]
+            let vUncond = vBoth[B ..< (2 * B)]
             let v = MLXArray(cfgAlpha) * vCond + MLXArray(1.0 - cfgAlpha) * vUncond
 
             xt = xt + v * MLXArray(dt)
-            MLX.eval(xt)  // Evaluate per Euler step to avoid deep computation graph
         }
+        // One sync for the whole 7-step Euler integration instead of one per
+        // step — the graph is shallow (7 small transformer passes) and a
+        // single eval avoids ~6 GPU round-trips per frame.
+        MLX.eval(xt)
 
         // Quantize to FSQ + add special token offset
         let clamped = MLX.clip(xt, min: MLXArray(Float(-1.0)), max: MLXArray(Float(1.0)))
