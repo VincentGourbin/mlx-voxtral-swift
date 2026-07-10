@@ -186,6 +186,87 @@ No account required. No data sent to the cloud. All models run locally on your A
         isLoading = false
     }
 
+    // MARK: - Mic recording (read a prompt → reference)
+
+    struct RecordPrompt: Identifiable, Hashable {
+        let id = UUID()
+        let lang: String
+        let text: String
+    }
+
+    /// Prompts sized to read in roughly the target reference length (~16 s).
+    let recordPrompts: [RecordPrompt] = [
+        RecordPrompt(lang: "EN", text: "The rapid development of artificial intelligence is reshaping how we live and work. From the way we search for information to how we create images and music, these tools are quietly becoming part of our everyday lives."),
+        RecordPrompt(lang: "FR", text: "Le développement rapide de l'intelligence artificielle transforme notre façon de vivre et de travailler. De la manière dont nous cherchons l'information à celle dont nous créons des images et de la musique, ces outils s'installent peu à peu dans notre quotidien."),
+        RecordPrompt(lang: "EN", text: "Good morning. Today I want to talk about something simple but important: the value of taking your time. In a world that rewards speed, slowing down to think clearly is a quiet kind of strength that pays off in the long run."),
+    ]
+
+    @Published var recordPromptIndex = 0
+    @Published var isRecording = false
+    @Published var recordElapsed: Double = 0
+    @Published var micStatus: String = ""
+
+    private var recorder: AVAudioRecorder?
+    private var recordTimer: Timer?
+    private var recordStart: Date?
+
+    func startRecording() {
+        guard !isRecording else { return }
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            Task { @MainActor in
+                guard let self else { return }
+                guard granted else { self.micStatus = "Microphone access denied"; return }
+                self.beginRecording()
+            }
+        }
+    }
+
+    private func beginRecording() {
+        let url = Self.refWorkDir.appendingPathComponent("mic_\(UUID().uuidString).wav")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 24000,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+        ]
+        do {
+            let rec = try AVAudioRecorder(url: url, settings: settings)
+            rec.record()
+            recorder = rec
+            recordStart = Date()
+            recordElapsed = 0
+            isRecording = true
+            micStatus = "Recording…"
+            recordTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, let s = self.recordStart else { return }
+                    self.recordElapsed = Date().timeIntervalSince(s)
+                }
+            }
+        } catch {
+            micStatus = "Recorder error: \(error.localizedDescription)"
+        }
+    }
+
+    /// Stop recording. If long enough, set it as the enrollment reference.
+    func stopRecording() {
+        guard isRecording else { return }
+        recorder?.stop()
+        recordTimer?.invalidate(); recordTimer = nil
+        isRecording = false
+        let url = recorder?.url
+        let elapsed = recordElapsed
+        recorder = nil
+        if let url, elapsed >= cloneDuration {
+            referenceURL = url
+            micStatus = String(format: "Reference recorded (%.1f s)", elapsed)
+            log("Recorded reference from mic (\(String(format: "%.1f", elapsed))s)")
+        } else {
+            micStatus = String(format: "Too short (%.1f s, need %.0f s)", elapsed, cloneDuration)
+        }
+    }
+
     // MARK: - Reference builder actions
 
     /// Load a video/audio file and read its total duration (via ffprobe).
