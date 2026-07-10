@@ -246,7 +246,16 @@ struct ProfileRun: AsyncParsableCommand {
             throw ValidationError("Unknown voice: \(voice)")
         }
 
+        // First synthesis is cold (computes the voice-prefix KV cache); a
+        // second with the same voice reuses it (skips the voice prefill).
+        // Wall-clock covers the whole call (prefix precompute included).
+        let t0 = Date()
+        _ = try await ttsPipeline.synthesize(text: text, voice: voicePreset)
+        let coldWall = Date().timeIntervalSince(t0) * 1000
+        let t1 = Date()
         let result = try await ttsPipeline.synthesize(text: text, voice: voicePreset)
+        let warmWall = Date().timeIntervalSince(t1) * 1000
+        print("Full synth wall-clock — cold (computes prefix): \(String(format: "%.0f", coldWall))ms, warm (reuses): \(String(format: "%.0f", warmWall))ms")
 
         let profiler = MLXProfiler.shared
         let audioDuration = Double(result.waveform.dim(0)) / Double(ttsPipeline.sampleRate)

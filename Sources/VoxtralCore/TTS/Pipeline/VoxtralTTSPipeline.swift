@@ -13,6 +13,7 @@
 
 import Foundation
 import MLX
+import MLXLMCommon
 import MLXProfiler
 
 @available(macOS 14.0, *)
@@ -66,6 +67,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     private var modelDirectory: URL?
     private var voiceEmbeddings: [String: MLXArray] = [:]
 
+    // Cached voice-conditioned prefill KV for the last-used voice. The voice
+    // frames precede the text in the prompt, so their KV depends only on the
+    // voice — reusing it skips the voice prefill on repeated syntheses.
+    private var prefixCacheEntry: (key: String, cache: [any KVCache], len: Int)?
+
+    /// Get-or-compute the voice prefix KV cache for `key`.
+    private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String)
+        -> (cache: [any KVCache], len: Int)
+    {
+        if let e = prefixCacheEntry, e.key == key { return (e.cache, e.len) }
+        let (cache, len) = model.precomputeVoicePrefixCache(voiceEmbedding: voiceEmb)
+        prefixCacheEntry = (key, cache, len)
+        return (cache, len)
+    }
+
     public typealias ProgressCallback = @Sendable (Double, String) -> Void
 
     // MARK: - Initialization
@@ -83,6 +99,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
 
         state = .loading
+        prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
 
         do {
             let session = MLXProfiler.shared.activeSession
@@ -153,6 +170,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let profiler = MLXProfiler.shared
         let session = profiler.activeSession
 
+        let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
         do {
             // Generate audio codes (semantic code generation + flow matching inside)
             profiler.startSemanticGen()
@@ -161,7 +179,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 voiceEmbedding: voiceEmb,
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
-                sanitize: configuration.sanitizeText
+                sanitize: configuration.sanitizeText,
+                prefixCache: prefix.cache,
+                prefixLen: prefix.len
             )
             profiler.endSemanticGen(frameCount: numFrames)
             profiler.setTTFT(ttft)
@@ -342,20 +362,27 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")) }
         }
-        return synthesizeStreaming(text: text, voiceEmbedding: voiceEmb, chunkSize: chunkSize)
+        return synthesizeStreaming(text: text, voiceEmbedding: voiceEmb, chunkSize: chunkSize, voiceKey: voice.rawValue)
     }
 
     /// Streaming synthesis with an arbitrary `[T, 3072]` voice embedding
     /// (e.g. a cloned voice), mirroring the preset overload above.
+    /// Pass a stable `voiceKey` to enable voice-prefix KV caching across calls.
     public func synthesizeStreaming(
         text: String,
         voiceEmbedding: MLXArray,
-        chunkSize: Int = 10
+        chunkSize: Int = 10,
+        voiceKey: String? = nil
     ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
         }
         let voiceEmb = voiceEmbedding
+
+        // Reuse (or compute) the voice-conditioned prefix KV when we have a key.
+        let prefix: (cache: [any KVCache], len: Int)? = voiceKey.map {
+            voicePrefix(model, for: voiceEmb, key: $0)
+        }
 
         state = .synthesizing
         let startTime = Date()
@@ -370,11 +397,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let tokenizer: TekkenTokenizer
             let voiceEmb: MLXArray
             let pipeline: VoxtralTTSPipeline
-            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline) {
+            let prefixCache: [any KVCache]?
+            let prefixLen: Int
+            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline, prefixCache: [any KVCache]?, prefixLen: Int) {
                 self.model = model; self.tokenizer = tokenizer; self.voiceEmb = voiceEmb; self.pipeline = pipeline
+                self.prefixCache = prefixCache; self.prefixLen = prefixLen
             }
         }
-        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self)
+        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, prefixCache: prefix?.cache, prefixLen: prefix?.len ?? 0)
 
         return AsyncThrowingStream { continuation in
             Task {
@@ -388,7 +418,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         tokenizer: ctx.tokenizer,
                         maxTokens: capturedMaxFrames,
                         chunkSize: chunkSize,
-                        sanitize: capturedSanitize
+                        sanitize: capturedSanitize,
+                        prefixCache: ctx.prefixCache,
+                        prefixLen: ctx.prefixLen
                     )
 
                     for try await chunk in codeStream {
@@ -439,6 +471,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         ttsModel = nil
         tokenizer = nil
         voiceEmbeddings = [:]
+        prefixCacheEntry = nil
         modelDirectory = nil
         state = .unloaded
     }
