@@ -330,6 +330,9 @@ No account required. No data sent to the cloud. All models run locally on your A
                     Task { @MainActor in
                         self?.enrollProgress = Double(epoch) / Double(epochs)
                         self?.enrollStatus = "epoch \(epoch)/\(epochs) · loss \(String(format: "%.3f", loss))"
+                        // Also record to the log file so the loss curve is
+                        // observable outside the UI.
+                        self?.log("enroll epoch \(epoch)/\(epochs) loss \(String(format: "%.4f", loss))")
                     }
                 }
                 await MainActor.run {
