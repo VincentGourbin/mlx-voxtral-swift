@@ -74,6 +74,15 @@ Practical guidance:
 Enrollment is offline and one-time per voice. On an unloaded M-series GPU
 it runs at roughly 15× the speed of the original PyTorch reference.
 
+## Demo app
+
+The `VoxtralTTSStreamingDemo` app (macOS) has a **Voice Cloning** panel:
+pick a reference recording, name it, set the reference length/epochs, and
+click **Enroll** — progress (epoch/loss) streams live while the run happens
+off the main thread. The enrolled voice then appears in the voice picker
+alongside the presets and streams like any other voice. Enrolled voices are
+saved under `Application Support/VoxtralClonedVoices/` and reloaded on launch.
+
 ## Using a cloned voice in code
 
 ```swift

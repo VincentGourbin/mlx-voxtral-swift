@@ -339,12 +339,23 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         voice: VoxtralVoice = .neutralFemale,
         chunkSize: Int = 10
     ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
-        guard state.isReady, let model = ttsModel, let tokenizer else {
-            return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
-        }
         guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")) }
         }
+        return synthesizeStreaming(text: text, voiceEmbedding: voiceEmb, chunkSize: chunkSize)
+    }
+
+    /// Streaming synthesis with an arbitrary `[T, 3072]` voice embedding
+    /// (e.g. a cloned voice), mirroring the preset overload above.
+    public func synthesizeStreaming(
+        text: String,
+        voiceEmbedding: MLXArray,
+        chunkSize: Int = 10
+    ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
+        guard state.isReady, let model = ttsModel, let tokenizer else {
+            return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
+        }
+        let voiceEmb = voiceEmbedding
 
         state = .synthesizing
         let startTime = Date()

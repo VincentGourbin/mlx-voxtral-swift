@@ -14,6 +14,49 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var selectedVoice: String = "fr_female"
     @Published var sanitizeEnabled: Bool = true
 
+    // MARK: - Voice cloning inputs
+
+    @Published var referenceURL: URL?
+    @Published var cloneName: String = "my_voice"
+    @Published var cloneDuration: Double = 16
+    @Published var cloneEpochs: Int = 3000
+    @Published var isEnrolling = false
+    @Published var enrollStatus: String = ""
+    @Published var enrollProgress: Double = 0        // 0…1 over epochs
+    @Published var clonedVoices: [ClonedVoice] = []
+
+    struct ClonedVoice: Identifiable, Hashable {
+        let name: String
+        let url: URL
+        var id: String { "cloned:\(name)" }
+    }
+
+    // MARK: - Reference builder (video/audio → extracts → reference)
+
+    struct RefExtract: Identifiable, Hashable {
+        let id = UUID()
+        let start: Double
+        let end: Double
+        var duration: Double { end - start }
+    }
+
+    @Published var refSourceURL: URL?
+    @Published var refSourceDuration: Double = 0
+    @Published var refExtracts: [RefExtract] = []
+    @Published var segStart: Double = 0
+    @Published var segEnd: Double = 8
+    @Published var refBuilderBusy = false
+    @Published var refBuilderStatus: String = ""
+    let ffmpegAvailable = FFmpeg.isAvailable
+
+    var refExtractsTotal: Double { refExtracts.reduce(0) { $0 + $1.duration } }
+    private var previewPlayer: AVAudioPlayer?
+    private static let refWorkDir: URL = {
+        let d = FileManager.default.temporaryDirectory.appendingPathComponent("VoxtralRefBuilder", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
     // MARK: - State
 
     @Published var isModelLoaded = false
@@ -49,11 +92,17 @@ final class StreamingDemoViewModel: ObservableObject {
     let availableModels: [(id: String, name: String)] = [
         ("tts-4b-4bit", "4-bit (2.5 GB)"),
         ("tts-4b-6bit", "6-bit (3.5 GB)"),
-        ("tts-4b-mlx", "bf16 (8 GB)")
+        ("tts-4b", "bf16 original (8 GB)"),
+        ("tts-4b-mlx", "bf16 MLX (8 GB)")
     ]
 
-    let availableVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
+    let presetVoices: [(id: String, label: String)] = VoxtralVoice.allCases.map {
         ($0.rawValue, $0.displayName)
+    }
+
+    /// Preset voices plus any enrolled (cloned) voices, for the voice picker.
+    var voicePickerOptions: [(id: String, label: String)] {
+        presetVoices + clonedVoices.map { ($0.id, "🎙️ \($0.name) (cloned)") }
     }
 
     struct TextPreset {
@@ -137,11 +186,276 @@ No account required. No data sent to the cloud. All models run locally on your A
         isLoading = false
     }
 
+    // MARK: - Mic recording (read a prompt → reference)
+
+    struct RecordPrompt: Identifiable, Hashable {
+        let id = UUID()
+        let lang: String
+        let text: String
+    }
+
+    /// Prompts sized to read in roughly the target reference length (~16 s).
+    let recordPrompts: [RecordPrompt] = [
+        RecordPrompt(lang: "EN", text: "The rapid development of artificial intelligence is reshaping how we live and work. From the way we search for information to how we create images and music, these tools are quietly becoming part of our everyday lives."),
+        RecordPrompt(lang: "FR", text: "Le développement rapide de l'intelligence artificielle transforme notre façon de vivre et de travailler. De la manière dont nous cherchons l'information à celle dont nous créons des images et de la musique, ces outils s'installent peu à peu dans notre quotidien."),
+        RecordPrompt(lang: "EN", text: "Good morning. Today I want to talk about something simple but important: the value of taking your time. In a world that rewards speed, slowing down to think clearly is a quiet kind of strength that pays off in the long run."),
+    ]
+
+    @Published var recordPromptIndex = 0
+    @Published var isRecording = false
+    @Published var recordElapsed: Double = 0
+    @Published var micStatus: String = ""
+
+    private var recorder: AVAudioRecorder?
+    private var recordTimer: Timer?
+    private var recordStart: Date?
+
+    func startRecording() {
+        guard !isRecording else { return }
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            Task { @MainActor in
+                guard let self else { return }
+                guard granted else { self.micStatus = "Microphone access denied"; return }
+                self.beginRecording()
+            }
+        }
+    }
+
+    private func beginRecording() {
+        let url = Self.refWorkDir.appendingPathComponent("mic_\(UUID().uuidString).wav")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 24000,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+        ]
+        do {
+            let rec = try AVAudioRecorder(url: url, settings: settings)
+            rec.record()
+            recorder = rec
+            recordStart = Date()
+            recordElapsed = 0
+            isRecording = true
+            micStatus = "Recording…"
+            recordTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, let s = self.recordStart else { return }
+                    self.recordElapsed = Date().timeIntervalSince(s)
+                }
+            }
+        } catch {
+            micStatus = "Recorder error: \(error.localizedDescription)"
+        }
+    }
+
+    /// Stop recording. If long enough, set it as the enrollment reference.
+    func stopRecording() {
+        guard isRecording else { return }
+        recorder?.stop()
+        recordTimer?.invalidate(); recordTimer = nil
+        isRecording = false
+        let url = recorder?.url
+        let elapsed = recordElapsed
+        recorder = nil
+        if let url, elapsed >= cloneDuration {
+            referenceURL = url
+            micStatus = String(format: "Reference recorded (%.1f s)", elapsed)
+            log("Recorded reference from mic (\(String(format: "%.1f", elapsed))s)")
+        } else {
+            micStatus = String(format: "Too short (%.1f s, need %.0f s)", elapsed, cloneDuration)
+        }
+    }
+
+    // MARK: - Reference builder actions
+
+    /// Load a video/audio file and read its total duration (via ffprobe).
+    func loadRefSource(_ url: URL) {
+        refSourceURL = url
+        refExtracts = []
+        refSourceDuration = 0
+        segStart = 0
+        segEnd = min(cloneDuration, 8)
+        refBuilderStatus = "Reading \(url.lastPathComponent)…"
+        Task {
+            do {
+                let dur = try await FFmpeg.duration(of: url)
+                await MainActor.run {
+                    self.refSourceDuration = dur
+                    self.segEnd = min(self.segStart + self.cloneDuration, dur)
+                    self.refBuilderStatus = String(format: "Source: %.0f s", dur)
+                }
+            } catch {
+                await MainActor.run { self.refBuilderStatus = "Error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    /// Preview the current [segStart, segEnd] selection (extract + play).
+    func previewSegment() {
+        guard let src = refSourceURL, segEnd > segStart else { return }
+        let (start, end) = (segStart, segEnd)
+        refBuilderStatus = "Extracting preview…"
+        Task {
+            do {
+                let out = Self.refWorkDir.appendingPathComponent("preview.wav")
+                try await FFmpeg.extractSegment(from: src, start: start, end: end, to: out)
+                let data = try Data(contentsOf: out)
+                await MainActor.run {
+                    self.previewPlayer = try? AVAudioPlayer(data: data)
+                    self.previewPlayer?.play()
+                    self.refBuilderStatus = String(format: "Preview %.1f–%.1f s", start, end)
+                }
+            } catch {
+                await MainActor.run { self.refBuilderStatus = "Error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    func addExtract() {
+        guard segEnd > segStart else { return }
+        refExtracts.append(RefExtract(start: segStart, end: segEnd))
+        // Advance the selector past this extract for convenience.
+        let next = min(segEnd, refSourceDuration)
+        segStart = next
+        segEnd = min(next + cloneDuration, refSourceDuration)
+    }
+
+    func removeExtract(_ id: RefExtract.ID) {
+        refExtracts.removeAll { $0.id == id }
+    }
+
+    /// Concatenate the chosen extracts into a single reference WAV and set it
+    /// as the enrollment reference. Returns via `referenceURL`.
+    func buildReference() {
+        guard let src = refSourceURL, !refExtracts.isEmpty, !refBuilderBusy else { return }
+        refBuilderBusy = true
+        refBuilderStatus = "Building reference…"
+        let extracts = refExtracts
+        Task {
+            do {
+                var parts: [URL] = []
+                for (i, e) in extracts.enumerated() {
+                    let part = Self.refWorkDir.appendingPathComponent("part_\(i).wav")
+                    try await FFmpeg.extractSegment(from: src, start: e.start, end: e.end, to: part)
+                    parts.append(part)
+                }
+                let out = Self.refWorkDir.appendingPathComponent("reference_\(UUID().uuidString).wav")
+                try await FFmpeg.concat(parts, to: out)
+                await MainActor.run {
+                    self.referenceURL = out
+                    self.refBuilderBusy = false
+                    self.refBuilderStatus = String(format: "Reference ready (%.1f s)", self.refExtractsTotal)
+                    self.log("Built reference from \(extracts.count) extract(s), \(String(format: "%.1f", self.refExtractsTotal))s")
+                }
+            } catch {
+                await MainActor.run {
+                    self.refBuilderBusy = false
+                    self.refBuilderStatus = "Error: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    // MARK: - Voice Cloning
+
+    /// Directory where enrolled (cloned) voice embeddings are stored.
+    static let clonedVoicesDir: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("VoxtralClonedVoices", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Load the list of previously enrolled voices from disk.
+    func refreshClonedVoices() {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: Self.clonedVoicesDir, includingPropertiesForKeys: nil)) ?? []
+        clonedVoices = files
+            .filter { $0.pathExtension == "safetensors" }
+            .map { ClonedVoice(name: $0.deletingPathExtension().lastPathComponent, url: $0) }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// Enroll a voice from `referenceURL` using the currently loaded model.
+    /// Runs the (long) optimization off the main actor and streams progress.
+    func enroll() {
+        guard isModelLoaded, let pipeline, !isEnrolling, !isSynthesizing else { return }
+        guard let ref = referenceURL else { log("No reference audio selected"); return }
+        let name = cloneName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { log("Enter a name for the cloned voice"); return }
+
+        isEnrolling = true
+        enrollProgress = 0
+        enrollStatus = "Preparing…"
+        let epochs = cloneEpochs
+        let duration = cloneDuration
+        let outURL = Self.clonedVoicesDir.appendingPathComponent("\(name).safetensors")
+        log("--- Enrolling '\(name)' from \(ref.lastPathComponent) (\(epochs) epochs, \(Int(duration))s) ---")
+
+        // The pipeline is not Sendable; box it to run the sync, GPU-heavy
+        // enrollment off the main actor without blocking the UI.
+        final class Box: @unchecked Sendable { let p: VoxtralTTSPipeline; init(_ p: VoxtralTTSPipeline) { self.p = p } }
+        let box = Box(pipeline)
+
+        Task.detached { [weak self] in
+            var config = VoxtralVoiceEnrollment.Config()
+            config.numFrames = Int(duration * 12.5)
+            config.epochs = epochs
+            config.logEvery = 100
+            do {
+                try box.p.enrollVoice(referenceURL: ref, outputURL: outURL, config: config) { progress in
+                    // Extract Sendable value types before hopping to the main actor.
+                    let epoch = progress.epoch
+                    let loss = progress.totalLoss
+                    Task { @MainActor in
+                        self?.enrollProgress = Double(epoch) / Double(epochs)
+                        self?.enrollStatus = "epoch \(epoch)/\(epochs) · loss \(String(format: "%.3f", loss))"
+                        // Also record to the log file so the loss curve is
+                        // observable outside the UI.
+                        self?.log("enroll epoch \(epoch)/\(epochs) loss \(String(format: "%.4f", loss))")
+                    }
+                }
+                await MainActor.run {
+                    self?.log("Voice enrolled: \(name)")
+                    self?.enrollStatus = "Done"
+                    self?.isEnrolling = false
+                    self?.refreshClonedVoices()
+                    self?.selectedVoice = "cloned:\(name)"
+                }
+            } catch {
+                await MainActor.run {
+                    self?.log("Enrollment failed: \(error.localizedDescription)")
+                    self?.enrollStatus = "Failed"
+                    self?.isEnrolling = false
+                }
+            }
+        }
+    }
+
+    private func loadClonedEmbedding(_ url: URL) throws -> MLXArray {
+        let arrays = try MLX.loadArrays(url: url)
+        guard let embedding = arrays["embedding"] else {
+            throw VoxtralTTSError.invalidConfiguration("No 'embedding' array in \(url.lastPathComponent)")
+        }
+        return embedding
+    }
+
     // MARK: - Streaming Playback
 
     func startStreaming() {
         guard isModelLoaded, let pipeline, !isSynthesizing else { return }
-        guard let voice = VoxtralVoice(rawValue: selectedVoice) else {
+
+        // Resolve the selected voice: a cloned voice (embedding) or a preset.
+        let clonedVoice = clonedVoices.first { $0.id == selectedVoice }
+        var voiceEmbedding: MLXArray?
+        var presetVoice: VoxtralVoice?
+        if let clonedVoice {
+            do { voiceEmbedding = try loadClonedEmbedding(clonedVoice.url) }
+            catch { log("Failed to load cloned voice: \(error.localizedDescription)"); return }
+        } else if let v = VoxtralVoice(rawValue: selectedVoice) {
+            presetVoice = v
+        } else {
             log("Unknown voice: \(selectedVoice)")
             return
         }
@@ -171,11 +485,12 @@ No account required. No data sent to the cloud. All models run locally on your A
             var totalSamplesScheduled = 0
 
             do {
-                let stream = pipeline.synthesizeStreaming(
-                    text: text,
-                    voice: voice,
-                    chunkSize: 10
-                )
+                let stream: AsyncThrowingStream<TTSStreamingChunk, Error>
+                if let voiceEmbedding {
+                    stream = pipeline.synthesizeStreaming(text: text, voiceEmbedding: voiceEmbedding, chunkSize: 10)
+                } else {
+                    stream = pipeline.synthesizeStreaming(text: text, voice: presetVoice!, chunkSize: 10)
+                }
 
                 for try await chunk in stream {
                     if Task.isCancelled { break }
