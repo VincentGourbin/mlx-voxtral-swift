@@ -385,6 +385,41 @@ public class VoxtralTTSModel: Module {
         codes + codebookOffsets
     }
 
+    // MARK: - Voice prefix KV cache (TTFT optimization)
+
+    /// Deep-copy KV caches so a cached prefix can be reused across syntheses
+    /// without the generation loop mutating the cached copy.
+    public func cloneCache(_ caches: [any KVCache]) -> [any KVCache] {
+        caches.map { c in
+            let fresh = KVCacheSimple()
+            let s = c.state
+            if s.count == 2 { fresh.state = s }
+            return fresh
+        }
+    }
+
+    /// Precompute the KV cache for the voice-conditioned prompt prefix
+    /// `[BOS, BEGIN_AUDIO, AUDIO×voiceFrameCount]`. This prefix precedes the
+    /// text, so its KV depends only on the voice — cache it once and reuse it
+    /// (cloned) for every synthesis with the same voice, skipping the O(T²)
+    /// voice prefill each time.
+    public func precomputeVoicePrefixCache(voiceEmbedding: MLXArray) -> (cache: [any KVCache], prefixLen: Int) {
+        let voiceFrameCount = voiceEmbedding.dim(0)
+        let audioTokenId = Int32(config.multimodal.audioModelArgs.audioTokenId)
+        var prefixIds: [Int32] = [
+            Int32(config.bosTokenId),
+            Int32(config.multimodal.audioModelArgs.beginAudioTokenId),
+        ]
+        prefixIds.append(contentsOf: Array(repeating: audioTokenId, count: voiceFrameCount))
+        let prefixLen = prefixIds.count
+        let inputIdsMx = MLXArray(prefixIds).reshaped(1, prefixLen)
+        let embeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
+        let cache = createCache()
+        _ = llmForward(inputEmbeds: embeddings, cache: cache)
+        MLX.eval(cache.flatMap { $0.state })  // materialize so clones don't re-run the prefix
+        return (cache, prefixLen)
+    }
+
     // MARK: - Generation
 
     /// Generate speech from text with voice conditioning.
@@ -396,6 +431,8 @@ public class VoxtralTTSModel: Module {
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
         sanitize: Bool = true,
+        prefixCache: [any KVCache]? = nil,
+        prefixLen: Int = 0,
         onFrame: ((Int, MLXArray) -> Void)? = nil
     ) -> (codes: MLXArray, numFrames: Int, ttft: TimeInterval) {
         let genStart = Date()
@@ -413,12 +450,21 @@ public class VoxtralTTSModel: Module {
         let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
         session?.endPhase("Voice Embedding Merge", category: .voiceEmbedding)
 
-        // 3. Create KV cache and prefill
+        // 3. KV cache + prefill. If a precomputed voice-prefix cache is given,
+        // clone it and prefill ONLY the text suffix (positions >= prefixLen) —
+        // the voice frames' KV is already cached. Otherwise prefill the whole
+        // prompt. Both fuse the prefill and the first AUDIO-token forward.
         session?.beginPhase("Prefill", category: .prefill)
-        let cache = createCache()
-
-        var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
-        MLX.eval(hidden)
+        let cache: [any KVCache]
+        var hidden: MLXArray
+        if let prefixCache, prefixLen > 0 {
+            cache = cloneCache(prefixCache)
+            let suffixEmb = inputEmbeddings[0..., prefixLen..., 0...]
+            hidden = llmForward(inputEmbeds: suffixEmb, cache: cache)
+        } else {
+            cache = createCache()
+            hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
+        }
 
         // 4. First decode step: inject AUDIO token to trigger first frame
         let audioTokenId = config.multimodal.audioModelArgs.audioTokenId
@@ -523,7 +569,9 @@ public class VoxtralTTSModel: Module {
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
         chunkSize: Int = 10,
-        sanitize: Bool = true
+        sanitize: Bool = true,
+        prefixCache: [any KVCache]? = nil,
+        prefixLen: Int = 0
     ) -> AsyncThrowingStream<GenerationChunk, Error> {
         AsyncThrowingStream { continuation in
             let voiceFrameCount = voiceEmbedding.dim(0)
@@ -535,10 +583,18 @@ public class VoxtralTTSModel: Module {
             // 2. Build input embeddings with voice replacement
             let inputEmbeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
 
-            // 3. Create KV cache and prefill
-            let cache = createCache()
-            var hidden = llmForward(inputEmbeds: inputEmbeddings, cache: cache)
-            MLX.eval(hidden)
+            // 3. KV cache + prefill. Reuse the cached voice prefix if provided,
+            // prefilling only the text suffix (see generate() for details).
+            let cache: [any KVCache]
+            var hidden: MLXArray
+            if let prefixCache, prefixLen > 0 {
+                cache = self.cloneCache(prefixCache)
+                let suffixEmb = inputEmbeddings[0..., prefixLen..., 0...]
+                hidden = self.llmForward(inputEmbeds: suffixEmb, cache: cache)
+            } else {
+                cache = self.createCache()
+                hidden = self.llmForward(inputEmbeds: inputEmbeddings, cache: cache)
+            }
 
             // 4. First decode step: inject AUDIO token
             let audioTokenId = config.multimodal.audioModelArgs.audioTokenId
@@ -549,6 +605,11 @@ public class VoxtralTTSModel: Module {
             // 5. Autoregressive generation with streaming
             var allCodes: [MLXArray] = []
             var chunkFrameCount = 0
+            // Emit the first audio chunk early (fewer frames) to minimize
+            // perceived time-to-first-audio; generation (~31 fps) outpaces
+            // playback (12.5 fps) so later, larger chunks keep the buffer full.
+            let firstChunkFrames = min(3, chunkSize)
+            var firstChunkYielded = false
 
             for i in 0..<maxTokens {
                 // Check for cancellation
@@ -581,8 +642,9 @@ public class VoxtralTTSModel: Module {
                 allCodes.append(codes)
                 chunkFrameCount += 1
 
-                // Yield chunk every chunkSize frames
-                if chunkFrameCount >= chunkSize {
+                // Yield a small first chunk early, then every chunkSize frames.
+                let chunkTarget = firstChunkYielded ? chunkSize : firstChunkFrames
+                if chunkFrameCount >= chunkTarget {
                     let audioCodes = MLX.stacked(allCodes, axis: 1)
                     continuation.yield(GenerationChunk(
                         accumulatedCodes: audioCodes,
@@ -591,6 +653,7 @@ public class VoxtralTTSModel: Module {
                         isFinal: false
                     ))
                     chunkFrameCount = 0
+                    firstChunkYielded = true
                 }
 
                 // Embed codes back as LLM input for next step
