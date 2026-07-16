@@ -12,6 +12,11 @@ import MLX
 
 public struct TTSSynthesisResult: @unchecked Sendable {
     public let waveform: MLXArray
+    /// Number of generated codec token frames at 12.5 Hz — NOT audio samples.
+    /// One frame = 80 ms = 1920 samples at 24 kHz; multiplying `numFrames` by
+    /// anything other than 1920 under-estimates the audio length. For the
+    /// audio's wall-clock length use `duration`, which is computed from the
+    /// decoded waveform.
     public let numFrames: Int
     public let sampleRate: Int
     public let generationTime: TimeInterval
@@ -33,26 +38,56 @@ public struct TTSSynthesisResult: @unchecked Sendable {
     }
 }
 
-// MARK: - Lead-in Silence Trimming
+// MARK: - Silence Trimming
+
+/// Per-frame (80 ms) RMS threshold RELATIVE to the clip's peak amplitude.
+///
+/// A fixed absolute threshold fails on cloned/enrolled voices: the enrollment
+/// optimization reproduces the reference recording's noise floor, so the
+/// "silence" frames of a synthesis never drop below an absolute value tuned
+/// on the clean presets (measured: enrolled-voice silences at −32.5 dBFS vs
+/// −35.8 dBFS for presets — an absolute 0.025 never triggered). Relative to
+/// peak, silence and speech stay separable regardless of the voice's floor.
+/// `absoluteFloor` keeps near-digital-silence clips from producing a
+/// meaninglessly low threshold.
+private func silenceThreshold(
+    _ samples: MLXArray, relativeThresholdDB: Float, absoluteFloor: Float
+) -> Float {
+    let peak = MLX.abs(samples).max().item(Float.self)
+    return max(absoluteFloor, peak * Foundation.pow(10, relativeThresholdDB / 20))
+}
+
+private let samplesPerFrame = 1920  // 80ms at 24kHz (8x upsample * 240 patch)
+
+private func frameRMS(_ samples: MLXArray, frame: Int, totalSamples: Int) -> Float {
+    let start = frame * samplesPerFrame
+    let end = min(start + samplesPerFrame, totalSamples)
+    let chunk = samples[start..<end]
+    return MLX.sqrt(MLX.mean(chunk * chunk)).item(Float.self)
+}
 
 /// Trim low-energy lead-in frames from waveform.
 /// Voxtral TTS often generates a few silence/transition frames before speech starts,
 /// especially noticeable with non-English voices. This removes them for cleaner output.
-public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, threshold: Float = 0.025) -> MLXArray {
-    let samplesPerFrame = 1920  // 80ms at 24kHz (8x upsample * 240 patch)
+/// The threshold is relative to the clip's peak (default peak − 25 dB) — see
+/// `silenceThreshold` for why absolute thresholds fail on enrolled voices.
+public func trimLeadInSilence(
+    _ waveform: MLXArray,
+    sampleRate: Int = 24000,
+    relativeThresholdDB: Float = -25,
+    absoluteFloor: Float = 0.001
+) -> MLXArray {
     let totalSamples = waveform.dim(0)
     let totalFrames = totalSamples / samplesPerFrame
 
-    // Scan frame-by-frame, find the first frame above threshold RMS
     let samples = waveform.asType(.float32)
-    var trimFrames = 0
+    let threshold = silenceThreshold(
+        samples, relativeThresholdDB: relativeThresholdDB, absoluteFloor: absoluteFloor)
 
+    // Scan frame-by-frame, find the first frame above threshold RMS
+    var trimFrames = 0
     for i in 0..<min(totalFrames, 20) {  // Check at most first 20 frames (1.6s)
-        let start = i * samplesPerFrame
-        let end = min(start + samplesPerFrame, totalSamples)
-        let chunk = samples[start..<end]
-        let rms = MLX.sqrt(MLX.mean(chunk * chunk)).item(Float.self)
-        if rms >= threshold {
+        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold {
             break
         }
         trimFrames += 1
@@ -63,6 +98,58 @@ public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, thr
         if trimSamples < totalSamples {
             return waveform[trimSamples...]
         }
+    }
+    return waveform
+}
+
+/// Deprecated absolute-threshold variant, kept for source compatibility.
+@available(*, deprecated, message: "A fixed absolute threshold never triggers on enrolled voices; use trimLeadInSilence(_:sampleRate:relativeThresholdDB:absoluteFloor:)")
+public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, threshold: Float) -> MLXArray {
+    let totalSamples = waveform.dim(0)
+    let totalFrames = totalSamples / samplesPerFrame
+    let samples = waveform.asType(.float32)
+    var trimFrames = 0
+    for i in 0..<min(totalFrames, 20) {
+        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold { break }
+        trimFrames += 1
+    }
+    if trimFrames > 0, trimFrames * samplesPerFrame < totalSamples {
+        return waveform[(trimFrames * samplesPerFrame)...]
+    }
+    return waveform
+}
+
+/// Trim low-energy trailing frames from waveform (fade-out / hang after the
+/// last word). Same relative threshold as `trimLeadInSilence`; scans at most
+/// the last 20 frames (1.6 s) and always keeps at least one frame.
+public func trimTrailingSilence(
+    _ waveform: MLXArray,
+    sampleRate: Int = 24000,
+    relativeThresholdDB: Float = -25,
+    absoluteFloor: Float = 0.001
+) -> MLXArray {
+    let totalSamples = waveform.dim(0)
+    let totalFrames = totalSamples / samplesPerFrame
+    guard totalFrames > 1 else { return waveform }
+
+    let samples = waveform.asType(.float32)
+    let threshold = silenceThreshold(
+        samples, relativeThresholdDB: relativeThresholdDB, absoluteFloor: absoluteFloor)
+
+    // Scan from the end, find the last frame above threshold RMS. The final
+    // partial frame (< 80 ms remainder) is treated as part of the last frame.
+    var trimFrames = 0
+    for i in stride(from: totalFrames - 1, through: max(0, totalFrames - 20), by: -1) {
+        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold {
+            break
+        }
+        trimFrames += 1
+    }
+
+    if trimFrames > 0, trimFrames < totalFrames {
+        // Cut at the frame boundary; drop the trailing partial frame too.
+        let keepSamples = (totalFrames - trimFrames) * samplesPerFrame
+        return waveform[0..<keepSamples]
     }
     return waveform
 }

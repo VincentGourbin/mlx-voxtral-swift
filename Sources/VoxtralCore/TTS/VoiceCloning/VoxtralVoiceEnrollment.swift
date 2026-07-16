@@ -37,6 +37,21 @@ public final class VoxtralVoiceEnrollment {
         public var minTemperature: Float = 0.3
         public var gradClip: Float = 1.0        // global-norm gradient clip
         public var logEvery: Int = 500
+
+        // Reference clean-up (see prepareReference). The recording's noise
+        // floor is otherwise LEARNED as part of the voice: every synthesis
+        // then reproduces it, and downstream silence detection (lead-in trim,
+        // lip-sync alignment) stops finding any silence at all.
+        /// High-pass cutoff (Hz) applied to the reference before optimization;
+        /// removes rumble/DC below the voice band. `nil` disables.
+        public var referenceHighPassHz: Float? = 70
+        /// Gate reference windows whose RMS falls below `gateThresholdDB`
+        /// (relative to the reference peak) to true silence. Set `false` to
+        /// keep the raw recording, ambience included.
+        public var gateReference: Bool = true
+        /// Gate threshold relative to the reference peak, in dB.
+        public var gateThresholdDB: Float = -25
+
         public init() {}
     }
 
@@ -74,6 +89,11 @@ public final class VoxtralVoiceEnrollment {
     /// samples and ending on the quietest window in the last 1.5 s (fade +
     /// trailing silence). A reference cut mid-speech destabilizes the start
     /// of later syntheses.
+    ///
+    /// Unless disabled in `Config`, the reference is also high-passed and
+    /// noise-gated first: whatever is in the reference — noise floor
+    /// included — becomes the optimization target and is baked into the
+    /// cloned voice, so silences must be true silence going in.
     public func prepareReference(url: URL) throws -> MLXArray {
         // Read the file at its NATIVE rate as mono float32 (channel mix only —
         // no sample-rate conversion here, which is where AVAudioConverter is
@@ -87,6 +107,13 @@ public final class VoxtralVoiceEnrollment {
             )
         }
         samples = Array(samples[0 ..< numSamples])
+
+        if let hp = config.referenceHighPassHz, hp > 0 {
+            samples = Self.highPass(samples, cutoff: Double(hp), sampleRate: 24_000)
+        }
+        if config.gateReference {
+            samples = Self.gate(samples, sampleRate: 24_000, thresholdDB: config.gateThresholdDB)
+        }
 
         // Cut at the quietest 50 ms window in the last 1.5 s.
         let sr = 24_000, win = 24_000 / 20
@@ -155,6 +182,69 @@ public final class VoxtralVoiceEnrollment {
             let a = source[i0]
             let b = i0 + 1 < source.count ? source[i0 + 1] : a
             out[i] = a + (b - a) * frac
+        }
+        return out
+    }
+
+    /// FIR high-pass: spectral complement of `lowPass` (x − LP(x)), so it
+    /// shares the low-pass's linear phase and unity passband. Removes DC and
+    /// rumble below the voice band that the optimization would otherwise
+    /// learn as part of the voice. Static + internal for unit testing.
+    static func highPass(_ x: [Float], cutoff: Double, sampleRate: Double) -> [Float] {
+        let lp = lowPass(x, cutoff: cutoff, sampleRate: sampleRate)
+        var out = x
+        for i in 0 ..< out.count { out[i] -= lp[i] }
+        return out
+    }
+
+    /// Noise gate: 20 ms windows whose RMS falls below `thresholdDB` relative
+    /// to the clip's peak are pushed to true silence, with 5 ms linear ramps
+    /// at every open/close so gating never clicks. Frames that are quiet in
+    /// the reference must be EXACTLY zero — the optimization treats the
+    /// reference as ground truth, so a learned noise floor shows up in every
+    /// later synthesis. Static + internal for unit testing.
+    static func gate(_ x: [Float], sampleRate: Int, thresholdDB: Float) -> [Float] {
+        guard !x.isEmpty else { return x }
+        let peak = x.reduce(0) { max($0, abs($1)) }
+        guard peak > 0 else { return x }
+        let threshold = peak * Foundation.pow(10, thresholdDB / 20)
+
+        let win = sampleRate / 50  // 20 ms
+        let numWindows = (x.count + win - 1) / win
+
+        // Per-window open/closed decision.
+        var open = [Bool](repeating: true, count: numWindows)
+        for w in 0 ..< numWindows {
+            let start = w * win
+            let end = min(start + win, x.count)
+            var acc: Float = 0
+            for i in start ..< end { acc += x[i] * x[i] }
+            open[w] = (acc / Float(end - start)).squareRoot() >= threshold
+        }
+
+        // Per-sample gain with short ramps at open/close boundaries.
+        let fade = sampleRate / 200  // 5 ms
+        var out = x
+        for w in 0 ..< numWindows where !open[w] {
+            let start = w * win
+            let end = min(start + win, x.count)
+            for i in start ..< end { out[i] = 0 }
+        }
+        for w in 0 ..< numWindows {
+            guard open[w] else { continue }
+            let start = w * win
+            let end = min(start + win, x.count)
+            // Ramp in if the previous window is closed, out if the next is.
+            if w > 0, !open[w - 1] {
+                for i in 0 ..< min(fade, end - start) {
+                    out[start + i] *= Float(i) / Float(fade)
+                }
+            }
+            if w + 1 < numWindows, !open[w + 1] {
+                for i in 0 ..< min(fade, end - start) {
+                    out[end - 1 - i] *= Float(i) / Float(fade)
+                }
+            }
         }
         return out
     }
@@ -240,9 +330,16 @@ public final class VoxtralVoiceEnrollment {
     // MARK: - Optimization
 
     /// Run the enrollment loop and return the learned discrete codes (T, 37).
+    ///
+    /// `shouldContinue` is polled at the top of every epoch (an epoch is
+    /// ~100–500 ms); returning `false` stops the loop early and the codes
+    /// learned SO FAR are returned. Callers cancelling a run should discard
+    /// that partial result (`enrollVoice` does, by throwing
+    /// `CancellationError`); callers stopping a "good enough" run may keep it.
     public func optimize(
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
-        progress: ((Progress) -> Void)? = nil
+        progress: ((Progress) -> Void)? = nil,
+        shouldContinue: (() -> Bool)? = nil
     ) -> MLXArray {
         let T = config.numFrames
         precondition(reference.dim(0) >= numSamples,
@@ -267,6 +364,7 @@ public final class VoxtralVoiceEnrollment {
         var temperature = config.temperature
 
         for epoch in 0 ..< config.epochs {
+            if let shouldContinue, !shouldContinue() { break }
             let temp = temperature
 
             func lossFn(_ p: [MLXArray]) -> [MLXArray] {

@@ -421,6 +421,9 @@ struct TTS: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable lead-in silence trimming")
     var noTrim = false
 
+    @Flag(name: .long, help: "Also trim trailing silence (useful for lip-sync alignment)")
+    var trimTail = false
+
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TTS (Text-to-Speech)")
@@ -443,6 +446,7 @@ struct TTS: AsyncParsableCommand {
         config.temperature = temperature
         config.sanitizeText = !noSanitize
         config.trimLeadIn = !noTrim
+        config.trimTail = trimTail
 
         let pipeline = VoxtralTTSPipeline(configuration: config)
 

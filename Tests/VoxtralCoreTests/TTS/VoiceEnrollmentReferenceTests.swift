@@ -66,4 +66,42 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
         XCTAssertEqual(out.count, src.count)
         XCTAssertEqual(out, src)
     }
+
+    // MARK: - Reference clean-up (high-pass + gate)
+
+    /// Quiet-only windows must come out of the gate as EXACT silence — the
+    /// optimization learns whatever the reference contains, so a noise floor
+    /// left in the "silences" is baked into the cloned voice.
+    func testGateZeroesNoiseOnlyRegions() {
+        let speech = sine(440, seconds: 0.5, rate: 24_000)
+        // Noise floor at 0.01 (peak 0.5 → threshold at −25 dB is 0.028).
+        let noise = (0 ..< 12_000).map { Float($0 % 2 == 0 ? 0.01 : -0.01) }
+        let out = VoxtralVoiceEnrollment.gate(speech + noise, sampleRate: 24_000, thresholdDB: -25)
+
+        // Away from the closing ramp, the noise region is exactly zero.
+        let tail = Array(out[(speech.count + 480)...])
+        XCTAssertEqual(tail.reduce(0) { max($0, abs($1)) }, 0, "noise floor survived the gate")
+        // The speech region keeps its energy (ramps only touch 5 ms).
+        XCTAssertGreaterThan(rms(Array(out[0 ..< speech.count])), 0.3)
+    }
+
+    /// A fully voiced signal passes through the gate untouched.
+    func testGateIsIdentityOnVoicedSignal() {
+        let speech = sine(440, seconds: 0.5, rate: 24_000)
+        let out = VoxtralVoiceEnrollment.gate(speech, sampleRate: 24_000, thresholdDB: -25)
+        XCTAssertEqual(out, speech)
+    }
+
+    /// The high-pass must remove DC/rumble while keeping the voice band.
+    func testHighPassRemovesDCKeepsVoiceBand() {
+        let tone = sine(1_000, seconds: 0.5, rate: 24_000)
+        let withDC = tone.map { $0 + 0.3 }
+        let out = VoxtralVoiceEnrollment.highPass(withDC, cutoff: 70, sampleRate: 24_000)
+
+        // Assert away from the FIR edges (64 taps).
+        let mid = Array(out[100 ..< out.count - 100])
+        let mean = mid.reduce(0, +) / Float(mid.count)
+        XCTAssertEqual(mean, 0, accuracy: 0.01, "DC offset not removed")
+        XCTAssertGreaterThan(rms(mid), 0.3, "1 kHz tone wrongly attenuated")
+    }
 }
