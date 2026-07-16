@@ -72,7 +72,11 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "Output directory for trace files")
     var output: String?
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         // Validate inputs
         switch pipeline {
         case .stt, .realtime:

@@ -384,6 +384,11 @@ public final class VoxtralVoiceEnrollment {
         let ref = reference[0 ..< numSamples]
         let losses = EnrollmentLossComputer(reference: ref)
 
+        let beacon = RuntimeBeacon.begin(task: "enroll-voice")
+        defer { beacon?.end() }
+        // Throttle manifest refreshes: ~100 over the whole run, not one per epoch.
+        let beaconEvery = max(1, config.epochs / 100)
+
         // Semantic centroid table is constant across the run — compute once.
         let semCodebook = model.audioTokenizer.quantizer.semanticCodebook.codebook  // (semanticVocab, semanticDim)
         MLX.eval(semCodebook)
@@ -450,6 +455,10 @@ public final class VoxtralVoiceEnrollment {
             MLX.eval(semanticLogits, acousticValues, mS, vS, mA, vA)
 
             temperature = max(config.minTemperature, temperature * config.temperatureDecay)
+
+            if (epoch + 1) % beaconEvery == 0 || epoch == 0 {
+                beacon?.update(phase: "optimizing", step: epoch + 1, totalSteps: config.epochs)
+            }
 
             if let progress, (epoch + 1) % config.logEvery == 0 || epoch == 0 {
                 progress(Progress(

@@ -74,6 +74,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     private let voiceManager: VoxtralVoicePresetManager
     private var modelDirectory: URL?
     private var voiceEmbeddings: [String: MLXArray] = [:]
+    /// Registry id of the loaded model (for the activity beacon manifests).
+    private var loadedModelID: String?
 
     // Cached voice-conditioned prefill KV for the last-used voice. The voice
     // frames precede the text in the prompt, so their KV depends only on the
@@ -118,12 +120,16 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         state = .loading
         prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
 
+        let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
+        let beacon = RuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
+        defer { beacon?.end() }
+
         do {
             let session = MLXProfiler.shared.activeSession
 
             progress?(0.05, "Resolving TTS model...")
             session?.beginPhase("1. Model Download", category: .modelLoad)
-            let modelInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
+            let modelInfo = resolvedInfo
             let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
                 progress?(0.05 + p * 0.35, msg)
             }
@@ -160,6 +166,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             session?.endPhase("4. Voice Embeddings", category: .voiceEmbedding)
 
             progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
+            loadedModelID = resolvedInfo.id
             state = .ready
 
         } catch {
@@ -186,6 +193,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let startTime = Date()
         let profiler = MLXProfiler.shared
         let session = profiler.activeSession
+        let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+        defer { beacon?.end() }
 
         let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
         do {
@@ -273,6 +282,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let startTime = Date()
         let profiler = MLXProfiler.shared
         let session = profiler.activeSession
+        let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+        defer { beacon?.end() }
 
         do {
             profiler.startSemanticGen()
@@ -416,6 +427,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         state = .synthesizing
         let startTime = Date()
+        let beacon = RuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
 
         let capturedMaxFrames = configuration.maxFrames
         let capturedSampleRate = sampleRate
@@ -438,6 +450,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
         return AsyncThrowingStream { continuation in
             Task {
+                defer { beacon?.end() }
                 var previousSampleCount = 0
                 var isFirst = true
 
@@ -483,6 +496,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                         previousSampleCount = totalSamples
                         isFirst = false
+                        beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                     }
 
                     continuation.finish()
@@ -503,6 +517,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         voiceEmbeddings = [:]
         prefixCacheEntry = nil
         modelDirectory = nil
+        loadedModelID = nil
         state = .unloaded
     }
 

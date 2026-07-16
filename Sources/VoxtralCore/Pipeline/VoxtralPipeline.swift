@@ -216,6 +216,9 @@ public class VoxtralPipeline: @unchecked Sendable {
         state = .loading
         progress?(0.0, "Starting model download...")
 
+        let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
+        defer { beacon?.end() }
+
         do {
             let profiler = MLXProfiler.shared
             let session = profiler.activeSession
@@ -321,7 +324,9 @@ public class VoxtralPipeline: @unchecked Sendable {
 
         state = .processing
         let session = MLXProfiler.shared.activeSession
+        let beacon = RuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
         defer {
+            beacon?.end()
             state = .ready
             // Apply memory optimization
             VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0)
@@ -396,7 +401,9 @@ public class VoxtralPipeline: @unchecked Sendable {
 
         state = .processing
         let session = MLXProfiler.shared.activeSession
+        let beacon = RuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
         defer {
+            beacon?.end()
             state = .ready
             VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0)
         }
