@@ -68,8 +68,13 @@ private func rms(_ samples: MLXArray, _ start: Int, _ end: Int) -> Float {
     return MLX.sqrt(MLX.mean(chunk * chunk)).item(Float.self)
 }
 
+/// Scan cap: 50 frames = 4 s. Enrolled voices can generate well over 20
+/// frames (1.6 s) of noise-floor lead-in — measured 22 on a real clone —
+/// so the historical 20-frame cap left audible noise at the start.
+private let maxTrimScanFrames = 50
+
 /// Shared scan-and-count core: number of consecutive sub-threshold frames
-/// from the start (or, reversed, from the end), capped at 20 frames (1.6 s).
+/// from the start (or, reversed, from the end), capped at `maxTrimScanFrames`.
 /// When scanning from the end, the final partial frame (< 80 ms remainder)
 /// is folded into the last frame so its energy is never dropped unseen.
 private func quietFrameCount(
@@ -77,8 +82,8 @@ private func quietFrameCount(
     threshold: Float, fromEnd: Bool
 ) -> Int {
     let indices = fromEnd
-        ? Array((max(0, totalFrames - 20) ..< totalFrames).reversed())
-        : Array(0 ..< min(totalFrames, 20))
+        ? Array((max(0, totalFrames - maxTrimScanFrames) ..< totalFrames).reversed())
+        : Array(0 ..< min(totalFrames, maxTrimScanFrames))
     var quiet = 0
     for i in indices {
         let start = i * frameSize
@@ -146,7 +151,7 @@ public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, thr
 
 /// Trim low-energy trailing frames from waveform (fade-out / hang after the
 /// last word). Same relative threshold as `trimLeadInSilence`; scans at most
-/// the last 20 frames (1.6 s) and always keeps at least one frame. The final
+/// the last 50 frames (4 s) and always keeps at least one frame. The final
 /// partial frame (< 80 ms remainder) is folded into the last frame's RMS, so
 /// audible content there prevents the trim instead of being dropped unseen.
 public func trimTrailingSilence(
