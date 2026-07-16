@@ -30,19 +30,27 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// Disable if you need precise control over intonation via casing/punctuation.
         public var sanitizeText: Bool
         /// Trim low-energy lead-in silence frames from the beginning of generated audio.
+        /// Applies to `synthesize`/`synthesizeToFile` only — `synthesizeStreaming`
+        /// yields chunks as they decode and never trims.
         public var trimLeadIn: Bool
+        /// Trim low-energy trailing silence frames from the end of generated
+        /// audio (opt-in; useful when downstream consumers align on speech
+        /// boundaries, e.g. lip-sync video generation). Like `trimLeadIn`,
+        /// ignored by `synthesizeStreaming`.
+        public var trimTail: Bool
 
         public static var `default`: Configuration {
-            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true)
+            Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true, trimTail: false)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true) {
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false) {
             self.maxFrames = maxFrames
             self.temperature = temperature
             self.cfgAlpha = cfgAlpha
             self.flowSteps = flowSteps
             self.sanitizeText = sanitizeText
             self.trimLeadIn = trimLeadIn
+            self.trimTail = trimTail
         }
     }
 
@@ -85,6 +93,15 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     }
 
     public typealias ProgressCallback = @Sendable (Double, String) -> Void
+
+    /// Post-process one decoded waveform per the configuration's trim flags.
+    private func applyTrims(_ raw: MLXArray) -> MLXArray {
+        var waveform = configuration.trimLeadIn ? trimLeadInSilence(raw, sampleRate: sampleRate) : raw
+        if configuration.trimTail {
+            waveform = trimTrailingSilence(waveform, sampleRate: sampleRate)
+        }
+        return waveform
+    }
 
     // MARK: - Initialization
 
@@ -207,7 +224,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
+            let waveform = applyTrims(rawWaveform)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
@@ -291,7 +308,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            let waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
+            let waveform = applyTrims(rawWaveform)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
@@ -329,19 +346,32 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// `.safetensors` (key "embedding", shape [T+1, 3072]) usable with
     /// `synthesize(text:voiceEmbedding:)` or `--voice-embedding`.
     /// Offline: ~30 min for 5000 epochs on an M-series Mac.
+    ///
+    /// `shouldContinue` is polled every epoch; return `false` to cancel the
+    /// run — the optimization stops within one epoch and `CancellationError`
+    /// propagates from inside the loop, so no partial embedding file is ever
+    /// written (the cancellation decision is the in-loop poll itself, not a
+    /// second read of the predicate afterwards).
     @discardableResult
     public func enrollVoice(
         referenceURL: URL,
         outputURL: URL,
         config: VoxtralVoiceEnrollment.Config = .init(),
-        progress: ((VoxtralVoiceEnrollment.Progress) -> Void)? = nil
+        progress: ((VoxtralVoiceEnrollment.Progress) -> Void)? = nil,
+        shouldContinue: (() -> Bool)? = nil
     ) throws -> MLXArray {
         guard state.isReady, let model = ttsModel else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
         }
         let enroller = VoxtralVoiceEnrollment(model: model, config: config)
         let reference = try enroller.prepareReference(url: referenceURL)
-        let codes = enroller.optimize(reference: reference, progress: progress)
+        let codes: MLXArray
+        if let shouldContinue {
+            codes = try enroller.optimize(
+                reference: reference, progress: progress, shouldContinue: shouldContinue)
+        } else {
+            codes = enroller.optimize(reference: reference, progress: progress)
+        }
         let embedding = enroller.codesToVoiceEmbedding(codes)
         try MLX.save(arrays: ["embedding": embedding], url: outputURL)
         return embedding

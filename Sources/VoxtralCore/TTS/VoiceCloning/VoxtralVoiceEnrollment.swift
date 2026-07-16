@@ -37,6 +37,26 @@ public final class VoxtralVoiceEnrollment {
         public var minTemperature: Float = 0.3
         public var gradClip: Float = 1.0        // global-norm gradient clip
         public var logEvery: Int = 500
+
+        // Reference clean-up (see prepareReference). The recording's noise
+        // floor is otherwise LEARNED as part of the voice: every synthesis
+        // then reproduces it, and downstream silence detection (lead-in trim,
+        // lip-sync alignment) stops finding any silence at all.
+        /// High-pass cutoff (Hz) applied to the reference before optimization;
+        /// removes rumble/DC below the voice band. `nil` disables.
+        public var referenceHighPassHz: Float? = 70
+        /// Gate reference windows whose RMS falls below `gateThresholdDB`
+        /// (relative to the LOUDEST 20 ms window's RMS — not the sample peak,
+        /// so a single click or plosive spike cannot inflate the threshold
+        /// and gate genuine speech) to true silence. Set `false` to keep the
+        /// raw recording, ambience included.
+        public var gateReference: Bool = true
+        /// Gate threshold relative to the loudest 20 ms window RMS, in dB.
+        /// −30 is deliberately conservative: gating that eats soft speech is
+        /// far worse than a slightly higher learned noise floor (the output
+        /// trim is peak-relative and handles the latter downstream).
+        public var gateThresholdDB: Float = -30
+
         public init() {}
     }
 
@@ -74,6 +94,11 @@ public final class VoxtralVoiceEnrollment {
     /// samples and ending on the quietest window in the last 1.5 s (fade +
     /// trailing silence). A reference cut mid-speech destabilizes the start
     /// of later syntheses.
+    ///
+    /// Unless disabled in `Config`, the reference is also high-passed and
+    /// noise-gated first: whatever is in the reference — noise floor
+    /// included — becomes the optimization target and is baked into the
+    /// cloned voice, so silences must be true silence going in.
     public func prepareReference(url: URL) throws -> MLXArray {
         // Read the file at its NATIVE rate as mono float32 (channel mix only —
         // no sample-rate conversion here, which is where AVAudioConverter is
@@ -88,16 +113,25 @@ public final class VoxtralVoiceEnrollment {
         }
         samples = Array(samples[0 ..< numSamples])
 
-        // Cut at the quietest 50 ms window in the last 1.5 s.
+        if let hp = config.referenceHighPassHz, hp > 0 {
+            samples = Self.highPass(samples, cutoff: Double(hp), sampleRate: 24_000)
+        }
+        if config.gateReference {
+            samples = Self.gate(samples, sampleRate: 24_000, thresholdDB: config.gateThresholdDB)
+        }
+
+        // Cut at the quietest 50 ms window in the last 1.5 s. `<=` so that
+        // among equally quiet windows the LATEST wins: gating produces exact
+        // zeros, and with strict `<` a gated inter-word pause early in the
+        // search range would beat the trailing silence — cutting mid-pause
+        // and silencing the final word(s) of the reference.
         let sr = 24_000, win = 24_000 / 20
         let searchStart = max(0, numSamples - Int(1.5 * Double(sr)))
         var cut = numSamples, bestRMS = Float.greatestFiniteMagnitude
         var s = searchStart
         while s < numSamples - win {
-            var acc: Float = 0
-            for i in s ..< s + win { acc += samples[i] * samples[i] }
-            let rms = (acc / Float(win)).squareRoot()
-            if rms < bestRMS { bestRMS = rms; cut = s + win / 2 }
+            let rms = Self.windowRMS(samples, s ..< s + win)
+            if rms <= bestRMS { bestRMS = rms; cut = s + win / 2 }
             s += sr / 100
         }
         let fade = sr / 50
@@ -155,6 +189,82 @@ public final class VoxtralVoiceEnrollment {
             let a = source[i0]
             let b = i0 + 1 < source.count ? source[i0 + 1] : a
             out[i] = a + (b - a) * frac
+        }
+        return out
+    }
+
+    /// FIR high-pass: spectral complement of `lowPass` (x − LP(x)), so it
+    /// shares the low-pass's linear phase and unity passband. Removes DC and
+    /// rumble below the voice band that the optimization would otherwise
+    /// learn as part of the voice. Static + internal for unit testing.
+    static func highPass(_ x: [Float], cutoff: Double, sampleRate: Double) -> [Float] {
+        let lp = lowPass(x, cutoff: cutoff, sampleRate: sampleRate)
+        var out = x
+        for i in 0 ..< out.count { out[i] -= lp[i] }
+        return out
+    }
+
+    /// RMS of one window of samples. Shared by the gate and the tail-cut
+    /// scan in `prepareReference` so "quiet" means the same thing in both.
+    static func windowRMS(_ x: [Float], _ range: Range<Int>) -> Float {
+        guard !range.isEmpty else { return 0 }
+        var acc: Float = 0
+        for i in range { acc += x[i] * x[i] }
+        return (acc / Float(range.count)).squareRoot()
+    }
+
+    /// Noise gate: 20 ms windows whose RMS falls below `thresholdDB` relative
+    /// to the LOUDEST window's RMS are pushed to true silence, with 5 ms
+    /// linear ramps at every open/close so gating never clicks. The reference
+    /// level is a window RMS, not the sample peak: a single click or plosive
+    /// spike would inflate a sample-peak threshold above genuine speech
+    /// windows and gate the voice itself — the one failure mode a reference
+    /// gate must never have, since the gated audio IS the optimization
+    /// target. Frames that are quiet in the reference must be EXACTLY zero —
+    /// a learned noise floor shows up in every later synthesis. Static +
+    /// internal for unit testing.
+    static func gate(_ x: [Float], sampleRate: Int, thresholdDB: Float) -> [Float] {
+        guard !x.isEmpty else { return x }
+
+        let win = sampleRate / 50  // 20 ms
+        let numWindows = (x.count + win - 1) / win
+
+        var windowLevels = [Float](repeating: 0, count: numWindows)
+        for w in 0 ..< numWindows {
+            windowLevels[w] = windowRMS(x, w * win ..< min((w + 1) * win, x.count))
+        }
+        guard let loudest = windowLevels.max(), loudest > 0 else { return x }
+        let threshold = loudest * Foundation.pow(10, thresholdDB / 20)
+
+        // Per-window open/closed decision.
+        var open = [Bool](repeating: true, count: numWindows)
+        for w in 0 ..< numWindows {
+            open[w] = windowLevels[w] >= threshold
+        }
+
+        // Per-sample gain with short ramps at open/close boundaries.
+        let fade = sampleRate / 200  // 5 ms
+        var out = x
+        for w in 0 ..< numWindows where !open[w] {
+            let start = w * win
+            let end = min(start + win, x.count)
+            for i in start ..< end { out[i] = 0 }
+        }
+        for w in 0 ..< numWindows {
+            guard open[w] else { continue }
+            let start = w * win
+            let end = min(start + win, x.count)
+            // Ramp in if the previous window is closed, out if the next is.
+            if w > 0, !open[w - 1] {
+                for i in 0 ..< min(fade, end - start) {
+                    out[start + i] *= Float(i) / Float(fade)
+                }
+            }
+            if w + 1 < numWindows, !open[w + 1] {
+                for i in 0 ..< min(fade, end - start) {
+                    out[end - 1 - i] *= Float(i) / Float(fade)
+                }
+            }
         }
         return out
     }
@@ -244,6 +354,30 @@ public final class VoxtralVoiceEnrollment {
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
         progress: ((Progress) -> Void)? = nil
     ) -> MLXArray {
+        optimizeCore(reference: reference, progress: progress, shouldContinue: nil).codes
+    }
+
+    /// Cancellable variant: `shouldContinue` is polled at the top of every
+    /// epoch (an epoch is ~100–500 ms); the first `false` stops the loop and
+    /// throws `CancellationError`. Cancellation is decided by that single
+    /// in-loop poll — the partial codes never escape, so a non-latching
+    /// predicate cannot leak an under-trained result to the caller.
+    public func optimize(
+        reference: MLXArray,                       // (numSamples,) 24 kHz mono
+        progress: ((Progress) -> Void)? = nil,
+        shouldContinue: @escaping () -> Bool
+    ) throws -> MLXArray {
+        let (codes, cancelled) = optimizeCore(
+            reference: reference, progress: progress, shouldContinue: shouldContinue)
+        if cancelled { throw CancellationError() }
+        return codes
+    }
+
+    private func optimizeCore(
+        reference: MLXArray,
+        progress: ((Progress) -> Void)?,
+        shouldContinue: (() -> Bool)?
+    ) -> (codes: MLXArray, cancelled: Bool) {
         let T = config.numFrames
         precondition(reference.dim(0) >= numSamples,
                      "reference must have at least \(numSamples) samples, got \(reference.dim(0))")
@@ -271,7 +405,9 @@ public final class VoxtralVoiceEnrollment {
 
         var temperature = config.temperature
 
+        var cancelled = false
         for epoch in 0 ..< config.epochs {
+            if let shouldContinue, !shouldContinue() { cancelled = true; break }
             let temp = temperature
 
             func lossFn(_ p: [MLXArray]) -> [MLXArray] {
@@ -333,7 +469,8 @@ public final class VoxtralVoiceEnrollment {
             }
         }
 
-        return discreteCodes(semanticLogits: semanticLogits, acousticValues: acousticValues)
+        return (discreteCodes(semanticLogits: semanticLogits, acousticValues: acousticValues),
+                cancelled)
     }
 
     private func adamStep(
