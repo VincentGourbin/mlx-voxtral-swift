@@ -573,6 +573,15 @@ struct Enroll: AsyncParsableCommand {
     @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5, min 2s)")
     var duration: Double = 16.0
 
+    @Flag(name: .long, help: "Keep the reference's noise floor (disable the silence gate)")
+    var noGate = false
+
+    @Option(name: .long, help: "Gate threshold in dB relative to the loudest 20ms window (default -30)")
+    var gateThresholdDb: Float = -30
+
+    @Option(name: .long, help: "Reference high-pass cutoff in Hz; 0 disables (default 70)")
+    var highPassHz: Float = 70
+
     func run() async throws {
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL VOICE ENROLLMENT (cloning)")
@@ -602,6 +611,9 @@ struct Enroll: AsyncParsableCommand {
         var config = VoxtralVoiceEnrollment.Config()
         config.numFrames = Int(duration * 12.5)
         config.epochs = epochs
+        config.gateReference = !noGate
+        config.gateThresholdDB = gateThresholdDb
+        config.referenceHighPassHz = highPassHz > 0 ? highPassHz : nil
 
         let pipeline = VoxtralTTSPipeline()
         print("\n[1/2] Loading TTS model...")

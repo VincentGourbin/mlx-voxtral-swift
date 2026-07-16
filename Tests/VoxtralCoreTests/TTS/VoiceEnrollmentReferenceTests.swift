@@ -74,9 +74,9 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
     /// left in the "silences" is baked into the cloned voice.
     func testGateZeroesNoiseOnlyRegions() {
         let speech = sine(440, seconds: 0.5, rate: 24_000)
-        // Noise floor at 0.01 (peak 0.5 → threshold at −25 dB is 0.028).
+        // Noise floor at 0.01 (loudest window RMS ≈ 0.35 → −30 dB ≈ 0.011).
         let noise = (0 ..< 12_000).map { Float($0 % 2 == 0 ? 0.01 : -0.01) }
-        let out = VoxtralVoiceEnrollment.gate(speech + noise, sampleRate: 24_000, thresholdDB: -25)
+        let out = VoxtralVoiceEnrollment.gate(speech + noise, sampleRate: 24_000, thresholdDB: -30)
 
         // Away from the closing ramp, the noise region is exactly zero.
         let tail = Array(out[(speech.count + 480)...])
@@ -88,8 +88,25 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
     /// A fully voiced signal passes through the gate untouched.
     func testGateIsIdentityOnVoicedSignal() {
         let speech = sine(440, seconds: 0.5, rate: 24_000)
-        let out = VoxtralVoiceEnrollment.gate(speech, sampleRate: 24_000, thresholdDB: -25)
+        let out = VoxtralVoiceEnrollment.gate(speech, sampleRate: 24_000, thresholdDB: -30)
         XCTAssertEqual(out, speech)
+    }
+
+    /// A single full-scale click must NOT inflate the gate threshold above
+    /// genuine soft speech — the threshold is relative to the loudest WINDOW
+    /// RMS, not the sample peak. (With a sample-peak threshold, one click in
+    /// a soft recording gated the entire voice to silence and the 30-minute
+    /// optimization targeted nothing.)
+    func testGateSurvivesTransientClick() {
+        // Soft speech at RMS ≈ 0.028: below 1.0 × 10^(−30/20) ≈ 0.032, so a
+        // sample-peak threshold would gate ALL of it because of the click.
+        var signal = sine(440, seconds: 1.0, rate: 24_000).map { $0 * 0.08 }
+        signal[12_000] = 1.0  // full-scale click
+        let out = VoxtralVoiceEnrollment.gate(signal, sampleRate: 24_000, thresholdDB: -30)
+
+        // Speech well away from the click must survive ungated.
+        XCTAssertGreaterThan(rms(Array(out[0 ..< 6_000])), 0.02, "soft speech gated by a click")
+        XCTAssertGreaterThan(rms(Array(out[18_000 ..< 24_000])), 0.02, "soft speech gated by a click")
     }
 
     /// The high-pass must remove DC/rumble while keeping the voice band.

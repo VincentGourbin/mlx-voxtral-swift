@@ -57,13 +57,36 @@ private func silenceThreshold(
     return max(absoluteFloor, peak * Foundation.pow(10, relativeThresholdDB / 20))
 }
 
-private let samplesPerFrame = 1920  // 80ms at 24kHz (8x upsample * 240 patch)
+/// Samples per 80 ms codec frame at the given rate (1920 at 24 kHz:
+/// 8x upsample * 240 patch).
+private func samplesPerFrame(at sampleRate: Int) -> Int {
+    sampleRate * 2 / 25
+}
 
-private func frameRMS(_ samples: MLXArray, frame: Int, totalSamples: Int) -> Float {
-    let start = frame * samplesPerFrame
-    let end = min(start + samplesPerFrame, totalSamples)
+private func rms(_ samples: MLXArray, _ start: Int, _ end: Int) -> Float {
     let chunk = samples[start..<end]
     return MLX.sqrt(MLX.mean(chunk * chunk)).item(Float.self)
+}
+
+/// Shared scan-and-count core: number of consecutive sub-threshold frames
+/// from the start (or, reversed, from the end), capped at 20 frames (1.6 s).
+/// When scanning from the end, the final partial frame (< 80 ms remainder)
+/// is folded into the last frame so its energy is never dropped unseen.
+private func quietFrameCount(
+    _ samples: MLXArray, totalSamples: Int, frameSize: Int, totalFrames: Int,
+    threshold: Float, fromEnd: Bool
+) -> Int {
+    let indices = fromEnd
+        ? Array((max(0, totalFrames - 20) ..< totalFrames).reversed())
+        : Array(0 ..< min(totalFrames, 20))
+    var quiet = 0
+    for i in indices {
+        let start = i * frameSize
+        let end = (fromEnd && i == totalFrames - 1) ? totalSamples : min(start + frameSize, totalSamples)
+        if rms(samples, start, end) >= threshold { break }
+        quiet += 1
+    }
+    return quiet
 }
 
 /// Trim low-energy lead-in frames from waveform.
@@ -71,6 +94,12 @@ private func frameRMS(_ samples: MLXArray, frame: Int, totalSamples: Int) -> Flo
 /// especially noticeable with non-English voices. This removes them for cleaner output.
 /// The threshold is relative to the clip's peak (default peak − 25 dB) — see
 /// `silenceThreshold` for why absolute thresholds fail on enrolled voices.
+///
+/// - Note: Behavior change vs the old absolute threshold (0.025), in both
+///   directions: on a full-scale clip the relative threshold sits higher
+///   (~0.056), so a very soft onset frame that used to survive may now be
+///   trimmed; on a quiet clip (peak < 0.44) it sits lower, so faint lead-in
+///   ambience that used to be cut is now kept.
 public func trimLeadInSilence(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
@@ -78,50 +107,48 @@ public func trimLeadInSilence(
     absoluteFloor: Float = 0.001
 ) -> MLXArray {
     let totalSamples = waveform.dim(0)
-    let totalFrames = totalSamples / samplesPerFrame
+    let frameSize = samplesPerFrame(at: sampleRate)
+    let totalFrames = totalSamples / frameSize
+    guard totalFrames > 0 else { return waveform }
 
     let samples = waveform.asType(.float32)
     let threshold = silenceThreshold(
         samples, relativeThresholdDB: relativeThresholdDB, absoluteFloor: absoluteFloor)
+    return trimLead(waveform, samples: samples, totalSamples: totalSamples,
+                    frameSize: frameSize, totalFrames: totalFrames, threshold: threshold)
+}
 
-    // Scan frame-by-frame, find the first frame above threshold RMS
-    var trimFrames = 0
-    for i in 0..<min(totalFrames, 20) {  // Check at most first 20 frames (1.6s)
-        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold {
-            break
-        }
-        trimFrames += 1
-    }
-
-    if trimFrames > 0 {
-        let trimSamples = trimFrames * samplesPerFrame
-        if trimSamples < totalSamples {
-            return waveform[trimSamples...]
-        }
+private func trimLead(
+    _ waveform: MLXArray, samples: MLXArray, totalSamples: Int,
+    frameSize: Int, totalFrames: Int, threshold: Float
+) -> MLXArray {
+    let trimFrames = quietFrameCount(
+        samples, totalSamples: totalSamples, frameSize: frameSize,
+        totalFrames: totalFrames, threshold: threshold, fromEnd: false)
+    if trimFrames > 0, trimFrames * frameSize < totalSamples {
+        return waveform[(trimFrames * frameSize)...]
     }
     return waveform
 }
 
-/// Deprecated absolute-threshold variant, kept for source compatibility.
+/// Deprecated absolute-threshold variant. Note it only preserves the old
+/// semantics for calls that spell out `threshold:` — calls that omitted the
+/// argument resolve to the new relative-threshold function above.
 @available(*, deprecated, message: "A fixed absolute threshold never triggers on enrolled voices; use trimLeadInSilence(_:sampleRate:relativeThresholdDB:absoluteFloor:)")
 public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, threshold: Float) -> MLXArray {
     let totalSamples = waveform.dim(0)
-    let totalFrames = totalSamples / samplesPerFrame
-    let samples = waveform.asType(.float32)
-    var trimFrames = 0
-    for i in 0..<min(totalFrames, 20) {
-        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold { break }
-        trimFrames += 1
-    }
-    if trimFrames > 0, trimFrames * samplesPerFrame < totalSamples {
-        return waveform[(trimFrames * samplesPerFrame)...]
-    }
-    return waveform
+    let frameSize = samplesPerFrame(at: sampleRate)
+    let totalFrames = totalSamples / frameSize
+    guard totalFrames > 0 else { return waveform }
+    return trimLead(waveform, samples: waveform.asType(.float32), totalSamples: totalSamples,
+                    frameSize: frameSize, totalFrames: totalFrames, threshold: threshold)
 }
 
 /// Trim low-energy trailing frames from waveform (fade-out / hang after the
 /// last word). Same relative threshold as `trimLeadInSilence`; scans at most
-/// the last 20 frames (1.6 s) and always keeps at least one frame.
+/// the last 20 frames (1.6 s) and always keeps at least one frame. The final
+/// partial frame (< 80 ms remainder) is folded into the last frame's RMS, so
+/// audible content there prevents the trim instead of being dropped unseen.
 public func trimTrailingSilence(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
@@ -129,26 +156,20 @@ public func trimTrailingSilence(
     absoluteFloor: Float = 0.001
 ) -> MLXArray {
     let totalSamples = waveform.dim(0)
-    let totalFrames = totalSamples / samplesPerFrame
+    let frameSize = samplesPerFrame(at: sampleRate)
+    let totalFrames = totalSamples / frameSize
     guard totalFrames > 1 else { return waveform }
 
     let samples = waveform.asType(.float32)
     let threshold = silenceThreshold(
         samples, relativeThresholdDB: relativeThresholdDB, absoluteFloor: absoluteFloor)
 
-    // Scan from the end, find the last frame above threshold RMS. The final
-    // partial frame (< 80 ms remainder) is treated as part of the last frame.
-    var trimFrames = 0
-    for i in stride(from: totalFrames - 1, through: max(0, totalFrames - 20), by: -1) {
-        if frameRMS(samples, frame: i, totalSamples: totalSamples) >= threshold {
-            break
-        }
-        trimFrames += 1
-    }
+    let trimFrames = quietFrameCount(
+        samples, totalSamples: totalSamples, frameSize: frameSize,
+        totalFrames: totalFrames, threshold: threshold, fromEnd: true)
 
     if trimFrames > 0, trimFrames < totalFrames {
-        // Cut at the frame boundary; drop the trailing partial frame too.
-        let keepSamples = (totalFrames - trimFrames) * samplesPerFrame
+        let keepSamples = (totalFrames - trimFrames) * frameSize
         return waveform[0..<keepSamples]
     }
     return waveform

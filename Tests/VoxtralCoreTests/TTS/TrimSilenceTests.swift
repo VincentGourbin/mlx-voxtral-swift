@@ -83,4 +83,30 @@ final class TrimSilenceTests: XCTestCase {
             trimLeadInSilence(waveform, sampleRate: 24_000), sampleRate: 24_000)
         XCTAssertEqual(trimmed.dim(0), 4 * frame)
     }
+
+    /// An empty waveform must pass through untouched — the threshold pass
+    /// must not run on a zero-size array (MLX max() aborts on empty input).
+    func testEmptyWaveformUntouched() {
+        let empty = MLXArray([Float]())
+        XCTAssertEqual(trimLeadInSilence(empty, sampleRate: 24_000).dim(0), 0)
+        XCTAssertEqual(trimTrailingSilence(empty, sampleRate: 24_000).dim(0), 0)
+    }
+
+    /// Audible content in the trailing partial frame (< 80 ms remainder)
+    /// must prevent the tail trim: the remainder is folded into the last
+    /// frame's RMS, not dropped unseen.
+    func testTrailingPartialFrameWithSpeechPreventsTrim() {
+        let remainder = Array(speechFrames(1)[0 ..< 900])
+        let waveform = MLXArray(speechFrames(4) + noiseFrames(1, amplitude: 0.03) + remainder)
+        let trimmed = trimTrailingSilence(waveform, sampleRate: 24_000)
+        XCTAssertEqual(trimmed.dim(0), 4 * frame + frame + 900, "audible remainder was dropped")
+    }
+
+    /// A quiet partial remainder after a quiet last frame is trimmed with it.
+    func testTrailingQuietPartialFrameTrimmed() {
+        let remainder = Array(noiseFrames(1, amplitude: 0.03)[0 ..< 900])
+        let waveform = MLXArray(speechFrames(4) + noiseFrames(1, amplitude: 0.03) + remainder)
+        let trimmed = trimTrailingSilence(waveform, sampleRate: 24_000)
+        XCTAssertEqual(trimmed.dim(0), 4 * frame)
+    }
 }

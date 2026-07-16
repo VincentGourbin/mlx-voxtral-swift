@@ -30,10 +30,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// Disable if you need precise control over intonation via casing/punctuation.
         public var sanitizeText: Bool
         /// Trim low-energy lead-in silence frames from the beginning of generated audio.
+        /// Applies to `synthesize`/`synthesizeToFile` only — `synthesizeStreaming`
+        /// yields chunks as they decode and never trims.
         public var trimLeadIn: Bool
         /// Trim low-energy trailing silence frames from the end of generated
         /// audio (opt-in; useful when downstream consumers align on speech
-        /// boundaries, e.g. lip-sync video generation).
+        /// boundaries, e.g. lip-sync video generation). Like `trimLeadIn`,
+        /// ignored by `synthesizeStreaming`.
         public var trimTail: Bool
 
         public static var `default`: Configuration {
@@ -88,6 +91,15 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     }
 
     public typealias ProgressCallback = @Sendable (Double, String) -> Void
+
+    /// Post-process one decoded waveform per the configuration's trim flags.
+    private func applyTrims(_ raw: MLXArray) -> MLXArray {
+        var waveform = configuration.trimLeadIn ? trimLeadInSilence(raw, sampleRate: sampleRate) : raw
+        if configuration.trimTail {
+            waveform = trimTrailingSilence(waveform, sampleRate: sampleRate)
+        }
+        return waveform
+    }
 
     // MARK: - Initialization
 
@@ -203,10 +215,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            var waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
-            if configuration.trimTail {
-                waveform = trimTrailingSilence(waveform, sampleRate: sampleRate)
-            }
+            let waveform = applyTrims(rawWaveform)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
@@ -288,10 +297,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            var waveform = configuration.trimLeadIn ? trimLeadInSilence(rawWaveform, sampleRate: sampleRate) : rawWaveform
-            if configuration.trimTail {
-                waveform = trimTrailingSilence(waveform, sampleRate: sampleRate)
-            }
+            let waveform = applyTrims(rawWaveform)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
@@ -332,7 +338,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     ///
     /// `shouldContinue` is polled every epoch; return `false` to cancel the
     /// run — the optimization stops within one epoch and `CancellationError`
-    /// is thrown, so no partial embedding file is ever written.
+    /// propagates from inside the loop, so no partial embedding file is ever
+    /// written (the cancellation decision is the in-loop poll itself, not a
+    /// second read of the predicate afterwards).
     @discardableResult
     public func enrollVoice(
         referenceURL: URL,
@@ -346,10 +354,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
         let enroller = VoxtralVoiceEnrollment(model: model, config: config)
         let reference = try enroller.prepareReference(url: referenceURL)
-        let codes = enroller.optimize(
-            reference: reference, progress: progress, shouldContinue: shouldContinue)
-        if let shouldContinue, !shouldContinue() {
-            throw CancellationError()
+        let codes: MLXArray
+        if let shouldContinue {
+            codes = try enroller.optimize(
+                reference: reference, progress: progress, shouldContinue: shouldContinue)
+        } else {
+            codes = enroller.optimize(reference: reference, progress: progress)
         }
         let embedding = enroller.codesToVoiceEmbedding(codes)
         try MLX.save(arrays: ["embedding": embedding], url: outputURL)

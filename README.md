@@ -182,10 +182,12 @@ voice once (offline), then reuse it like any preset.
 
 Reference guidance: aim for **10–16 s** of clean speech, one speaker, no
 background music. Any format (wav/mp3/m4a) works. The reference is
-high-passed (70 Hz) and noise-gated before optimization so the recording's
-noise floor doesn't get baked into the cloned voice (disable via
-`Config.referenceHighPassHz = nil` / `Config.gateReference = false`). See
-the full guide, including quality expectations and bilingual examples, in
+high-passed (70 Hz) and noise-gated (windows 30 dB below the loudest 20 ms
+window become true silence) before optimization so the recording's noise
+floor doesn't get baked into the cloned voice — disable via `--no-gate` /
+`--high-pass-hz 0` on the CLI, or `Config.gateReference = false` /
+`Config.referenceHighPassHz = nil` in code. See the full guide, including
+quality expectations and bilingual examples, in
 **[docs/voice_cloning.md](docs/voice_cloning.md)**.
 
 > Voice cloning recovers the voice by optimizing codec codes through the

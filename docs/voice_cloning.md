@@ -56,6 +56,13 @@ Practical guidance:
   automatically trims to the last natural pause, fades, and pads with
   silence, so a reference that ends mid-word is handled gracefully — but a
   clip that *starts* clean (no long intro) gives the best result.
+- **The reference is cleaned before optimization**: a 70 Hz high-pass
+  removes rumble/DC, and a noise gate pushes windows more than 30 dB below
+  the loudest 20 ms window to true silence. Whatever is in the reference —
+  noise floor included — is learned as part of the voice, so silences must
+  be real silence going in. If your reference legitimately needs its
+  low end or ambience kept, disable with `--high-pass-hz 0` / `--no-gate`
+  (or `Config.referenceHighPassHz = nil` / `Config.gateReference = false`).
 
 ## `voxtral enroll` options
 
@@ -66,6 +73,9 @@ Practical guidance:
 | `-m, --model` | `tts-4b-mlx` | TTS model (matches the `tts` command's default so the voice is synthesized through the same weights) |
 | `-e, --epochs` | `5000` | Optimization epochs (5000 good, more helps slightly) |
 | `--duration` | `16.0` | Reference seconds to use (min 2 s; ~16 s is the sweet spot) |
+| `--no-gate` | off | Keep the reference's noise floor (disable the silence gate) |
+| `--gate-threshold-db` | `-30` | Gate threshold in dB relative to the loudest 20 ms window |
+| `--high-pass-hz` | `70` | Reference high-pass cutoff in Hz (`0` disables) |
 
 > Use the **same `--model`** for `enroll` and `tts` — a voice embedding is
 > tied to the decoder/embedding table it was optimized against. The defaults

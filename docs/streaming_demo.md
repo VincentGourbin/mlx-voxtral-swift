@@ -80,7 +80,9 @@ enrollment core itself stays pure Swift.
 
 Requires microphone permission (macOS will prompt on first use). Record in a
 quiet room at a natural pace, aiming slightly past the target length — the
-reference is trimmed to end on a natural pause.
+reference is high-passed (70 Hz), noise-gated (quiet windows become true
+silence so the room's noise floor isn't learned as part of the voice), and
+trimmed to end on a natural pause.
 
 ## Notes
 
