@@ -186,7 +186,11 @@ struct Transcribe: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TRANSCRIPTION (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
@@ -293,7 +297,11 @@ struct Chat: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL CHAT (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
@@ -421,7 +429,11 @@ struct TTS: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable lead-in silence trimming")
     var noTrim = false
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TTS (Text-to-Speech)")
         print(String(repeating: "=", count: 60))
@@ -569,7 +581,11 @@ struct Enroll: AsyncParsableCommand {
     @Option(name: .long, help: "Reference duration in seconds (frames = duration * 12.5, min 2s)")
     var duration: Double = 16.0
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL VOICE ENROLLMENT (cloning)")
         print(String(repeating: "=", count: 60))
@@ -654,7 +670,11 @@ struct Realtime: AsyncParsableCommand {
     @Flag(name: .long, help: "Extract and print audio embeddings shape")
     var embeddings = false
 
+    @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
+    var beacon = false
+
     func run() async throws {
+        RuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL REALTIME (Streaming STT)")
         print(String(repeating: "=", count: 60))

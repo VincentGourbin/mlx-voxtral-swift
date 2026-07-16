@@ -75,13 +75,16 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
         state = .loading
 
+        let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
+            ?? VoxtralRealtimeRegistry.defaultModel
+        let beacon = RuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
+        defer { beacon?.end() }
+
         do {
             let session = MLXProfiler.shared.activeSession
 
             progress?(0.05, "Resolving Realtime model...")
             session?.beginPhase("1. Model Download", category: .modelLoad)
-            let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
-                ?? VoxtralRealtimeRegistry.defaultModel
             let modelDir = try await ModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
                 progress?(0.05 + p * 0.35, msg)
             }
@@ -119,6 +122,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
         state = .processing
         let session = MLXProfiler.shared.activeSession
+        let beacon = RuntimeBeacon.begin(task: "transcribe-realtime")
+        defer { beacon?.end() }
 
         do {
             session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)

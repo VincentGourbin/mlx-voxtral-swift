@@ -262,6 +262,25 @@ The hybrid mode uses Apple's Core ML for the audio encoder while keeping the LLM
 .build/xcode/Build/Products/Release/VoxtralCLI transcribe /path/to/audio.mp3 --backend hybrid
 ```
 
+## Activity Beacon (Opt-in)
+
+Heavy operations (model loading, transcription, chat, TTS synthesis, voice enrollment) can advertise themselves to external activity monitors such as [SiliconScope](https://github.com/kennss/SiliconScope). While the operation runs, a small JSON manifest lives at `~/Library/Application Support/ai-runtime-beacons/<pid>-<id>.json` and is deleted the moment it ends — errors included. Nothing is ever written unless you opt in:
+
+```swift
+// Library integration
+RuntimeBeacon.isEnabled = true
+```
+
+```bash
+# CLI: --beacon flag (transcribe / chat / tts / enroll / realtime / profile),
+# or the environment variable for any host
+VOXTRAL_RUNTIME_BEACON=1 voxtral tts "Hello!"
+```
+
+The manifest schema is deliberately runtime-agnostic (`version`, `pid`, `runtime`, `displayName`, `task`, `model`, `phase`, `step`, `totalSteps`, timestamps) — it is the same convention as [ltx-video-swift-mlx](https://github.com/VincentGourbin/ltx-video-swift-mlx), so monitors only need one reader. Manifests left behind by a force-killed process are garbage-collected on the next beacon start via a pid liveness check.
+
+> **Note:** sandboxed apps write inside their container, invisible to external monitors — the beacon targets CLI tools and non-sandboxed apps.
+
 ## Architecture
 
 ```
