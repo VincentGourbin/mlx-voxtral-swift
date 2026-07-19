@@ -183,7 +183,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     public func synthesize(
         text: String,
-        voice: VoxtralVoice = .neutralFemale
+        voice: VoxtralVoice = .neutralFemale,
+        seed: UInt64? = nil
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -210,6 +211,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
                 sanitize: configuration.sanitizeText,
+                seed: seed,
                 prefixCache: prefix.cache,
                 prefixLen: prefix.len
             )
@@ -274,9 +276,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     }
 
     /// Synthesize speech using a pre-computed blended voice embedding.
+    ///
+    /// Pass `seed` for reproducible output: the acoustic flow-matching step
+    /// samples random noise, so without a seed the same text+voice yields a
+    /// different waveform (and a different length) on every call.
     public func synthesize(
         text: String,
-        voiceEmbedding: MLXArray
+        voiceEmbedding: MLXArray,
+        seed: UInt64? = nil
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -296,7 +303,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
-                sanitize: configuration.sanitizeText
+                sanitize: configuration.sanitizeText,
+                seed: seed
             )
             profiler.endSemanticGen(frameCount: numFrames)
             profiler.setTTFT(ttft)
