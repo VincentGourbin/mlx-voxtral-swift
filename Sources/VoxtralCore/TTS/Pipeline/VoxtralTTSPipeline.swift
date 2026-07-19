@@ -280,10 +280,17 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// Pass `seed` for reproducible output: the acoustic flow-matching step
     /// samples random noise, so without a seed the same text+voice yields a
     /// different waveform (and a different length) on every call.
+    ///
+    /// Pass `warmUpText` (A6b mitigation) to prepend a short throwaway sentence
+    /// that absorbs the enrolled-voice first-sentence degradation; its audio is
+    /// trimmed off (see `trimLeadingCarrier`) so the returned waveform starts on
+    /// the real `text`. Use a full short sentence in the voice's language (a
+    /// single word is too brief to cover the warm-up), e.g. "Bonjour à tous."
     public func synthesize(
         text: String,
         voiceEmbedding: MLXArray,
-        seed: UInt64? = nil
+        seed: UInt64? = nil,
+        warmUpText: String? = nil
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -296,10 +303,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
         defer { beacon?.end() }
 
+        // Prepend the warm-up carrier as its own sentence so the model puts a
+        // detectable pause between it and the real content.
+        let genText: String
+        if let warmUpText, !warmUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let carrier = warmUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sep = carrier.last.map { ".!?…".contains($0) } == true ? " " : ". "
+            genText = carrier + sep + text
+        } else {
+            genText = text
+        }
+
         do {
             profiler.startSemanticGen()
             let (codes, numFrames, ttft) = model.generate(
-                text: text,
+                text: genText,
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
@@ -320,7 +338,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            let waveform = applyTrims(rawWaveform)
+            // Drop the warm-up carrier's audio before the usual lead-in/tail trims.
+            var toTrim = rawWaveform
+            if warmUpText != nil, genText != text {
+                let (carrierTrimmed, cut) = trimLeadingCarrier(rawWaveform, sampleRate: sampleRate)
+                if cut > 0 { toTrim = carrierTrimmed }
+            }
+            let waveform = applyTrims(toTrim)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
