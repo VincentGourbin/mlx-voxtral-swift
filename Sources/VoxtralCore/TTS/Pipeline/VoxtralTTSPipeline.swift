@@ -80,6 +80,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     // Cached voice-conditioned prefill KV for the last-used voice. The voice
     // frames precede the text in the prompt, so their KV depends only on the
     // voice — reusing it skips the voice prefill on repeated syntheses.
+    // Invariant: this entry is never mutated by generation — generate() and
+    // generateStreaming() clone it (cloneKVCaches) before prefilling, so
+    // consecutive syntheses always start from the pristine voice prefix
+    // (guarded by KVCacheCloneTests + TTSConsecutiveSynthesisReproTests).
     private var prefixCacheEntry: (key: String, cache: [any KVCache], len: Int)?
 
     /// Get-or-compute the voice prefix KV cache for `key`.
