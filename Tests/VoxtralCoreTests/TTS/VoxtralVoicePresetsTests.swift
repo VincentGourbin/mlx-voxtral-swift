@@ -152,7 +152,7 @@ final class VoxtralVoicePresetsTests: XCTestCase {
 
     func testManagerInitWithDefaultCache() {
         let manager = VoxtralVoicePresetManager()
-        XCTAssertTrue(manager.cacheDirectory.path.contains(".voxtral/voices"))
+        XCTAssertTrue(manager.cacheDirectory.path.contains("models/voices"))
     }
 
     func testManagerInitWithCustomCache() {

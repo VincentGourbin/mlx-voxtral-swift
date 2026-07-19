@@ -388,14 +388,10 @@ public class VoxtralTTSModel: Module {
     // MARK: - Voice prefix KV cache (TTFT optimization)
 
     /// Deep-copy KV caches so a cached prefix can be reused across syntheses
-    /// without the generation loop mutating the cached copy.
+    /// without the generation loop mutating the cached copy (see
+    /// `cloneKVCaches` for the aliasing analysis).
     public func cloneCache(_ caches: [any KVCache]) -> [any KVCache] {
-        caches.map { c in
-            let fresh = KVCacheSimple()
-            let s = c.state
-            if s.count == 2 { fresh.state = s }
-            return fresh
-        }
+        cloneKVCaches(caches)
     }
 
     /// Precompute the KV cache for the voice-conditioned prompt prefix
@@ -676,5 +672,23 @@ public class VoxtralTTSModel: Module {
             }
             continuation.finish()
         }
+    }
+}
+
+/// Deep-copy a set of `KVCacheSimple` caches. The clone never aliases the
+/// source's mutable buffers: `state` yields views trimmed to `offset`, so the
+/// clone starts with zero spare capacity and its first `update()` must
+/// reallocate (it never writes into the source's backing buffer). Even in the
+/// exact-capacity case (`offset == dim(2)`, where `state` returns the source's
+/// own `MLXArray` instances) that first `update()` rebinds `keys`/`values` to
+/// freshly concatenated arrays before any in-place slice assignment.
+/// Guarded by `KVCacheCloneTests` — revisit if MLXLMCommon's
+/// `KVCacheSimple.update`/`state` semantics change.
+public func cloneKVCaches(_ caches: [any KVCache]) -> [any KVCache] {
+    caches.map { c in
+        let fresh = KVCacheSimple()
+        let s = c.state
+        if s.count == 2 { fresh.state = s }
+        return fresh
     }
 }
