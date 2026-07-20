@@ -180,6 +180,75 @@ public func trimTrailingSilence(
     return waveform
 }
 
+// MARK: - Warm-up Carrier Trimming (A6b mitigation)
+
+/// Drop a leading "warm-up carrier" utterance from a synthesis, cutting at the
+/// first inter-utterance silence gap so the real content starts clean.
+///
+/// Enrolled voices degrade the first ~sentence of every synthesis (the model's
+/// autoregressive state needs a run-up before the cloned voice stabilises).
+/// The mitigation is to prepend a short throwaway sentence, synthesize, then
+/// remove it here: skip the carrier's leading silence and speech, find the
+/// first silent run of at least `gapMinFrames` that is followed by resumed
+/// speech (the carrier's terminal pause), and cut there.
+///
+/// Returns the trimmed waveform and the number of leading frames removed. If no
+/// qualifying gap is found within `scanFrames` (e.g. the carrier ran straight
+/// into the content), the waveform is returned unchanged with `cutFrames == 0`
+/// — never silently blanking the output.
+///
+/// `leadInFrames` keeps that many frames of the carrier's terminal silence
+/// before the content, so the real speech does not start abruptly on a
+/// still-settling first word (each frame = 80 ms). It never keeps more silence
+/// than the gap actually contains.
+public func trimLeadingCarrier(
+    _ waveform: MLXArray,
+    sampleRate: Int = 24000,
+    relativeThresholdDB: Float = -25,
+    absoluteFloor: Float = 0.001,
+    gapMinFrames: Int = 3,
+    scanFrames: Int = 100,
+    leadInFrames: Int = 0
+) -> (trimmed: MLXArray, cutFrames: Int) {
+    let totalSamples = waveform.dim(0)
+    let frameSize = samplesPerFrame(at: sampleRate)
+    let totalFrames = totalSamples / frameSize
+    guard totalFrames > gapMinFrames + 1 else { return (waveform, 0) }
+
+    let samples = waveform.asType(.float32)
+    let threshold = silenceThreshold(
+        samples, relativeThresholdDB: relativeThresholdDB, absoluteFloor: absoluteFloor)
+
+    func frameRMS(_ i: Int) -> Float {
+        rms(samples, i * frameSize, min((i + 1) * frameSize, totalSamples))
+    }
+
+    let scanEnd = min(totalFrames, scanFrames)
+    var i = 0
+    // 1. Skip the carrier's leading silence.
+    while i < scanEnd, frameRMS(i) < threshold { i += 1 }
+    // 2. Require at least one frame of carrier speech before looking for a gap,
+    //    so leading silence alone is never mistaken for the terminal pause.
+    guard i < scanEnd else { return (waveform, 0) }
+    // 3. Walk forward; the first silent run of >= gapMinFrames that is followed
+    //    by resumed speech is the carrier's terminal pause.
+    while i < scanEnd {
+        if frameRMS(i) >= threshold { i += 1; continue }
+        var j = i
+        while j < totalFrames, frameRMS(j) < threshold { j += 1 }
+        let gapLen = j - i
+        if gapLen >= gapMinFrames, j < totalFrames {
+            // Cut at the resumed-speech frame, optionally keeping up to
+            // `leadInFrames` of the gap's silence (bounded by the gap and >= i)
+            // so the content has a natural lead-in instead of an abrupt onset.
+            let cut = max(i, j - max(0, leadInFrames))
+            return (waveform[(cut * frameSize)...], cut)
+        }
+        i = j  // short gap (comma) or trailing silence — keep scanning.
+    }
+    return (waveform, 0)
+}
+
 // MARK: - TTS Streaming Chunk
 
 /// A chunk of decoded audio from the streaming TTS pipeline.

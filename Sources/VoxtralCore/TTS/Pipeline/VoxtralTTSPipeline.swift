@@ -65,6 +65,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     // MARK: - Properties
 
+    /// Recommended `warmUpText` for enrolled voices (A6b): a short vocalise that
+    /// both covers the first-sentence degradation and stabilises the whole
+    /// generation across seeds. Picked by blind A/B over vocalise/verbal/hum
+    /// carriers; pair with `warmUpLeadInFrames: 0`.
+    public static let recommendedWarmUpVocalise = "La la la la la la la la."
+
     public var configuration: Configuration
     public private(set) var state: State = .unloaded
     public let sampleRate: Int = 24000
@@ -183,7 +189,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     public func synthesize(
         text: String,
-        voice: VoxtralVoice = .neutralFemale
+        voice: VoxtralVoice = .neutralFemale,
+        seed: UInt64? = nil
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -210,6 +217,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
                 sanitize: configuration.sanitizeText,
+                seed: seed,
                 prefixCache: prefix.cache,
                 prefixLen: prefix.len
             )
@@ -274,9 +282,29 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     }
 
     /// Synthesize speech using a pre-computed blended voice embedding.
+    ///
+    /// Pass `seed` for reproducible output: the acoustic flow-matching step
+    /// samples random noise, so without a seed the same text+voice yields a
+    /// different waveform (and a different length) on every call.
+    ///
+    /// Pass `warmUpText` (A6b mitigation) to prepend a short throwaway utterance
+    /// that absorbs the enrolled-voice first-sentence degradation; its audio is
+    /// trimmed off (see `trimLeadingCarrier`) so the returned waveform starts on
+    /// the real `text`. A short **vocalise** works best — pass
+    /// `recommendedWarmUpVocalise` (`"La la la la la la la la."`); a uniform
+    /// sound both covers the warm-up AND stabilises the whole generation across
+    /// seeds. A verbal carrier is less consistent and a hum/"ah-ah" scored
+    /// slightly worse in blind tests. Keep it single-clause; avoid many "…"
+    /// which makes the model over-generate.
+    /// `warmUpLeadInFrames` keeps that many 80 ms frames of the carrier's
+    /// terminal silence before the content — 0 (tight cut) is the recommended
+    /// default (blind-test winner); 3 (~0.24 s) adds a small breath.
     public func synthesize(
         text: String,
-        voiceEmbedding: MLXArray
+        voiceEmbedding: MLXArray,
+        seed: UInt64? = nil,
+        warmUpText: String? = nil,
+        warmUpLeadInFrames: Int = 0
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -289,14 +317,26 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
         defer { beacon?.end() }
 
+        // Prepend the warm-up carrier as its own sentence so the model puts a
+        // detectable pause between it and the real content.
+        let genText: String
+        if let warmUpText, !warmUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let carrier = warmUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sep = carrier.last.map { ".!?…".contains($0) } == true ? " " : ". "
+            genText = carrier + sep + text
+        } else {
+            genText = text
+        }
+
         do {
             profiler.startSemanticGen()
             let (codes, numFrames, ttft) = model.generate(
-                text: text,
+                text: genText,
                 voiceEmbedding: voiceEmbedding,
                 tokenizer: tokenizer,
                 maxTokens: configuration.maxFrames,
-                sanitize: configuration.sanitizeText
+                sanitize: configuration.sanitizeText,
+                seed: seed
             )
             profiler.endSemanticGen(frameCount: numFrames)
             profiler.setTTFT(ttft)
@@ -312,7 +352,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            let waveform = applyTrims(rawWaveform)
+            // Drop the warm-up carrier's audio. When it trims, the carrier trim
+            // already positions the content start (including any kept
+            // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
+            // it would strip that lead-in back off. Apply only the tail trim.
+            let (carrierTrimmed, carrierCut) = genText != text
+                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
+                : (rawWaveform, 0)
+            let waveform: MLXArray
+            if carrierCut > 0 {
+                waveform = configuration.trimTail
+                    ? trimTrailingSilence(carrierTrimmed, sampleRate: sampleRate)
+                    : carrierTrimmed
+            } else {
+                waveform = applyTrims(rawWaveform)
+            }
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)

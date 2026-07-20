@@ -427,10 +427,17 @@ public class VoxtralTTSModel: Module {
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
         sanitize: Bool = true,
+        seed: UInt64? = nil,
         prefixCache: [any KVCache]? = nil,
         prefixLen: Int = 0,
         onFrame: ((Int, MLXArray) -> Void)? = nil
     ) -> (codes: MLXArray, numFrames: Int, ttft: TimeInterval) {
+        // Acoustic codes come from flow matching seeded with MLXRandom.normal,
+        // and those codes feed back into the autoregressive state — so the
+        // global RNG advancing between calls makes output (including EOA
+        // timing) vary run-to-run even at temperature 0. Seed here for
+        // reproducible synthesis; leave nil for fresh sampling each call.
+        if let seed { MLXRandom.seed(seed) }
         let genStart = Date()
         let voiceFrameCount = voiceEmbedding.dim(0)
         let session = MLXProfiler.shared.activeSession
@@ -566,10 +573,13 @@ public class VoxtralTTSModel: Module {
         maxTokens: Int = 4096,
         chunkSize: Int = 10,
         sanitize: Bool = true,
+        seed: UInt64? = nil,
         prefixCache: [any KVCache]? = nil,
         prefixLen: Int = 0
     ) -> AsyncThrowingStream<GenerationChunk, Error> {
         AsyncThrowingStream { continuation in
+            // See generate(): seed for reproducible flow-matching sampling.
+            if let seed { MLXRandom.seed(seed) }
             let voiceFrameCount = voiceEmbedding.dim(0)
 
             // 1. Encode text to token IDs
