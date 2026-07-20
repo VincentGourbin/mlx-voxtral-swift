@@ -352,14 +352,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             profiler.endCodecDecode()
 
             session?.beginPhase("Audio Post-processing", category: .postProcess)
-            // Drop the warm-up carrier's audio before the usual lead-in/tail trims.
-            var toTrim = rawWaveform
-            if warmUpText != nil, genText != text {
-                let (carrierTrimmed, cut) = trimLeadingCarrier(
-                    rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
-                if cut > 0 { toTrim = carrierTrimmed }
+            // Drop the warm-up carrier's audio. When it trims, the carrier trim
+            // already positions the content start (including any kept
+            // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
+            // it would strip that lead-in back off. Apply only the tail trim.
+            let (carrierTrimmed, carrierCut) = genText != text
+                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
+                : (rawWaveform, 0)
+            let waveform: MLXArray
+            if carrierCut > 0 {
+                waveform = configuration.trimTail
+                    ? trimTrailingSilence(carrierTrimmed, sampleRate: sampleRate)
+                    : carrierTrimmed
+            } else {
+                waveform = applyTrims(rawWaveform)
             }
-            let waveform = applyTrims(toTrim)
             session?.endPhase("Audio Post-processing", category: .postProcess)
 
             let generationTime = Date().timeIntervalSince(startTime)
