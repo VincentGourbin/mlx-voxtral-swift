@@ -281,16 +281,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// samples random noise, so without a seed the same text+voice yields a
     /// different waveform (and a different length) on every call.
     ///
-    /// Pass `warmUpText` (A6b mitigation) to prepend a short throwaway sentence
+    /// Pass `warmUpText` (A6b mitigation) to prepend a short throwaway utterance
     /// that absorbs the enrolled-voice first-sentence degradation; its audio is
     /// trimmed off (see `trimLeadingCarrier`) so the returned waveform starts on
-    /// the real `text`. Use a full short sentence in the voice's language (a
-    /// single word is too brief to cover the warm-up), e.g. "Bonjour à tous."
+    /// the real `text`. A short **vocalise** works best — a uniform sound like
+    /// `"La la la la la la la la."` both covers the warm-up AND stabilises the
+    /// whole generation across seeds (a verbal carrier is less consistent). Keep
+    /// it single-clause; avoid `"… … …"`, which makes the model over-generate.
+    /// `warmUpLeadInFrames` keeps that many 80 ms frames of the carrier's
+    /// terminal silence before the content (0 = tight cut, usually best).
     public func synthesize(
         text: String,
         voiceEmbedding: MLXArray,
         seed: UInt64? = nil,
-        warmUpText: String? = nil
+        warmUpText: String? = nil,
+        warmUpLeadInFrames: Int = 0
     ) async throws -> TTSSynthesisResult {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             throw VoxtralTTSError.invalidConfiguration("Model not loaded")
@@ -341,7 +346,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             // Drop the warm-up carrier's audio before the usual lead-in/tail trims.
             var toTrim = rawWaveform
             if warmUpText != nil, genText != text {
-                let (carrierTrimmed, cut) = trimLeadingCarrier(rawWaveform, sampleRate: sampleRate)
+                let (carrierTrimmed, cut) = trimLeadingCarrier(
+                    rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
                 if cut > 0 { toTrim = carrierTrimmed }
             }
             let waveform = applyTrims(toTrim)

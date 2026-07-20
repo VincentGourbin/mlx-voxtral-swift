@@ -47,6 +47,22 @@ final class TrimLeadingCarrierTests: XCTestCase {
         XCTAssertEqual(cut, 12, "cut at the first boundary, not a later sentence gap")
     }
 
+    func testLeadInKeepsGapSilenceBeforeContent() {
+        // 10 carrier frames, 4 silent frames, 30 content frames.
+        // leadInFrames:2 keeps 2 of the 4 gap frames → cut at frame 12.
+        let wav = waveform([(10, 0.3), (4, 0.0), (30, 0.3)])
+        let (trimmed, cut) = trimLeadingCarrier(wav, gapMinFrames: 3, leadInFrames: 2)
+        XCTAssertEqual(cut, 12, "should keep 2 lead-in frames before the content onset")
+        XCTAssertEqual(trimmed.dim(0), 32 * frame)
+    }
+
+    func testLeadInNeverExceedsTheGap() {
+        // leadInFrames larger than the gap must not cut into carrier speech.
+        let wav = waveform([(10, 0.3), (4, 0.0), (30, 0.3)])
+        let (_, cut) = trimLeadingCarrier(wav, gapMinFrames: 3, leadInFrames: 99)
+        XCTAssertEqual(cut, 10, "clamped to the gap start (frame 10), not into the carrier")
+    }
+
     func testNoGapReturnsUnchanged() {
         // Continuous speech, no gap → safe fallback, nothing trimmed.
         let wav = waveform([(40, 0.3)])

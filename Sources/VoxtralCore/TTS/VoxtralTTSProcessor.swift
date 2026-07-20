@@ -196,13 +196,19 @@ public func trimTrailingSilence(
 /// qualifying gap is found within `scanFrames` (e.g. the carrier ran straight
 /// into the content), the waveform is returned unchanged with `cutFrames == 0`
 /// — never silently blanking the output.
+///
+/// `leadInFrames` keeps that many frames of the carrier's terminal silence
+/// before the content, so the real speech does not start abruptly on a
+/// still-settling first word (each frame = 80 ms). It never keeps more silence
+/// than the gap actually contains.
 public func trimLeadingCarrier(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
     relativeThresholdDB: Float = -25,
     absoluteFloor: Float = 0.001,
     gapMinFrames: Int = 3,
-    scanFrames: Int = 100
+    scanFrames: Int = 100,
+    leadInFrames: Int = 0
 ) -> (trimmed: MLXArray, cutFrames: Int) {
     let totalSamples = waveform.dim(0)
     let frameSize = samplesPerFrame(at: sampleRate)
@@ -232,8 +238,11 @@ public func trimLeadingCarrier(
         while j < totalFrames, frameRMS(j) < threshold { j += 1 }
         let gapLen = j - i
         if gapLen >= gapMinFrames, j < totalFrames {
-            // Cut at the resumed-speech frame (low-energy boundary → no click).
-            return (waveform[(j * frameSize)...], j)
+            // Cut at the resumed-speech frame, optionally keeping up to
+            // `leadInFrames` of the gap's silence (bounded by the gap and >= i)
+            // so the content has a natural lead-in instead of an abrupt onset.
+            let cut = max(i, j - max(0, leadInFrames))
+            return (waveform[(cut * frameSize)...], cut)
         }
         i = j  // short gap (comma) or trailing silence — keep scanning.
     }
