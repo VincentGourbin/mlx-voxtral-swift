@@ -65,6 +65,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     // MARK: - Properties
 
+    /// Recommended `warmUpText` for enrolled voices (A6b): a short vocalise that
+    /// both covers the first-sentence degradation and stabilises the whole
+    /// generation across seeds. Picked by blind A/B over vocalise/verbal/hum
+    /// carriers; pair with `warmUpLeadInFrames: 0`.
+    public static let recommendedWarmUpVocalise = "La la la la la la la la."
+
     public var configuration: Configuration
     public private(set) var state: State = .unloaded
     public let sampleRate: Int = 24000
@@ -284,12 +290,15 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// Pass `warmUpText` (A6b mitigation) to prepend a short throwaway utterance
     /// that absorbs the enrolled-voice first-sentence degradation; its audio is
     /// trimmed off (see `trimLeadingCarrier`) so the returned waveform starts on
-    /// the real `text`. A short **vocalise** works best — a uniform sound like
-    /// `"La la la la la la la la."` both covers the warm-up AND stabilises the
-    /// whole generation across seeds (a verbal carrier is less consistent). Keep
-    /// it single-clause; avoid `"… … …"`, which makes the model over-generate.
+    /// the real `text`. A short **vocalise** works best — pass
+    /// `recommendedWarmUpVocalise` (`"La la la la la la la la."`); a uniform
+    /// sound both covers the warm-up AND stabilises the whole generation across
+    /// seeds. A verbal carrier is less consistent and a hum/"ah-ah" scored
+    /// slightly worse in blind tests. Keep it single-clause; avoid many "…"
+    /// which makes the model over-generate.
     /// `warmUpLeadInFrames` keeps that many 80 ms frames of the carrier's
-    /// terminal silence before the content (0 = tight cut, usually best).
+    /// terminal silence before the content — 0 (tight cut) is the recommended
+    /// default (blind-test winner); 3 (~0.24 s) adds a small breath.
     public func synthesize(
         text: String,
         voiceEmbedding: MLXArray,
