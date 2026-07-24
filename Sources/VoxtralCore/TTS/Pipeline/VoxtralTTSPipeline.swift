@@ -456,22 +456,36 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     public func synthesizeStreaming(
         text: String,
         voice: VoxtralVoice = .neutralFemale,
-        chunkSize: Int = 10
+        chunkSize: Int = 10,
+        seed: UInt64? = nil,
+        warmUpText: String? = nil,
+        warmUpLeadInFrames: Int = 0
     ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
         guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")) }
         }
-        return synthesizeStreaming(text: text, voiceEmbedding: voiceEmb, chunkSize: chunkSize, voiceKey: voice.rawValue)
+        return synthesizeStreaming(text: text, voiceEmbedding: voiceEmb, chunkSize: chunkSize, voiceKey: voice.rawValue,
+                                   seed: seed, warmUpText: warmUpText, warmUpLeadInFrames: warmUpLeadInFrames)
     }
 
     /// Streaming synthesis with an arbitrary `[T, 3072]` voice embedding
     /// (e.g. a cloned voice), mirroring the preset overload above.
     /// Pass a stable `voiceKey` to enable voice-prefix KV caching across calls.
+    ///
+    /// `seed`, `warmUpText` and `warmUpLeadInFrames` mirror the batch
+    /// `synthesize(...)` overload: `seed` makes the flow-matching sampling
+    /// reproducible (without it every call draws fresh noise), and `warmUpText`
+    /// prepends a short throwaway carrier — a vocalise works best, see
+    /// `recommendedWarmUpVocalise` — whose audio is trimmed back off before the
+    /// first content chunk is emitted (A6b enrolled-voice stabilization).
     public func synthesizeStreaming(
         text: String,
         voiceEmbedding: MLXArray,
         chunkSize: Int = 10,
-        voiceKey: String? = nil
+        voiceKey: String? = nil,
+        seed: UInt64? = nil,
+        warmUpText: String? = nil,
+        warmUpLeadInFrames: Int = 0
     ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
         guard state.isReady, let model = ttsModel, let tokenizer else {
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
@@ -491,6 +505,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let capturedSampleRate = sampleRate
         let capturedSanitize = configuration.sanitizeText
 
+        // Prepend the warm-up carrier as its own sentence (mirrors the batch
+        // synthesize path) so its audio can be located and trimmed below.
+        let carrier = warmUpText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasWarmUp = !(carrier?.isEmpty ?? true)
+        let genText: String
+        if let carrier, hasWarmUp {
+            let sep = carrier.last.map { ".!?…".contains($0) } == true ? " " : ". "
+            genText = carrier + sep + text
+        } else {
+            genText = text
+        }
+
         // Box non-Sendable captures for Swift 6 strict concurrency
         final class StreamContext: @unchecked Sendable {
             let model: VoxtralTTSModel
@@ -499,27 +525,39 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let pipeline: VoxtralTTSPipeline
             let prefixCache: [any KVCache]?
             let prefixLen: Int
-            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline, prefixCache: [any KVCache]?, prefixLen: Int) {
+            let genText: String
+            let seed: UInt64?
+            let hasWarmUp: Bool
+            let warmUpLeadInFrames: Int
+            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline, prefixCache: [any KVCache]?, prefixLen: Int, genText: String, seed: UInt64?, hasWarmUp: Bool, warmUpLeadInFrames: Int) {
                 self.model = model; self.tokenizer = tokenizer; self.voiceEmb = voiceEmb; self.pipeline = pipeline
                 self.prefixCache = prefixCache; self.prefixLen = prefixLen
+                self.genText = genText; self.seed = seed; self.hasWarmUp = hasWarmUp; self.warmUpLeadInFrames = warmUpLeadInFrames
             }
         }
-        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, prefixCache: prefix?.cache, prefixLen: prefix?.len ?? 0)
+        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, prefixCache: prefix?.cache, prefixLen: prefix?.len ?? 0, genText: genText, seed: seed, hasWarmUp: hasWarmUp, warmUpLeadInFrames: warmUpLeadInFrames)
 
         return AsyncThrowingStream { continuation in
             Task {
                 defer { beacon?.end() }
-                var previousSampleCount = 0
+                // Sample offset (into the full decoded waveform) where the real
+                // content starts. Without warm-up that's 0; with warm-up it's the
+                // carrier cut, located once from the accumulated audio and then
+                // held fixed so the carrier is dropped from every emitted chunk.
+                var contentStart: Int? = ctx.hasWarmUp ? nil : 0
+                let frameSize = capturedSampleRate * 2 / 25  // 80 ms acoustic frame
+                var previousContentSamples = 0
                 var isFirst = true
 
                 do {
                     let codeStream = ctx.model.generateStreaming(
-                        text: text,
+                        text: ctx.genText,
                         voiceEmbedding: ctx.voiceEmb,
                         tokenizer: ctx.tokenizer,
                         maxTokens: capturedMaxFrames,
                         chunkSize: chunkSize,
                         sanitize: capturedSanitize,
+                        seed: ctx.seed,
                         prefixCache: ctx.prefixCache,
                         prefixLen: ctx.prefixLen
                     )
@@ -531,12 +569,43 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                         let totalSamples = fullWaveform.dim(0)
 
-                        // Extract only the new samples
+                        // Locate the warm-up carrier's end once, then drop it.
+                        if contentStart == nil {
+                            let (_, cutFrames) = trimLeadingCarrier(
+                                fullWaveform, sampleRate: capturedSampleRate,
+                                leadInFrames: ctx.warmUpLeadInFrames)
+                            if cutFrames > 0 {
+                                contentStart = cutFrames * frameSize
+                            } else if chunk.isFinal {
+                                contentStart = 0  // pause never found — emit everything
+                            } else {
+                                // Still inside the carrier; nothing to emit yet.
+                                beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                                continue
+                            }
+                        }
+                        let start = contentStart!
+                        guard totalSamples > start else {
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            if !chunk.isFinal { continue }
+                            // Final chunk with no content past the cut: emit an
+                            // empty final marker so consumers see completion.
+                            continuation.yield(TTSStreamingChunk(
+                                waveform: fullWaveform[(totalSamples)...],
+                                frameIndex: chunk.totalFrames, frameCount: 0,
+                                totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
+                                isFirst: isFirst, isFinal: true,
+                                elapsed: Date().timeIntervalSince(startTime)))
+                            break
+                        }
+
+                        // Content samples generated so far, and the new slice.
+                        let contentTotal = totalSamples - start
                         let newWaveform: MLXArray
-                        if previousSampleCount > 0 && previousSampleCount < totalSamples {
-                            newWaveform = fullWaveform[previousSampleCount...]
+                        if previousContentSamples > 0 && previousContentSamples < contentTotal {
+                            newWaveform = fullWaveform[(start + previousContentSamples)...]
                         } else {
-                            newWaveform = fullWaveform
+                            newWaveform = fullWaveform[start...]
                         }
 
                         let elapsed = Date().timeIntervalSince(startTime)
@@ -552,7 +621,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                             elapsed: elapsed
                         ))
 
-                        previousSampleCount = totalSamples
+                        previousContentSamples = contentTotal
                         isFirst = false
                         beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                     }

@@ -90,19 +90,43 @@ struct StreamingDemoView: View {
                     .border(Color.gray.opacity(0.3))
                     .cornerRadius(4)
 
-                // Play button
-                Button(action: {
-                    if vm.isSynthesizing { vm.stop() } else { vm.startStreaming() }
-                }) {
-                    HStack {
-                        Image(systemName: vm.isSynthesizing ? "stop.fill" : "play.fill")
-                        Text(vm.isSynthesizing ? "Stop" : "Play Streaming")
+                // Play button + capture controls
+                HStack(spacing: 12) {
+                    Button(action: {
+                        if vm.isSynthesizing { vm.stop() } else { vm.startStreaming() }
+                    }) {
+                        HStack {
+                            Image(systemName: vm.isSynthesizing ? "stop.fill" : "play.fill")
+                            Text(vm.isSynthesizing ? "Stop" : "Play Streaming")
+                        }
+                        .frame(width: 200, height: 36)
                     }
-                    .frame(width: 200, height: 36)
+                    .buttonStyle(.borderedProminent)
+                    .tint(vm.isSynthesizing ? .red : .accentColor)
+                    .disabled(!vm.isModelLoaded || vm.isLoading)
+
+                    HStack(spacing: 4) {
+                        Text("Seed:")
+                            .font(.caption).foregroundStyle(.secondary)
+                        TextField("random", text: $vm.seedText)
+                            .frame(width: 60)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                    }
+                    .help("Fixed seed → reproducible audio. Clear for random.")
+
+                    Toggle("Save WAV", isOn: $vm.saveCaptures)
+                        .toggleStyle(.checkbox)
+                        .font(.caption)
+
+                    Button {
+                        vm.revealCaptures()
+                    } label: {
+                        Label("Captures…", systemImage: "folder")
+                    }
+                    .controlSize(.small)
+                    .font(.caption)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(vm.isSynthesizing ? .red : .accentColor)
-                .disabled(!vm.isModelLoaded || vm.isLoading)
 
                 voiceCloningSection
             }
