@@ -119,3 +119,4 @@ default.profraw
 .serena/
 voxtral_tts_trace.json
 *.pdf
+.xcodebuild*/
