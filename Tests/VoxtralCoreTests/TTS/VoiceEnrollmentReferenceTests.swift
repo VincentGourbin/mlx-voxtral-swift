@@ -121,4 +121,73 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
         XCTAssertEqual(mean, 0, accuracy: 0.01, "DC offset not removed")
         XCTAssertGreaterThan(rms(mid), 0.3, "1 kHz tone wrongly attenuated")
     }
+
+    // MARK: - Soft gate (attenuationDB) + loudness normalization
+
+    /// With an attenuation floor, gated regions must be ATTENUATED, not
+    /// zeroed: exact zeros are learned by the enrollment and reproduce as
+    /// hard-chopped micro-gaps in every synthesis (measured −inf noise floor
+    /// on enrolled voices).
+    func testSoftGateAttenuatesInsteadOfZeroing() {
+        let speech = sine(440, seconds: 0.5, rate: 24_000)
+        let noise = (0 ..< 12_000).map { Float($0 % 2 == 0 ? 0.01 : -0.01) }
+        let out = VoxtralVoiceEnrollment.gate(
+            speech + noise, sampleRate: 24_000, thresholdDB: -30, attenuationDB: -24)
+
+        // Away from the ramp, the noise region is attenuated by ≈24 dB…
+        let tail = Array(out[(speech.count + 480)...])
+        let expected = Float(0.01 * pow(10, -24.0 / 20))  // ≈ 0.00063
+        XCTAssertEqual(tail.reduce(0) { max($0, abs($1)) }, expected, accuracy: expected * 0.1)
+        // …but NOT zeroed.
+        XCTAssertGreaterThan(rms(tail), 0, "soft gate produced exact zeros")
+        // Speech untouched away from the ramps.
+        XCTAssertGreaterThan(rms(Array(out[0 ..< speech.count])), 0.3)
+    }
+
+    /// nil attenuation preserves the legacy exact-zero behavior.
+    func testNilAttenuationKeepsLegacyZeroGate() {
+        let speech = sine(440, seconds: 0.5, rate: 24_000)
+        let noise = (0 ..< 12_000).map { Float($0 % 2 == 0 ? 0.01 : -0.01) }
+        let out = VoxtralVoiceEnrollment.gate(
+            speech + noise, sampleRate: 24_000, thresholdDB: -30, attenuationDB: nil)
+        let tail = Array(out[(speech.count + 480)...])
+        XCTAssertEqual(tail.reduce(0) { max($0, abs($1)) }, 0)
+    }
+
+    /// Normalization must bring the ACTIVE-speech RMS to the target level —
+    /// long silences in the reference must not inflate the gain.
+    func testNormalizeActiveRMSHitsTarget() {
+        // Quiet speech (RMS ≈ −38 dB ≈ 0.0126) followed by 1 s of silence.
+        let speech = sine(440, seconds: 1.0, rate: 24_000).map { $0 * 0.0178 }
+        let silence = [Float](repeating: 0, count: 24_000)
+        let out = VoxtralVoiceEnrollment.normalizeActiveRMS(
+            speech + silence, sampleRate: 24_000, targetDB: -20)
+
+        // Active (speech) RMS lands on −20 dB = 0.1, regardless of the silence.
+        let speechRMS = rms(Array(out[0 ..< speech.count]))
+        XCTAssertEqual(speechRMS, 0.1, accuracy: 0.01, "active RMS missed the −20 dB target")
+        // Silence stays silent (pure gain — no offset).
+        XCTAssertEqual(rms(Array(out[speech.count...])), 0)
+    }
+
+    /// The normalization gain is capped so no sample can clip.
+    func testNormalizeActiveRMSPeakGuard() {
+        // A very quiet signal with one large transient: reaching −20 dB RMS
+        // would need ×8 gain, but the 0.5 peak only allows ×1.96.
+        var signal = sine(440, seconds: 1.0, rate: 24_000).map { $0 * 0.0178 }
+        signal[12_000] = 0.5
+        let out = VoxtralVoiceEnrollment.normalizeActiveRMS(
+            signal, sampleRate: 24_000, targetDB: -20)
+        let maxAbs = out.reduce(0) { max($0, abs($1)) }
+        XCTAssertLessThanOrEqual(maxAbs, 0.98001, "peak guard failed")
+    }
+
+    /// An already-correct level is a near-identity transform.
+    func testNormalizeActiveRMSIdentityAtTarget() {
+        // sine() has amplitude 0.5 → ×0.2828 gives amplitude 0.1414, RMS ≈ 0.1.
+        let speech = sine(440, seconds: 1.0, rate: 24_000).map { $0 * 0.2828 }
+        let out = VoxtralVoiceEnrollment.normalizeActiveRMS(
+            speech, sampleRate: 24_000, targetDB: -20)
+        XCTAssertEqual(rms(out), rms(speech), accuracy: 0.005)
+    }
 }
