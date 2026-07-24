@@ -107,4 +107,66 @@ final class TTSStreamingSeedReproTests: XCTestCase {
         XCTAssertNotEqual(w1.dim(0), a.dim(0),
                           "Warm-up run has the same length as the no-warm-up run — carrier not trimmed?")
     }
+
+    /// Diagnostic: run the real long text with warm-up and dump the leading
+    /// energy so we can see whether the carrier is actually trimmed.
+    func testWarmUpCarrierTrimmedLongText() async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["VOXTRAL_TTS_STREAM_SEED"] == "1",
+            "Set VOXTRAL_TTS_STREAM_SEED=1 to run this heavy streaming repro test")
+
+        let pipeline = VoxtralTTSPipeline()
+        let env = ProcessInfo.processInfo.environment
+        try await pipeline.loadModel(modelInfo: VoxtralTTSRegistry.defaultModel)
+
+        let text = "Fluxforge Studio transforme votre Mac en un studio de création IA complet. Générez des images et des vidéos de haute qualité à partir de texte, entraînez vos propres modèles personnalisés, et gérez votre bibliothèque créative — le tout en local sur votre Apple Silicon, sans cloud ni abonnement."
+
+        guard let embPath = env["VOXTRAL_TTS_REPRO_EMB"] else {
+            throw XCTSkip("Set VOXTRAL_TTS_REPRO_EMB to an enrolled-voice .safetensors path")
+        }
+        let arrays = try MLX.loadArrays(url: URL(fileURLWithPath: embPath))
+        guard let embedding = arrays["embedding"] ?? arrays.values.first else {
+            throw XCTSkip("No embedding in \(embPath)")
+        }
+
+        func dumpLeading(_ w: MLXArray, label: String) {
+            let sr = 24000, frame = 1920
+            let samples = w.asType(.float32).asArray(Float.self)
+            print("[carrier] \(label): total=\(samples.count) dur=\(String(format: "%.2f", Double(samples.count)/Double(sr)))s")
+            for i in 0..<min(20, samples.count / frame) {
+                let seg = samples[(i*frame)..<min((i+1)*frame, samples.count)]
+                let rms = (seg.reduce(0) { $0 + $1*$1 } / Float(seg.count)).squareRoot()
+                let db = 20 * log10(max(rms, 1e-9))
+                print(String(format: "[carrier]   t=%4dms  %6.1f dB", i*80, db))
+            }
+        }
+
+        func collectRun(warmUp: String?) async throws -> MLXArray {
+            let stream = pipeline.synthesizeStreaming(
+                text: text, voiceEmbedding: embedding, chunkSize: 10,
+                seed: 42, warmUpText: warmUp)
+            return try await collect(stream)
+        }
+
+        let noWarm = try await collectRun(warmUp: nil)
+        let warm = try await collectRun(warmUp: VoxtralTTSPipeline.recommendedWarmUpVocalise)
+        dumpLeading(noWarm, label: "no-warmup")
+        dumpLeading(warm, label: "warmup")
+        print("[carrier] delta samples (warm - noWarm) = \(warm.dim(0) - noWarm.dim(0))")
+
+        // The carrier ends in a run of true digital silence (~-110 dB). If the
+        // warm-up output still contains such a run in its first second, the
+        // carrier was not trimmed off — the exact bug this guards against.
+        let frame = 1920
+        let lead = warm.asType(.float32).asArray(Float.self)
+        var silentRun = 0, maxSilentRun = 0
+        for i in 0..<min(13, lead.count / frame) {  // first ~1.0 s
+            let seg = lead[(i*frame)..<min((i+1)*frame, lead.count)]
+            let rms = (seg.reduce(0) { $0 + $1*$1 } / Float(seg.count)).squareRoot()
+            if rms < 4e-4 { silentRun += 1; maxSilentRun = max(maxSilentRun, silentRun) }
+            else { silentRun = 0 }
+        }
+        XCTAssertLessThan(maxSilentRun, 3,
+            "Warm-up output has a \(maxSilentRun)-frame true-silence run in its first second — the carrier's terminal pause was not trimmed")
+    }
 }

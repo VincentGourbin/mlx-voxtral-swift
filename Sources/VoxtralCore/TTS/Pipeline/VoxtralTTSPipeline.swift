@@ -571,8 +571,17 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                         // Locate the warm-up carrier's end once, then drop it.
                         if contentStart == nil {
+                            // Use a purely ABSOLUTE silence floor (not the default
+                            // peak-relative threshold): as louder real content
+                            // accumulates, a relative threshold rises above the
+                            // quiet enrolled-voice carrier and mis-detects the cut
+                            // (keeps the carrier, or eats real content). The
+                            // carrier's terminal pause is true digital silence
+                            // (~-110 dB), far below any speech (~-60 dB onset), so
+                            // a fixed low floor isolates it robustly.
                             let (_, cutFrames) = trimLeadingCarrier(
                                 fullWaveform, sampleRate: capturedSampleRate,
+                                relativeThresholdDB: -100, absoluteFloor: 4e-4,
                                 leadInFrames: ctx.warmUpLeadInFrames)
                             if cutFrames > 0 {
                                 contentStart = cutFrames * frameSize
