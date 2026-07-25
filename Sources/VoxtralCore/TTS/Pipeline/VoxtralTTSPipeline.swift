@@ -423,14 +423,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
         let enroller = VoxtralVoiceEnrollment(model: model, config: config)
         let reference = try enroller.prepareReference(url: referenceURL)
-        let codes: MLXArray
-        if let shouldContinue {
-            codes = try enroller.optimize(
-                reference: reference, progress: progress, shouldContinue: shouldContinue)
-        } else {
-            codes = enroller.optimize(reference: reference, progress: progress)
-        }
+        // Always go through the throwing overload (a nil `shouldContinue`
+        // becomes a never-cancel poll) so a diverged run surfaces as an error
+        // on every path, GUI included, instead of silently saving a bad voice.
+        let codes = try enroller.optimize(
+            reference: reference, progress: progress, shouldContinue: shouldContinue ?? { true })
         let embedding = enroller.codesToVoiceEmbedding(codes)
+        // Hard guarantee: never write a non-finite embedding. A NaN prefix is
+        // continued into every synthesis as runaway babble to the frame cap.
+        guard embedding.sum().item(Float.self).isFinite else {
+            throw VoxtralTTSError.synthesisError(
+                "Enrollment produced a non-finite voice embedding; refusing to save")
+        }
         try MLX.save(arrays: ["embedding": embedding], url: outputURL)
         return embedding
     }

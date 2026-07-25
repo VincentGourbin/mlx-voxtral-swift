@@ -222,14 +222,43 @@ public final class VoxtralVoiceEnrollment {
         return out
     }
 
-    /// FIR high-pass: spectral complement of `lowPass` (x − LP(x)), so it
-    /// shares the low-pass's linear phase and unity passband. Removes DC and
-    /// rumble below the voice band that the optimization would otherwise
-    /// learn as part of the voice. Static + internal for unit testing.
+    /// Zero-phase 2nd-order Butterworth high-pass (forward–backward / filtfilt).
+    ///
+    /// Replaces the old complementary FIR (`x − lowPass(x)`): at 24 kHz a
+    /// 64-tap kernel resolves ~375 Hz, so a 70 Hz corner was unrealizable and
+    /// the filter instead attenuated a male voice's fundamental (100–120 Hz)
+    /// by 24–27 dB. The enrolled embedding is an audio prefix the model
+    /// continues, so that loss was learned and reproduced as a thin timbre in
+    /// every synthesis. A biquad reaches the corner with a handful of
+    /// coefficients; running it forward then backward cancels phase exactly.
+    /// Static + internal for unit testing.
     static func highPass(_ x: [Float], cutoff: Double, sampleRate: Double) -> [Float] {
-        let lp = lowPass(x, cutoff: cutoff, sampleRate: sampleRate)
-        var out = x
-        for i in 0 ..< out.count { out[i] -= lp[i] }
+        guard x.count > 6, cutoff > 0, cutoff < sampleRate / 2 else { return x }
+        // 2nd-order Butterworth high-pass via the bilinear transform.
+        let k = Foundation.tan(Double.pi * cutoff / sampleRate)
+        let q = 1.0 / 2.0.squareRoot()            // Butterworth Q = 1/√2
+        let norm = 1.0 / (1.0 + k / q + k * k)
+        let b = (Float(norm), Float(-2.0 * norm), Float(norm))
+        let a = (Float(2.0 * (k * k - 1.0) * norm), Float((1.0 - k / q + k * k) * norm))
+        // filtfilt: forward, then over the reversed signal, then un-reverse →
+        // zero net phase and a doubled (4th-order) magnitude rolloff.
+        let fwd = biquad(x, b: b, a: a)
+        let rev = biquad(Array(fwd.reversed()), b: b, a: a)
+        return Array(rev.reversed())
+    }
+
+    /// Direct-form-II transposed biquad: one causal pass of the filter defined
+    /// by feed-forward `b` (b0, b1, b2) and feedback `a` (a1, a2) coefficients.
+    static func biquad(_ x: [Float], b: (Float, Float, Float), a: (Float, Float)) -> [Float] {
+        var out = [Float](repeating: 0, count: x.count)
+        var x1: Float = 0, x2: Float = 0, y1: Float = 0, y2: Float = 0
+        for i in 0 ..< x.count {
+            let xi = x[i]
+            let yi = b.0 * xi + b.1 * x1 + b.2 * x2 - a.0 * y1 - a.1 * y2
+            out[i] = yi
+            x2 = x1; x1 = xi
+            y2 = y1; y1 = yi
+        }
         return out
     }
 
@@ -439,6 +468,13 @@ public final class VoxtralVoiceEnrollment {
         optimizeCore(reference: reference, progress: progress, shouldContinue: nil).codes
     }
 
+    /// Thrown when the enrollment optimization diverges to a non-finite loss
+    /// and never produced a usable (finite) step to fall back to.
+    public struct EnrollmentDivergedError: Error, CustomStringConvertible {
+        public let description = "Enrollment diverged to a non-finite loss with "
+            + "no usable step; check the reference audio (level/clipping/noise)."
+    }
+
     /// Cancellable variant: `shouldContinue` is polled at the top of every
     /// epoch (an epoch is ~100–500 ms); the first `false` stops the loop and
     /// throws `CancellationError`. Cancellation is decided by that single
@@ -449,9 +485,10 @@ public final class VoxtralVoiceEnrollment {
         progress: ((Progress) -> Void)? = nil,
         shouldContinue: @escaping () -> Bool
     ) throws -> MLXArray {
-        let (codes, cancelled) = optimizeCore(
+        let (codes, cancelled, failed) = optimizeCore(
             reference: reference, progress: progress, shouldContinue: shouldContinue)
         if cancelled { throw CancellationError() }
+        if failed { throw EnrollmentDivergedError() }
         return codes
     }
 
@@ -459,7 +496,7 @@ public final class VoxtralVoiceEnrollment {
         reference: MLXArray,
         progress: ((Progress) -> Void)?,
         shouldContinue: (() -> Bool)?
-    ) -> (codes: MLXArray, cancelled: Bool) {
+    ) -> (codes: MLXArray, cancelled: Bool, failed: Bool) {
         let T = config.numFrames
         precondition(reference.dim(0) >= numSamples,
                      "reference must have at least \(numSamples) samples, got \(reference.dim(0))")
@@ -487,7 +524,18 @@ public final class VoxtralVoiceEnrollment {
 
         var temperature = config.temperature
 
+        // Best-loss snapshot for divergence recovery. Optimization can diverge
+        // to a non-finite loss (measured: NaN between epochs 4000→4500 on a
+        // degraded reference); the pre-guard code saved that NaN embedding and
+        // synthesis then ran away to the maxFrames cap (~198 s of babble). On a
+        // non-finite loss we stop and fall back to the best finite params seen.
         var cancelled = false
+        var diverged = false
+        var sawFinite = false
+        var bestLoss = Float.greatestFiniteMagnitude
+        var bestS = semanticLogits
+        var bestA = acousticValues
+
         for epoch in 0 ..< config.epochs {
             if let shouldContinue, !shouldContinue() { cancelled = true; break }
             let temp = temperature
@@ -510,6 +558,22 @@ public final class VoxtralVoiceEnrollment {
             let (values, grads) = MLX.valueAndGrad(lossFn, argumentNumbers: [0, 1])(
                 [semanticLogits, acousticValues]
             )
+
+            // Divergence guard. `values` reflect the CURRENT (pre-update)
+            // params, so a finite loss here means those params are a usable
+            // fallback; snapshot them before Adam moves on. A non-finite loss
+            // means this step blew up — stop and keep the last good snapshot.
+            let totalLoss = values[0].item(Float.self)
+            if !totalLoss.isFinite {
+                diverged = true
+                break
+            }
+            sawFinite = true
+            if totalLoss < bestLoss {
+                bestLoss = totalLoss
+                bestS = semanticLogits
+                bestA = acousticValues
+            }
 
             // Global-norm gradient clipping (matches the Python reference's
             // grad_clip=1.0). Without it the semantic logits diverge on long
@@ -545,14 +609,20 @@ public final class VoxtralVoiceEnrollment {
             if let progress, (epoch + 1) % config.logEvery == 0 || epoch == 0 {
                 progress(Progress(
                     epoch: epoch + 1,
-                    totalLoss: values[0].item(Float.self),
+                    totalLoss: totalLoss,
                     reconLoss: values[1].item(Float.self)
                 ))
             }
         }
 
-        return (discreteCodes(semanticLogits: semanticLogits, acousticValues: acousticValues),
-                cancelled)
+        // On divergence, discretize the best finite params rather than the
+        // blown-up current ones. `failed` means we never saw a single finite
+        // loss (nothing usable to fall back to) — the caller should refuse to
+        // save rather than emit a garbage voice.
+        let (semOut, acoOut) = diverged ? (bestS, bestA) : (semanticLogits, acousticValues)
+        let failed = diverged && !sawFinite
+        return (discreteCodes(semanticLogits: semOut, acousticValues: acoOut),
+                cancelled, failed)
     }
 
     private func adamStep(

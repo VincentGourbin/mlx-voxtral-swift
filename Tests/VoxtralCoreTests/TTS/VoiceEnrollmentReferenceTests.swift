@@ -115,11 +115,32 @@ final class VoiceEnrollmentReferenceTests: XCTestCase {
         let withDC = tone.map { $0 + 0.3 }
         let out = VoxtralVoiceEnrollment.highPass(withDC, cutoff: 70, sampleRate: 24_000)
 
-        // Assert away from the FIR edges (64 taps).
-        let mid = Array(out[100 ..< out.count - 100])
+        // Assert away from the filter's edge transients.
+        let mid = Array(out[2_000 ..< out.count - 2_000])
         let mean = mid.reduce(0, +) / Float(mid.count)
         XCTAssertEqual(mean, 0, accuracy: 0.01, "DC offset not removed")
         XCTAssertGreaterThan(rms(mid), 0.3, "1 kHz tone wrongly attenuated")
+    }
+
+    /// Frequency-response guard for the high-pass. The old 64-tap complementary
+    /// FIR could not resolve a 70 Hz corner at 24 kHz and attenuated a male
+    /// voice's fundamental (100–120 Hz) by 24–27 dB — the root cause of the
+    /// "thin" cloned timbre. A tone at 1 kHz alone (as the previous test used)
+    /// does not catch this; these near-corner tones do.
+    func testHighPassPreservesFundamentalRemovesRumble() {
+        // Measured attenuation (dB, positive = cut) of a pure tone through the
+        // filter, over its steady-state middle to avoid edge transients.
+        func attenuationDB(_ freq: Double) -> Float {
+            let x = sine(freq, seconds: 1.0, rate: 24_000)
+            let y = VoxtralVoiceEnrollment.highPass(x, cutoff: 70, sampleRate: 24_000)
+            let lo = x.count / 5, hi = x.count * 4 / 5
+            return -20 * log10(rms(Array(y[lo ..< hi])) / rms(Array(x[lo ..< hi])))
+        }
+
+        XCTAssertGreaterThan(attenuationDB(30), 20, "30 Hz rumble not removed")
+        XCTAssertLessThan(attenuationDB(100), 2.5, "100 Hz fundamental over-attenuated")
+        XCTAssertLessThan(attenuationDB(120), 1.5, "120 Hz fundamental over-attenuated")
+        XCTAssertLessThan(attenuationDB(1_000), 0.5, "1 kHz passband not flat")
     }
 
     // MARK: - Soft gate (attenuationDB) + loudness normalization
