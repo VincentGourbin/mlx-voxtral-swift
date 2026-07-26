@@ -56,13 +56,32 @@ Practical guidance:
   automatically trims to the last natural pause, fades, and pads with
   silence, so a reference that ends mid-word is handled gracefully — but a
   clip that *starts* clean (no long intro) gives the best result.
-- **The reference is cleaned before optimization**: a 70 Hz high-pass
-  removes rumble/DC, and a noise gate pushes windows more than 30 dB below
-  the loudest 20 ms window to true silence. Whatever is in the reference —
-  noise floor included — is learned as part of the voice, so silences must
-  be real silence going in. If your reference legitimately needs its
-  low end or ambience kept, disable with `--high-pass-hz 0` / `--no-gate`
-  (or `Config.referenceHighPassHz = nil` / `Config.gateReference = false`).
+- **Record at a healthy level.** The voice continues the reference's
+  loudness, and the normalization below is peak-guarded, so a very quiet take
+  cannot be fully rescued. Measured on the same speaker: a −30 dB take gave
+  −27 dB syntheses, a −23 dB take gave −22 dB (preset level is ≈ −24 dB).
+  Aim for peaks around −6 dBFS with no clipping.
+- **The reference is cleaned before optimization**, in this order:
+  1. a **70 Hz high-pass** (zero-phase Butterworth) removes rumble and DC;
+  2. **loudness normalization** brings active speech to
+     `--reference-target-rms-db` (−20 dBFS), capped so no sample exceeds 0.98;
+  3. a **noise gate** attenuates windows more than 30 dB below the loudest
+     20 ms window by 24 dB — it *attenuates*, it does not zero them.
+
+  Whatever is in the reference — noise floor included — is learned as part of
+  the voice. The gate deliberately leaves a low floor rather than digital
+  silence: a hard-zeroed reference teaches the voice that chopped-up style and
+  reproduces it as micro-gaps in every synthesis. To keep the low end or the
+  ambience as recorded, disable with `--high-pass-hz 0` / `--no-gate` (or
+  `Config.referenceHighPassHz = nil` / `Config.gateReference = false`).
+
+  > The high-pass used to be a 64-tap complementary FIR, which at 24 kHz
+  > cannot resolve a 70 Hz corner: it attenuated a male fundamental
+  > (100–120 Hz) by 24–27 dB, and since the embedding is a prefix the model
+  > continues, every synthesis came out thin. Voices enrolled before this fix
+  > are worth re-enrolling — measured on one speaker, re-enrolling the *same*
+  > recording recovered 6.4 dB of fundamental and moved the synthesized pitch
+  > from a harmonic (144 Hz) back onto the speaker's own (88 Hz vs 97 Hz real).
 
 ## `voxtral enroll` options
 
@@ -76,6 +95,10 @@ Practical guidance:
 | `--no-gate` | off | Keep the reference's noise floor (disable the silence gate) |
 | `--gate-threshold-db` | `-30` | Gate threshold in dB relative to the loudest 20 ms window |
 | `--high-pass-hz` | `70` | Reference high-pass cutoff in Hz (`0` disables) |
+| `--reference-target-rms-db` | `-20` | Target active-speech RMS for the reference, in dBFS (`0` disables normalization) |
+
+> Negative values need `=`: `--reference-target-rms-db=-26`. Without it the
+> parser reads `-26` as another option.
 
 > Use the **same `--model`** for `enroll` and `tts` — a voice embedding is
 > tied to the decoder/embedding table it was optimized against. The defaults
@@ -83,6 +106,48 @@ Practical guidance:
 
 Enrollment is offline and one-time per voice. On an unloaded M-series GPU
 it runs at roughly 15× the speed of the original PyTorch reference.
+
+Enrollment refuses to save a voice whose optimization diverged to a
+non-finite loss: it falls back to the best finite step, and if there was none
+it throws rather than write a NaN embedding (a NaN prefix is continued as
+runaway babble to the frame cap).
+
+## Synthesizing with a cloned voice: seed and warm-up
+
+Two `voxtral tts` options matter for enrolled voices specifically.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--seed` | random | RNG seed. **Without it, output varies run to run** |
+| `--warm-up` | off | Prepend a throwaway vocalise, then trim it back off |
+
+**`--seed` — reproducibility.** The acoustic step samples flow-matching noise,
+and those samples feed back into the autoregressive state, so the same text and
+voice give a different take (different wording quality, pacing, even length)
+on every call — at temperature 0. Pass a seed whenever you need to compare two
+things, or to be able to reproduce a take you liked.
+
+**`--warm-up` — first-word quality.** Enrolled-voice codes are optimized to
+reconstruct audio, not to be a plausible autoregressive context, so the opening
+of a generation is unstable. Prepending a short vocalise and cutting it back
+off measurably improves the first word: over three seeds on one voice, the
+first word came out `"Flux Forge"` with the warm-up versus `"Sorche"` /
+`"Loxforge"` without.
+
+```bash
+voxtral tts "Fluxforge Studio transforme votre Mac." \
+    -o out.wav --model tts-4b-mlx --voice-embedding my_voice.safetensors \
+    --seed 7 --warm-up
+```
+
+> **Check the output.** The carrier cut is a heuristic — the pause the model
+> leaves after the vocalise has no fixed depth (measured −55 dB, −65 dB and
+> −126 dB across three seeds on one voice), so roughly one generation in eight
+> either leaks the vocalise or clips the opening. Enrolled voices also
+> occasionally hallucinate a preamble. For unattended use, transcribe the
+> result and check it against the input text — `voxtral transcribe out.wav
+> --model mini-3b-8bit --language fr` — and regenerate with another seed if it
+> does not match. That check is what filtered 7 bad takes out of 12 in testing.
 
 ## Demo app
 

@@ -23,6 +23,25 @@ xcodebuild -scheme VoxtralTTSStreamingDemo -configuration Release \
 | **Presets** | Quick-fill the text box with short/long EN/FR samples. |
 | **Text editor** | The text to synthesize. |
 | **Play Streaming / Stop** | Streams synthesized audio chunk-by-chunk to the speakers as they are generated. |
+| **Seed** | RNG seed for reproducible output (default `42`). Clear the field for a fresh random draw each run. |
+| **Save WAV** | Writes every synthesis to `Application Support/VoxtralCaptures/` as `cap_<model>_<voice>_<timestamp>.wav` (24 kHz mono). On by default. |
+| **Captures…** | Reveals that folder in the Finder. |
+
+### Seed, warm-up and captures
+
+Streaming used to draw fresh flow-matching noise on every call, so an identical
+text and voice produced decorrelated audio run to run — measured at 84 s versus
+5 s for the same input, which read as "the first play after enrolling is broken
+and it drifts afterwards". The **Seed** field fixes that: same seed, same audio.
+
+For **cloned** voices the app also prepends the recommended warm-up vocalise and
+trims it back off, which stabilizes the opening (see
+[voice_cloning.md](voice_cloning.md)). Presets don't need it and don't get it.
+
+The carrier cut is heuristic, so roughly one generation in eight still leaks the
+vocalise or clips the first word. **Save WAV** exists so a take can be checked
+(and A/B'd against the baselines in `docs/examples/`) instead of vanishing after
+playback.
 
 ### Metrics row
 
@@ -79,10 +98,14 @@ enrollment core itself stays pure Swift.
    becomes the reference.
 
 Requires microphone permission (macOS will prompt on first use). Record in a
-quiet room at a natural pace, aiming slightly past the target length — the
-reference is high-passed (70 Hz), noise-gated (quiet windows become true
-silence so the room's noise floor isn't learned as part of the voice), and
-trimmed to end on a natural pause.
+quiet room at a natural pace, aiming slightly past the target length — and
+**speak up**: the cloned voice inherits the reference's loudness, and the
+normalization is peak-guarded, so a very quiet take cannot be fully rescued
+(measured on one speaker: a −30 dB take gave −27 dB syntheses, a −23 dB take
+gave −22 dB). The reference is then high-passed (70 Hz), loudness-normalized,
+noise-gated (quiet windows attenuated by 24 dB — attenuated, not zeroed, so the
+voice doesn't learn a digitally-chopped style), and trimmed to end on a natural
+pause.
 
 ## Notes
 
