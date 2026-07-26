@@ -411,6 +411,12 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .long, help: "Path to a custom voice embedding .safetensors [T, 3072] (e.g. a cloned voice; overrides --voice)")
     var voiceEmbedding: String?
 
+    @Option(name: .long, help: "RNG seed for reproducible synthesis; omit for a random draw")
+    var seed: UInt64?
+
+    @Flag(name: .long, help: "Prepend the recommended warm-up vocalise (enrolled-voice stabilization) and trim it back off")
+    var warmUp = false
+
     @Option(name: .long, help: "Maximum audio frames to generate (12.5 frames/sec)")
     var maxFrames: Int = 2500
 
@@ -490,7 +496,9 @@ struct TTS: AsyncParsableCommand {
                 throw ValidationError("Voice embedding must be [T, 3072], got \(embedding.shape)")
             }
             print("  Custom voice: \(embeddingPath) (\(embedding.dim(0)) frames)")
-            result = try await pipeline.synthesize(text: text, voiceEmbedding: embedding)
+            result = try await pipeline.synthesize(
+                text: text, voiceEmbedding: embedding, seed: seed,
+                warmUpText: warmUp ? VoxtralTTSPipeline.recommendedWarmUpVocalise : nil)
 
         } else if let xyz = voiceXyz {
             // ZeroVoice coordinate mode
@@ -594,6 +602,9 @@ struct Enroll: AsyncParsableCommand {
     @Option(name: .long, help: "Reference high-pass cutoff in Hz; 0 disables (default 70)")
     var highPassHz: Float = 70
 
+    @Option(name: .long, help: "Target active-speech RMS for the reference in dBFS; 0 disables normalization (default -20)")
+    var referenceTargetRmsDb: Float = -20
+
     @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
     var beacon = false
 
@@ -630,6 +641,7 @@ struct Enroll: AsyncParsableCommand {
         config.gateReference = !noGate
         config.gateThresholdDB = gateThresholdDb
         config.referenceHighPassHz = highPassHz > 0 ? highPassHz : nil
+        config.referenceTargetRMSdB = referenceTargetRmsDb < 0 ? referenceTargetRmsDb : nil
 
         let pipeline = VoxtralTTSPipeline()
         print("\n[1/2] Loading TTS model...")

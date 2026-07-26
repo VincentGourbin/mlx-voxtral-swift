@@ -356,8 +356,20 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             // already positions the content start (including any kept
             // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
             // it would strip that lead-in back off. Apply only the tail trim.
+            // Locate the cut with a purely ABSOLUTE silence floor rather than
+            // the default peak-relative threshold. An enrolled voice renders
+            // the carrier much quieter than the content, so a peak-relative
+            // threshold lands ABOVE the carrier: the "skip leading silence"
+            // scan then consumes the carrier *and* its terminal pause, and the
+            // first gap it finds is the pause after the first sentence — which
+            // is cut away with the carrier (measured: a 2-sentence text lost
+            // its whole first sentence, 18.9 s → 11.8 s). The carrier's
+            // terminal pause is true digital silence (~−110 dB), far below any
+            // speech, so a fixed low floor isolates it whatever the content
+            // loudness.
             let (carrierTrimmed, carrierCut) = genText != text
-                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
+                ? trimLeadingCarrierAdaptive(rawWaveform, sampleRate: sampleRate,
+                                             leadInFrames: warmUpLeadInFrames)
                 : (rawWaveform, 0)
             let waveform: MLXArray
             if carrierCut > 0 {
@@ -423,14 +435,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
         let enroller = VoxtralVoiceEnrollment(model: model, config: config)
         let reference = try enroller.prepareReference(url: referenceURL)
-        let codes: MLXArray
-        if let shouldContinue {
-            codes = try enroller.optimize(
-                reference: reference, progress: progress, shouldContinue: shouldContinue)
-        } else {
-            codes = enroller.optimize(reference: reference, progress: progress)
-        }
+        // Always go through the throwing overload (a nil `shouldContinue`
+        // becomes a never-cancel poll) so a diverged run surfaces as an error
+        // on every path, GUI included, instead of silently saving a bad voice.
+        let codes = try enroller.optimize(
+            reference: reference, progress: progress, shouldContinue: shouldContinue ?? { true })
         let embedding = enroller.codesToVoiceEmbedding(codes)
+        // Hard guarantee: never write a non-finite embedding. A NaN prefix is
+        // continued into every synthesis as runaway babble to the frame cap.
+        guard embedding.sum().item(Float.self).isFinite else {
+            throw VoxtralTTSError.synthesisError(
+                "Enrollment produced a non-finite voice embedding; refusing to save")
+        }
         try MLX.save(arrays: ["embedding": embedding], url: outputURL)
         return embedding
     }

@@ -201,6 +201,74 @@ public func trimTrailingSilence(
 /// before the content, so the real speech does not start abruptly on a
 /// still-settling first word (each frame = 80 ms). It never keeps more silence
 /// than the gap actually contains.
+/// Locate the warm-up carrier's terminal pause WITHOUT a level threshold, by
+/// taking the quietest frame in the scan window and walking forward to where
+/// speech resumes.
+///
+/// Why not a threshold: the pause's absolute depth is set by the generation,
+/// not by the signal's loudness, and varies enormously — measured across three
+/// seeds with the same voice and text: −55 dB, −65 dB and −126 dB, while the
+/// surrounding speech sat at −16…−37 dB. A peak-relative threshold rides up
+/// with the content and swallows the carrier (cutting the first sentence away);
+/// a fixed absolute floor sits below the shallow cases and finds nothing (the
+/// vocalise then leaks into the output). Both were observed in practice.
+///
+/// The minimum, by contrast, needs no calibration: the carrier's pause is the
+/// quietest moment of the opening seconds whatever its depth. `riseDB` above
+/// that minimum then marks resumed speech.
+///
+/// Returns `(waveform, 0)` when the window is too short to judge, so callers
+/// keep their existing "no cut" fallback.
+public func trimLeadingCarrierAdaptive(
+    _ waveform: MLXArray,
+    sampleRate: Int = 24000,
+    scanSeconds: Double = 3.0,
+    dropDB: Float = 20,
+    riseDB: Float = 15,
+    minCarrierFrames: Int = 2,
+    leadInFrames: Int = 0
+) -> (trimmed: MLXArray, cutFrames: Int) {
+    let frameSize = sampleRate * 2 / 25          // 80 ms
+    let totalFrames = waveform.dim(0) / frameSize
+    let scanEnd = min(totalFrames, Int(scanSeconds * 12.5))
+    guard scanEnd > minCarrierFrames + 2 else { return (waveform, 0) }
+
+    let samples = waveform.asType(.float32)
+    func frameDB(_ i: Int) -> Float {
+        let r = rms(samples, i * frameSize, min((i + 1) * frameSize, waveform.dim(0)))
+        return 20 * Foundation.log10(max(r, 1e-9))
+    }
+
+    // Reference level = the carrier's own speech, taken as the median of the
+    // first few frames. Using the FIRST big drop below it (not the window's
+    // global minimum) matters: the content's own pauses can be deeper than the
+    // carrier's, and a global minimum then lands inside the sentence and cuts
+    // real speech away — observed as a warm-up run 2.5 s shorter than its
+    // no-warm-up twin.
+    let refCount = min(5, scanEnd - minCarrierFrames)
+    var refLevels = (minCarrierFrames ..< minCarrierFrames + refCount).map(frameDB)
+    refLevels.sort()
+    let carrierDB = refLevels[refLevels.count / 2]
+
+    var minIdx = -1
+    var minDB = Float.greatestFiniteMagnitude
+    for i in minCarrierFrames ..< scanEnd where frameDB(i) <= carrierDB - dropDB {
+        minIdx = i
+        minDB = frameDB(i)
+        break
+    }
+    guard minIdx >= 0 else { return (waveform, 0) }
+
+    // Walk forward to the first frame that climbs back out of the pause.
+    var resume = minIdx
+    while resume < totalFrames, frameDB(resume) < minDB + riseDB { resume += 1 }
+    guard resume < totalFrames, resume > minCarrierFrames else { return (waveform, 0) }
+
+    // Optionally keep a little of the pause so the first word keeps its attack.
+    let cut = max(minIdx, resume - max(0, leadInFrames))
+    return (waveform[(cut * frameSize)...], cut)
+}
+
 public func trimLeadingCarrier(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,

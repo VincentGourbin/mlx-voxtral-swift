@@ -56,6 +56,24 @@ public final class VoxtralVoiceEnrollment {
         /// far worse than a slightly higher learned noise floor (the output
         /// trim is peak-relative and handles the latter downstream).
         public var gateThresholdDB: Float = -30
+        /// Attenuation applied to gated (closed) windows instead of writing
+        /// exact zeros. The prefix CONTINUES into every synthesis: a
+        /// digitally-gated reference teaches the voice that hard-chopped
+        /// style (measured: −inf noise floor and the same micro-gaps in
+        /// every synthesis, which the LipDub stage then re-times instead of
+        /// following). −24 dB keeps residual ambience far below any speech
+        /// detector's threshold while the reference still sounds like a
+        /// recording, not a gate. `nil` restores the legacy exact-zero gate.
+        public var gateAttenuationDB: Float? = -24
+        /// Target active-speech RMS (dBFS) the reference is normalized to,
+        /// after the high-pass and before the gate. The cloned voice also
+        /// continues the prefix's LEVEL: a reference recorded at −38 dB RMS
+        /// yields −38 dB syntheses (measured), ~14 dB under the shipped
+        /// presets and outside the codec's comfortable range. Active-window
+        /// RMS (windows within 30 dB of the loudest) is used so long
+        /// silences cannot inflate the gain; the gain is peak-limited to
+        /// 0.98 full-scale. `nil` disables.
+        public var referenceTargetRMSdB: Float? = -20
 
         public init() {}
     }
@@ -95,10 +113,13 @@ public final class VoxtralVoiceEnrollment {
     /// trailing silence). A reference cut mid-speech destabilizes the start
     /// of later syntheses.
     ///
-    /// Unless disabled in `Config`, the reference is also high-passed and
-    /// noise-gated first: whatever is in the reference — noise floor
-    /// included — becomes the optimization target and is baked into the
-    /// cloned voice, so silences must be true silence going in.
+    /// Unless disabled in `Config`, the reference is also high-passed,
+    /// loudness-normalized and noise-gated first: whatever is in the
+    /// reference — level and noise floor included — becomes the optimization
+    /// target and is baked into the cloned voice. Silences are attenuated to
+    /// a low soft floor rather than zeroed: exact zeros are themselves
+    /// learned and reproduce as hard-chopped micro-gaps in every synthesis
+    /// (see `Config.gateAttenuationDB`).
     public func prepareReference(url: URL) throws -> MLXArray {
         // Read the file at its NATIVE rate as mono float32 (channel mix only —
         // no sample-rate conversion here, which is where AVAudioConverter is
@@ -116,8 +137,16 @@ public final class VoxtralVoiceEnrollment {
         if let hp = config.referenceHighPassHz, hp > 0 {
             samples = Self.highPass(samples, cutoff: Double(hp), sampleRate: 24_000)
         }
+        // Normalize BEFORE the gate: the gate threshold is relative to the
+        // loudest window, so gating is unaffected, and the attenuated floor
+        // ends up relative to the NORMALIZED level.
+        if let target = config.referenceTargetRMSdB {
+            samples = Self.normalizeActiveRMS(samples, sampleRate: 24_000, targetDB: target)
+        }
         if config.gateReference {
-            samples = Self.gate(samples, sampleRate: 24_000, thresholdDB: config.gateThresholdDB)
+            samples = Self.gate(samples, sampleRate: 24_000,
+                                thresholdDB: config.gateThresholdDB,
+                                attenuationDB: config.gateAttenuationDB)
         }
 
         // Cut at the quietest 50 ms window in the last 1.5 s. `<=` so that
@@ -193,14 +222,43 @@ public final class VoxtralVoiceEnrollment {
         return out
     }
 
-    /// FIR high-pass: spectral complement of `lowPass` (x − LP(x)), so it
-    /// shares the low-pass's linear phase and unity passband. Removes DC and
-    /// rumble below the voice band that the optimization would otherwise
-    /// learn as part of the voice. Static + internal for unit testing.
+    /// Zero-phase 2nd-order Butterworth high-pass (forward–backward / filtfilt).
+    ///
+    /// Replaces the old complementary FIR (`x − lowPass(x)`): at 24 kHz a
+    /// 64-tap kernel resolves ~375 Hz, so a 70 Hz corner was unrealizable and
+    /// the filter instead attenuated a male voice's fundamental (100–120 Hz)
+    /// by 24–27 dB. The enrolled embedding is an audio prefix the model
+    /// continues, so that loss was learned and reproduced as a thin timbre in
+    /// every synthesis. A biquad reaches the corner with a handful of
+    /// coefficients; running it forward then backward cancels phase exactly.
+    /// Static + internal for unit testing.
     static func highPass(_ x: [Float], cutoff: Double, sampleRate: Double) -> [Float] {
-        let lp = lowPass(x, cutoff: cutoff, sampleRate: sampleRate)
-        var out = x
-        for i in 0 ..< out.count { out[i] -= lp[i] }
+        guard x.count > 6, cutoff > 0, cutoff < sampleRate / 2 else { return x }
+        // 2nd-order Butterworth high-pass via the bilinear transform.
+        let k = Foundation.tan(Double.pi * cutoff / sampleRate)
+        let q = 1.0 / 2.0.squareRoot()            // Butterworth Q = 1/√2
+        let norm = 1.0 / (1.0 + k / q + k * k)
+        let b = (Float(norm), Float(-2.0 * norm), Float(norm))
+        let a = (Float(2.0 * (k * k - 1.0) * norm), Float((1.0 - k / q + k * k) * norm))
+        // filtfilt: forward, then over the reversed signal, then un-reverse →
+        // zero net phase and a doubled (4th-order) magnitude rolloff.
+        let fwd = biquad(x, b: b, a: a)
+        let rev = biquad(Array(fwd.reversed()), b: b, a: a)
+        return Array(rev.reversed())
+    }
+
+    /// Direct-form-II transposed biquad: one causal pass of the filter defined
+    /// by feed-forward `b` (b0, b1, b2) and feedback `a` (a1, a2) coefficients.
+    static func biquad(_ x: [Float], b: (Float, Float, Float), a: (Float, Float)) -> [Float] {
+        var out = [Float](repeating: 0, count: x.count)
+        var x1: Float = 0, x2: Float = 0, y1: Float = 0, y2: Float = 0
+        for i in 0 ..< x.count {
+            let xi = x[i]
+            let yi = b.0 * xi + b.1 * x1 + b.2 * x2 - a.0 * y1 - a.1 * y2
+            out[i] = yi
+            x2 = x1; x1 = xi
+            y2 = y1; y1 = yi
+        }
         return out
     }
 
@@ -214,16 +272,24 @@ public final class VoxtralVoiceEnrollment {
     }
 
     /// Noise gate: 20 ms windows whose RMS falls below `thresholdDB` relative
-    /// to the LOUDEST window's RMS are pushed to true silence, with 5 ms
-    /// linear ramps at every open/close so gating never clicks. The reference
-    /// level is a window RMS, not the sample peak: a single click or plosive
-    /// spike would inflate a sample-peak threshold above genuine speech
-    /// windows and gate the voice itself — the one failure mode a reference
-    /// gate must never have, since the gated audio IS the optimization
-    /// target. Frames that are quiet in the reference must be EXACTLY zero —
-    /// a learned noise floor shows up in every later synthesis. Static +
+    /// to the LOUDEST window's RMS are attenuated to `attenuationDB` (or to
+    /// true silence when nil), with 5 ms linear ramps at every open/close so
+    /// gating never clicks. The reference level is a window RMS, not the
+    /// sample peak: a single click or plosive spike would inflate a
+    /// sample-peak threshold above genuine speech windows and gate the voice
+    /// itself — the one failure mode a reference gate must never have, since
+    /// the gated audio IS the optimization target.
+    ///
+    /// Why attenuate rather than zero: the prefix continues into every
+    /// synthesis, and a hard-zeroed reference teaches the voice that
+    /// digitally-chopped style (measured on enrolled voices: −inf noise
+    /// floor and the same micro-gaps in every synthesis). The soft floor
+    /// keeps ambience low enough that downstream silence detection still
+    /// sees silence, without baking gate artifacts into the voice. Static +
     /// internal for unit testing.
-    static func gate(_ x: [Float], sampleRate: Int, thresholdDB: Float) -> [Float] {
+    static func gate(
+        _ x: [Float], sampleRate: Int, thresholdDB: Float, attenuationDB: Float? = nil
+    ) -> [Float] {
         guard !x.isEmpty else { return x }
 
         let win = sampleRate / 50  // 20 ms
@@ -242,31 +308,76 @@ public final class VoxtralVoiceEnrollment {
             open[w] = windowLevels[w] >= threshold
         }
 
+        // Closed-window gain: soft floor, or hard zero when attenuationDB is nil.
+        let floorGain: Float = attenuationDB.map { Foundation.pow(10, $0 / 20) } ?? 0
+
         // Per-sample gain with short ramps at open/close boundaries.
         let fade = sampleRate / 200  // 5 ms
         var out = x
         for w in 0 ..< numWindows where !open[w] {
             let start = w * win
             let end = min(start + win, x.count)
-            for i in start ..< end { out[i] = 0 }
+            for i in start ..< end { out[i] *= floorGain }
         }
         for w in 0 ..< numWindows {
             guard open[w] else { continue }
             let start = w * win
             let end = min(start + win, x.count)
-            // Ramp in if the previous window is closed, out if the next is.
+            // Ramp from the floor gain up to unity where the previous window
+            // is closed, and back down where the next one is.
             if w > 0, !open[w - 1] {
                 for i in 0 ..< min(fade, end - start) {
-                    out[start + i] *= Float(i) / Float(fade)
+                    out[start + i] *= floorGain + (1 - floorGain) * Float(i) / Float(fade)
                 }
             }
             if w + 1 < numWindows, !open[w + 1] {
                 for i in 0 ..< min(fade, end - start) {
-                    out[end - 1 - i] *= Float(i) / Float(fade)
+                    out[end - 1 - i] *= floorGain + (1 - floorGain) * Float(i) / Float(fade)
                 }
             }
         }
         return out
+    }
+
+    /// Normalize so the ACTIVE-speech RMS lands on `targetDB` dBFS. Active
+    /// windows are the 20 ms windows within 30 dB of the loudest — the same
+    /// "is this speech" notion as the gate — so long silences cannot inflate
+    /// the gain. The gain is capped so no sample exceeds 0.98 full-scale.
+    ///
+    /// Why this exists: the cloned voice continues the prefix's level. An
+    /// enrolled reference at −38 dB active RMS yields −38 dB syntheses
+    /// (measured), ~14 dB under the shipped presets — quiet enough to push
+    /// downstream consumers (codec conditioning, silence detection, lip-sync
+    /// reference encoding) off their expected operating range. Static +
+    /// internal for unit testing.
+    static func normalizeActiveRMS(_ x: [Float], sampleRate: Int, targetDB: Float) -> [Float] {
+        guard !x.isEmpty else { return x }
+
+        let win = sampleRate / 50  // 20 ms
+        let numWindows = (x.count + win - 1) / win
+        var windowLevels = [Float](repeating: 0, count: numWindows)
+        for w in 0 ..< numWindows {
+            windowLevels[w] = windowRMS(x, w * win ..< min((w + 1) * win, x.count))
+        }
+        guard let loudest = windowLevels.max(), loudest > 0 else { return x }
+        let activeThreshold = loudest * Foundation.pow(10, -30 / 20 as Float)
+
+        var sumSq: Float = 0
+        var count = 0
+        for w in 0 ..< numWindows where windowLevels[w] >= activeThreshold {
+            let range = w * win ..< min((w + 1) * win, x.count)
+            for i in range { sumSq += x[i] * x[i] }
+            count += range.count
+        }
+        guard count > 0 else { return x }
+        let activeRMS = (sumSq / Float(count)).squareRoot()
+        guard activeRMS > 0 else { return x }
+
+        var gain = Foundation.pow(10, targetDB / 20) / activeRMS
+        if let maxAbs = x.map({ abs($0) }).max(), maxAbs * gain > 0.98 {
+            gain = 0.98 / maxAbs
+        }
+        return x.map { $0 * gain }
     }
 
     /// Zero-phase-ish FIR low-pass (Hann-windowed sinc, 64 taps) applied as a
@@ -357,6 +468,13 @@ public final class VoxtralVoiceEnrollment {
         optimizeCore(reference: reference, progress: progress, shouldContinue: nil).codes
     }
 
+    /// Thrown when the enrollment optimization diverges to a non-finite loss
+    /// and never produced a usable (finite) step to fall back to.
+    public struct EnrollmentDivergedError: Error, CustomStringConvertible {
+        public let description = "Enrollment diverged to a non-finite loss with "
+            + "no usable step; check the reference audio (level/clipping/noise)."
+    }
+
     /// Cancellable variant: `shouldContinue` is polled at the top of every
     /// epoch (an epoch is ~100–500 ms); the first `false` stops the loop and
     /// throws `CancellationError`. Cancellation is decided by that single
@@ -367,9 +485,10 @@ public final class VoxtralVoiceEnrollment {
         progress: ((Progress) -> Void)? = nil,
         shouldContinue: @escaping () -> Bool
     ) throws -> MLXArray {
-        let (codes, cancelled) = optimizeCore(
+        let (codes, cancelled, failed) = optimizeCore(
             reference: reference, progress: progress, shouldContinue: shouldContinue)
         if cancelled { throw CancellationError() }
+        if failed { throw EnrollmentDivergedError() }
         return codes
     }
 
@@ -377,7 +496,7 @@ public final class VoxtralVoiceEnrollment {
         reference: MLXArray,
         progress: ((Progress) -> Void)?,
         shouldContinue: (() -> Bool)?
-    ) -> (codes: MLXArray, cancelled: Bool) {
+    ) -> (codes: MLXArray, cancelled: Bool, failed: Bool) {
         let T = config.numFrames
         precondition(reference.dim(0) >= numSamples,
                      "reference must have at least \(numSamples) samples, got \(reference.dim(0))")
@@ -405,7 +524,18 @@ public final class VoxtralVoiceEnrollment {
 
         var temperature = config.temperature
 
+        // Best-loss snapshot for divergence recovery. Optimization can diverge
+        // to a non-finite loss (measured: NaN between epochs 4000→4500 on a
+        // degraded reference); the pre-guard code saved that NaN embedding and
+        // synthesis then ran away to the maxFrames cap (~198 s of babble). On a
+        // non-finite loss we stop and fall back to the best finite params seen.
         var cancelled = false
+        var diverged = false
+        var sawFinite = false
+        var bestLoss = Float.greatestFiniteMagnitude
+        var bestS = semanticLogits
+        var bestA = acousticValues
+
         for epoch in 0 ..< config.epochs {
             if let shouldContinue, !shouldContinue() { cancelled = true; break }
             let temp = temperature
@@ -428,6 +558,22 @@ public final class VoxtralVoiceEnrollment {
             let (values, grads) = MLX.valueAndGrad(lossFn, argumentNumbers: [0, 1])(
                 [semanticLogits, acousticValues]
             )
+
+            // Divergence guard. `values` reflect the CURRENT (pre-update)
+            // params, so a finite loss here means those params are a usable
+            // fallback; snapshot them before Adam moves on. A non-finite loss
+            // means this step blew up — stop and keep the last good snapshot.
+            let totalLoss = values[0].item(Float.self)
+            if !totalLoss.isFinite {
+                diverged = true
+                break
+            }
+            sawFinite = true
+            if totalLoss < bestLoss {
+                bestLoss = totalLoss
+                bestS = semanticLogits
+                bestA = acousticValues
+            }
 
             // Global-norm gradient clipping (matches the Python reference's
             // grad_clip=1.0). Without it the semantic logits diverge on long
@@ -463,14 +609,20 @@ public final class VoxtralVoiceEnrollment {
             if let progress, (epoch + 1) % config.logEvery == 0 || epoch == 0 {
                 progress(Progress(
                     epoch: epoch + 1,
-                    totalLoss: values[0].item(Float.self),
+                    totalLoss: totalLoss,
                     reconLoss: values[1].item(Float.self)
                 ))
             }
         }
 
-        return (discreteCodes(semanticLogits: semanticLogits, acousticValues: acousticValues),
-                cancelled)
+        // On divergence, discretize the best finite params rather than the
+        // blown-up current ones. `failed` means we never saw a single finite
+        // loss (nothing usable to fall back to) — the caller should refuse to
+        // save rather than emit a garbage voice.
+        let (semOut, acoOut) = diverged ? (bestS, bestA) : (semanticLogits, acousticValues)
+        let failed = diverged && !sawFinite
+        return (discreteCodes(semanticLogits: semOut, acousticValues: acoOut),
+                cancelled, failed)
     }
 
     private func adamStep(
