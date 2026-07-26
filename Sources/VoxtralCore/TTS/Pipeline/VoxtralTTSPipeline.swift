@@ -586,18 +586,28 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         let totalSamples = fullWaveform.dim(0)
 
                         // Locate the warm-up carrier's end once, then drop it.
+                        // Wait until the adaptive scan window (3 s) has actually
+                        // accumulated — deciding on a partial waveform can latch
+                        // onto a micro-pause inside the carrier and hold that
+                        // wrong cut for the rest of the stream. The batch path
+                        // never sees a partial waveform, so it needs no such
+                        // guard; this keeps both paths deciding on the same view.
+                        let scanWindowSamples = capturedSampleRate * 3
+                        if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            continue
+                        }
                         if contentStart == nil {
-                            // Use a purely ABSOLUTE silence floor (not the default
-                            // peak-relative threshold): as louder real content
-                            // accumulates, a relative threshold rises above the
-                            // quiet enrolled-voice carrier and mis-detects the cut
-                            // (keeps the carrier, or eats real content). The
-                            // carrier's terminal pause is true digital silence
-                            // (~-110 dB), far below any speech (~-60 dB onset), so
-                            // a fixed low floor isolates it robustly.
-                            let (_, cutFrames) = trimLeadingCarrier(
+                            // Same adaptive cut as the batch path: no absolute
+                            // level is assumed. The carrier's terminal pause is
+                            // whatever the generation made it — measured −55 dB,
+                            // −65 dB and −126 dB across three seeds on one voice
+                            // — so a fixed floor finds it only sometimes, and a
+                            // peak-relative one rides up with the content and
+                            // swallows the carrier. Deriving the reference from
+                            // the carrier's own level sidesteps both.
+                            let (_, cutFrames) = trimLeadingCarrierAdaptive(
                                 fullWaveform, sampleRate: capturedSampleRate,
-                                relativeThresholdDB: -100, absoluteFloor: 4e-4,
                                 leadInFrames: ctx.warmUpLeadInFrames)
                             if cutFrames > 0 {
                                 contentStart = cutFrames * frameSize
