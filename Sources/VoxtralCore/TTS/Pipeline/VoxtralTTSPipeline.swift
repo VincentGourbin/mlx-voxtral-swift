@@ -368,9 +368,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             // speech, so a fixed low floor isolates it whatever the content
             // loudness.
             let (carrierTrimmed, carrierCut) = genText != text
-                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate,
-                                     relativeThresholdDB: -100, absoluteFloor: 4e-4,
-                                     leadInFrames: warmUpLeadInFrames)
+                ? trimLeadingCarrierAdaptive(rawWaveform, sampleRate: sampleRate,
+                                             leadInFrames: warmUpLeadInFrames)
                 : (rawWaveform, 0)
             let waveform: MLXArray
             if carrierCut > 0 {
