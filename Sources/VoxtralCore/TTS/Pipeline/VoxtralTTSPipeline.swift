@@ -356,8 +356,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             // already positions the content start (including any kept
             // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
             // it would strip that lead-in back off. Apply only the tail trim.
+            // Locate the cut with a purely ABSOLUTE silence floor rather than
+            // the default peak-relative threshold. An enrolled voice renders
+            // the carrier much quieter than the content, so a peak-relative
+            // threshold lands ABOVE the carrier: the "skip leading silence"
+            // scan then consumes the carrier *and* its terminal pause, and the
+            // first gap it finds is the pause after the first sentence — which
+            // is cut away with the carrier (measured: a 2-sentence text lost
+            // its whole first sentence, 18.9 s → 11.8 s). The carrier's
+            // terminal pause is true digital silence (~−110 dB), far below any
+            // speech, so a fixed low floor isolates it whatever the content
+            // loudness.
             let (carrierTrimmed, carrierCut) = genText != text
-                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate, leadInFrames: warmUpLeadInFrames)
+                ? trimLeadingCarrier(rawWaveform, sampleRate: sampleRate,
+                                     relativeThresholdDB: -100, absoluteFloor: 4e-4,
+                                     leadInFrames: warmUpLeadInFrames)
                 : (rawWaveform, 0)
             let waveform: MLXArray
             if carrierCut > 0 {
