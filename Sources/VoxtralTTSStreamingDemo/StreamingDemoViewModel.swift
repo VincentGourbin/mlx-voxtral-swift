@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AppKit
 import VoxtralCore
 import MLX
 
@@ -13,6 +14,15 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var selectedModelId: String = "tts-4b-4bit"
     @Published var selectedVoice: String = "fr_female"
     @Published var sanitizeEnabled: Bool = true
+
+    /// Auto-save each synthesized audio to disk (for regression A/B vs baselines).
+    @Published var saveCaptures: Bool = true
+    /// Path of the most recently saved capture (for "reveal in Finder").
+    @Published var lastCaptureURL: URL?
+
+    /// Seed for reproducible synthesis. A fixed default makes runs deterministic
+    /// (same text+voice → same audio); clear the field for the old random draw.
+    @Published var seedText: String = "42"
 
     // MARK: - Voice cloning inputs
 
@@ -472,6 +482,7 @@ No account required. No data sent to the cloud. All models run locally on your A
         framesGenerated = 0
         chunksReceived = 0
         isSynthesizing = true
+        capturedSamples.removeAll(keepingCapacity: true)
 
         let clickTime = Date()
         buttonClickTime = clickTime
@@ -485,11 +496,19 @@ No account required. No data sent to the cloud. All models run locally on your A
             var totalSamplesScheduled = 0
 
             do {
+                // Reproducible seed (empty field → random, the old behavior).
+                let seed = UInt64(self.seedText.trimmingCharacters(in: .whitespaces))
+                // Warm-up vocalise stabilizes enrolled (cloned) voices (A6b);
+                // presets don't need it.
+                let warmUp = (clonedVoice != nil) ? VoxtralTTSPipeline.recommendedWarmUpVocalise : nil
+
                 let stream: AsyncThrowingStream<TTSStreamingChunk, Error>
                 if let voiceEmbedding {
-                    stream = pipeline.synthesizeStreaming(text: text, voiceEmbedding: voiceEmbedding, chunkSize: 10)
+                    stream = pipeline.synthesizeStreaming(text: text, voiceEmbedding: voiceEmbedding, chunkSize: 10,
+                                                          seed: seed, warmUpText: warmUp, warmUpLeadInFrames: 0)
                 } else {
-                    stream = pipeline.synthesizeStreaming(text: text, voice: presetVoice!, chunkSize: 10)
+                    stream = pipeline.synthesizeStreaming(text: text, voice: presetVoice!, chunkSize: 10,
+                                                          seed: seed, warmUpText: warmUp, warmUpLeadInFrames: 0)
                 }
 
                 for try await chunk in stream {
@@ -521,6 +540,10 @@ No account required. No data sent to the cloud. All models run locally on your A
             } catch {
                 self.log("Error: \(error.localizedDescription)")
             }
+
+            // Persist the full synthesized waveform so a run can be A/B'd
+            // against the saved baselines in docs/examples/.
+            if self.saveCaptures { self.writeCaptureWAV(self.capturedSamples) }
 
             self.isSynthesizing = false
         }
@@ -562,12 +585,75 @@ No account required. No data sent to the cloud. All models run locally on your A
         MLX.eval(samples)
         let floatArray = samples.asArray(Float.self)
 
+        // Keep a copy for the on-disk capture (played chunks are otherwise lost).
+        if saveCaptures { capturedSamples.append(contentsOf: floatArray) }
+
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: UInt32(floatArray.count))!
         buffer.frameLength = UInt32(floatArray.count)
         floatArray.withUnsafeBufferPointer { ptr in
             buffer.floatChannelData![0].update(from: ptr.baseAddress!, count: floatArray.count)
         }
         playerNode.scheduleBuffer(buffer)
+    }
+
+    // MARK: - Capture (save synthesized audio to disk)
+
+    /// Accumulated float32 samples of the current synthesis (24 kHz mono).
+    private var capturedSamples: [Float] = []
+
+    /// Directory where captured syntheses are written (visible in Finder).
+    static let capturesDir: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("VoxtralCaptures", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Write `samples` (24 kHz mono) to a timestamped 16-bit PCM WAV.
+    private func writeCaptureWAV(_ samples: [Float]) {
+        guard !samples.isEmpty else { log("Capture skipped: no audio"); return }
+
+        let ts = fileTimestamp()
+        let model = (currentModelId ?? "model")
+        let voice = selectedVoice.replacingOccurrences(of: ":", with: "-")
+        let url = Self.capturesDir.appendingPathComponent("cap_\(model)_\(voice)_\(ts).wav")
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 24000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+        ]
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: settings)
+            // Source buffer is float32; AVAudioFile converts to the 16-bit file format.
+            let srcFormat = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
+            let buffer = AVAudioPCMBuffer(pcmFormat: srcFormat, frameCapacity: UInt32(samples.count))!
+            buffer.frameLength = UInt32(samples.count)
+            samples.withUnsafeBufferPointer { ptr in
+                buffer.floatChannelData![0].update(from: ptr.baseAddress!, count: samples.count)
+            }
+            try file.write(from: buffer)
+            lastCaptureURL = url
+            let secs = Double(samples.count) / 24000.0
+            log("Saved capture (\(String(format: "%.2f", secs))s): \(url.path)")
+        } catch {
+            log("Capture save failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Reveal the captures directory (or the last capture) in Finder.
+    func revealCaptures() {
+        NSWorkspace.shared.activateFileViewerSelecting(
+            [lastCaptureURL ?? Self.capturesDir])
+    }
+
+    private func fileTimestamp() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f.string(from: Date())
     }
 
     // MARK: - Logging
