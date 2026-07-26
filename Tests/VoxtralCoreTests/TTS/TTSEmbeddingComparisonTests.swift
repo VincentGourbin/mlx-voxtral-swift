@@ -52,12 +52,18 @@ final class TTSEmbeddingComparisonTests: XCTestCase {
             return e
         }
 
+        // Frames of the carrier's terminal pause kept before the content. With
+        // 0 (a tight cut) the cut lands on the 80 ms frame where speech
+        // resumes, so a word starting mid-frame loses its attack — heard as a
+        // clipped first word ("Fluxforge" → "…orge").
+        let leadIn = env["VOXTRAL_COMPARE_LEADIN"].flatMap { Int($0) } ?? 2
+
         for (label, path) in [("A", embA), ("B", embB)] {
             let embedding = try load(path)
             let result = try await pipeline.synthesize(
                 text: text, voiceEmbedding: embedding, seed: seed,
                 warmUpText: VoxtralTTSPipeline.recommendedWarmUpVocalise,
-                warmUpLeadInFrames: 0)
+                warmUpLeadInFrames: leadIn)
             let url = outDir.appendingPathComponent("compare_\(label).wav")
             try WAVWriter.write(waveform: result.waveform, to: url)
             let dur = Double(result.waveform.dim(0)) / Double(pipeline.sampleRate)
