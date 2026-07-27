@@ -112,6 +112,39 @@ Practical guidance:
 > tied to the decoder/embedding table it was optimized against. The defaults
 > already match (`tts-4b-mlx`).
 
+### Quantized models with a cloned voice — evaluate for yourself
+
+The defaults are bf16 because it is the safe reference, not because quantized
+models were found wanting. If synthesis speed or memory matters to you, measure
+the quantized variants **on your own voice and language** before deciding —
+results here are a single data point, not a recommendation:
+
+| observed on one speaker | `tts-4b-6bit` | `tts-4b-mlx` (bf16) |
+|---|---|---|
+| word coverage (ASR-scored) | 99.4% | 96.5% |
+| real-time factor | 1.47 | 3.44 |
+| warm-up vocalise leaked | 2–3 / 15 | 0 / 15 |
+
+*Sample: one enrolled French male voice (~90 Hz fundamental), 3 ordinary
+sentences × 5 seeds per model, transcribed with `mini-3b-8bit` and scored on
+word overlap. Small, single-speaker, single-language — quantization interacts
+with the voice and the text, so it may not transfer to yours.*
+
+What this does rule out is the earlier assumption that a quantized model drops
+words with enrolled voices: on this sample q6 dropped **fewer** than bf16. That
+assumption came from an observation made before the enrollment high-pass was
+fixed, when embeddings were measurably thinner and plausibly more fragile.
+
+Reproduce it on your own voice with `TTSQuantizationCampaignTests`:
+
+```bash
+TEST_RUNNER_VOXTRAL_TTS_CAMPAIGN=1 \
+TEST_RUNNER_VOXTRAL_TTS_REPRO_EMB=/path/to/your_voice.safetensors \
+xcodebuild test-without-building -scheme MLXVoxtralSwift-Package \
+  -destination 'platform=macOS' \
+  -only-testing:VoxtralCoreTests/TTSQuantizationCampaignTests
+```
+
 Enrollment is offline and one-time per voice. On an unloaded M-series GPU
 it runs at roughly 15× the speed of the original PyTorch reference.
 
