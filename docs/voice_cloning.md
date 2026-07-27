@@ -75,6 +75,14 @@ Practical guidance:
   ambience as recorded, disable with `--high-pass-hz 0` / `--no-gate` (or
   `Config.referenceHighPassHz = nil` / `Config.gateReference = false`).
 
+  > **Low-pitched voices: consider `--high-pass-hz 50`.** The 70 Hz default
+  > still costs 2.7 dB at 90 Hz, and a deep male voice sits right there —
+  > measured on one speaker, preparation alone took the fundamental from
+  > +0.5 dB to −2.1 dB (relative to the second harmonic). Dropping the corner
+  > to 50 Hz costs only 0.8 dB at 90 Hz, in exchange for 19 dB of rumble
+  > rejection at 30 Hz instead of 30 dB — worth it if the room is quiet.
+  > Leave the default for ordinary and higher-pitched voices.
+
   > The high-pass used to be a 64-tap complementary FIR, which at 24 kHz
   > cannot resolve a 70 Hz corner: it attenuated a male fundamental
   > (100–120 Hz) by 24–27 dB, and since the embedding is a prefix the model
