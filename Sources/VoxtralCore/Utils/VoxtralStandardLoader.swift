@@ -986,7 +986,10 @@ private func loadWeights(from modelURL: URL) throws -> [String: MLXArray] {
     var weights: [String: MLXArray] = [:]
 
     // Python: weight_files = sorted([f for f in model_path.glob("*.safetensors") ...])
-    let weightFiles = try FileManager.default.contentsOfDirectory(at: modelURL, includingPropertiesForKeys: nil)
+    // `atPath:` (not the `URL`-based `contentsOfDirectory(at:)`) so this also lists
+    // files one level inside a symlinked model directory, not just a symlinked file.
+    let weightFiles = try FileManager.default.contentsOfDirectory(atPath: modelURL.path)
+        .map { modelURL.appendingPathComponent($0) }
         .filter { url in
             let name = url.lastPathComponent
             return name.hasSuffix(".safetensors") &&

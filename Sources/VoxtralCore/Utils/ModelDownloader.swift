@@ -434,17 +434,37 @@ public class ModelDownloader {
         return directorySize(at: path)
     }
 
-    /// Calculate directory size recursively
+    /// Calculate directory size recursively.
+    ///
+    /// Walks with `atPath:` APIs (not the `URL`-based family) because a relocated
+    /// model's large weight files are replaced with file symlinks to an external
+    /// disk: `resourceValues(forKeys: [.fileSizeKey])` on a symlink reports the
+    /// link's own size (a few bytes), not its target's. Each symlinked entry is
+    /// resolved via `destinationOfSymbolicLink(atPath:)` (a raw `readlink`) rather
+    /// than `resolvingSymlinksInPath()`, which silently no-ops and leaks the
+    /// symlink's own near-zero size when the target is missing (e.g. an unmounted
+    /// external disk); a broken symlink contributes 0 instead.
     private static func directorySize(at url: URL) -> Int64 {
         let fm = FileManager.default
-        guard let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) else {
+        guard let enumerator = fm.enumerator(atPath: url.path) else {
             return 0
         }
 
         var totalSize: Int64 = 0
-        for case let fileURL as URL in enumerator {
-            if let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                totalSize += Int64(fileSize)
+        for case let relativePath as String in enumerator {
+            let itemPath = url.appendingPathComponent(relativePath).path
+            if (itemPath as NSString).lastPathComponent.hasPrefix(".") { continue }
+            guard let attrs = try? fm.attributesOfItem(atPath: itemPath) else { continue }
+
+            if (attrs[.type] as? FileAttributeType) == .typeSymbolicLink {
+                guard let rawTarget = try? fm.destinationOfSymbolicLink(atPath: itemPath) else { continue }
+                let targetPath = rawTarget.hasPrefix("/")
+                    ? rawTarget
+                    : URL(fileURLWithPath: itemPath).deletingLastPathComponent().appendingPathComponent(rawTarget).path
+                guard let targetAttrs = try? fm.attributesOfItem(atPath: targetPath) else { continue }
+                totalSize += (targetAttrs[.size] as? Int64) ?? 0
+            } else {
+                totalSize += (attrs[.size] as? Int64) ?? 0
             }
         }
         return totalSize
