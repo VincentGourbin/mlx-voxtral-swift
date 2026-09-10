@@ -450,9 +450,10 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
         progress?(0.0, "Checking cache for \(variant.rawValue) encoder...")
 
-        // Check if already cached
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("models")
+        // Check if already cached. Honors ModelDownloader.customModelsDirectory so the
+        // Core ML encoder lands under the same app-chosen root as every other model
+        // instead of always writing to ~/Library/Caches.
+        let cacheDir = ModelDownloader.modelsDirectory
             .appendingPathComponent(repo.replacingOccurrences(of: "/", with: "--"))
 
         let modelPath = cacheDir.appendingPathComponent(modelName)
@@ -472,9 +473,10 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         progress?(0.1, "Downloading \(variant.rawValue) encoder from HuggingFace...")
         VoxtralDebug.log("Downloading Core ML \(variant.rawValue) encoder from \(repo)")
 
-        // Create Hub API
+        // Create Hub API. HubApi appends "models/" to downloadBase, so pass the
+        // parent of modelsDirectory (which already ends in ".../models").
         let hubApi = HubApi(
-            downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            downloadBase: ModelDownloader.modelsDirectory.deletingLastPathComponent(),
             useOfflineMode: false
         )
 
