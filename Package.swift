@@ -43,7 +43,13 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.31.6"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.3"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.31.4"),
+        // Pinned to branch (not a version) because the app that embeds this framework
+        // also depends on mlx-swift-lm's `main` (needed by a sibling framework), and
+        // SwiftPM refuses to resolve a version requirement against a branch requirement
+        // on the same package. `main` currently sits past the `prepare(...)` protocol
+        // change (added `prefill: PrefillParameters`) that this package's LanguageModel
+        // conformances were updated for. Revisit once ml-explore cuts a tag beyond 3.31.4.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", branch: "main"),
         .package(url: "https://github.com/VincentGourbin/swift-mlx-profiler", from: "1.4.0")
     ],
     targets: [

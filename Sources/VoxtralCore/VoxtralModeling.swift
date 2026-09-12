@@ -1593,7 +1593,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Prepare the cache state and consume the LMInput
      * Required by LanguageModel protocol
      */
-    public func prepare(_ input: LMInput, cache: [any KVCache], windowSize: Int?) throws -> PrepareResult {
+    public func prepare(
+        _ input: LMInput, cache: [any KVCache], state: LMOutput.State?, prefill: PrefillParameters
+    ) throws -> PrepareResult {
         // For Voxtral, we need to handle both text and audio inputs
         let mergedEmbeddings: MLXArray
         
@@ -1636,6 +1638,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else {
             fatalError("Unsupported lm_head type: \(type(of: lm_head))")
         }
+
+        // Single-forward prefill (no chunking): report the whole prompt done at once.
+        let totalPositions = mergedEmbeddings.dim(1)
+        prefill.progress?(totalPositions, totalPositions)
 
         return .logits(LMOutput(logits: logits))
     }
