@@ -214,7 +214,7 @@ décroissant → 5. type de profils + CLI `references` / `--reference` → 6. me
 | K-78 | [Mesure de la matrice Realtime (4 / 16 bits, 8 bits si un pack chargeable existe)](fiches/K-78.md) | P-70, P-60, P-67, M-01 | profils `4bit-fast\|lean`, `16bit-fast\|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82). | M | macos-gpu | à faire |
 | K-79 | [Défaut TTS tranché par la mesure et matrice TTS (4 / 6 / 16 bits × fast / lean)](fiches/K-79.md) | FA-03, ACT-12, ACT-18, ACT-29, P-34, T15 | `TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun. | M | macos-gpu | à faire (⛔ ASK-5, ASK-13, ASK-18) |
 | K-80 | [Packs publiés : Realtime 8 bits, TTS 8 bits, Mini à encodeur 8 bits / bf16, Small à encodeur dense (SHA-256, cartes)](fiches/K-80.md) | K-M08, PK-1, PK-4, P-70, P-48 | pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour. | L | macos-gpu | à faire (⛔ ASK-16, ASK-18, ASK-19, ASK-20, ASK-22) |
-| K-81 | [Squelette sourcé de `docs/References.md` et `docs/Weights.md` (sans mesure : valeurs « mesurée (source) » ou « à mesurer »)](fiches/K-81.md) | P-20, M-03 | `docs/References.md` : une ligne par profil de `profils.md` (28), chaque cellule « mesurée (source) » ou « à mesurer » (0 valeur non sourcée, relecture) ; `docs/Weights.md` : les 13 dépôts du registre + les candidats de `modeles-2026-09.md` §3.2 avec octets exacts et date ; aucun fichier `.swift` modifié. | S | cloud | à faire |
+| K-81 | [Squelette sourcé de `docs/References.md` et `docs/Weights.md` (sans mesure : valeurs « mesurée (source) » ou « à mesurer »)](fiches/K-81.md) | P-20, M-03 | `docs/References.md` : une ligne par profil de `profils.md` (28), chaque cellule « mesurée (source) » ou « à mesurer » (0 valeur non sourcée, relecture) ; `docs/Weights.md` : les 13 dépôts du registre + les candidats de `modeles-2026-09.md` §3.2 avec octets exacts et date ; aucun fichier `.swift` modifié. | S | cloud | fait |
 | K-82 | [`docs/References.md`, `docs/Weights.md` et décisions remplis avec les mesures et les SHA-256 relevés](fiches/K-82.md) | P-20, M-03, K-M09 | 0 « à mesurer » restant dans la table de `References.md` pour les profils de `.all` (sauf largeur non disponible, marquée) ; chaque valeur cite sa ligne `BENCHMARKS.md` ; `Weights.md` : SHA-256 relevé par `curl -s https://huggingface.co/api/models/<repo>/tree/<rev>?recursive=true` pour chaque fichier de poids retenu, révision notée ; `docs/knowledge/index.md` à jour. | S | macos-gpu | à faire |
 
 ### Classement du lot 4 par gain attendu (aucun n'est « obtenu »)
@@ -482,3 +482,24 @@ Gabarits :
   · `CLAUDE.md commandes PLAN.md §5 (build :297, test :302-303, machine-check :309) : 4/4 lignes identiques ; 57 lignes (≤ 60)`
   · `GLOSSARY 16 métriques, 0 doublon` ; relecture : chaque chiffre porte sa source (fichier:ligne, commit, issue ou
   rapport d'audit) ou la mention « calcul » / « en session ».
+
+## K-81 — Squelette sourcé de `docs/References.md` et `docs/Weights.md` — 2026-09-27 — validée
+- Fait : `docs/References.md` (brouillon de `profils.md` §8 — la fiche dit « §7 », numérotation décalée — adapté :
+  une ligne par profil, 28 ; colonne « Source » `profils.md:N` par ligne ; cellules de mesure « to measure (K-n) » ou
+  « — » pour les 4 profils non disponibles ; valeurs du brouillon sans source remplacées par « to decide (K-n) » ;
+  équivalents CLI corrigés d'après `VoxtralCLI.swift:177-187`, `:210`, `:215`) ; `docs/Weights.md` (13 ids du
+  registre, 3 dépôts hors registre téléchargés par le code — enum `small24b8bit`, Core ML mini/small —, 13 candidats
+  de `modeles-2026-09.md` §3.2 ; octets exacts, date de MAJ et licence du Hub, format, chargeable ou non,
+  SHA-256 « to record (K-82) »). Octets relistés le 2026-09-27 par le connecteur Hugging Face (`hf_fs ls`) :
+  identiques au rapport pour tous ses dépôts ; `aufklarer/…-MLX-5bit` et `…-MLX-FP16`, non inspectés par le rapport,
+  relevés par K-81. Piège coché : dérive des dépôts officiels (Weights.md §4 « relister à chaque audit »). Aucun
+  `.swift` touché.
+- Mesure : aucune (documentation, session cloud).
+- Porte observée :
+  `REFERENCES 28 lignes, 0 valeur non sourcée`
+  · `WEIGHTS 13 dépôts du registre + 13 candidats, octets exacts (Hub 2026-09-27)`
+  · `REFERENCES 28 lignes (4 non disponibles), 0 valeur non sourcée, 0 ligne de tableau mal formée`
+  · `LINKS 20 liens relatifs, 0 mort`
+  · `WEIGHTS registre 13 dépôts + 3 hors registre + 13 candidats §3.2 ; 0 ligne sans octets sourcés`
+  · `SWIFT git status -- '*.swift' : vide` ; relecture : chaque réglage et chaque valeur « in session » porte sa source
+  (`profils.md:N`, `modeles:N`, fichier:ligne) ; octets datés « Hub, 2026-09-27 ».
