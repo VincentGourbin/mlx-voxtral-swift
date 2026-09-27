@@ -1,0 +1,466 @@
+# Plan — mlx-voxtral-swift : stabilité, performance et profils de référence — 2026-09-27
+
+> Produit par le skill `mlx-swift-audit` (bêta, phases 3 et 4). Révision auditée : `9392ed1` (= tag `v2.2.2`),
+> branche `claude/action-plan-skills-beta-wifgmu`. Rapports d'audit : `docs/audit/2026-09-27/` (index :
+> [`README.md`](README.md)). Profils : [`profils.md`](profils.md). Décisions : [`ASK.md`](ASK.md). Fiches :
+> [`fiches/`](fiches/). Tâches Mac : [`tasks.yaml`](tasks.yaml) (format task-dispatch).
+>
+> **82 fiches** : 6 exécutables en cloud (documentation, scripts Python, tracker), 76 sur `macos-gpu` (build, tests,
+> mesure ou écoute). Aucune n'a été exécutée : c'est la fin de la phase 4, on s'arrête ici (règle du skill).
+
+## 0. Règles de mesure
+
+Binaire **Release** (`xcodebuild -scheme VoxtralCLI -configuration Release`) · `machine-check.sh` vert
+(`~/.claude/skills/mlx-swift-audit/scripts/machine-check.sh $CLI --cooldown 120 --procs 'Voxtral.*'`) ·
+refroidissement 120 s · **un levier par comparaison** · A/B/B/A (deux passes par variante, une requête d'amorçage
+exclue) · une différence n'est lue que si elle dépasse la dispersion A/A · **gain < 5 % = bruit, le levier est
+retiré** · **une ligne JSON par mesure** (`BENCH {…}`, instrument K-32) recopiée telle quelle dans `BENCHMARKS.md`
+avec les révisions **résolues** de mlx-swift, mlx-swift-lm (dépendance sur `main`) et swift-mlx-profiler · parité
+avant/après sur le **checkpoint réel**.
+
+Précisions propres à Voxtral :
+- **Tests en Debug, mesures en Release** : les 43 fichiers de tests font `@testable import VoxtralCore` ; une porte de
+  test se prouve par `xcodebuild test` (Debug), une porte de mesure par `VoxtralCLI bench` (Release). Une campagne
+  XCTest chronométrée (P-76) n'est pas une référence sauf build Release avec `ENABLE_TESTABILITY=YES`.
+- **Tests sans parallélisme** (`-parallel-testing-enabled NO`) : jamais de gradient pendant une inférence (piège 20,
+  A-01).
+- **Parité par chemin** : STT et Realtime = transcription greedy identique ou WER normalisé (casse, ponctuation,
+  accents : la référence FR est sans accents) dans la tolérance de la fiche (ASK-11) ; TTS = **bit-identique à graine
+  fixée** pour les leviers exacts, **parité forcée par l'enseignant** + couverture ASR pour les leviers numériques
+  (le FM est stochastique à rétroaction : une comparaison libre diverge par construction) ; enrôlement = codes
+  identiques à graine fixée.
+- **Deux conventions de RTF coexistent dans le dépôt** (faits-et-actions.md §2.1) : ici **RTF = génération / audio**
+  (< 1 = plus vite que le temps réel) ; **TTFT-frame** (premier frame de codes interne) ≠ **TTFA** (premier
+  échantillon audio reçu par le consommateur).
+- Toute valeur antérieure à ce plan est **« en session »** : aucune n'est une référence (faits-et-actions.md §2.8).
+
+## 1. Faits vérifiés (ne pas re-dériver)
+
+| Fait | Preuve (fichier:ligne, commande, source) |
+|---|---|
+| `9392ed1` = tag `v2.2.2` ; 0 issue ouverte, 0 PR ouverte ; seule branche distante `main` | MCP GitHub `list_tags`/`list_issues`/`list_pull_requests`, `git ls-remote --heads` (2026-09-27) |
+| Voxtral résout mlx-swift **0.31.6** (`0bb916c`, 2026-07-01, MLX C++ `ce45c52`) : `from: "0.31.6"` et mlx-swift-lm impose `.upToNextMinor(from: "0.31.6")` ; aucun tag > 0.31.6 | `Package.swift:43` ; mlx-swift-lm `Package.swift:64` ; `git ls-remote --tags` |
+| mlx-swift-lm suivi sur `branch: "main"` (tête `ee673d6`, 2026-09-22 ; dernier tag 3.31.4) ; `Package.resolved` ignoré par git | `Package.swift:46-52` ; `.gitignore:27` |
+| Le correctif du deadlock compile × vjp (`df9ae26`, #461) n'est dans **aucun** tag de mlx-swift | `git tag --contains df9ae26` vide (audit-annexes-serveur.md A-01) |
+| Sans `withError`, une erreur MLX appelle `fatalError(message)` ; Voxtral n'appelle jamais `withError` | mlx-swift 0.31.6 `ErrorHandler.swift:337-347` ; `grep -rn withError Sources` = 0 |
+| Tekken : id = rang + 1 000 ; **id 32000 = « ␣Capital »** ; la génération STT s'arrête sur `[2, 4, 32000]` | `VoxtralComponents.swift:155-176` ; `VoxtralModeling.swift:1124` ; `tekken.json` rang 31000 |
+| Le LM Voxtral n'a pas de fenêtre glissante (`sliding_window: null`, 131 072 positions) ; 375 jetons audio par fenêtre de 30 s | `config.json` HF ; `VoxtralProcessor.swift:389-390` |
+| Tous les préréglages mémoire posent `maxKVCacheSize` (2 048 / 4 096 / 6 144 / 8 192) ⇒ `RotatingKVCache` + masque `[T, offset+T]` ⇒ arrêt au préfill à partir de 6 / 11 / 17 / 22 fenêtres ; l'app impose 8 192 | `MemoryOptimizationConfig.swift:41-90` ; `VoxtralModeling.swift:1135-1147` ; `VoxtralStandardLoader.swift:450-481` ; simulation (audit-performance-stt.md annexe A) |
+| `maxTokens` STT = 500 par défaut (≈ 3 min de parole) ; Realtime compte des trames (4 096 ≈ 5 min 27 s) | `VoxtralPipeline.swift:109` ; `VoxtralRealtimeModel.swift:115-124` |
+| `update(parameters:)` non levant = `try! … verify: .none` ; les 3 chargeurs vivants ne vérifient ni clés ni formes | mlx-swift `Module.swift:401-408` ; `VoxtralStandardLoader.swift:1323`, `:1338` ; `VoxtralTTSModelLoading.swift:71` ; `VoxtralRealtimeModelLoading.swift:55` |
+| « Téléchargé » = `config.json` / `params.json` présent ; sans index = « complet » ; aucun SHA-256 | `ModelDownloader.swift:206-210`, `:312-335`, `:537-592`, `:644-702` |
+| `small-24b-8bit` : enum → `mzbac/…` (28 056 927 031 o), registre → `VincentGOURBIN/…` (26 499 134 369 o) | `VoxtralPipeline.swift:47-48` ; `ModelRegistry.swift:90-91` |
+| Le glob `*.safetensors` télécharge aussi `consolidated.safetensors` (mini-3b 18,7 Go au lieu de 9,36) | `ModelDownloader.swift:361-365`, `:388-392` ; listings HF |
+| Le « streaming » TTS génère tout dans la closure synchrone de `AsyncThrowingStream` ; `Task` sans `onTermination` | `VoxtralTTSModeling.swift:569-685` ; `VoxtralTTSPipeline.swift:556-671` |
+| `enrollVoice` ne marque jamais la pipeline occupée ; `silu` (compilé par MLXNN) est traversé par le vjp ⇒ ABBA possible avec une synthèse | `VoxtralTTSPipeline.swift:425-452` ; `VoxtralCodecDecoder.swift:295-296` ; mlx-swift 0.31.6 `Transforms+Compile.swift:12,39-43,89` |
+| STT : features mel fp32 jamais castées ⇒ préfill, KV (240 Kio/jeton Mini) et décodage en fp32 ; en bf16 chaque `Linear` recopie son poids en fp32 | `VoxtralFeatureExtractor.swift:298-335` ; `VoxtralModeling.swift:979` ; MLX `ops.cpp:3069-3082`, `dtype.cpp:45,48` |
+| TTS : `decodeOneFrame` caste l'état caché en fp32 ⇒ FM en fp32 ; attention du codec en T×T fp32 (≈ 10,5 Go par tenseur à 2 266 frames, **calcul**, à mesurer) | `VoxtralFlowMatching.swift:289` ; `VoxtralCodecDecoder.swift:210-231` |
+| Realtime : `logits = matmul(h, tokEmbeddings.weight.T)` avec `h` fp32 ⇒ copie fp32 de la table 131 072 × 3 072 (1,5 Gio par pas, **calcul** depuis la forme, à mesurer) ; `tok_embeddings` jamais quantifié | `VoxtralRealtimeDecoder.swift:187-189` ; `VoxtralRealtimeModelLoading.swift:39` |
+| Realtime : fenêtres de la config (encodeur 750, décodeur 8 192) ignorées ; la référence mlx-audio les applique | `VoxtralRealtimeEncoder.swift:151-159` ; `VoxtralRealtimeDecoder.swift:191-194` ; mlx-audio `encoder.py:188-219`, `decoder.py:226-229` |
+| `flowSteps`, `cfgAlpha`, `temperature` du TTS ne sont lus nulle part ; 8 pas et 1,2 codés en dur | `VoxtralFlowMatching.swift:195-196` ; `grep` |
+| Aucune `Memory.cacheLimit` dans `VoxtralCore` ; seule pose `0` puis `Int.max` (qui n'est **pas** le défaut) dans une fonction morte de l'app | `TranscriptionManager.swift:285-297` ; MLX `allocator.cpp:52-54` |
+| La bibliothèque remet le pic MLX à zéro tous les 2 à 16 jetons en STT | `VoxtralModeling.swift:1256-1257`, `:1433-1434` ; `MemoryOptimizationConfig.swift:44-68` |
+| `mistralai/Voxtral-Mini-4B-Realtime-2602` a gagné un `config.json` et un `model.safetensors` transformers : l'entrée `realtime-4b` ne se charge plus | listing HF (2026-09-27) ; `VoxtralRealtimeModelLoading.swift:63-77` |
+| Les packs STT de 2026 (Markus, aufklarer) portent `"mode": "affine"` : refusés par le décodeur STT ; mode ignoré en TTS/Realtime | `VoxtralStandardLoader.swift:87-114` ; `VoxtralTTSModelLoading.swift:58` |
+| Aucun nouveau checkpoint Voxtral chez Mistral depuis `4B-TTS-2603` ; TTS sous **CC BY-NC 4.0** ; pas d'encodeur de codec publié | Hub HF, MCP (2026-09-27) |
+| Consommateurs connus : FluxForge Studio (App Store, chaîne LipDub/LTX : `VoxtralPipeline(.mini3b4bit)`, TTS 6 bits + voix enrôlées + warm-up, batch), SongAnalysisDb ; 0 usage connu de l'API legacy ni du Realtime | recherche de code GitHub (audit-stabilite.md §0 ; audit-performance-tts.md en-tête) |
+| Aucune mesure publiée n'est une référence (froid, pas d'A/B/B/A, deux RTF, TTFT ≠ TTFA, instrument contesté) | faits-et-actions.md §2.1, §2.8 ; audit-performance-realtime-instruments.md P-73 |
+| Le texte de référence « Full test texts » fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio (« ~350 words » annoncés) : peut-être abrégé | `docs/tts_benchmark.md:24-31`, `:135-151` ; `wc -w` (à contrôler par K-33) |
+| Pas de `CLAUDE.md`, `AGENTS.md`, `BENCHMARKS.md`, `docs/knowledge/` ; pas de CI | `scan.md` §7 ; `.github/` absent |
+
+## 2. Baseline (mesures de référence avant toute modification de performance)
+
+Toutes les cellules sont **À MESURER** ; aucune valeur antérieure n'est reprise comme référence. Instrument : K-32
+(`VoxtralCLI bench`, A/A ≤ 3 %) ; qualité : K-33 (`VoxtralCLI eval`). Les lignes produites vont dans `BENCHMARKS.md`.
+
+| Chemin | Workload | Préfill tok/s | Décodage tok/s | TTFT | Pic phys_footprint | Ligne BENCHMARKS |
+|---|---|---|---|---|---|---|
+| STT Mini 4 / 8 / 16 bits, `.mlx` et `.auto` | C-court EN, C-moyen EN/FR, C-long | À MESURER | À MESURER | À MESURER | À MESURER | K-34 |
+| STT Small 4 / 8 bits, `.mlx` et `.auto` | C-moyen EN, 8 min | À MESURER | À MESURER | À MESURER | À MESURER (≤ 24 Go ?) | K-34 |
+| Realtime 4 bits / fp16 | C-court, C-moyen EN/FR, C-long | À MESURER (préfill ≤ 32 jetons) | À MESURER (`step_ms_p50`/`p90`, budget 80 ms) | À MESURER (1er jeton texte) | À MESURER | K-36 |
+
+| Chemin | Workload | Débit | Latence | Autres | Pic phys_footprint | Ligne BENCHMARKS |
+|---|---|---|---|---|---|---|
+| TTS 4 / 6 / 16 bits × prédéfinie / clonée × batch / streaming | court, 60 s, long ; graines 1-3 ; chemin FluxForge (6 b + clonée + warm-up) | fr/s : À MESURER | TTFT-frame, TTFA : À MESURER | RTF (gén/audio), décodage codec, frames du porteur : À MESURER | À MESURER | K-35 |
+| Enrôlement 6 / 16 bits | `clone_fr.wav`, 200 époques, graine 7 ; scénarios CLI et synthèse → enrôlement | s/époque : À MESURER | — | perte finale : À MESURER | À MESURER | K-37 |
+| Chat (Q/R sur l'audio, `VoxtralPipeline.chat`) | mini-3b-8bit × `.mlx` / `.auto` × C-moyen EN × 4 questions fixes (`docs/eval/chat-questions.json`, greedy) | — | tok/s : À MESURER | `ttft_ms` par question : À MESURER | — | À MESURER | K-34 |
+| Qualité | corpus `docs/eval/corpus.json` | — | — | WER STT et Realtime (lignes de K-34 et K-36), couverture ASR TTS (K-35), juge Realtime, auto-détection | — | K-33 |
+
+## 3. Fiches
+
+**Ordre imposé** (skill) : 1. stabilité bloquante (arrêt du processus, deadlock, sortie silencieusement fausse,
+fuite) → 2. hygiène sans risque → 3. **baseline mesurée** de chaque chemin → 4. leviers perf par gain attendu
+décroissant → 5. type de profils + CLI `references` / `--reference` → 6. mesures de la matrice et docs
+(`References.md`, `Weights.md`, `docs/knowledge/`).
+
+- **Cible** : `cloud` = documentation, scripts Python, tracker, sans build (exécutée dans la session cloud) ;
+  `macos-gpu` = tout ce qui exige build, tests, mesure ou écoute (dispatchée via `tasks.yaml`). Une porte à test
+  unitaire est `macos-gpu` (pas de toolchain Swift en cloud).
+- **Porte** : toujours chiffrée ; gain < 5 % ⇒ code retiré. **⛔** : une décision de Vincent (ASK) est requise avant
+  d'exécuter (ou de conclure) la fiche.
+- Chaque fiche porte ses prérequis ; le graphe est acyclique et suit l'ordre de numérotation. **Contrôle mécanique du
+  2026-09-27** (critique de complétude) : toute fiche des lots 4 à 6 atteint, par ses prérequis, la baseline de son
+  chemin (K-34 STT et chat, K-35 TTS, K-36 Realtime, K-37 enrôlement) et, si sa porte cite un WER ou une couverture
+  ASR, l'outil K-33 ; K-65 (+ K-36), K-74 (+ K-34), K-82 (+ K-64), K-35 et K-36 (+ K-33) ont été corrigés pour cela.
+- Les fiches cloud **K-17…K-21 et K-81** n'ont aucune dépendance Mac : K-17, K-18, K-19 et K-81 peuvent être
+  exécutées tout de suite ; K-20 attend ASK-30 et K-21 attend ASK-31.
+
+### Lot 1 — stabilité bloquante
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-1 | [Erreurs MLX levées au lieu de terminer le processus hôte (`withError` aux points d'entrée publics)](fiches/K-1.md) | MLX-020, S-02, P-03, P-17, MLX-018 | test `MLXErrorBoundaryTests` : invite synthétique de 2 600 positions préfillée avec `MemoryOptimizationConfig.ultra` (déclencheur P-03, présent tant que K-2 n'est pas livré) → `VoxtralError.mlx` levée, processus vivant (rouge sans correctif = plantage du runner de test, piège 38) ; suite complète verte ; durée totale de `VoxtralCLI transcribe` sur C-moyen EN inchangée à ±5 % (A/B/B/A, `/usr/bin/time`). | S | macos-gpu | à faire |
+| K-2 | [STT : cache KV sans fenêtre par défaut + garde-fou explicite (plus d'arrêt ni de perte du début sur audio long)](fiches/K-2.md) | S-02, P-03 | test `LongPromptKVCacheTests` (invite synthétique de 2 600 positions, préréglage `.ultra`) rouge → vert ; intégration `VOXTRAL_LONG_AUDIO=1` sur C-long (≈ 11 min 22 s) avec `recommended(forRAMGB: 8)` puis `(forRAMGB: 16)` et `maxTokens` 4 096 : 0 arrêt, première phrase EN « Fluxforge Studio turns your Mac into a complete AI creative studio. » et dernière phrase FR « Aucune donnee envoyee dans le cloud. » présentes (casse et accents ignorés) ; pic « peak memory footprint » consigné (ASK-7 au-delà de 12 Go). | S/M | macos-gpu | à faire |
+| K-3 | [Masques d'attention construits par le cache (décodeur STT vivant et décodeur hérité)](fiches/K-3.md) | P-02, P-17, MLX-002, MLX-018 | logits du dernier jeton : écart relatif L2 ≤ 1e-3 contre l'actuel sur 3 clips (C-court EN/FR, C-moyen EN), greedy identique 3/3 ; test : un préfill à entrée bf16 ne lève plus « Mask type must promote to output type » ; test `RotatingKVCache` enroulé (préfill en 2 tranches, T ≥ 2) : 0 arrêt, masque `.bool` de la forme des clés ; invite de 600 positions via `loadVoxtralModel(modelPath:dtype:lazy:)` (chemin hérité) sans arrêt ; durée de transcription C-moyen EN ±5 % (A/B/B/A). | S | macos-gpu | à faire |
+| K-4 | [Jetons d'arrêt dérivés du tokenizer (fin de la troncature sur « ␣Capital »)](fiches/K-4.md) | S-01 | test `StopTokenTests` : chaque jeton d'arrêt est un id spécial (< 1 000), rouge avec la liste actuelle ; clip de test synthétisé « Capital Gains and Capital One are two different things. The capital of France is Paris. » transcrit au-delà du premier « ␣Capital » (« One » et « Paris » présents, 1/1) ; greedy identique avant/après sur C-court EN, C-court FR et C-moyen EN (3/3). | S | macos-gpu | à faire |
+| K-5 | [Plus de troncature silencieuse : `maxTokens` STT proportionnel à la durée, boucle Realtime bornée par l'audio](fiches/K-5.md) | P-11, P-64 | STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur). | S | macos-gpu | à faire (⛔ ASK-8, ASK-9) |
+| K-6 | [Téléchargements prouvés complets (manifeste + SHA-256), API de téléchargement factice neutralisée](fiches/K-6.md) | S-03, A-02, A-05, MLX-012 | 6 tests unitaires sur dossiers temporaires, rouges sans le correctif : 1 shard sur 5 sans index → non téléchargé ; index corrompu → non téléchargé ; TTS `params.json` seul → non téléchargé puis reprise effective ; Realtime `config.json` seul → idem ; SHA-256 faux → rejet ; `downloadModel` sur id inconnu → erreur, aucun dossier créé ; `ModelDownloaderSizeTests` et `ModelLoadingSymlinkedDirectoryTests` verts ; coupure réseau simulée au milieu d'un shard puis relance → modèle complet (1/1). | M | macos-gpu | à faire |
+| K-7 | [Chargement vérifié (`verify: [.allModelKeysSet, .shapeMismatch]`) et tokenizer strict](fiches/K-7.md) | S-04, S-05, MLX-017 | chargement sans erreur (0 clé manquante) de `mini-3b-4bit`, `mini-3b-8bit`, `mini-3b`, `tts-4b-4bit`, `tts-4b-6bit`, `tts-4b-mlx`, `tts-4b`, `realtime-4b-4bit`, `realtime-4b-fp16` (+ Small s'ils sont présents) ; dossier privé d'un shard → erreur nommant ≥ 1 clé (test rouge avant) ; dossier sans `tekken.json` → erreur typée pour STT, TTS et Realtime (3 tests) ; ids de jetons identiques sur 20 phrases FR/EN avec le vrai fichier ; sorties greedy (STT C-court) et audio TTS (graine 42) identiques avant/après. | S | macos-gpu | à faire |
+| K-8 | [Quantification lue comme l'amont (mode, per-layer, `quantization_config`, index TTS) et modes non affines refusés](fiches/K-8.md) | M-02, M-04, P-48 | 5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite. | S-M | macos-gpu | à faire |
+| K-9 | [Realtime : entrée originale `realtime-4b` de nouveau chargeable ; id de modèle strict](fiches/K-9.md) | M-01, M-05 | 2 fixtures de décodage vertes (`config.json` transformers ignoré → config Mistral depuis `params.json`, `quantization == nil`) ; téléchargement de `realtime-4b` = 8,87 Go ± 1 % (au lieu de 17,72) ; chargement `verify: [.all]` : 0 clé manquante ou en trop ; transcription C-court EN identique au pack `realtime-4b-fp16` (ou WER ≤ +0,2 pt) ; test « id inconnu → erreur ; nil → défaut ». | S | macos-gpu | à faire (⛔ ASK-17) |
+| K-10 | [Une seule source pour les dépôts STT (`small-24b-8bit` sur deux dépôts)](fiches/K-10.md) | S-06 | test « chaque `VoxtralPipeline.Model` existe dans `ModelRegistry` avec le même repoId » vert (rouge avant) ; modèle Small 8 bits téléchargé par l'app puis `loadModel` en mode avion → chargé, 0 octet réseau (`nettop` ou Little Snitch) ; un seul dossier `small-8bit` sur disque. | S | macos-gpu | à faire (⛔ ASK-15) |
+| K-11 | [Exclusion enrôlement / inférence et machine d'états atomique des pipelines (deadlock ABBA compile × vjp)](fiches/K-11.md) | A-01, S-10 | test d'intégration `EnrollInferenceExclusionTests` (`enrollVoice` 50 époques ∥ `synthesizeStreaming`) : 20/20 exécutions sans blocage (timeout 120 s), synthèse refusée `busy` en < 1 s ou exécutée après ; rouge sans le correctif (blocage ou chevauchement détecté) ; test de stress TSan (2 × `loadModel`, `unload` pendant un stream, synthèse pendant enrôlement) : 0 alerte, états finaux cohérents 10/10 ; suite complète verte. | M | macos-gpu | à faire |
+| K-12 | [Streaming TTS réel et annulable (production dans une Task, `onTermination`, `checkCancellation`)](fiches/K-12.md) | S-08, MLX-003, MLX-019 | texte long (≈ 350 mots, `tts-4b-4bit`), **sans warm-up**, graine 42 : `generateStreaming` rend en < 50 ms ; premier chunk ≤ 1,5 × `ttft` du batch ; annulation après 5 chunks → pipeline `.ready` en < 1 s et frames générées ≤ frames à l'annulation + 1 ; audio concaténé identique au batch (même graine). | M | macos-gpu | à faire |
+| K-13 | [Realtime : fenêtres glissantes appliquées (encodeur 750 par tranches, décodeur `RotatingKVCache(8192)`)](fiches/K-13.md) | P-62, P-63 | embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min). | M | macos-gpu | à faire (⛔ ASK-11, ASK-12) |
+| K-14 | [TTS : plafond de frames proportionnel au texte (fin des emballements jusqu'à 200 s)](fiches/K-14.md) | P-41, FV-46, FV-53 | 0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés. | S | macos-gpu | à faire |
+| K-15 | [Annulation coopérative et calcul hors du pool coopératif (STT, TTS batch, Realtime, chargement)](fiches/K-15.md) | S-09 | annulation d'une transcription de C-long (≈ 11 min) → `CancellationError` en < 2 s, pipeline `.ready` ; idem TTS batch (texte long) et Realtime ; app `VoxtralApp` : 0 blocage > 250 ms du main thread pendant `loadModel` (Instruments, Hangs) ; tests rouges sans le correctif. | M | macos-gpu | à faire |
+| K-16 | [Données partagées sûres : globaux protégés, `MLXArray` évalués avant de traverser une frontière d'isolation](fiches/K-16.md) | S-11, S-12, MLX-004 | `grep -c 'nonisolated(unsafe)' Sources/VoxtralCore -r` : 8 → ≤ 2, chacune documentée ; test : deux pipelines de configurations mémoire différentes gardent chacune la leur ; TSan propre sur 4 extractions de features en parallèle ; synthèse hors MainActor consommée sur le MainActor 20/20 sans plantage, WAV identiques octet pour octet (fiche préventive : aucun plantage reproduit avant). | S/M | macos-gpu | à faire |
+
+### Lot 2 — hygiène sans risque
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-17 | [Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire des métriques](fiches/K-17.md) | ACT-20, P-73, FA-04 | fichiers présents : `CLAUDE.md`, `BENCHMARKS.md`, `docs/Benchmarks.md`, `docs/knowledge/index.md`, `docs/knowledge/log.md`, `docs/knowledge/decisions/realtime-diagnostics-23-25.md`, ≥ 6 fichiers `docs/knowledge/pitfalls/*.md` (V-P5 stream synchrone, V-P8 même % GPU, tête liée fp32, fenêtre ignorée, clé `mode`, jeton d'arrêt hérité) ; `CLAUDE.md` contient les 3 commandes exactes de PLAN.md §5 ; glossaire : 1 définition par métrique, citée par `docs/Benchmarks.md` ; 0 chiffre sans source (relecture) ; aucun fichier `.swift` modifié (`git diff --stat`). | S | cloud | à faire |
+| K-18 | [Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés)](fiches/K-18.md) | S-19, S-20, FA-02, FA-05, P-35, P-38, P-76, FV-54, ACT-52, P-31 | checklist S-20 (12 points) relue contre `9392ed1` : 0 écart ; `grep -nE 'Swift 6\.0\|Xcode 15\|macOS 14' README.md llms.txt` = 0 ; `grep -n 'true silence' README.md` = 0 ; llms.txt cite v2.2.x et les 3 pipelines ; chaque tableau de `README.md` et `docs/*benchmark*.md` / `docs/voice_cloning.md` porte définition + révision + « en session » ; FV-54 : les deux jeux de chiffres cités avec leur source ; `syntax_guard.py` : 0 erreur nouvelle sur les `.swift` touchés (commentaires seulement : `VoxtralTTSModeling.swift:480-482`, `:528`, `VoxtralVoiceEnrollment.swift:51`). | S | cloud | à faire |
+| K-19 | [Annexes Python reproductibles (conversion Core ML, recherche clonage)](fiches/K-19.md) | A-03, A-21, FA-06 | contrôle argparse par AST (sans torch) : 0 argument inconnu et 0 requis manquant pour `convert.sh` et les commandes du README ; `grep -E '>=' Scripts/*/requirements.txt` = 0 ; commit amont épinglé et contrôlé par `enroll_voice.py` ; `grep -n 'Next step' Scripts/VoiceCloningResearch/README.md` = 0 ; commande de similarité ECAPA documentée ; la validation Core ML sur Mac (parité L2 ≤ 1e-2) est portée par K-42. | S | cloud | à faire |
+| K-20 | [Hygiène git : fichiers suivis malgré `.gitignore` (cache `.serena`, WAV)](fiches/K-20.md) | S-25 | `git ls-files -ci --exclude-standard \| wc -l` = 0 (hors exceptions déclarées dans `.gitignore`) ; `.serena/` retiré (−1 790 543 o dans l'arbre suivi) ; si ASK-30 = C : −18 274 912 o (8 WAV) ; 0 lien de doc mort ; les 4 clips du corpus (`fluxforge_{short,long}_{en,fr}_6bit.wav`) toujours présents avec leur SHA-256 noté dans `docs/Benchmarks.md`. | S | cloud | à faire (⛔ ASK-30) |
+| K-21 | [Tracker action-plans : solder #71, #307, #349 et créer le plan upstream-blocker mlx-swift-lm (> 3.31.4)](fiches/K-21.md) | FA-01, FA-02, ACT-02, ACT-03, ACT-04, ACT-07, ACT-39, ACT-41, S-18 | 0 plan `project:mlx-voxtral-swift` en `status:ready-to-act` ; #71, #307, #349 fermés `status:verified`, chacun avec le commentaire-preuve de faits-et-actions.md §3.9 ; 1 plan `kind:upstream-blocker` `github_release ml-explore/mlx-swift-lm semver_gt "3.31.4"` en `monitoring` — **après** avoir vérifié que l'amont publie des GitHub Releases (sinon : source `github_tag` ou plan `manual`, et retour skill) ; lien du plan ajouté au commentaire de `Package.swift:46-51` au prochain commit de code (K-22). | S | cloud | à faire (⛔ ASK-31) |
+| K-22 | [Package : dépendances élaguées, résolution reproductible, plancher de toolchain, profiler épinglé](fiches/K-22.md) | S-15, S-18, S-19, P-74, FA-02 | `xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine). | S | macos-gpu | à faire (⛔ ASK-28) |
+| K-23 | [Nettoyage sans risque d'API : code mort privé/interne, famille legacy silencieuse, chemins codés en dur, TODO, `print`](fiches/K-23.md) | S-13, S-14, S-23, S-24, S-29, A-17, MLX-016 | `BUILD SUCCEEDED` (4 schémas) et suite verte ; −≈ 900 lignes (`git diff --shortstat`) ; `grep -rn '/Users/' Sources Tests` = 0 ; `grep -rn 'print(' Sources/VoxtralCore \| grep -v VoxtralDebug` = 0 ; `grep -rnE 'TODO\|For now\|would integrate' Sources/VoxtralCore` = 0 (hors code public déprécié par K-30) ; 0 écriture dans `/tmp` pendant une génération par `VoxtralGenerator` (test) ; une synthèse CLI sans `--debug` n'écrit rien de la bibliothèque sur stdout. | M | macos-gpu | à faire |
+| K-24 | [Registres exacts : `consolidated.safetensors` exclu en STT, tailles et précisions réelles, variante Core ML par config](fiches/K-24.md) | S-07, M-03, M-06 | `mini-3b` téléchargé = 9,37 Go ± 1 % (`du -sb`) ; test d'exclusion `consolidated*` vert (STT) et `tts-4b` inchangé (consolidated présent) ; test « chaque entrée du registre à ± 5 % des octets de `docs/Weights.md` » vert ; test « dossier Small nommé `x/model` → `.small` » vert ; README sans « ~6 GB / ~3.5 GB / ~2 GB / ~12 GB ». | S | macos-gpu | à faire |
+| K-25 | [Encodeur Core ML : chemin unique sous `customModelsDirectory`, chargement hors ligne, erreurs explicites](fiches/K-25.md) | A-04, A-13 | test avec `customModelsDirectory = <tmp>/VoxtralModels` : encodeur trouvé sous ce dossier ; 2ᵉ chargement hybride réseau coupé → `Core ML available: true` ; 0 octet écrit sous `~/.cache/huggingface` (`du` avant/après) ; tests « Small + encodeur mini → erreur » et « encodeur MLX non initialisé → erreur » verts (rouges avant). | S-M | macos-gpu | à faire |
+| K-26 | [Enrôlement reproductible : graine, point de contrôle et reprise, tests de la garde NaN](fiches/K-26.md) | A-07, A-08, A-09, T23 | 2 enrôlements de 200 époques, même graine → codes `[T, 37]` identiques ; graines différentes → différents ; arrêt à 2 500 / 5 000 puis reprise → codes finaux identiques bit à bit au run continu ; surcoût de sauvegarde ≤ 5 % du temps total (dans le bruit) ; 3 tests (NaN à l'époque 0 → `EnrollmentDivergedError` ; NaN à l'époque k → codes du meilleur pas ; annulation → `CancellationError`) rouges sans la garde, verts avec. | M | macos-gpu | à faire |
+| K-27 | [API honnête et erreurs explicites, sans cassure (souches, paramètres ignorés, `as!`, `precondition`)](fiches/K-27.md) | S-22, S-28, A-05 | `tokenCount` > 0 sur une transcription (test) ; `grep -rn 'as!' Sources/VoxtralCore` = 0 ; 0 `precondition`/`fatalError` atteignable depuis l'API publique (liste relue, un test par cas) ; build sans nouvel avertissement hors dépréciations voulues ; suite verte. | S | macos-gpu | à faire |
+| K-28 | [Racine, cibles annexes et app : build depuis un clone neuf, empaquetage, démo robuste, `RuntimeBeacon`](fiches/K-28.md) | S-26, A-14, A-18, A-19, A-20 | `git clone` dans un dossier neuf + `xcodebuild` Release des 4 schémas : `** BUILD SUCCEEDED **` sans « Invalid Resource » ; app empaquetée (script réécrit en `xcodebuild` Release + bundles) lancée : transcrit C-court EN ; test FFmpeg : 1 Mo sur stderr → processus terminé ; annulation → processus tué < 1 s ; nom `../x` refusé avant l'enrôlement, écrasement demandé explicitement ; 1 000 `update` concurrents d'un `end` → 0 manifeste résiduel. | M | macos-gpu | à faire (⛔ ASK-27) |
+| K-29 | [Filet de tests et CI macOS (tests non tautologiques, fixture Tekken, test symlink sur le vrai chargeur)](fiches/K-29.md) | S-27, A-22 | CI verte sur la branche (lien du run) ; `PerformanceOptimizationTests.swift:173-255` remplacés par des appels au code (chacun rouge si l'algorithme de production est cassé) ; `TekkenTokenizerTests` sur fixture réduite versionnée (ne dépend plus de `/Users/vincent`) ; `ModelLoadingSymlinkedDirectoryTests` couvre `loadWeights(from:)` ; suite locale verte. | M | macos-gpu | à faire |
+| K-30 | [Dépréciation de l'API legacy et du code mort public (version 2.3 ; suppression en 3.0 selon ASK-23)](fiches/K-30.md) | S-13, S-14, P-17, A-05, P-24 | liste S-13 lot 2 + S-14 entièrement annotée (grep) ; build de la bibliothèque sans avertissement interne (aucun appel interne à du déprécié) ; recherche GitHub `user:VincentGourbin` sur chaque symbole = 0 usage (relue) et, si FluxForge est présent, son build n'affiche aucun avertissement de dépréciation Voxtral ; CHANGELOG (section 2.3) listant chaque symbole. | S | macos-gpu | à faire (⛔ ASK-23) |
+| K-31 | [Revue d'API publique : façades, préfixes, résultats typés (version majeure)](fiches/K-31.md) | S-21 | liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte. | L | macos-gpu | à faire (⛔ ASK-25) |
+
+### Lot 3 — baseline mesurée
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-32 | [Instrument de baseline `VoxtralCLI bench` (STT, TTS, Realtime, enrôlement ; JSON ; A/A ≤ 3 %)](fiches/K-32.md) | P-79, P-75, P-77, A-15, A-16, P-45, P-19, FA-04 | A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s. | M | macos-gpu | à faire (⛔ ASK-26) |
+| K-33 | [Éval reproductible : WER STT, aller-retour TTS → STT, juge ASR validé, auto-détection de langue](fiches/K-33.md) | A-22, P-78, FA-07, ACT-32 | texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts. | M | macos-gpu | à faire |
+| K-34 | [Baseline STT (Mini et Small ; `.mlx` et `.auto`) + requalification du « 49 % GPU » et du support 32 Go](fiches/K-34.md) | P-19, FA-08, ACT-22, ACT-23 | A/A ≤ 3 % sur 2 passes pour chaque ligne ; une ligne `BENCHMARKS.md` par (modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} × backend ∈ {.mlx, .auto} × clip ∈ {C-court EN, C-moyen EN, C-moyen FR, C-long}) avec la révision résolue et le WER ; occupation GPU du préfill Mini et Small consignée par les deux instruments (écart noté) ; small-4bit, 8 min d'audio : pic `phys_footprint` mesuré ≤ 24 Go (marge d'un Mac 32 Go), sinon verdict « non supporté sur 32 Go » écrit dans `docs/knowledge/decisions/small-32gb.md` ; chat : une ligne `BENCHMARKS.md` par backend ∈ {.mlx, .auto} pour mini-3b-8bit sur C-moyen EN × 4 questions fixes (greedy), avec `ttft_ms` de chaque question et tok/s (référence de K-49 et K-70). | M | macos-gpu | à faire |
+| K-35 | [Baseline TTS (prédéfinie / clonée, batch / streaming, 4 / 6 / 16 bits, chemin du consommateur)](fiches/K-35.md) | P-45, FA-04, P-76 | A/A ≤ 3 % ; baseline enregistrée pour {tts-4b-4bit, tts-4b-6bit, tts-4b-mlx} × {court, 60 s, long} × graines {1, 2, 3} × {neutral_female, voix clonée `docs/examples/clone_fr.wav` enrôlée} × {batch, streaming} ; ligne dédiée « consommateur » (6 bits + clonée + `--warm-up`, batch) ; frames du porteur / frames totales consignées ; couverture ASR (aller-retour TTS → STT, outil K-33) consignée par (pack × texte × graine) en batch : référence des portes qualité de K-39, K-48, K-58 et K-79. | M | macos-gpu | à faire |
+| K-36 | [Baseline Realtime et re-diagnostic des issues #23-#25 (occupation GPU réelle)](fiches/K-36.md) | P-73, P-75, ACT-27 | A/A ≤ 3 % ; lignes `BENCHMARKS.md` pour realtime-4b-4bit et realtime-4b-fp16 sur C-court, C-moyen EN/FR, C-long ; trace swift-mlx-profiler 1.5.x `.fineGrained` (`.ioReportResidency`) et Metal System Trace sur C-moyen complet : occupation GPU du décodage rapportée des deux façons, écart ≤ 10 pts ; décision « #23-#25 caducs » complétée par les chiffres ; `pad_fraction` consignée (entrée de K-73) ; WER (outil K-33) consigné pour chaque ligne : référence des portes de K-38, K-46, K-65 et K-78. | S-M | macos-gpu | à faire |
+| K-37 | [Baseline enrôlement (s/époque, pic, deux scénarios de résidence du LLM)](fiches/K-37.md) | A-06, A-15 | A/A ≤ 3 % sur `epoch_ms_p50` (200 époques, graine 7) ; pics (i) et (ii) consignés pour tts-4b-6bit et tts-4b-mlx ; décision écrite : si (ii) − (i) < 5 %, le volet résidence de K-64 est retiré sans code. | S | macos-gpu | à faire |
+
+### Lot 4 — leviers perf (gain attendu décroissant)
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-38 | [Realtime en dtype du modèle (mel, tables RoPE, `tCond`/`adaScale`) — supprime la copie fp32 de la tête (1,5 Gio par pas)](fiches/K-38.md) | P-60, T17 | audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11). | S | macos-gpu | à faire (⛔ ASK-11) |
+| K-39 | [TTS : transformeur acoustique (FM) et tête sémantique dans le dtype des poids](fiches/K-39.md) | P-30, MLX-002, T17 | pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige. | M | macos-gpu | à faire (⛔ ASK-11, ASK-13) |
+| K-40 | [STT : calcul bf16 de bout en bout (features et sortie Core ML castées, fusion au dtype du texte)](fiches/K-40.md) | P-01, P-05, T17 | test : dtype du cache KV après préfill = bf16 (rouge avant) ; encodage + préfill ≥ 5 % plus rapides **ou** pic MLX −≥ 10 % (A/B/B/A, Mini 8 bits et 4 bits mixte, `.mlx` et `.auto`, C-moyen et C-long) ; `mini-3b` bf16 : décodage ≥ +5 % et pic process −≥ 1 Go ; parité : greedy identique sur ≥ 90 % des clips et WER ≤ réf + 0,3 pt (FR et EN), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée. | S | macos-gpu | à faire |
+| K-41 | [Codec TTS : attention par bandes (fenêtre ≤ 16) au lieu de T × T fp32](fiches/K-41.md) | P-32 | forme d'onde \|Δ\|max ≤ 1e-4 contre l'actuel sur 3 textes (court, 60 s, long) ; pic `phys_footprint` du décodage long ≤ poids + 1 Go (contre ≥ 10 Go attendus aujourd'hui) ; décodage court ±5 % (A/B/B/A). | M | macos-gpu | à faire |
+| K-42 | [Décider l'encodeur STT par la mesure : matrice MLX bf16 / Core ML GPU / ANE / `.all` × packs (backend par défaut)](fiches/K-42.md) | P-14, A-12, A-13, A-03, M-07, R14 | règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout. | M | macos-gpu | à faire (⛔ ASK-6) |
+| K-43 | [Streaming TTS : décodage incrémental exact (contexte gauche borné) au lieu du re-décodage de tout l'accumulé](fiches/K-43.md) | P-33 | forme d'onde concaténée du streaming = batch (\|Δ\|max ≤ 1e-4) sur 3 textes × 3 graines ; temps de décodage par chunk constant ±20 % du chunk 1 au chunk 200 ; RTF streaming du texte long ≤ RTF batch + 5 %. | M | macos-gpu | à faire |
+| K-44 | [TTS : pipelining `asyncEval` de la boucle AR (batch et streaming, itérateur de frames unique)](fiches/K-44.md) | P-31, T15 | fr/s +5 % au moins en 4 et en 6 bits (A/B/B/A) ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (GPU % par frame en hausse, trace) ; streaming ≥ batch −3 %. | M | macos-gpu | à faire |
+| K-45 | [STT : pipelining `asyncEval` (décodage décalé d'un pas, `asyncEval(cache)` par tranche de préfill)](fiches/K-45.md) | P-07, P-25, T15 | `step_ms_p50` −5 % au moins (Mini 8 bits, C-moyen, A/B/B/A) ; sortie greedy identique 100 % ; preuve que la branche asynchrone est prise. | M | macos-gpu | à faire |
+| K-46 | [Realtime : tête liée quantifiée (8 bits en fast, 4 bits en lean) via `QuantizedEmbedding.asLinear`](fiches/K-46.md) | P-61, T12 | baseline = après K-38 : `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER ≤ réf + 0,2 pt (8 bits) et ≤ réf + 0,5 pt (4 bits), sinon la tête 4 bits est rejetée et documentée. | M | macos-gpu | à faire |
+| K-47 | [Realtime : pipelining `asyncEval` du décodage (jeton en `MLXArray`, EOS lu avec un pas de retard)](fiches/K-47.md) | P-65, T15 | `step_ms_p50` −5 % au moins (A/B/B/A, après K-46) ; texte identique sur C-court et C-moyen ; branche asynchrone prouvée. | S | macos-gpu | à faire |
+| K-48 | [TTS : nombre de pas de flow matching et `cfgAlpha` réellement réglables + balayage 8 / 6 / 5 / 4](fiches/K-48.md) | P-35, T21 | câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté. | S+M | macos-gpu | à faire (⛔ ASK-13) |
+| K-49 | [Chat : session audio réutilisable (embeddings audio et instantané KV avant la question)](fiches/K-49.md) | P-15, T6, T7 | 2ᵉ question : latence au premier jeton −50 % au moins ; réponses greedy identiques à un démarrage à froid sur 4 questions ; mémoire de la session consignée. | M-L | macos-gpu | à faire |
+| K-50 | [TTS : cache de préfixe pour toute voix (clonée, ZeroVoice, mélange) avec empreinte et LRU](fiches/K-50.md) | P-40, T6, T2 | 2ᵉ synthèse d'une voix clonée : préfill −30 % au moins (graine fixée, A/B/B/A) ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif. | S | macos-gpu | à faire |
+| K-51 | [STT : nettoyage mémoire sorti de la boucle de décodage ; configuration par pipeline](fiches/K-51.md) | P-08, R13, T2 | `recommended(forRAMGB: 16)` sur le Mac de mesure : décodage +5 % au moins (A/B/B/A), pic `phys_footprint` ≤ +10 %, greedy identique. | S | macos-gpu | à faire |
+| K-52 | [Politique mémoire MLX opt-in par pipeline : `cacheLimit` par profil, `clearCache` en fin de réponse et dans `unload()`](fiches/K-52.md) | P-09, P-42, P-67, MLX-010, MLX-016, T1, T2, T3 | STT à 10 min d'audio : pic `phys_footprint` ≤ pic actif MLX + `cacheLimit` + empreinte Core ML (+5 %) ; temps fast ±5 % ; TTS : après `unload()`, footprint ≤ référence du process + 200 Mo, lean ≤ +5 % de temps pour un pic −20 % au moins sur le texte long ; Realtime : après `unload()`, footprint = avant chargement ±200 Mo, `step_ms_p50` ±3 %, max/médiane des pas ≤ 1,3. | S | macos-gpu | à faire |
+| K-53 | [STT : cache KV pré-dimensionné (`step` = invite + `maxTokens`)](fiches/K-53.md) | P-10, T11, T1 | 30 min d'audio : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A) ; 10 min consigné ; sortie bit-exacte. | S | macos-gpu | à faire |
+| K-54 | [STT : dernier logit seulement au préfill](fiches/K-54.md) | P-06, T9 | préfill Mini −5 % **ou** pic −128 Mio au moins à 5 min d'audio (A/B/B/A) ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %. | S | macos-gpu | à faire |
+| K-55 | [STT lean : cache KV 8 bits (`QuantizedKVCache`, groupe 64) via l'aide amont](fiches/K-55.md) | P-16, T10 | Small 4 bits, 20 min : pic −1 Go au moins ; WER ≤ +0,3 pt ; décodage au pire −5 % (sinon réservé au lean). | M | macos-gpu | à faire |
+| K-56 | [STT : encodeur MLX par lots bornés de K fenêtres](fiches/K-56.md) | P-13, T16 | 30 min : pic MLX de l'encodage −30 % au moins ; temps d'encodage ±5 % ; embeddings bit-exacts attendus, à défaut L2 relative ≤ 1e-5 et greedy identique. | S | macos-gpu | à faire |
+| K-57 | [TTS : surcoût hôte du FM (invariants précalculés, SDPA fusionnée sans répétition GQA)](fiches/K-57.md) | P-36, P-37 | fr/s +5 % au moins en 4 bits (A/B/B/A) ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait. | S | macos-gpu | à faire |
+| K-58 | [Codec TTS en bf16 (padding, scalaires, sorties d'étage) et invariants mis en cache](fiches/K-58.md) | P-38, P-39 | décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39). | S | macos-gpu | à faire (⛔ ASK-13) |
+| K-59 | [Matérialisation des poids résidents par voie au chargement (STT, TTS, Realtime) et modules factices neutralisés](fiches/K-59.md) | P-04, P-24, P-43, P-66 | 1er préfill = préfill à chaud ±5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ±5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %. | S | macos-gpu | à faire |
+| K-60 | [Encodeurs dé-quantifiés en profil fast (STT et Realtime, T14/T20)](fiches/K-60.md) | P-27, P-69, T14, T20 | STT : encodage −5 % au moins, pic ≤ +0,8 Go, WER ≤ +0,1 pt ; Realtime : encodage −5 % au moins sur C-moyen (A/B/B/A), WER identique ; sinon retrait. | S | macos-gpu | à faire |
+| K-61 | [STT : pénalité de répétition tranchée par le WER (1,0 contre 1,2), version vectorisée si gardée](fiches/K-61.md) | P-12 | valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue. | S | macos-gpu | à faire (⛔ ASK-9) |
+| K-62 | [STT : tranche de préfill exposée (`prefillStepSize`) et balayée (256 / 512 / 1 024 / 2 048)](fiches/K-62.md) | P-22, T9 | A/B/B/A 256/512/1 024/2 048 à 5 et 30 min ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; sortie bit-exacte après factorisation des deux boucles. | S | macos-gpu | à faire |
+| K-63 | [STT lean : tour audio MLX libérée après l'encodage (zéros non évalués), rechargée paresseusement](fiches/K-63.md) | P-23, T4 | pic de décodage −0,5 Go au moins (Mini 8 bits) ; temps par requête ≤ +5 % ; sortie identique. | M | macos-gpu | à faire |
+| K-64 | [Enrôlement lean : politique mémoire (cacheLimit, clearCache), résidence du sous-ensemble codec + table audio, profils enroll-fast\|lean mesurés](fiches/K-64.md) | A-06, A-10, A-11, T1, T3, T4 | scénario synthèse → enrôlement : `enroll-lean` −40 % de pic au moins contre `enroll-fast` (si le volet résidence est gardé), temps/époque ±5 % (A/B/B/A), codes identiques à graine fixe ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table. | M | macos-gpu | à faire |
+| K-65 | [Realtime : RoPE de l'encodeur par le noyau fusionné (`RoPE(traditional: true)`)](fiches/K-65.md) | P-68 | embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER identique sur C-moyen ; encodage −5 % au moins (A/B/B/A). | S | macos-gpu | à faire |
+| K-66 | [TTS : une seule passe LLM avant le premier frame (suffixe + jeton AUDIO)](fiches/K-66.md) | P-44 | TTFT −5 % au moins (A/B/B/A) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait. | S | macos-gpu | à faire |
+| K-67 | [TTS : coupes du porteur et des silences vectorisées (un seul transfert)](fiches/K-67.md) | P-46 | indices de coupe identiques sur `TrimSilenceTests`, `TrimLeadingCarrierTests`, `TTSWarmUpCarrierTrimTests` ; phase « Audio Post-processing » ÷ 5 au moins. | S | macos-gpu | à faire |
+| K-68 | [TTS : coût du porteur de warm-up (mesure, vocalise ou fenêtre d'attente plus courts)](fiches/K-68.md) | P-47, R3 | TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée. | S | macos-gpu | à faire (⛔ ASK-10) |
+| K-69 | [Extraction audio : mel en une passe et décodage / rééchantillonnage par blocs](fiches/K-69.md) | P-21, P-29 | phase mel −5 % au moins, features bit-exactes ; pic mémoire de l'extraction −50 % au moins (30 min, stéréo 48 kHz), échantillons : écart max ≤ 1e-6 hors des 20 dernières ms, mel ≤ 1e-5, greedy identique ; temps ±5 %. | S | macos-gpu | à faire |
+| K-70 | [Chat : top-p exact (nucleus sur les k meilleurs) mesuré contre l'actuel](fiches/K-70.md) | P-26, T5 | chat tok/s ≥ actuel −5 % ; test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3). | S | macos-gpu | à faire |
+| K-71 | [Codec TTS : compile des chaînes élémentaires (SwiGLU, LayerScale), coupe-circuit, désactivé sous gradient](fiches/K-71.md) | P-49, T18, A-01 | décodage −5 % au moins, bit-exact, 0 blocage sur 20 exécutions « enrôlement + synthèse » (test de K-11) ; sinon retrait. | S | macos-gpu | à faire |
+| K-72 | [STT : préfill en flux par fenêtre (encoder la fenêtre k+1 pendant le préfill de k)](fiches/K-72.md) | P-28 | TTFT −10 % au moins à 10 min (A/B/B/A) ; greedy identique. | L | macos-gpu | à faire |
+| K-73 | [Realtime (R&D) : pas spéculatifs « remplissage » vérifiés en un forward](fiches/K-73.md) | P-72 | étape 1 : part de remplissage (`pad_fraction` de K-36) ≥ 50 % sur C-moyen, sinon abandon documenté ; étape 2 : passes de décodage −25 % au moins et texte identique sur C-court, C-moyen et C-long. | M-L | macos-gpu | à faire |
+| K-74 | [Un seul LLM typé et le chargeur amont (`MLXLMCommon.loadWeights` + `PerLayerQuantization`)](fiches/K-74.md) | S-16 | parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`). | L | macos-gpu | à faire (⛔ ASK-23) |
+| K-75 | [Conformance `LanguageModel` : retrait, ou génération par `TokenIterator` avec un `prepare` conforme](fiches/K-75.md) | S-17, P-18, MLX-006 | (A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton. | L | macos-gpu | à faire (⛔ ASK-24) |
+
+### Lot 5 — type de profils + CLI
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-76 | [Types de profils de référence par pipeline (v0, boutons existants) + CLI `references` / `--reference`](fiches/K-76.md) | P-20, K-M09, A-11, P-34 | `$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test). | M | macos-gpu | à faire (⛔ ASK-4) |
+
+### Lot 6 — mesures de la matrice et docs
+
+| Fiche | Objet | Source | Porte | Effort | Cible | État |
+|---|---|---|---|---|---|---|
+| K-77 | [Mesure de la matrice STT (Mini 3B, Small 24B) et décision `reference-profiles`](fiches/K-77.md) | P-20, M-07, FA-08 | 6 profils × 2 modèles mesurés (A/A ≤ 3 %, une ligne `BENCHMARKS.md` chacun) avec WER ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, valeur ASK-7) ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md`. | M | macos-gpu | à faire |
+| K-78 | [Mesure de la matrice Realtime (4 / 16 bits, 8 bits si un pack chargeable existe)](fiches/K-78.md) | P-70, P-60, P-67, M-01 | profils `4bit-fast\|lean`, `16bit-fast\|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82). | M | macos-gpu | à faire |
+| K-79 | [Défaut TTS tranché par la mesure et matrice TTS (4 / 6 / 16 bits × fast / lean)](fiches/K-79.md) | FA-03, ACT-12, ACT-18, ACT-29, P-34, T15 | `TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun. | M | macos-gpu | à faire (⛔ ASK-5, ASK-13, ASK-18) |
+| K-80 | [Packs publiés : Realtime 8 bits, TTS 8 bits, Mini à encodeur 8 bits / bf16, Small à encodeur dense (SHA-256, cartes)](fiches/K-80.md) | K-M08, PK-1, PK-4, P-70, P-48 | pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour. | L | macos-gpu | à faire (⛔ ASK-16, ASK-18, ASK-19, ASK-20, ASK-22) |
+| K-81 | [Squelette sourcé de `docs/References.md` et `docs/Weights.md` (sans mesure : valeurs « mesurée (source) » ou « à mesurer »)](fiches/K-81.md) | P-20, M-03 | `docs/References.md` : une ligne par profil de `profils.md` (28), chaque cellule « mesurée (source) » ou « à mesurer » (0 valeur non sourcée, relecture) ; `docs/Weights.md` : les 13 dépôts du registre + les candidats de `modeles-2026-09.md` §3.2 avec octets exacts et date ; aucun fichier `.swift` modifié. | S | cloud | à faire |
+| K-82 | [`docs/References.md`, `docs/Weights.md` et décisions remplis avec les mesures et les SHA-256 relevés](fiches/K-82.md) | P-20, M-03, K-M09 | 0 « à mesurer » restant dans la table de `References.md` pour les profils de `.all` (sauf largeur non disponible, marquée) ; chaque valeur cite sa ligne `BENCHMARKS.md` ; `Weights.md` : SHA-256 relevé par `curl -s https://huggingface.co/api/models/<repo>/tree/<rev>?recursive=true` pour chaque fichier de poids retenu, révision notée ; `docs/knowledge/index.md` à jour. | S | macos-gpu | à faire |
+
+### Classement du lot 4 par gain attendu (aucun n'est « obtenu »)
+
+| Rang | Fiche | Gain attendu (source) |
+|---|---|---|
+| 1 | K-38 | Realtime : ms/pas −30 % au moins, ≈ ×2,2 attendu (trafic 5,8 → 2,6 Go/pas, calcul) ; pic −1 Go |
+| 2 | K-39 | TTS bf16 : pas ÷ 2 à 2,8 (32,1 → 11,3 Go/frame, calcul) ; 4/6 bits 5-15 % |
+| 3 | K-40 | STT : KV ÷ 2 ; bf16 ≈ 5× moins de trafic par Linear |
+| 4 | K-41 | TTS : transitoire du codec ≈ 2 × 10,5 Go → ≈ 10 Mo (texte long) |
+| 5 | K-42 | STT : −1 min 09 à −2 min 25 au 1er lancement si `.mlx` gagne ; précision d'encodeur (CER ×1,74 en 6 bits, externe) |
+| 6 | K-43 | TTS streaming : codec ÷ 33 sur le texte long |
+| 7-8 | K-44, K-45 | `asyncEval` TTS / STT : −13 à −22 % par pas (T15) |
+| 9-10 | K-46, K-47 | Realtime : tête 8 bits ≈ −15 % de trafic ; `asyncEval` ≥ −5 % |
+| 11 | K-48 | TTS : 7 → 4 pas d'Euler, −15 à −20 % ms/frame (qualité à l'écoute) |
+| 12 | K-49 | Chat : −3 à −6 s par question suivante |
+| 13 | K-50 | TTS voix clonées : préfill −30 % (≈ −200 ms, chemin FluxForge) |
+| 14-16 | K-51, K-52, K-53 | Mémoire STT/TTS/Realtime : décodage +5 % sur ≤ 31 Go ; pic ramené à actif + `cacheLimit` ; pic −10 % à 30 min |
+| 17-20 | K-54, K-55, K-56, K-57 | Préfill −10 % ; KV −47 % en lean ; pic d'encodage −30 % ; FM +5 % |
+| 21-37 | K-58 … K-75 | leviers faibles, UX, R&D et refontes (gain ≤ 5-20 % ou non chiffré) |
+
+
+
+## 4. Pièges à cocher
+
+Numéros de `references/techniques.md` §4 (skill `mlx-swift-audit`) applicables à ce dépôt, avec la fiche où ils
+mordent :
+
+| N° | Piège | Où il mord ici |
+|---|---|---|
+| 1 | Passe sur `parameters()` qui matérialise une voie non résidente | modules factices aléatoires (P-24) : K-59, K-58, K-63 |
+| 2 / 30 | `QuantizedLinear.weight` est `uint32` ; `asType(layer.weight.dtype)` | dtype de calcul lu sur `norm`/`scales` : K-8, K-38, K-39, K-40, K-46 |
+| 3 | Muter un tableau non évalué | K-12, K-44, K-45, K-53, K-72 |
+| 4 | `eval` tenseur par tenseur au chargement | K-59 |
+| 5 | Graphe différé trop gros | encodeur en un lot (P-13) : K-56 |
+| 6 | `asyncEval` code mort | K-44, K-45, K-47 |
+| 7 | Pas de `cacheLimit` = mémoire qui explose | K-51, K-52 |
+| 8 | Autre app MLX sur la machine | toutes les mesures (K-32 refuse via `pgrep` + manifestes `RuntimeBeacon`) |
+| 9 | Debug contre Release | tests en Debug, mesures en Release (§0) ; campagne XCTest (P-76) |
+| 10 | Profiler par couche | K-32 (profiler désactivé pendant le chronométrage) |
+| 11 | Première mesure faussée | requête d'amorçage exclue ; #29 était une mesure froide |
+| 12 | Repli silencieux | tokenizer démo (K-7), id Realtime inconnu (K-9), pack absent |
+| 13 / 14 | Jetons générés ≠ préfixe ; cache sans état positionnel | session de chat (K-49), cache de préfixe TTS (K-50) |
+| 16 | `verify: [.all]` et clés en trop | `embedTokens.weight` dupliqué par `sanitize` : K-7, K-74 |
+| 17 | `memoryLimit` n'est pas un plafond dur | K-51, K-52 |
+| 18 | `activeMemory` immobile après un chargement paresseux | K-37, K-59 ; diagnostics #17/#28 |
+| 19 | Spotlight, `mediaanalysisd`, Time Machine | sorties sous `.local-runs/bench.noindex/` |
+| 20 | Deadlock ABBA compile × vjp | K-11 (enrôlement ∥ synthèse), K-71 ; mlx-swift 0.31.6 sans `df9ae26` |
+| 21 | Branche de dépendance mouvante | mlx-swift-lm `main` : révision résolue dans chaque ligne (K-22, K-32) |
+| 22 / 23 | iOS : GPU en arrière-plan, Simulator ; formes fixes Core ML | hors plan tant qu'ASK-2 n'est pas tranché ; K-42 |
+| 24 | Tenseur transitoire qui double | K-41 (scores ×2 à 2 266 frames), K-53 |
+| 25 | Estimation de gain trop optimiste | #13 prévoyait −75/−85 %, mesuré −20/−8 % (en session) : chaque fiche a sa porte |
+| 26 | Constante scalaire fp32 qui promeut | `MLXArray(scale)` (TTS), tables RoPE (Realtime) : K-3, K-39, K-58 |
+| 27 | `prepare` qui ignore la tranche de préfill | K-54, K-75 |
+| 29 / 36 | `RotatingKVCache` : pas de retour arrière ; dimensionner à la longueur | K-2, K-13, K-73 |
+| 31 | Stream sans `onTermination` | K-12 |
+| 32 | « Téléchargé » = un fichier | K-6, K-9, K-24 |
+| 33 | Instrument hors du chemin de la bibliothèque | `VoxtralBenchmark` (A-16) : K-32 |
+| 37 | Modèle derrière un lien symbolique de dossier | tests #49 conservés (K-6, K-29) |
+| 38 | Un test qui prouve un correctif échoue sans lui | toutes les fiches de stabilité (`{RED}`) |
+| 39 | `tests | grep && git commit` | toutes les fiches |
+| 40 | Poids aléatoires : graine + L2 relative | tests sur modèles réduits (K-1, K-2, K-3, K-41) |
+
+Pièges **nouveaux** proposés au catalogue (numéros à attribuer par la phase 6) : jeton d'arrêt hérité d'un autre
+tokenizer (S-01) ; `RotatingKVCache` comme plafond mémoire d'un LM sans fenêtre (S-02/P-03) ; `update(parameters:)`
+non levant (MLX-017) ; tokenizer démo en repli (S-05) ; `AsyncThrowingStream` à production synchrone (MLX-019) ;
+compile × vjp sans aucun `compile()` dans le dépôt (A-01) ; complétude par `config.json`/`params.json` et index classé
+après les shards (MLX-012) ; clé `"mode"` dans `quantization` (M-02) ; dérive d'un dépôt officiel (M-01) ; backend
+externe qui masque la quantification (M-07) ; entrée fp32 non castée et fp16 × bf16 = fp32 (P-01) ; masque fp32 +
+q bf16 ⇒ exception (P-02) ; tête liée par `matmul` brut (P-61) ; fenêtre déclarée mais ignorée (P-62/P-63) ;
+`maxTokens` sur un modèle synchrone à la trame (P-64) ; phases imbriquées et GPU % instantané (P-73) ; attention
+fenêtrée en T×T (P-32) ; streaming qui re-décode tout (P-33) ; champ public jamais lu (P-35) ; plafond fixe
+indépendant de l'entrée (P-41) ; deux conventions de RTF (V-P4) ; tag dépendant d'une branche (V-P15) ; fichiers
+suivis malgré `.gitignore` (S-25) ; bibliothèque qui remet le pic à zéro (P-77).
+
+## 5. Commandes de référence
+
+```bash
+# Build (Release, toutes les mesures) — $CLI = .build/xcode/Build/Products/Release/VoxtralCLI
+xcodebuild -scheme VoxtralCLI -configuration Release -derivedDataPath .build/xcode -destination 'platform=macOS' build
+#   → ** BUILD SUCCEEDED **
+# Autres schémas : VoxtralApp, VoxtralBenchmark, VoxtralTTSStreamingDemo (même commande, -scheme <nom>)
+
+# Tests (Debug, @testable, sans parallélisme — piège 20) ; cibler avec -only-testing:VoxtralCoreTests/<Classe>
+xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
+  -derivedDataPath .build/xcode-test -parallel-testing-enabled NO
+#   → Executed <N> tests, with 0 failures (0 unexpected) … ** TEST SUCCEEDED **
+# Tests gardés par variable : préfixe TEST_RUNNER_ (ex. TEST_RUNNER_VOXTRAL_LONG_AUDIO=1 xcodebuild test …)
+# Thread Sanitizer : ajouter -enableThreadSanitizer YES
+
+# Machine prête à mesurer
+~/.claude/skills/mlx-swift-audit/scripts/machine-check.sh $CLI --cooldown 120 --procs 'Voxtral.*'   # aucune ligne KO
+
+# Corpus (PLAN §0) — sorties hors index Spotlight
+mkdir -p .local-runs/corpus .local-runs/bench.noindex
+# C-court : docs/examples/fluxforge_short_{en,fr}_6bit.wav (5,0 / 4,8 s) ; C-moyen : fluxforge_long_{en,fr}_6bit.wav (167,0 / 173,8 s)
+for n in 2 3; do
+  for i in $(seq $n); do echo "file '$PWD/docs/examples/fluxforge_long_en_6bit.wav'"; echo "file '$PWD/docs/examples/fluxforge_long_fr_6bit.wav'"; done \
+    > .local-runs/corpus/list_$n.txt
+done
+ffmpeg -y -f concat -safe 0 -i .local-runs/corpus/list_2.txt -ar 16000 -ac 1 .local-runs/corpus/c_long.wav    # ≈ 11 min 22 s
+ffmpeg -y -f concat -safe 0 -i .local-runs/corpus/list_3.txt -ar 16000 -ac 1 .local-runs/corpus/c_xlong.wav   # ≈ 17 min
+ffmpeg -y -stream_loop 5 -i .local-runs/corpus/c_long.wav -t 1800 .local-runs/corpus/c_30min.wav               # 30 min
+# Textes de référence (vérifier qu'ils couvrent l'audio : K-33)
+awk 'f && /^> /{sub(/^> /,""); print >> (".local-runs/corpus/long_" f ".txt")} /^### Long FR/{f="fr"} /^### Long EN/{f="en"}' docs/tts_benchmark.md
+# Dernières phrases (portes « rien n'est coupé ») : EN « No data sent to the cloud. » · FR « Aucune donnee envoyee dans le cloud. »
+
+# Mesure et qualité (après K-32 / K-33)
+$CLI bench stt --model mini-3b-8bit --backend mlx --input docs/examples/fluxforge_long_en_6bit.wav --language en \
+  --passes 2 --warmup 1 --cooldown 120 --tag A
+$CLI eval stt --model mini-3b-8bit --backend mlx --corpus docs/eval/corpus.json
+VOXTRAL_DTYPE_AUDIT=1 $CLI bench realtime --model realtime-4b-4bit --input docs/examples/fluxforge_short_en_6bit.wav --passes 1
+# Pic mémoire avant K-32 : /usr/bin/time -l $CLI … (ligne « peak memory footprint »)
+# Occupation GPU réelle : xcrun xctrace record --template 'Metal System Trace' --launch -- $CLI bench … ; ioreg -r -c AGXAccelerator
+
+# Garde syntaxique (cloud, sans toolchain Swift ; ce n'est pas une compilation)
+python3 ~/.claude/skills/mlx-swift-patterns/scripts/syntax_guard.py .        # 0 erreur nouvelle
+
+# Dispatch des fiches macos-gpu (planificateur)
+python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml                 # essai à blanc
+python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml --emit-json \
+  --issue-map docs/audit/2026-09-27/map.json                                                                # sans gh (MCP)
+```
+
+## 6. Hors plan (noté pour plus tard)
+
+| Élément | Source | Raison | Déclencheur / suite |
+|---|---|---|---|
+| Serveur d'inférence (HTTP OpenAI-compatible ou binaire MCP) | A-23, F-A12 | aucun consommateur ne le demande ; prérequis K-11, K-12, K-6 | ASK-1 = B ou C ⇒ fiche depuis `audit-annexes-serveur.md` §4 |
+| Cible iOS réelle (STT, TTS, Realtime, enrôlement) | FA-09, T23, A-07 | compilée, jamais exécutée ; pics non sourcés | ASK-2 = oui ⇒ fiche appareil (profils `lean`, porte GPU, jetsam) |
+| API de streaming Realtime | P-71 | périmètre produit | ASK-3 = oui ⇒ fiche L (encodeur par tranches de K-13 réutilisé) |
+| Suppression de l'API legacy et morte | S-13 lot 2, S-14, S-17, S-21, P-24 | cassant | version 3.0, après K-30 et ASK-23 |
+| Réécriture de l'historique git (WAV, `.serena`) | S-25 | cassant pour les clones ; gain réel seulement ainsi | ASK-30 « oui » explicite |
+| Dither de sortie optionnel | ACT-14 (#45 item 5) | LTX tolère les zéros numériques du codec | un consommateur dont la détection de silence suppose un plancher naturel |
+| Passe-haut 50 Hz par défaut | ACT-15, V-R6 | réjection 19 dB au lieu de 30 dB à 30 Hz pour tous | option `--high-pass-hz 50` gardée ; champ du profil d'enrôlement (K-64) |
+| ≈ 5 dB de fondamentale perdus à la génération | ACT-17 | inhérent (pas d'encodeur de codec publié) | publication d'un encodeur de codec par Mistral |
+| Actions côté FluxForge : réenrôler les voix antérieures à `f63e2a8`, retirer le déchargement après chaque aperçu, doc de stockage (#7 résolu en v2.2.1), ask #8 HubApi | ACT-40, ACT-34, ACT-38 | hors dépôt | plan manuel `project:fluxforge-studio-swift` (ASK-31) |
+| Coût hôte d'`eval()` mlx-swift (#536, action-plans) | ACT-08 | suivi amont existant (`monitoring`) | cité par K-44, K-45, K-47 |
+| Spéculatif TTS, « batch lookup » (#26) | ACT-28 | aucune mesure, rejeté a priori | après K-44 si le pas reste borné par le CPU |
+| Drafter publié `jburtoft/Voxtral-Mini-3B-2507-draft-4layer` | modeles §3.2 | externe (L40S, anglais), pas de spéculatif dans Voxtral | après K-75 option B |
+| KV TurboQuant / variance normalisée (mlx-swift-lm) | modeles §4 | aucune parité WER Voxtral | après K-55 |
+| Modes mxfp4 / mxfp8 / nvfp4, `quantizedQuantizedMM` | M-02, Q-M8 | preuve externe négative, pas d'échelle globale en 0.31.6 | refus explicite livré par K-8 ; réexaminer au prochain tag |
+| Relever `mlx-swift` au-delà de 0.31.6 (correctif `df9ae26`, mlx 0.32.2) | Q-M7, A-01 | aucun tag ne le contient ; mlx-swift-lm impose `upToNextMinor` | ASK-29 ; plan upstream-blocker à créer en même temps que celui de K-21 |
+| Conversion Core ML du LLM complet ; cache binaire du tokenizer « 10-100× » ; WAV en bloc | faits §5.2 | aucune mesure | — |
+| « Voxtral Mini Transcribe 2.0 » | modeles §1 | cité par la carte Realtime, sans dépôt sur le Hub | publication sur le Hub |
+| Double synchronisation par époque d'enrôlement | A-10 | gain attendu < 1 % | passager de K-64, retiré si < 5 % |
+| P-25 (masque concaténé) | audit STT annexe B | écarté : chemin jamais atteint | — |
+| #18 (pas 1 lent), #29 (codec 4 bits) | ACT-26, ACT-31 | attendu (préfill inclus) ; faux positif de première mesure | capitalisés (piège 11, V-R10) |
+| Capitalisation phase 6 (section « audio » du catalogue, pièges 41+, patterns MLX-016…020) | tous les rapports | dépôt `claude-skills`, pas ce dépôt | retours skill de cet audit |
+
+## Annexe A — Où atterrit chaque action inventoriée (« ne perdre aucune action »)
+
+Source : `faits-et-actions.md` §3 (ACT-xx) et les listes d'actions des rapports frères.
+
+| Action | Élément | Disposition |
+|---|---|---|
+| ACT-01 | Issues / PR / branches ouvertes | aucune (0/0, seule `main`) : rien à reprendre |
+| ACT-02 | action-plans #71 (PR #34 fusionnée) | K-21 (fermer `verified`, ⛔ ASK-31) |
+| ACT-03 | action-plans #307 (PR #41 fusionnée) | K-21 |
+| ACT-04 | action-plans #349 (#45 fermée) | K-21 |
+| ACT-05 | #66 (PR #33) : point du plan de test jamais coché | K-33 (auto-détection de langue) |
+| ACT-06 | 11 plans `stale-branch` | déjà `verified` : rien |
+| ACT-07 / ACT-39 / ACT-41 | « Revisit once … tag beyond 3.31.4 » sans plan | K-21 (plan upstream-blocker) ; K-22 (`Package.resolved`) ; ASK-28 |
+| ACT-08 | #536 coût hôte d'`eval()` | hors plan (suivi amont), cité par K-44/K-45/K-47 |
+| ACT-10 | #45 item 1 : garde NaN | fermé ; tests de la garde : K-26 |
+| ACT-11 | #45 item 2 : coupe alignée sur les jetons | réfutée, fermée (V-R1…V-R4) |
+| ACT-12 | #45 item 3 : q6 contre bf16 pour voix enrôlées | K-79 + ASK-5 |
+| ACT-13 | #45 item 4 : niveau de sortie | fermé (documenté) |
+| ACT-14 | #45 item 5 : zéros numériques, dither | hors plan (§6) |
+| ACT-15 | `--high-pass-hz 50` | hors plan ; champ du profil d'enrôlement (K-64, K-76) |
+| ACT-16 | réenrôlement depuis le micro brut | fait (`4fb44b7`, `a7045f5`) ; résidu FluxForge → §6 |
+| ACT-17 | déficit de fondamentale | hors plan (§6) |
+| ACT-18 | détecteur de fuite « Là, là » | K-79 |
+| ACT-20 | consigne `xcodebuild` seulement dans une issue | K-17 (`CLAUDE.md`) |
+| ACT-21 | #12 mel sur GPU | K-69 |
+| ACT-22 | #13/#17/#19/#21 : « 49 % GPU », Small sur 32 Go | K-34 |
+| ACT-23 / ACT-25 | #14, #16, #22 : Core ML à 48 %, compilation à froid | K-42 (+ K-25) |
+| ACT-24 | #15/#20 chat lent, top-p approché | K-70 |
+| ACT-26 | #18 pas 1 lent | attendu : rien |
+| ACT-27 | #23-#25 Realtime | K-38, K-46 (P-61) ; K-17 et K-36 (re-diagnostic) |
+| ACT-28 | #26 génération sémantique | K-44 ; spéculatif hors plan |
+| ACT-29 | #27 bf16 lent, clôture sur affirmation fausse | K-79, K-76 (manager), K-18 (doc) |
+| ACT-30 | #28 deux passes LLM | K-66 |
+| ACT-31 | #29 codec 4 bits | fermé (faux positif, capitalisé) |
+| ACT-32 | PR #33 contrôle non-anglais | K-33 |
+| ACT-33 | PR #32 iOS | ASK-2 ; hors plan tant que non tranché |
+| ACT-34 / ACT-38 / ACT-40 | FluxForge (déchargement, HubApi, réenrôlement, doc stockage) | plan manuel FluxForge (§6, ASK-31) |
+| ACT-35 / ACT-36 / ACT-37 | PR #41, #44, #47 | soldés (#44, #45) ; #47 → K-79 |
+| ACT-42 / ACT-43 | TODO `VoxtralComponents.swift:28`, `:566` | K-23 (privé) / K-30 (public) |
+| ACT-44 / ACT-45 | « No quantization for now », workaround `embed_tokens` | K-30, K-74 |
+| ACT-46 | `Memory.cacheLimit = Int.max` | K-23 (fonction morte supprimée), K-52 |
+| ACT-47 | chemin `/Users/vincent/…` | K-23 |
+| ACT-48 / ACT-50 | gate « true silence » (code, README) | K-18 |
+| ACT-51 | « Next step: Swift/MLX port » | K-19 |
+| ACT-52 | chiffres de réenrôlement divergents (FV-54) | K-18 (deux sources citées) |
+| ACT-53 | llms.txt, exigences, architecture | K-18 |
+| ACT-54 | métriques TTS (RTF, TTFT, TTFA) | K-17 (glossaire), K-18 (annotations), K-32 (TTFA mesuré) |
+| ACT-55 | FluxForge et Voxtral passent ensemble à `from:` | ASK-28 (déclenché par le plan upstream-blocker de K-21) |
+| stabilité — 5 ASK | dépôt Small 8 bits, cache KV, API legacy, épinglage, WAV | ASK-15, ASK-7, ASK-23, ASK-28, ASK-30 |
+| annexes — F-A1…F-A12 | fiches du rapport annexes | K-11, K-6, K-25, K-19 + K-42, K-19, K-32, K-33, K-26, K-64, K-42, K-28, hors plan (serveur) |
+| annexes — Q1…Q7 | serveur, iOS, backend, API factice, défaut d'enrôlement, `VoxtralBenchmark`, ressource d'app | ASK-1, ASK-2, ASK-6, ASK-23, ASK-9, ASK-26, ASK-27 |
+| STT — ASK 1…6 | backend, cache KV, chemin hérité, modules factices, iOS, corpus / modèle de référence | ASK-6, ASK-7, ASK-23, ASK-23, ASK-2, ASK-14 |
+| Realtime — Q1…Q8 | tolérance, référence, `maxTokens`, 8 bits, iOS, streaming, corpus, `VoxtralBenchmark` | ASK-11, ASK-12, ASK-8, ASK-20, ASK-2, ASK-3, ASK-14, ASK-26 |
+| TTS — écoute, porteur, défaut | P-30/P-35/P-38, P-47, P-34 | ASK-13, ASK-10, ASK-5 |
+| modèles — Q-M1…Q-M8 | Small 8 bits · packs tiers · `realtime-4b` · licence TTS · largeurs TTS · backend STT · mlx-swift · modes non affines | Q-M1 → ASK-15 · Q-M2 → ASK-16 · Q-M3 → ASK-17 · Q-M4 → ASK-18 · Q-M5 → ASK-19 · Q-M6 → ASK-6 · Q-M7 → ASK-29 · Q-M8 → ASK-21 |
+| modèles — K-M01…K-M09 (pas de K-M04 : M-04 fusionné dans K-M02) | fiches proposées par `modeles-2026-09.md` §6 | K-M01 → K-9 · K-M02 → K-8 · K-M03 → K-24 (+ K-81, K-82 pour `Weights.md`) · K-M05 → K-9 · K-M06 → K-24 · K-M07 → K-42 · K-M08 → K-80 · K-M09 → K-76 (+ mesures K-77…K-79, K-82) |
+| modèles — PK-1…PK-4 | packs à publier (Realtime 8 b, TTS 8 b, Mini à encodeur 8 b / bf16, Small à encodeur dense) | K-80, décisions : PK-1 → ASK-20, ASK-22 · PK-2 → ASK-18, ASK-19, ASK-22 · PK-3 → ASK-6, ASK-22 (utile seulement si K-42 retient `.mlx`) · PK-4 → ASK-16, ASK-22 |
+| cadrage — 5 questions | profils, iOS, défaut TTS, hybride, serveur | ASK-4, ASK-2, ASK-5, ASK-6, ASK-1 |
+| patterns — actions sur le skill (apply.py, détecteurs, fiches MLX-016…020) | dépôt `claude-skills` | hors plan de ce dépôt ; retours skill |
+| patterns — hunk MLX-003 | dry-run sûr | K-12 |
+| contrôle du 2026-09-27 (critique de complétude) | numéros ACT-09, ACT-19, ACT-49 jamais attribués par `faits-et-actions.md` (52 actions = ACT-01…ACT-55 moins ces trois) ; tracker relu par MCP : 15 plans `project:mlx-voxtral-swift` (3 ouverts #71, #307, #349 ; 12 `verified`), 0 issue et 0 PR ouvertes sur `mlx-voxtral-swift`, recherche `mlx-voxtral-swift` hors de ce label : 1 résultat (#540, `project:flux-2-swift-mlx`, sans lien avec Voxtral) | aucune action perdue ; rien à ajouter |
+
+## 7. Journal
+
+Les entrées s'ajoutent en fin de fichier, une par fiche exécutée (et une par ASK posée en cours d'exécution).
+Gabarits :
+
+```
+## K-x — <titre> — <AAAA-MM-JJ> — validée|bloquée|retirée
+- Fait : …
+- Mesure : A <…> / B <…> / B <…> / A <…> (dispersion A : x %)
+- Porte observée : <ligne recopiée>
+- Parité : <ligne recopiée>
+- Révisions : mlx-swift <…>, mlx-swift-lm <…>, swift-mlx-profiler <…>
+
+## ASK — K-x — <AAAA-MM-JJ>
+- Contexte : (2 lignes)
+- Ce que j'ai essayé : (3 lignes)
+- Question : (fermée)
+- Options : A) … B) …
+```
+
+## 2026-09-27 — audit — phases 1 à 4 terminées
+- Fait : scan (phase 1), 7 rapports vérifiés (phase 2, vérification croisée), profils (phase 3), plan de 82 fiches,
+  31 décisions ASK, `tasks.yaml` (76 tâches `macos-gpu`, essai à blanc `dispatch.py` : 76 tâches valides).
+- Mesure : aucune (session cloud Linux, sans Mac).
+- Suite : exécution des fiches cloud K-17, K-18, K-19 et K-81 (K-20 et K-21 après ASK-30 et ASK-31) ; ASK à
+  trancher ; dispatch des fiches Mac après accord.
+
+## 2026-09-27 — audit — critique de complétude (phases 0-4 contre le SKILL.md)
+- Fait : contrôle mécanique (script de lecture, aucun build) de l'ordre imposé, des prérequis, des portes et de la
+  cohérence PLAN / fiches / `tasks.yaml` ; matrice points d'entrée × audits (`faits-et-actions.md` §1.2 bis) ;
+  catalogue T1…T23 complété (`audit-performance.md` §2, §2.0 bis) ; matrice des profils complétée (`profils.md` §0).
+- Corrections : prérequis K-35 et K-36 (+ K-33), K-65 (+ K-36), K-74 (+ K-34), K-82 (+ K-64) ; portes K-32, K-34
+  (chat), K-35 (couverture ASR), K-36 (WER) étendues à l'identique dans PLAN, fiches et `tasks.yaml` ; méthode WER
+  écrite dans K-9 et K-13 ; « calcul » et « en session » ajoutés à trois chiffres du §1 et du §4.
+- Mesure : aucune. Validation : `dispatch.py tasks.yaml` → « 76 tâche(s) valides — rien créé » ; `dispatch.py PLAN.md
+  --runs-on macos-gpu --project mlx-voxtral-swift` → « 82 tâche(s) valides » mais lot faux (README, section Exécution).
+- Reste ouvert : voir le rapport de critique (pas de chiffre obtenu ; ASK inchangées).

@@ -1,0 +1,1251 @@
+# Tâches task-dispatch générées depuis docs/audit/2026-09-27/PLAN.md (fiches Cible = macos-gpu).
+# Essai à blanc : python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml
+# Sans gh : … --emit-json --issue-map docs/audit/2026-09-27/map.json (voir skill task-dispatch §2 bis).
+# Les fiches cloud (K-17…K-21, K-81) ne sont pas ici : elles sont exécutées dans la session cloud.
+# Prérequis de toutes les tâches : les fichiers docs/audit/2026-09-27/ doivent être poussés sur la branche.
+defaults:
+  project: mlx-voxtral-swift
+  severity: medium
+  task:
+    repo: VincentGourbin/mlx-voxtral-swift
+    runs_on: [macos-gpu]
+    requires: [mlx, xcode, gh, git]
+    branch: claude/action-plan-skills-beta-wifgmu
+tasks:
+  - id: K-1
+    subject: "[voxtral K-1] Convertir les erreurs MLX en VoxtralError aux points d'entrée publics (plus de fatalError dans l'app hôte)"
+    severity: high
+    task:
+      goal: "Convertir les erreurs MLX en VoxtralError aux points d'entrée publics (plus de fatalError dans l'app hôte)"
+      gate: "test `MLXErrorBoundaryTests` : invite synthétique de 2 600 positions préfillée avec `MemoryOptimizationConfig.ultra` (déclencheur P-03, présent tant que K-2 n'est pas livré) → `VoxtralError.mlx` levée, processus vivant (rouge sans correctif = plantage du runner de test, piège 38) ; suite complète verte ; durée totale de `VoxtralCLI transcribe` sur C-moyen EN inchangée à ±5 % (A/B/B/A, `/usr/bin/time`)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-1.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test `MLXErrorBoundaryTests` : invite synthétique de 2 600 positions préfillée avec `MemoryOptimizationConfig.ultra` (déclencheur P-03, présent tant que K-2 n'est pas livré) → `VoxtralError.mlx` levée, processus vivant (rouge sans correctif = plantage du runner de test, piège 38) ; suite complète verte ; durée totale de `VoxtralCLI transcribe` sur C-moyen EN inchangée à ±5 % (A/B/B/A, `/usr/bin/time`).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-2
+    subject: "[voxtral K-2] STT: KVCacheSimple par défaut + erreur explicite au dépassement d'une limite (plus d'arrêt au-delà de la fenêtre)"
+    severity: high
+    task:
+      goal: "STT: KVCacheSimple par défaut + erreur explicite au dépassement d'une limite (plus d'arrêt au-delà de la fenêtre)"
+      gate: "test `LongPromptKVCacheTests` (invite synthétique de 2 600 positions, préréglage `.ultra`) rouge → vert ; intégration `VOXTRAL_LONG_AUDIO=1` sur C-long (≈ 11 min 22 s) avec `recommended(forRAMGB: 8)` puis `(forRAMGB: 16)` et `maxTokens` 4 096 : 0 arrêt, première phrase EN « Fluxforge Studio turns your Mac into a complete AI creative studio. » et dernière phrase FR « Aucune donnee envoyee dans le cloud. » présentes (casse et accents ignorés) ; pic « peak memory footprint » consigné (ASK-7 au-delà de 12 Go)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-2.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test `LongPromptKVCacheTests` (invite synthétique de 2 600 positions, préréglage `.ultra`) rouge → vert ; intégration `VOXTRAL_LONG_AUDIO=1` sur C-long (≈ 11 min 22 s) avec `recommended(forRAMGB: 8)` puis `(forRAMGB: 16)` et `maxTokens` 4 096 : 0 arrêt, première phrase EN « Fluxforge Studio turns your Mac into a complete AI creative studio. » et dernière phrase FR « Aucune donnee envoyee dans le cloud. » présentes (casse et accents ignorés) ; pic « peak memory footprint » consigné (ASK-7 au-delà de 12 Go).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-1]
+  - id: K-3
+    subject: "[voxtral K-3] Masque booléen/.causal construit par le cache à la place du masque additif fp32 maison (STT vivant et hérité)"
+    severity: high
+    task:
+      goal: "Masque booléen/.causal construit par le cache à la place du masque additif fp32 maison (STT vivant et hérité)"
+      gate: "logits du dernier jeton : écart relatif L2 ≤ 1e-3 contre l'actuel sur 3 clips (C-court EN/FR, C-moyen EN), greedy identique 3/3 ; test : un préfill à entrée bf16 ne lève plus « Mask type must promote to output type » ; test `RotatingKVCache` enroulé (préfill en 2 tranches, T ≥ 2) : 0 arrêt, masque `.bool` de la forme des clés ; invite de 600 positions via `loadVoxtralModel(modelPath:dtype:lazy:)` (chemin hérité) sans arrêt ; durée de transcription C-moyen EN ±5 % (A/B/B/A)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-3.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : logits du dernier jeton : écart relatif L2 ≤ 1e-3 contre l'actuel sur 3 clips (C-court EN/FR, C-moyen EN), greedy identique 3/3 ; test : un préfill à entrée bf16 ne lève plus « Mask type must promote to output type » ; test `RotatingKVCache` enroulé (préfill en 2 tranches, T ≥ 2) : 0 arrêt, masque `.bool` de la forme des clés ; invite de 600 positions via `loadVoxtralModel(modelPath:dtype:lazy:)` (chemin hérité) sans arrêt ; durée de transcription C-moyen EN ±5 % (A/B/B/A).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-2]
+  - id: K-4
+    subject: "[voxtral K-4] Jetons d'arrêt STT lus sur le tokenizer (supprimer 32000 = « ␣Capital »)"
+    severity: high
+    task:
+      goal: "Jetons d'arrêt STT lus sur le tokenizer (supprimer 32000 = « ␣Capital »)"
+      gate: "test `StopTokenTests` : chaque jeton d'arrêt est un id spécial (< 1 000), rouge avec la liste actuelle ; clip de test synthétisé « Capital Gains and Capital One are two different things. The capital of France is Paris. » transcrit au-delà du premier « ␣Capital » (« One » et « Paris » présents, 1/1) ; greedy identique avant/après sur C-court EN, C-court FR et C-moyen EN (3/3)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-4.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test `StopTokenTests` : chaque jeton d'arrêt est un id spécial (< 1 000), rouge avec la liste actuelle ; clip de test synthétisé « Capital Gains and Capital One are two different things. The capital of France is Paris. » transcrit au-delà du premier « ␣Capital » (« One » et « Paris » présents, 1/1) ; greedy identique avant/après sur C-court EN, C-court FR et C-moyen EN (3/3).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-5
+    subject: "[voxtral K-5] Supprimer les troncatures silencieuses (maxTokens STT = f(durée), boucle Realtime bornée par l'audio)"
+    severity: high
+    notes: "⛔ oui — ASK-8 (sémantique de `maxTokens`) avant de changer un défaut public"
+    task:
+      goal: "Supprimer les troncatures silencieuses (maxTokens STT = f(durée), boucle Realtime bornée par l'audio)"
+      gate: "STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-5.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-8, ASK-9 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-2]
+  - id: K-6
+    subject: "[voxtral K-6] Complétude des téléchargements prouvée par manifeste + SHA-256 (STT/TTS/Realtime), downloadModel factice neutralisé"
+    severity: high
+    task:
+      goal: "Complétude des téléchargements prouvée par manifeste + SHA-256 (STT/TTS/Realtime), downloadModel factice neutralisé"
+      gate: "6 tests unitaires sur dossiers temporaires, rouges sans le correctif : 1 shard sur 5 sans index → non téléchargé ; index corrompu → non téléchargé ; TTS `params.json` seul → non téléchargé puis reprise effective ; Realtime `config.json` seul → idem ; SHA-256 faux → rejet ; `downloadModel` sur id inconnu → erreur, aucun dossier créé ; `ModelDownloaderSizeTests` et `ModelLoadingSymlinkedDirectoryTests` verts ; coupure réseau simulée au milieu d'un shard puis relance → modèle complet (1/1)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-6.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 6 tests unitaires sur dossiers temporaires, rouges sans le correctif : 1 shard sur 5 sans index → non téléchargé ; index corrompu → non téléchargé ; TTS `params.json` seul → non téléchargé puis reprise effective ; Realtime `config.json` seul → idem ; SHA-256 faux → rejet ; `downloadModel` sur id inconnu → erreur, aucun dossier créé ; `ModelDownloaderSizeTests` et `ModelLoadingSymlinkedDirectoryTests` verts ; coupure réseau simulée au milieu d'un shard puis relance → modèle complet (1/1).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-7
+    subject: "[voxtral K-7] Chargeurs STT/TTS/Realtime vérifiés (clés + formes) et tokenizer Tekken strict"
+    severity: high
+    task:
+      goal: "Chargeurs STT/TTS/Realtime vérifiés (clés + formes) et tokenizer Tekken strict"
+      gate: "chargement sans erreur (0 clé manquante) de `mini-3b-4bit`, `mini-3b-8bit`, `mini-3b`, `tts-4b-4bit`, `tts-4b-6bit`, `tts-4b-mlx`, `tts-4b`, `realtime-4b-4bit`, `realtime-4b-fp16` (+ Small s'ils sont présents) ; dossier privé d'un shard → erreur nommant ≥ 1 clé (test rouge avant) ; dossier sans `tekken.json` → erreur typée pour STT, TTS et Realtime (3 tests) ; ids de jetons identiques sur 20 phrases FR/EN avec le vrai fichier ; sorties greedy (STT C-court) et audio TTS (graine 42) identiques avant/après."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-7.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : chargement sans erreur (0 clé manquante) de `mini-3b-4bit`, `mini-3b-8bit`, `mini-3b`, `tts-4b-4bit`, `tts-4b-6bit`, `tts-4b-mlx`, `tts-4b`, `realtime-4b-4bit`, `realtime-4b-fp16` (+ Small s'ils sont présents) ; dossier privé d'un shard → erreur nommant ≥ 1 clé (test rouge avant) ; dossier sans `tekken.json` → erreur typée pour STT, TTS et Realtime (3 tests) ; ids de jetons identiques sur 20 phrases FR/EN avec le vrai fichier ; sorties greedy (STT C-court) et audio TTS (graine 42) identiques avant/après.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-8
+    subject: "[voxtral K-8] Décoder la quantification comme l'amont (mode/per-layer), refuser les modes non affines"
+    severity: high
+    task:
+      goal: "Décoder la quantification comme l'amont (mode/per-layer), refuser les modes non affines"
+      gate: "5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-8.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-7]
+  - id: K-9
+    subject: "[voxtral K-9] Realtime: entrée mistralai originale chargeable (params.json + consolidated), id strict"
+    severity: high
+    notes: "⛔ oui — ASK-17 (corriger l'entrée plutôt que la retirer ; retrait = cassant)"
+    task:
+      goal: "Realtime: entrée mistralai originale chargeable (params.json + consolidated), id strict"
+      gate: "2 fixtures de décodage vertes (`config.json` transformers ignoré → config Mistral depuis `params.json`, `quantization == nil`) ; téléchargement de `realtime-4b` = 8,87 Go ± 1 % (au lieu de 17,72) ; chargement `verify: [.all]` : 0 clé manquante ou en trop ; transcription C-court EN identique au pack `realtime-4b-fp16` (ou WER ≤ +0,2 pt) ; test « id inconnu → erreur ; nil → défaut »."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-9.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-17 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 2 fixtures de décodage vertes (`config.json` transformers ignoré → config Mistral depuis `params.json`, `quantization == nil`) ; téléchargement de `realtime-4b` = 8,87 Go ± 1 % (au lieu de 17,72) ; chargement `verify: [.all]` : 0 clé manquante ou en trop ; transcription C-court EN identique au pack `realtime-4b-fp16` (ou WER ≤ +0,2 pt) ; test « id inconnu → erreur ; nil → défaut ».
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-6, K-7]
+  - id: K-10
+    subject: "[voxtral K-10] repoId STT: une seule source (registre), résolution par id, chargement hors ligne"
+    severity: high
+    notes: "⛔ oui — ASK-15 (dépôt Small 8 bits retenu)"
+    task:
+      goal: "repoId STT: une seule source (registre), résolution par id, chargement hors ligne"
+      gate: "test « chaque `VoxtralPipeline.Model` existe dans `ModelRegistry` avec le même repoId » vert (rouge avant) ; modèle Small 8 bits téléchargé par l'app puis `loadModel` en mode avion → chargé, 0 octet réseau (`nettop` ou Little Snitch) ; un seul dossier `small-8bit` sur disque."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-10.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-15 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test « chaque `VoxtralPipeline.Model` existe dans `ModelRegistry` avec le même repoId » vert (rouge avant) ; modèle Small 8 bits téléchargé par l'app puis `loadModel` en mode avion → chargé, 0 octet réseau (`nettop` ou Little Snitch) ; un seul dossier `small-8bit` sur disque.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-11
+    subject: "[voxtral K-11] Sérialiser enrôlement et inférence (verrou + busy), états de pipeline atomiques"
+    severity: high
+    task:
+      goal: "Sérialiser enrôlement et inférence (verrou + busy), états de pipeline atomiques"
+      gate: "test d'intégration `EnrollInferenceExclusionTests` (`enrollVoice` 50 époques ∥ `synthesizeStreaming`) : 20/20 exécutions sans blocage (timeout 120 s), synthèse refusée `busy` en < 1 s ou exécutée après ; rouge sans le correctif (blocage ou chevauchement détecté) ; test de stress TSan (2 × `loadModel`, `unload` pendant un stream, synthèse pendant enrôlement) : 0 alerte, états finaux cohérents 10/10 ; suite complète verte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-11.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test d'intégration `EnrollInferenceExclusionTests` (`enrollVoice` 50 époques ∥ `synthesizeStreaming`) : 20/20 exécutions sans blocage (timeout 120 s), synthèse refusée `busy` en < 1 s ou exécutée après ; rouge sans le correctif (blocage ou chevauchement détecté) ; test de stress TSan (2 × `loadModel`, `unload` pendant un stream, synthèse pendant enrôlement) : 0 alerte, états finaux cohérents 10/10 ; suite complète verte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-12
+    subject: "[voxtral K-12] Streaming TTS réellement progressif et annulable"
+    task:
+      goal: "Streaming TTS réellement progressif et annulable"
+      gate: "texte long (≈ 350 mots, `tts-4b-4bit`), **sans warm-up**, graine 42 : `generateStreaming` rend en < 50 ms ; premier chunk ≤ 1,5 × `ttft` du batch ; annulation après 5 chunks → pipeline `.ready` en < 1 s et frames générées ≤ frames à l'annulation + 1 ; audio concaténé identique au batch (même graine)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-12.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : texte long (≈ 350 mots, `tts-4b-4bit`), **sans warm-up**, graine 42 : `generateStreaming` rend en < 50 ms ; premier chunk ≤ 1,5 × `ttft` du batch ; annulation après 5 chunks → pipeline `.ready` en < 1 s et frames générées ≤ frames à l'annulation + 1 ; audio concaténé identique au batch (même graine).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-11]
+  - id: K-13
+    subject: "[voxtral K-13] Realtime: fenêtres glissantes encodeur (750) et décodeur (8192) appliquées"
+    severity: high
+    notes: "⛔ oui — ASK-11 (tolérance) et ASK-12 (référence mlx-audio) avant la porte de parité"
+    task:
+      goal: "Realtime: fenêtres glissantes encodeur (750) et décodeur (8192) appliquées"
+      gate: "embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-13.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-11, ASK-12 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-5]
+  - id: K-14
+    subject: "[voxtral K-14] Plafond de frames TTS proportionnel au texte"
+    task:
+      goal: "Plafond de frames TTS proportionnel au texte"
+      gate: "0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-14.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-15
+    subject: "[voxtral K-15] Annulation coopérative (<2 s) et calcul hors pool coopératif"
+    task:
+      goal: "Annulation coopérative (<2 s) et calcul hors pool coopératif"
+      gate: "annulation d'une transcription de C-long (≈ 11 min) → `CancellationError` en < 2 s, pipeline `.ready` ; idem TTS batch (texte long) et Realtime ; app `VoxtralApp` : 0 blocage > 250 ms du main thread pendant `loadModel` (Instruments, Hangs) ; tests rouges sans le correctif."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-15.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : annulation d'une transcription de C-long (≈ 11 min) → `CancellationError` en < 2 s, pipeline `.ready` ; idem TTS batch (texte long) et Realtime ; app `VoxtralApp` : 0 blocage > 250 ms du main thread pendant `loadModel` (Instruments, Hangs) ; tests rouges sans le correctif.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-2, K-11]
+  - id: K-16
+    subject: "[voxtral K-16] Globaux protégés et MLXArray évalués avant transfert entre acteurs"
+    task:
+      goal: "Globaux protégés et MLXArray évalués avant transfert entre acteurs"
+      gate: "`grep -c 'nonisolated(unsafe)' Sources/VoxtralCore -r` : 8 → ≤ 2, chacune documentée ; test : deux pipelines de configurations mémoire différentes gardent chacune la leur ; TSan propre sur 4 extractions de features en parallèle ; synthèse hors MainActor consommée sur le MainActor 20/20 sans plantage, WAV identiques octet pour octet (fiche préventive : aucun plantage reproduit avant)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-16.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `grep -c 'nonisolated(unsafe)' Sources/VoxtralCore -r` : 8 → ≤ 2, chacune documentée ; test : deux pipelines de configurations mémoire différentes gardent chacune la leur ; TSan propre sur 4 extractions de features en parallèle ; synthèse hors MainActor consommée sur le MainActor 20/20 sans plantage, WAV identiques octet pour octet (fiche préventive : aucun plantage reproduit avant).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-22
+    subject: "[voxtral K-22] Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
+    notes: "⛔ oui — ASK-28 (rester sur `main` + `Package.resolved` suivi, ou passer au prochain tag avec FluxForge)"
+    task:
+      goal: "Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
+      gate: "`xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-22.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-28 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-23
+    subject: "[voxtral K-23] Retirer le code mort sans risque, faire taire la famille legacy, logs os.Logger"
+    task:
+      goal: "Retirer le code mort sans risque, faire taire la famille legacy, logs os.Logger"
+      gate: "`BUILD SUCCEEDED` (4 schémas) et suite verte ; −≈ 900 lignes (`git diff --shortstat`) ; `grep -rn '/Users/' Sources Tests` = 0 ; `grep -rn 'print(' Sources/VoxtralCore | grep -v VoxtralDebug` = 0 ; `grep -rnE 'TODO|For now|would integrate' Sources/VoxtralCore` = 0 (hors code public déprécié par K-30) ; 0 écriture dans `/tmp` pendant une génération par `VoxtralGenerator` (test) ; une synthèse CLI sans `--debug` n'écrit rien de la bibliothèque sur stdout."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-23.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `BUILD SUCCEEDED` (4 schémas) et suite verte ; −≈ 900 lignes (`git diff --shortstat`) ; `grep -rn '/Users/' Sources Tests` = 0 ; `grep -rn 'print(' Sources/VoxtralCore | grep -v VoxtralDebug` = 0 ; `grep -rnE 'TODO|For now|would integrate' Sources/VoxtralCore` = 0 (hors code public déprécié par K-30) ; 0 écriture dans `/tmp` pendant une génération par `VoxtralGenerator` (test) ; une synthèse CLI sans `--debug` n'écrit rien de la bibliothèque sur stdout.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-22]
+  - id: K-24
+    subject: "[voxtral K-24] Registres exacts (tailles, précisions), consolidated exclu en STT, variante Core ML par config"
+    task:
+      goal: "Registres exacts (tailles, précisions), consolidated exclu en STT, variante Core ML par config"
+      gate: "`mini-3b` téléchargé = 9,37 Go ± 1 % (`du -sb`) ; test d'exclusion `consolidated*` vert (STT) et `tts-4b` inchangé (consolidated présent) ; test « chaque entrée du registre à ± 5 % des octets de `docs/Weights.md` » vert ; test « dossier Small nommé `x/model` → `.small` » vert ; README sans « ~6 GB / ~3.5 GB / ~2 GB / ~12 GB »."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-24.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `mini-3b` téléchargé = 9,37 Go ± 1 % (`du -sb`) ; test d'exclusion `consolidated*` vert (STT) et `tts-4b` inchangé (consolidated présent) ; test « chaque entrée du registre à ± 5 % des octets de `docs/Weights.md` » vert ; test « dossier Small nommé `x/model` → `.small` » vert ; README sans « ~6 GB / ~3.5 GB / ~2 GB / ~12 GB ».
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-6]
+  - id: K-25
+    subject: "[voxtral K-25] Encodeur Core ML sous customModelsDirectory, hors ligne, erreurs explicites"
+    task:
+      goal: "Encodeur Core ML sous customModelsDirectory, hors ligne, erreurs explicites"
+      gate: "test avec `customModelsDirectory = <tmp>/VoxtralModels` : encodeur trouvé sous ce dossier ; 2ᵉ chargement hybride réseau coupé → `Core ML available: true` ; 0 octet écrit sous `~/.cache/huggingface` (`du` avant/après) ; tests « Small + encodeur mini → erreur » et « encodeur MLX non initialisé → erreur » verts (rouges avant)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-25.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test avec `customModelsDirectory = <tmp>/VoxtralModels` : encodeur trouvé sous ce dossier ; 2ᵉ chargement hybride réseau coupé → `Core ML available: true` ; 0 octet écrit sous `~/.cache/huggingface` (`du` avant/après) ; tests « Small + encodeur mini → erreur » et « encodeur MLX non initialisé → erreur » verts (rouges avant).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-6]
+  - id: K-26
+    subject: "[voxtral K-26] Enrôlement reproductible (graine), reprise par checkpoint, garde NaN testée"
+    task:
+      goal: "Enrôlement reproductible (graine), reprise par checkpoint, garde NaN testée"
+      gate: "2 enrôlements de 200 époques, même graine → codes `[T, 37]` identiques ; graines différentes → différents ; arrêt à 2 500 / 5 000 puis reprise → codes finaux identiques bit à bit au run continu ; surcoût de sauvegarde ≤ 5 % du temps total (dans le bruit) ; 3 tests (NaN à l'époque 0 → `EnrollmentDivergedError` ; NaN à l'époque k → codes du meilleur pas ; annulation → `CancellationError`) rouges sans la garde, verts avec."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-26.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 2 enrôlements de 200 époques, même graine → codes `[T, 37]` identiques ; graines différentes → différents ; arrêt à 2 500 / 5 000 puis reprise → codes finaux identiques bit à bit au run continu ; surcoût de sauvegarde ≤ 5 % du temps total (dans le bruit) ; 3 tests (NaN à l'époque 0 → `EnrollmentDivergedError` ; NaN à l'époque k → codes du meilleur pas ; annulation → `CancellationError`) rouges sans la garde, verts avec.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-11]
+  - id: K-27
+    subject: "[voxtral K-27] API publique honnête (souches dépréciées, tokenCount, plus de as!/precondition publics)"
+    task:
+      goal: "API publique honnête (souches dépréciées, tokenCount, plus de as!/precondition publics)"
+      gate: "`tokenCount` > 0 sur une transcription (test) ; `grep -rn 'as!' Sources/VoxtralCore` = 0 ; 0 `precondition`/`fatalError` atteignable depuis l'API publique (liste relue, un test par cas) ; build sans nouvel avertissement hors dépréciations voulues ; suite verte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-27.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `tokenCount` > 0 sur une transcription (test) ; `grep -rn 'as!' Sources/VoxtralCore` = 0 ; 0 `precondition`/`fatalError` atteignable depuis l'API publique (liste relue, un test par cas) ; build sans nouvel avertissement hors dépréciations voulues ; suite verte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-6]
+  - id: K-28
+    subject: "[voxtral K-28] Build depuis un clone neuf, empaquetage Release, démo et RuntimeBeacon robustes"
+    severity: low
+    notes: "⛔ oui — ASK-27 (ressource `VoxtralEncoderFull.mlmodelc` embarquée ou téléchargée)"
+    task:
+      goal: "Build depuis un clone neuf, empaquetage Release, démo et RuntimeBeacon robustes"
+      gate: "`git clone` dans un dossier neuf + `xcodebuild` Release des 4 schémas : `** BUILD SUCCEEDED **` sans « Invalid Resource » ; app empaquetée (script réécrit en `xcodebuild` Release + bundles) lancée : transcrit C-court EN ; test FFmpeg : 1 Mo sur stderr → processus terminé ; annulation → processus tué < 1 s ; nom `../x` refusé avant l'enrôlement, écrasement demandé explicitement ; 1 000 `update` concurrents d'un `end` → 0 manifeste résiduel."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-28.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-27 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `git clone` dans un dossier neuf + `xcodebuild` Release des 4 schémas : `** BUILD SUCCEEDED **` sans « Invalid Resource » ; app empaquetée (script réécrit en `xcodebuild` Release + bundles) lancée : transcrit C-court EN ; test FFmpeg : 1 Mo sur stderr → processus terminé ; annulation → processus tué < 1 s ; nom `../x` refusé avant l'enrôlement, écrasement demandé explicitement ; 1 000 `update` concurrents d'un `end` → 0 manifeste résiduel.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-22]
+  - id: K-29
+    subject: "[voxtral K-29] Tests non tautologiques + CI macOS"
+    task:
+      goal: "Tests non tautologiques + CI macOS"
+      gate: "CI verte sur la branche (lien du run) ; `PerformanceOptimizationTests.swift:173-255` remplacés par des appels au code (chacun rouge si l'algorithme de production est cassé) ; `TekkenTokenizerTests` sur fixture réduite versionnée (ne dépend plus de `/Users/vincent`) ; `ModelLoadingSymlinkedDirectoryTests` couvre `loadWeights(from:)` ; suite locale verte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-29.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : CI verte sur la branche (lien du run) ; `PerformanceOptimizationTests.swift:173-255` remplacés par des appels au code (chacun rouge si l'algorithme de production est cassé) ; `TekkenTokenizerTests` sur fixture réduite versionnée (ne dépend plus de `/Users/vincent`) ; `ModelLoadingSymlinkedDirectoryTests` couvre `loadWeights(from:)` ; suite locale verte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-22]
+  - id: K-30
+    subject: "[voxtral K-30] Déprécier l'API legacy/morte publique (2.3)"
+    severity: low
+    notes: "⛔ oui — ASK-23 (dépréciation 2.3 puis suppression 3.0, ou suppression directe)"
+    task:
+      goal: "Déprécier l'API legacy/morte publique (2.3)"
+      gate: "liste S-13 lot 2 + S-14 entièrement annotée (grep) ; build de la bibliothèque sans avertissement interne (aucun appel interne à du déprécié) ; recherche GitHub `user:VincentGourbin` sur chaque symbole = 0 usage (relue) et, si FluxForge est présent, son build n'affiche aucun avertissement de dépréciation Voxtral ; CHANGELOG (section 2.3) listant chaque symbole."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-30.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-23 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : liste S-13 lot 2 + S-14 entièrement annotée (grep) ; build de la bibliothèque sans avertissement interne (aucun appel interne à du déprécié) ; recherche GitHub `user:VincentGourbin` sur chaque symbole = 0 usage (relue) et, si FluxForge est présent, son build n'affiche aucun avertissement de dépréciation Voxtral ; CHANGELOG (section 2.3) listant chaque symbole.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-23, K-27]
+  - id: K-31
+    subject: "[voxtral K-31] Revue d'API publique (3.0, sur liste validée)"
+    severity: low
+    notes: "⛔ oui — ASK-25 (liste des symboles publics conservés ; version 3.0)"
+    task:
+      goal: "Revue d'API publique (3.0, sur liste validée)"
+      gate: "liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-31.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-25 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-30]
+  - id: K-32
+    subject: "[voxtral K-32] Instrument VoxtralCLI bench validé en A/A (≤3 %), JSON par mesure"
+    severity: high
+    notes: "⛔ oui — ASK-26 (sort de `VoxtralBenchmark` : réorienté vers `bench` ou retiré)"
+    task:
+      goal: "Instrument VoxtralCLI bench validé en A/A (≤3 %), JSON par mesure"
+      gate: "A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-32.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-26 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s.
+      deliverables: ["commit(s) sur la branche", "3 lignes AA recopiées dans le rapport", "docs/bench.schema.json"]
+      depends_on: [K-22, K-5]
+  - id: K-33
+    subject: "[voxtral K-33] Commande eval (WER) reproductible, juge ASR validé, auto-détection de langue vérifiée"
+    task:
+      goal: "Commande eval (WER) reproductible, juge ASR validé, auto-détection de langue vérifiée"
+      gate: "texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-33.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-32, K-4, K-5]
+  - id: K-34
+    subject: "[voxtral K-34] Baseline STT mesurée (Mini/Small × backends × clips) + occupation GPU réelle + verdict Small 32 Go"
+    severity: high
+    task:
+      goal: "Baseline STT mesurée (Mini/Small × backends × clips) + occupation GPU réelle + verdict Small 32 Go"
+      gate: "A/A ≤ 3 % sur 2 passes pour chaque ligne ; une ligne `BENCHMARKS.md` par (modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} × backend ∈ {.mlx, .auto} × clip ∈ {C-court EN, C-moyen EN, C-moyen FR, C-long}) avec la révision résolue et le WER ; occupation GPU du préfill Mini et Small consignée par les deux instruments (écart noté) ; small-4bit, 8 min d'audio : pic `phys_footprint` mesuré ≤ 24 Go (marge d'un Mac 32 Go), sinon verdict « non supporté sur 32 Go » écrit dans `docs/knowledge/decisions/small-32gb.md` ; chat : une ligne `BENCHMARKS.md` par backend ∈ {.mlx, .auto} pour mini-3b-8bit sur C-moyen EN × 4 questions fixes (greedy), avec `ttft_ms` de chaque question et tok/s (référence de K-49 et K-70)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-34.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/A ≤ 3 % sur 2 passes pour chaque ligne ; une ligne `BENCHMARKS.md` par (modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} × backend ∈ {.mlx, .auto} × clip ∈ {C-court EN, C-moyen EN, C-moyen FR, C-long}) avec la révision résolue et le WER ; occupation GPU du préfill Mini et Small consignée par les deux instruments (écart noté) ; small-4bit, 8 min d'audio : pic `phys_footprint` mesuré ≤ 24 Go (marge d'un Mac 32 Go), sinon verdict « non supporté sur 32 Go » écrit dans `docs/knowledge/decisions/small-32gb.md` ; chat : une ligne `BENCHMARKS.md` par backend ∈ {.mlx, .auto} pour mini-3b-8bit sur C-moyen EN × 4 questions fixes (greedy), avec `ttft_ms` de chaque question et tok/s (référence de K-49 et K-70).
+      deliverables: ["lignes BENCHMARKS.md", "note docs/knowledge/benchmarks", "décision Small 32 Go"]
+      depends_on: [K-32, K-33, K-2, K-4, K-5]
+  - id: K-35
+    subject: "[voxtral K-35] Baseline TTS mesurée (matrice packs × textes × voix × batch/streaming)"
+    task:
+      goal: "Baseline TTS mesurée (matrice packs × textes × voix × batch/streaming)"
+      gate: "A/A ≤ 3 % ; baseline enregistrée pour {tts-4b-4bit, tts-4b-6bit, tts-4b-mlx} × {court, 60 s, long} × graines {1, 2, 3} × {neutral_female, voix clonée `docs/examples/clone_fr.wav` enrôlée} × {batch, streaming} ; ligne dédiée « consommateur » (6 bits + clonée + `--warm-up`, batch) ; frames du porteur / frames totales consignées ; couverture ASR (aller-retour TTS → STT, outil K-33) consignée par (pack × texte × graine) en batch : référence des portes qualité de K-39, K-48, K-58 et K-79."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-35.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/A ≤ 3 % ; baseline enregistrée pour {tts-4b-4bit, tts-4b-6bit, tts-4b-mlx} × {court, 60 s, long} × graines {1, 2, 3} × {neutral_female, voix clonée `docs/examples/clone_fr.wav` enrôlée} × {batch, streaming} ; ligne dédiée « consommateur » (6 bits + clonée + `--warm-up`, batch) ; frames du porteur / frames totales consignées ; couverture ASR (aller-retour TTS → STT, outil K-33) consignée par (pack × texte × graine) en batch : référence des portes qualité de K-39, K-48, K-58 et K-79.
+      deliverables: ["lignes BENCHMARKS.md", "note docs/knowledge/benchmarks"]
+      depends_on: [K-32, K-12, K-33]
+  - id: K-36
+    subject: "[voxtral K-36] Baseline Realtime + occupation GPU réelle (re-diagnostic #23-#25)"
+    task:
+      goal: "Baseline Realtime + occupation GPU réelle (re-diagnostic #23-#25)"
+      gate: "A/A ≤ 3 % ; lignes `BENCHMARKS.md` pour realtime-4b-4bit et realtime-4b-fp16 sur C-court, C-moyen EN/FR, C-long ; trace swift-mlx-profiler 1.5.x `.fineGrained` (`.ioReportResidency`) et Metal System Trace sur C-moyen complet : occupation GPU du décodage rapportée des deux façons, écart ≤ 10 pts ; décision « #23-#25 caducs » complétée par les chiffres ; `pad_fraction` consignée (entrée de K-73) ; WER (outil K-33) consigné pour chaque ligne : référence des portes de K-38, K-46, K-65 et K-78."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-36.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/A ≤ 3 % ; lignes `BENCHMARKS.md` pour realtime-4b-4bit et realtime-4b-fp16 sur C-court, C-moyen EN/FR, C-long ; trace swift-mlx-profiler 1.5.x `.fineGrained` (`.ioReportResidency`) et Metal System Trace sur C-moyen complet : occupation GPU du décodage rapportée des deux façons, écart ≤ 10 pts ; décision « #23-#25 caducs » complétée par les chiffres ; `pad_fraction` consignée (entrée de K-73) ; WER (outil K-33) consigné pour chaque ligne : référence des portes de K-38, K-46, K-65 et K-78.
+      deliverables: ["lignes BENCHMARKS.md", "décision #23-#25 complétée"]
+      depends_on: [K-32, K-5, K-33]
+  - id: K-37
+    subject: "[voxtral K-37] Baseline enrôlement (s/époque, pic, scénarios de résidence)"
+    severity: low
+    task:
+      goal: "Baseline enrôlement (s/époque, pic, scénarios de résidence)"
+      gate: "A/A ≤ 3 % sur `epoch_ms_p50` (200 époques, graine 7) ; pics (i) et (ii) consignés pour tts-4b-6bit et tts-4b-mlx ; décision écrite : si (ii) − (i) < 5 %, le volet résidence de K-64 est retiré sans code."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-37.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/A ≤ 3 % sur `epoch_ms_p50` (200 époques, graine 7) ; pics (i) et (ii) consignés pour tts-4b-6bit et tts-4b-mlx ; décision écrite : si (ii) − (i) < 5 %, le volet résidence de K-64 est retiré sans code.
+      deliverables: ["lignes BENCHMARKS.md", "décision enroll-residency"]
+      depends_on: [K-32, K-26]
+  - id: K-38
+    subject: "[voxtral K-38] Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
+    severity: high
+    notes: "⛔ oui — ASK-11 (tolérance de parité : texte identique ou WER ≤ réf + 0,2 pt)"
+    task:
+      goal: "Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
+      gate: "audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-38.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-11 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-36, K-13]
+  - id: K-39
+    subject: "[voxtral K-39] FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
+    severity: high
+    notes: "⛔ oui — ASK-13 (écoute à l'aveugle ou porte objective seule) avant de conclure"
+    task:
+      goal: "FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
+      gate: "pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-39.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-11, ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-40
+    subject: "[voxtral K-40] STT bf16 de bout en bout (KV bf16, plus de promotion fp32)"
+    severity: high
+    task:
+      goal: "STT bf16 de bout en bout (KV bf16, plus de promotion fp32)"
+      gate: "test : dtype du cache KV après préfill = bf16 (rouge avant) ; encodage + préfill ≥ 5 % plus rapides **ou** pic MLX −≥ 10 % (A/B/B/A, Mini 8 bits et 4 bits mixte, `.mlx` et `.auto`, C-moyen et C-long) ; `mini-3b` bf16 : décodage ≥ +5 % et pic process −≥ 1 Go ; parité : greedy identique sur ≥ 90 % des clips et WER ≤ réf + 0,3 pt (FR et EN), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-40.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : test : dtype du cache KV après préfill = bf16 (rouge avant) ; encodage + préfill ≥ 5 % plus rapides **ou** pic MLX −≥ 10 % (A/B/B/A, Mini 8 bits et 4 bits mixte, `.mlx` et `.auto`, C-moyen et C-long) ; `mini-3b` bf16 : décodage ≥ +5 % et pic process −≥ 1 Go ; parité : greedy identique sur ≥ 90 % des clips et WER ≤ réf + 0,3 pt (FR et EN), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-3, K-34]
+  - id: K-41
+    subject: "[voxtral K-41] Attention du codec par bandes (pic du décodage long borné)"
+    severity: high
+    task:
+      goal: "Attention du codec par bandes (pic du décodage long borné)"
+      gate: "forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, 60 s, long) ; pic `phys_footprint` du décodage long ≤ poids + 1 Go (contre ≥ 10 Go attendus aujourd'hui) ; décodage court ±5 % (A/B/B/A)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-41.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, 60 s, long) ; pic `phys_footprint` du décodage long ≤ poids + 1 Go (contre ≥ 10 Go attendus aujourd'hui) ; décodage court ±5 % (A/B/B/A).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-42
+    subject: "[voxtral K-42] Décider backend et précision d'encodeur STT par une matrice mesurée"
+    notes: "⛔ oui — ASK-6 (changer le défaut `.auto` → `.mlx` si la règle le dicte : impact FluxForge)"
+    task:
+      goal: "Décider backend et précision d'encodeur STT par une matrice mesurée"
+      gate: "règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-42.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-6 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40, K-33, K-25]
+  - id: K-43
+    subject: "[voxtral K-43] Décodage codec incrémental en streaming (÷33 attendu)"
+    task:
+      goal: "Décodage codec incrémental en streaming (÷33 attendu)"
+      gate: "forme d'onde concaténée du streaming = batch (|Δ|max ≤ 1e-4) sur 3 textes × 3 graines ; temps de décodage par chunk constant ±20 % du chunk 1 au chunk 200 ; RTF streaming du texte long ≤ RTF batch + 5 %."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-43.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : forme d'onde concaténée du streaming = batch (|Δ|max ≤ 1e-4) sur 3 textes × 3 graines ; temps de décodage par chunk constant ±20 % du chunk 1 au chunk 200 ; RTF streaming du texte long ≤ RTF batch + 5 %.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-12, K-41]
+  - id: K-44
+    subject: "[voxtral K-44] Pipelining asyncEval de la boucle AR TTS"
+    severity: high
+    task:
+      goal: "Pipelining asyncEval de la boucle AR TTS"
+      gate: "fr/s +5 % au moins en 4 et en 6 bits (A/B/B/A) ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (GPU % par frame en hausse, trace) ; streaming ≥ batch −3 %."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-44.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : fr/s +5 % au moins en 4 et en 6 bits (A/B/B/A) ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (GPU % par frame en hausse, trace) ; streaming ≥ batch −3 %.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-39]
+  - id: K-45
+    subject: "[voxtral K-45] Pipelining asyncEval du décodage STT"
+    task:
+      goal: "Pipelining asyncEval du décodage STT"
+      gate: "`step_ms_p50` −5 % au moins (Mini 8 bits, C-moyen, A/B/B/A) ; sortie greedy identique 100 % ; preuve que la branche asynchrone est prise."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-45.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `step_ms_p50` −5 % au moins (Mini 8 bits, C-moyen, A/B/B/A) ; sortie greedy identique 100 % ; preuve que la branche asynchrone est prise.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40]
+  - id: K-46
+    subject: "[voxtral K-46] Tête liée Realtime quantifiée (asLinear)"
+    task:
+      goal: "Tête liée Realtime quantifiée (asLinear)"
+      gate: "baseline = après K-38 : `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER ≤ réf + 0,2 pt (8 bits) et ≤ réf + 0,5 pt (4 bits), sinon la tête 4 bits est rejetée et documentée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-46.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : baseline = après K-38 : `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER ≤ réf + 0,2 pt (8 bits) et ≤ réf + 0,5 pt (4 bits), sinon la tête 4 bits est rejetée et documentée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-38]
+  - id: K-47
+    subject: "[voxtral K-47] Pipelining asyncEval du décodage Realtime"
+    task:
+      goal: "Pipelining asyncEval du décodage Realtime"
+      gate: "`step_ms_p50` −5 % au moins (A/B/B/A, après K-46) ; texte identique sur C-court et C-moyen ; branche asynchrone prouvée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-47.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `step_ms_p50` −5 % au moins (A/B/B/A, après K-46) ; texte identique sur C-court et C-moyen ; branche asynchrone prouvée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-46]
+  - id: K-48
+    subject: "[voxtral K-48] Rendre flowSteps/cfgAlpha effectifs et balayer T21"
+    notes: "⛔ oui — ASK-13 pour retenir une valeur < 8 (écoute)"
+    task:
+      goal: "Rendre flowSteps/cfgAlpha effectifs et balayer T21"
+      gate: "câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-48.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-44]
+  - id: K-49
+    subject: "[voxtral K-49] Session de chat audio réutilisable"
+    task:
+      goal: "Session de chat audio réutilisable"
+      gate: "2ᵉ question : latence au premier jeton −50 % au moins ; réponses greedy identiques à un démarrage à froid sur 4 questions ; mémoire de la session consignée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-49.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 2ᵉ question : latence au premier jeton −50 % au moins ; réponses greedy identiques à un démarrage à froid sur 4 questions ; mémoire de la session consignée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-45]
+  - id: K-50
+    subject: "[voxtral K-50] Cache de préfixe TTS pour les voix clonées"
+    task:
+      goal: "Cache de préfixe TTS pour les voix clonées"
+      gate: "2ᵉ synthèse d'une voix clonée : préfill −30 % au moins (graine fixée, A/B/B/A) ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-50.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 2ᵉ synthèse d'une voix clonée : préfill −30 % au moins (graine fixée, A/B/B/A) ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-11, K-35]
+  - id: K-51
+    subject: "[voxtral K-51] Sortir clearCache/eval/resetPeak de la boucle STT"
+    task:
+      goal: "Sortir clearCache/eval/resetPeak de la boucle STT"
+      gate: "`recommended(forRAMGB: 16)` sur le Mac de mesure : décodage +5 % au moins (A/B/B/A), pic `phys_footprint` ≤ +10 %, greedy identique."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-51.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `recommended(forRAMGB: 16)` sur le Mac de mesure : décodage +5 % au moins (A/B/B/A), pic `phys_footprint` ≤ +10 %, greedy identique.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-45]
+  - id: K-52
+    subject: "[voxtral K-52] Politique mémoire MLX opt-in (cacheLimit, clearCache, unload) sur les 3 pipelines"
+    task:
+      goal: "Politique mémoire MLX opt-in (cacheLimit, clearCache, unload) sur les 3 pipelines"
+      gate: "STT à 10 min d'audio : pic `phys_footprint` ≤ pic actif MLX + `cacheLimit` + empreinte Core ML (+5 %) ; temps fast ±5 % ; TTS : après `unload()`, footprint ≤ référence du process + 200 Mo, lean ≤ +5 % de temps pour un pic −20 % au moins sur le texte long ; Realtime : après `unload()`, footprint = avant chargement ±200 Mo, `step_ms_p50` ±3 %, max/médiane des pas ≤ 1,3."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-52.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : STT à 10 min d'audio : pic `phys_footprint` ≤ pic actif MLX + `cacheLimit` + empreinte Core ML (+5 %) ; temps fast ±5 % ; TTS : après `unload()`, footprint ≤ référence du process + 200 Mo, lean ≤ +5 % de temps pour un pic −20 % au moins sur le texte long ; Realtime : après `unload()`, footprint = avant chargement ±200 Mo, `step_ms_p50` ±3 %, max/médiane des pas ≤ 1,3.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-51]
+  - id: K-53
+    subject: "[voxtral K-53] KV STT pré-dimensionné"
+    task:
+      goal: "KV STT pré-dimensionné"
+      gate: "30 min d'audio : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A) ; 10 min consigné ; sortie bit-exacte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-53.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 30 min d'audio : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A) ; 10 min consigné ; sortie bit-exacte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40]
+  - id: K-54
+    subject: "[voxtral K-54] Dernier logit seulement au préfill STT"
+    task:
+      goal: "Dernier logit seulement au préfill STT"
+      gate: "préfill Mini −5 % **ou** pic −128 Mio au moins à 5 min d'audio (A/B/B/A) ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-54.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : préfill Mini −5 % **ou** pic −128 Mio au moins à 5 min d'audio (A/B/B/A) ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40]
+  - id: K-55
+    subject: "[voxtral K-55] KV 8 bits en lean STT"
+    task:
+      goal: "KV 8 bits en lean STT"
+      gate: "Small 4 bits, 20 min : pic −1 Go au moins ; WER ≤ +0,3 pt ; décodage au pire −5 % (sinon réservé au lean)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-55.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : Small 4 bits, 20 min : pic −1 Go au moins ; WER ≤ +0,3 pt ; décodage au pire −5 % (sinon réservé au lean).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-3, K-2, K-40]
+  - id: K-56
+    subject: "[voxtral K-56] Encodeur STT par lots bornés"
+    task:
+      goal: "Encodeur STT par lots bornés"
+      gate: "30 min : pic MLX de l'encodage −30 % au moins ; temps d'encodage ±5 % ; embeddings bit-exacts attendus, à défaut L2 relative ≤ 1e-5 et greedy identique."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-56.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 30 min : pic MLX de l'encodage −30 % au moins ; temps d'encodage ±5 % ; embeddings bit-exacts attendus, à défaut L2 relative ≤ 1e-5 et greedy identique.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40]
+  - id: K-57
+    subject: "[voxtral K-57] Surcoût hôte du FM TTS"
+    task:
+      goal: "Surcoût hôte du FM TTS"
+      gate: "fr/s +5 % au moins en 4 bits (A/B/B/A) ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-57.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : fr/s +5 % au moins en 4 bits (A/B/B/A) ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-44]
+  - id: K-58
+    subject: "[voxtral K-58] Codec TTS bf16 + invariants"
+    severity: low
+    notes: "⛔ oui — ASK-13 (écoute A/B) pour garder le bf16"
+    task:
+      goal: "Codec TTS bf16 + invariants"
+      gate: "décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-58.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-41]
+  - id: K-59
+    subject: "[voxtral K-59] Matérialiser les poids résidents par voie, neutraliser les modules factices"
+    severity: low
+    task:
+      goal: "Matérialiser les poids résidents par voie, neutraliser les modules factices"
+      gate: "1er préfill = préfill à chaud ±5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ±5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-59.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 1er préfill = préfill à chaud ±5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ±5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-34, K-35, K-36]
+  - id: K-60
+    subject: "[voxtral K-60] Encodeurs dé-quantifiés en fast (STT, Realtime)"
+    severity: low
+    task:
+      goal: "Encodeurs dé-quantifiés en fast (STT, Realtime)"
+      gate: "STT : encodage −5 % au moins, pic ≤ +0,8 Go, WER ≤ +0,1 pt ; Realtime : encodage −5 % au moins sur C-moyen (A/B/B/A), WER identique ; sinon retrait."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-60.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : STT : encodage −5 % au moins, pic ≤ +0,8 Go, WER ≤ +0,1 pt ; Realtime : encodage −5 % au moins sur C-moyen (A/B/B/A), WER identique ; sinon retrait.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-40, K-38, K-13]
+  - id: K-61
+    subject: "[voxtral K-61] Pénalité de répétition décidée par le WER"
+    notes: "⛔ oui — ASK-9 (changer un défaut public quand la porte l'emporte)"
+    task:
+      goal: "Pénalité de répétition décidée par le WER"
+      gate: "valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-61.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-9 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-33, K-45]
+  - id: K-62
+    subject: "[voxtral K-62] Tranche de préfill STT exposée et balayée"
+    severity: low
+    task:
+      goal: "Tranche de préfill STT exposée et balayée"
+      gate: "A/B/B/A 256/512/1 024/2 048 à 5 et 30 min ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; sortie bit-exacte après factorisation des deux boucles."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-62.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/B/B/A 256/512/1 024/2 048 à 5 et 30 min ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; sortie bit-exacte après factorisation des deux boucles.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-54, K-53]
+  - id: K-63
+    subject: "[voxtral K-63] Libérer la tour audio après encodage (lean STT)"
+    severity: low
+    task:
+      goal: "Libérer la tour audio après encodage (lean STT)"
+      gate: "pic de décodage −0,5 Go au moins (Mini 8 bits) ; temps par requête ≤ +5 % ; sortie identique."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-63.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : pic de décodage −0,5 Go au moins (Mini 8 bits) ; temps par requête ≤ +5 % ; sortie identique.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-59]
+  - id: K-64
+    subject: "[voxtral K-64] enroll-lean (mémoire, résidence) et profils d'enrôlement mesurés"
+    severity: low
+    task:
+      goal: "enroll-lean (mémoire, résidence) et profils d'enrôlement mesurés"
+      gate: "scénario synthèse → enrôlement : `enroll-lean` −40 % de pic au moins contre `enroll-fast` (si le volet résidence est gardé), temps/époque ±5 % (A/B/B/A), codes identiques à graine fixe ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-64.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : scénario synthèse → enrôlement : `enroll-lean` −40 % de pic au moins contre `enroll-fast` (si le volet résidence est gardé), temps/époque ±5 % (A/B/B/A), codes identiques à graine fixe ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-37, K-52]
+  - id: K-65
+    subject: "[voxtral K-65] RoPE fusionnée dans l'encodeur Realtime"
+    severity: low
+    task:
+      goal: "RoPE fusionnée dans l'encodeur Realtime"
+      gate: "embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER identique sur C-moyen ; encodage −5 % au moins (A/B/B/A)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-65.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER identique sur C-moyen ; encodage −5 % au moins (A/B/B/A).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-13, K-36]
+  - id: K-66
+    subject: "[voxtral K-66] Une passe LLM avant le premier frame TTS"
+    severity: low
+    task:
+      goal: "Une passe LLM avant le premier frame TTS"
+      gate: "TTFT −5 % au moins (A/B/B/A) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-66.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : TTFT −5 % au moins (A/B/B/A) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-67
+    subject: "[voxtral K-67] Coupes TTS vectorisées"
+    severity: low
+    task:
+      goal: "Coupes TTS vectorisées"
+      gate: "indices de coupe identiques sur `TrimSilenceTests`, `TrimLeadingCarrierTests`, `TTSWarmUpCarrierTrimTests` ; phase « Audio Post-processing » ÷ 5 au moins."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-67.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : indices de coupe identiques sur `TrimSilenceTests`, `TrimLeadingCarrierTests`, `TTSWarmUpCarrierTrimTests` ; phase « Audio Post-processing » ÷ 5 au moins.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-68
+    subject: "[voxtral K-68] Réduire le coût du porteur de warm-up (décision mesurée)"
+    severity: low
+    notes: "⛔ oui — ASK-10 (compromis qualité / latence)"
+    task:
+      goal: "Réduire le coût du porteur de warm-up (décision mesurée)"
+      gate: "TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-68.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-10 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-12, K-35]
+  - id: K-69
+    subject: "[voxtral K-69] Extraction audio : mel une passe, décodage par blocs"
+    severity: low
+    task:
+      goal: "Extraction audio : mel une passe, décodage par blocs"
+      gate: "phase mel −5 % au moins, features bit-exactes ; pic mémoire de l'extraction −50 % au moins (30 min, stéréo 48 kHz), échantillons : écart max ≤ 1e-6 hors des 20 dernières ms, mel ≤ 1e-5, greedy identique ; temps ±5 %."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-69.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : phase mel −5 % au moins, features bit-exactes ; pic mémoire de l'extraction −50 % au moins (30 min, stéréo 48 kHz), échantillons : écart max ≤ 1e-6 hors des 20 dernières ms, mel ≤ 1e-5, greedy identique ; temps ±5 %.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-34]
+  - id: K-70
+    subject: "[voxtral K-70] Top-p exact en chat"
+    severity: low
+    task:
+      goal: "Top-p exact en chat"
+      gate: "chat tok/s ≥ actuel −5 % ; test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-70.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : chat tok/s ≥ actuel −5 % ; test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-45]
+  - id: K-71
+    subject: "[voxtral K-71] Compile ciblé du codec (coupe-circuit)"
+    severity: low
+    task:
+      goal: "Compile ciblé du codec (coupe-circuit)"
+      gate: "décodage −5 % au moins, bit-exact, 0 blocage sur 20 exécutions « enrôlement + synthèse » (test de K-11) ; sinon retrait."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-71.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : décodage −5 % au moins, bit-exact, 0 blocage sur 20 exécutions « enrôlement + synthèse » (test de K-11) ; sinon retrait.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-41, K-43, K-11]
+  - id: K-72
+    subject: "[voxtral K-72] Préfill STT en flux par fenêtre"
+    severity: low
+    task:
+      goal: "Préfill STT en flux par fenêtre"
+      gate: "TTFT −10 % au moins à 10 min (A/B/B/A) ; greedy identique."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-72.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : TTFT −10 % au moins à 10 min (A/B/B/A) ; greedy identique.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-42, K-56]
+  - id: K-73
+    subject: "[voxtral K-73] R&D : pas spéculatifs de remplissage (Realtime)"
+    severity: low
+    task:
+      goal: "R&D : pas spéculatifs de remplissage (Realtime)"
+      gate: "étape 1 : part de remplissage (`pad_fraction` de K-36) ≥ 50 % sur C-moyen, sinon abandon documenté ; étape 2 : passes de décodage −25 % au moins et texte identique sur C-court, C-moyen et C-long."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-73.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : étape 1 : part de remplissage (`pad_fraction` de K-36) ≥ 50 % sur C-moyen, sinon abandon documenté ; étape 2 : passes de décodage −25 % au moins et texte identique sur C-court, C-moyen et C-long.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-47, K-36]
+  - id: K-74
+    subject: "[voxtral K-74] Un seul LLM typé, chargeur amont"
+    severity: low
+    notes: "⛔ oui — ASK-23 (`LlamaModel`, `VoxtralConfig`, `PythonVoxtralConfig` publics)"
+    task:
+      goal: "Un seul LLM typé, chargeur amont"
+      gate: "parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-74.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-23 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-7, K-8, K-30, K-34]
+  - id: K-75
+    subject: "[voxtral K-75] Conformance LanguageModel: retrait ou TokenIterator"
+    severity: low
+    notes: "⛔ oui — ASK-24 (retrait = cassant théorique ; migration = L)"
+    task:
+      goal: "Conformance LanguageModel: retrait ou TokenIterator"
+      gate: "(A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-75.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-24 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : (A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-45, K-54, K-55]
+  - id: K-76
+    subject: "[voxtral K-76] Types de profils de référence par pipeline + CLI references/--reference"
+    notes: "⛔ oui — ASK-4 (périmètre de la matrice : modèles, largeur 6 bits TTS)"
+    task:
+      goal: "Types de profils de référence par pipeline + CLI references/--reference"
+      gate: "`$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-76.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-4 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-2, K-5, K-10, K-24]
+  - id: K-77
+    subject: "[voxtral K-77] Mesurer la matrice de profils STT et écrire la décision"
+    task:
+      goal: "Mesurer la matrice de profils STT et écrire la décision"
+      gate: "6 profils × 2 modèles mesurés (A/A ≤ 3 %, une ligne `BENCHMARKS.md` chacun) avec WER ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, valeur ASK-7) ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md`."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-77.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 6 profils × 2 modèles mesurés (A/A ≤ 3 %, une ligne `BENCHMARKS.md` chacun) avec WER ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, valeur ASK-7) ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md`.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-76, K-42, K-34]
+  - id: K-78
+    subject: "[voxtral K-78] Mesurer la matrice de profils Realtime"
+    task:
+      goal: "Mesurer la matrice de profils Realtime"
+      gate: "profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-78.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-76, K-38, K-46, K-9]
+  - id: K-79
+    subject: "[voxtral K-79] Décider le défaut TTS par la mesure et mesurer la matrice TTS"
+    notes: "⛔ oui — ASK-5 (politique de défaut) ; ASK-18 (licence) avant toute recommandation commerciale"
+    task:
+      goal: "Décider le défaut TTS par la mesure et mesurer la matrice TTS"
+      gate: "`TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-79.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-5, ASK-13, ASK-18 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-76, K-35, K-33, K-39]
+  - id: K-80
+    subject: "[voxtral K-80] Produire et publier les packs décidés (SHA-256, cartes)"
+    severity: low
+    notes: "⛔ oui — ASK-22 (quels packs, quel compte) ; ASK-18 pour tout pack TTS"
+    task:
+      goal: "Produire et publier les packs décidés (SHA-256, cartes)"
+      gate: "pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-80.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-16, ASK-18, ASK-19, ASK-20, ASK-22 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-8, K-77, K-78, K-79]
+  - id: K-82
+    subject: "[voxtral K-82] Remplir References.md / Weights.md avec les mesures et SHA-256"
+    severity: low
+    task:
+      goal: "Remplir References.md / Weights.md avec les mesures et SHA-256"
+      gate: "0 « à mesurer » restant dans la table de `References.md` pour les profils de `.all` (sauf largeur non disponible, marquée) ; chaque valeur cite sa ligne `BENCHMARKS.md` ; `Weights.md` : SHA-256 relevé par `curl -s https://huggingface.co/api/models/<repo>/tree/<rev>?recursive=true` pour chaque fichier de poids retenu, révision notée ; `docs/knowledge/index.md` à jour."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-82.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Prérequis hors tracker (cloud) à vérifier livrés sur la branche : K-81.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : 0 « à mesurer » restant dans la table de `References.md` pour les profils de `.all` (sauf largeur non disponible, marquée) ; chaque valeur cite sa ligne `BENCHMARKS.md` ; `Weights.md` : SHA-256 relevé par `curl -s https://huggingface.co/api/models/<repo>/tree/<rev>?recursive=true` pour chaque fichier de poids retenu, révision notée ; `docs/knowledge/index.md` à jour.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-77, K-78, K-79, K-64]
