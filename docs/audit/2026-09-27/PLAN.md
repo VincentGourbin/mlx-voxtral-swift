@@ -130,7 +130,7 @@ décroissant → 5. type de profils + CLI `references` / `--reference` → 6. me
 
 | Fiche | Objet | Source | Porte | Effort | Cible | État |
 |---|---|---|---|---|---|---|
-| K-17 | [Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire des métriques](fiches/K-17.md) | ACT-20, P-73, FA-04 | fichiers présents : `CLAUDE.md`, `BENCHMARKS.md`, `docs/Benchmarks.md`, `docs/knowledge/index.md`, `docs/knowledge/log.md`, `docs/knowledge/decisions/realtime-diagnostics-23-25.md`, ≥ 6 fichiers `docs/knowledge/pitfalls/*.md` (V-P5 stream synchrone, V-P8 même % GPU, tête liée fp32, fenêtre ignorée, clé `mode`, jeton d'arrêt hérité) ; `CLAUDE.md` contient les 3 commandes exactes de PLAN.md §5 ; glossaire : 1 définition par métrique, citée par `docs/Benchmarks.md` ; 0 chiffre sans source (relecture) ; aucun fichier `.swift` modifié (`git diff --stat`). | S | cloud | à faire |
+| K-17 | [Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire des métriques](fiches/K-17.md) | ACT-20, P-73, FA-04 | fichiers présents : `CLAUDE.md`, `BENCHMARKS.md`, `docs/Benchmarks.md`, `docs/knowledge/index.md`, `docs/knowledge/log.md`, `docs/knowledge/decisions/realtime-diagnostics-23-25.md`, ≥ 6 fichiers `docs/knowledge/pitfalls/*.md` (V-P5 stream synchrone, V-P8 même % GPU, tête liée fp32, fenêtre ignorée, clé `mode`, jeton d'arrêt hérité) ; `CLAUDE.md` contient les 3 commandes exactes de PLAN.md §5 ; glossaire : 1 définition par métrique, citée par `docs/Benchmarks.md` ; 0 chiffre sans source (relecture) ; aucun fichier `.swift` modifié (`git diff --stat`). | S | cloud | fait |
 | K-18 | [Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés)](fiches/K-18.md) | S-19, S-20, FA-02, FA-05, P-35, P-38, P-76, FV-54, ACT-52, P-31 | checklist S-20 (12 points) relue contre `9392ed1` : 0 écart ; `grep -nE 'Swift 6\.0\|Xcode 15\|macOS 14' README.md llms.txt` = 0 ; `grep -n 'true silence' README.md` = 0 ; llms.txt cite v2.2.x et les 3 pipelines ; chaque tableau de `README.md` et `docs/*benchmark*.md` / `docs/voice_cloning.md` porte définition + révision + « en session » ; FV-54 : les deux jeux de chiffres cités avec leur source ; `syntax_guard.py` : 0 erreur nouvelle sur les `.swift` touchés (commentaires seulement : `VoxtralTTSModeling.swift:480-482`, `:528`, `VoxtralVoiceEnrollment.swift:51`). | S | cloud | à faire |
 | K-19 | [Annexes Python reproductibles (conversion Core ML, recherche clonage)](fiches/K-19.md) | A-03, A-21, FA-06 | contrôle argparse par AST (sans torch) : 0 argument inconnu et 0 requis manquant pour `convert.sh` et les commandes du README ; `grep -E '>=' Scripts/*/requirements.txt` = 0 ; commit amont épinglé et contrôlé par `enroll_voice.py` ; `grep -n 'Next step' Scripts/VoiceCloningResearch/README.md` = 0 ; commande de similarité ECAPA documentée ; la validation Core ML sur Mac (parité L2 ≤ 1e-2) est portée par K-42. | S | cloud | à faire |
 | K-20 | [Hygiène git : fichiers suivis malgré `.gitignore` (cache `.serena`, WAV)](fiches/K-20.md) | S-25 | `git ls-files -ci --exclude-standard \| wc -l` = 0 (hors exceptions déclarées dans `.gitignore`) ; `.serena/` retiré (−1 790 543 o dans l'arbre suivi) ; si ASK-30 = C : −18 274 912 o (8 WAV) ; 0 lien de doc mort ; les 4 clips du corpus (`fluxforge_{short,long}_{en,fr}_6bit.wav`) toujours présents avec leur SHA-256 noté dans `docs/Benchmarks.md`. | S | cloud | à faire (⛔ ASK-30) |
@@ -464,3 +464,21 @@ Gabarits :
 - Mesure : aucune. Validation : `dispatch.py tasks.yaml` → « 76 tâche(s) valides — rien créé » ; `dispatch.py PLAN.md
   --runs-on macos-gpu --project mlx-voxtral-swift` → « 82 tâche(s) valides » mais lot faux (README, section Exécution).
 - Reste ouvert : voir le rapport de critique (pas de chiffre obtenu ; ASK inchangées).
+
+## K-17 — Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire — 2026-09-27 — validée
+- Fait : `CLAUDE.md` (57 lignes : build `xcodebuild` Release, tests Debug sans parallélisme et `TEST_RUNNER_*`,
+  `machine-check.sh`, A/B/B/A, seuil 5 %, `mlx-swift-lm` sur `main` avec la tête `ee673d6` notée, consommateurs
+  FluxForge et SongAnalysisDb, commits) ; `BENCHMARKS.md` (règle « jamais éditée », colonnes de la ligne `BENCH` de
+  K-32, aucune ligne) ; `docs/Benchmarks.md` (protocole §0, corpus §5, glossaire de 16 métriques, une définition
+  chacune, sourcée) ; `docs/knowledge/` (index OKF, log daté « audit », décision `realtime-diagnostics-23-25.md`,
+  6 pièges au format Symptôme · Cause · Correctif · Règle). Aucune mesure ; aucun `.swift` touché. Pièges cochés :
+  21 (révision notée), 9 (Debug contre Release), 33 (instrument hors chemin : `VoxtralBenchmark`).
+- Mesure : aucune (documentation, session cloud).
+- Porte observée :
+  `FILES CLAUDE.md BENCHMARKS.md docs/Benchmarks.md docs/knowledge/index.md docs/knowledge/log.md → présents (+ docs/knowledge/decisions/realtime-diagnostics-23-25.md)`
+  · `PITFALLS docs/knowledge/pitfalls/*.md : 6 (≥ 6)`
+  · `SWIFT git diff --stat -- '*.swift' : vide`
+  · `LINKS 0 lien relatif mort (42 liens vérifiés)`
+  · `CLAUDE.md commandes PLAN.md §5 (build :297, test :302-303, machine-check :309) : 4/4 lignes identiques ; 57 lignes (≤ 60)`
+  · `GLOSSARY 16 métriques, 0 doublon` ; relecture : chaque chiffre porte sa source (fichier:ligne, commit, issue ou
+  rapport d'audit) ou la mention « calcul » / « en session ».

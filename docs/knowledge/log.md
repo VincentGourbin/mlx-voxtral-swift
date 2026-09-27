@@ -1,0 +1,18 @@
+# Journal de la base de connaissances
+
+Une entrée par mesure, hypothèse réfutée, décision ou correctif, dans l'ordre d'arrivée
+(`- AAAA-MM-JJ — **titre** : …`). Source de vérité des chiffres cités ailleurs.
+
+Rappels de discipline : `machine-check.sh` sans ligne `KO` avant toute mesure ; binaire Release ; révisions résolues
+de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` recopiée dans `BENCHMARKS.md`, jamais
+éditée (voir [`CLAUDE.md`](../../CLAUDE.md), [`docs/Benchmarks.md`](../Benchmarks.md)).
+
+- 2026-09-27 — **audit** : audit `mlx-swift-audit` (phases 0 à 4) à `9392ed1` (= tag `v2.2.2`), session cloud
+  Linux sans Mac : aucun build, aucun test, aucune mesure. Livrables dans
+  [`docs/audit/2026-09-27/`](../audit/2026-09-27/README.md) : 7 rapports, profils, plan de 82 fiches, 31 décisions
+  ASK, `tasks.yaml` (76 tâches `macos-gpu`) (PLAN.md §7). Aucun chiffre publié avant cette date n'est une référence
+  (faits-et-actions.md §2.1, §2.8).
+- 2026-09-27 — **mémoire du projet (K-17)** : création de `CLAUDE.md`, `BENCHMARKS.md` (en-tête seul),
+  `docs/Benchmarks.md` (protocole, corpus, glossaire), de la décision
+  [#23-#25 caduques](decisions/realtime-diagnostics-23-25.md) et de six pièges (index : [`index.md`](index.md)).
+  Aucune mesure.
