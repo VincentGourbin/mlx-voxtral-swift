@@ -639,3 +639,16 @@ Gabarits :
   le disque, `.gitignore:119` les couvre déjà). Rien fait sur les WAV : ASK-30 sans réponse.
 - Porte observée : `git ls-files -ci --exclude-standard | wc -l` : 24 → 22 (reste : les 22 WAV de ASK-30).
 
+## Dispatch des lots 1 à 3 — 2026-09-28 — fait
+- Fait : `dispatch.py tasks.yaml --only K-1…K-16,K-22…K-37 --emit-json --issue-map map.json` (task-dispatch de
+  claude-skills 0.5.0, mode sans gh), 6 vagues créées par le MCP GitHub dans l'ordre des dépendances ; carte locale →
+  issue dans [`map.json`](map.json) (32 tâches). Aller-retour vérifié sur #566 (corps identique à l'opération
+  émise) ; titres relus (aucun `&gt;`).
+- Porte observée : `32 tâche(s) valides` · `Vagues : 6` · `Naissent blocked (⛔) : 9` (K-5, K-9, K-10, K-13, K-22,
+  K-28, K-30, K-31, K-32) · issues action-plans #558 à #589 · `Erreurs : aucune`.
+- Lots 4 à 6 (44 fiches) volontairement **non créés** : leurs portes dépendent des baselines. Tâche de planification
+  **#590** (`runs-on:linux`, `depends_on` #586-#589 avec `depends_on_status: verified`) : recaler, retirer ou
+  dispatcher K-38…K-82 une fois K-34…K-37 vérifiées.
+- Chemin critique : K-32 (instrument, ⛔ ASK-26) dépend de K-22 (⛔ ASK-28) ; sans ces deux réponses, aucune
+  baseline (K-33…K-37) ne peut démarrer.
+
