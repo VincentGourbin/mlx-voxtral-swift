@@ -58,7 +58,7 @@ Relecture contre le `SKILL.md` de `mlx-swift-audit` (phases 0-4 et règles). Cor
 |---|---|---|
 | [`scan.md`](scan.md) | 1 | sortie de `scan.py` : volumes, dépendances, motifs, absence de `BENCHMARKS.md` |
 | [`patterns-scan.md`](patterns-scan.md) | 1 | sortie de `apply.py scan` (catalogue MLX-001…MLX-015) |
-| [`patterns-verdicts.md`](patterns-verdicts.md) | 2 | verdicts par occurrence ; 13 constats relus, 12 gardés, 1 écarté ; MLX-001, 005, 007, 008, 009, 011, 013, 014, 015 conformes ou sans objet ; fiches MLX-016…MLX-020 proposées au skill (ids provisoires : correspondance avec le catalogue mlx-swift 0.3.0 en tête du rapport) |
+| [`patterns-verdicts.md`](patterns-verdicts.md) | 2 | verdicts par occurrence ; 13 constats relus, 12 gardés, 1 écarté ; MLX-001, 005, 007, 008, 009, 011, 013, 014, 015 conformes ou sans objet ; fiches MLX-016…MLX-020 proposées au skill (ids provisoires : correspondance avec le catalogue mlx-swift 0.4.0 en tête du rapport) |
 | [`faits-et-actions.md`](faits-et-actions.md) | 0 | cadrage, consommateurs de l'API, 44 faits `FV-xx`, 52 actions `ACT-xx` (issues, PR, plans, TODO, docs), 9 constats `FA-xx`, capitalisation |
 | [`audit-stabilite.md`](audit-stabilite.md) | 2 | 29 constats `S-xx` (12 gardés tels quels, 17 amendés, 0 écarté) |
 | [`audit-annexes-serveur.md`](audit-annexes-serveur.md) | 2 | 23 constats `A-xx` : enrôlement, Core ML, app, scripts, serveur (13 amendés) |
@@ -122,7 +122,7 @@ sont lus nulle part (P-35, K-48).
 tâche Mac commence par `git pull` puis lit sa fiche. Il est commité depuis `22a117f` : pousser les derniers commits
 avant de dispatcher.
 
-Depuis claude-skills 0.5.0 (agent-tracker 0.2.0, contrat de tableau partagé avec `mlx-swift-audit`), `tasks.yaml` et
+Depuis claude-skills 0.6.0 (agent-tracker 0.2.0, contrat de tableau partagé avec `mlx-swift-audit`), `tasks.yaml` et
 `PLAN.md` donnent le même lot (rejoué le 2026-09-28) :
 
 ```bash

@@ -1,11 +1,12 @@
 # Verdicts mlx-swift-patterns — Voxtral @ `9392ed1` (2026-09-27)
 
-> **Identifiants définitifs (2026-09-28, claude-skills mlx-swift 0.3.0).** Les candidats du §5 ont été intégrés
-> au catalogue : « MLX-016 » (`cacheLimit = Int.max`) → **MLX-010** ; « MLX-019 » (production synchrone) →
-> variante de **MLX-003** ; MLX-017, MLX-018 et MLX-020 gardent leur numéro. Dans le catalogue final, MLX-016 =
-> jetons d'arrêt codés en dur, MLX-019 = fenêtre du cache ≠ architecture, MLX-021…024 = tokenizer de secours,
-> `consolidated.safetensors`, ABBA compile × vjp, mode de quantification. Ce rapport garde les ids provisoires
-> (instantané du 2026-09-27) ; PLAN.md et les fiches citent les ids définitifs.
+> **Identifiants définitifs (2026-09-28, claude-skills mlx-swift 0.4.0).** Les candidats du §5 ont été intégrés
+> au catalogue : « MLX-016 » (`cacheLimit = Int.max`) → **MLX-010** ; « MLX-017 » → **MLX-018** ; « MLX-018 » →
+> **MLX-019** ; « MLX-019 » (production synchrone) → variante de **MLX-003** ; « MLX-020 » → **MLX-021**
+> (décalage d'un rang : MLX-016 du catalogue = experts MoE non quantifiés, publié par mlx-swift 0.3.0). Dans le
+> catalogue final, MLX-017 = jetons d'arrêt codés en dur, MLX-020 = fenêtre du cache ≠ architecture, MLX-022…025 =
+> tokenizer de secours, `consolidated.safetensors`, ABBA compile × vjp, mode de quantification. Ce rapport garde
+> les ids provisoires (instantané du 2026-09-27) ; PLAN.md et les fiches citent les ids définitifs.
 
 > **Vérification croisée : 13 constats relus, 12 gardés, 1 écarté, 8 amendés.** Relecture adverse du 2026-09-27 :
 > chaque `fichier:ligne` relu à `9392ed1` ; règles relues dans mlx `1f8e74e`, mlx-swift `9019419` (et tag `0.31.6`),

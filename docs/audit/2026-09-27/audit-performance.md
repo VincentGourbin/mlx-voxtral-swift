@@ -209,7 +209,7 @@ Sévérités **après** vérification croisée. Statut : V = VÉRIFIÉ (mécanis
 | A-12 | annexes | Gain ANE annoncé non mesuré, unités de calcul contradictoires | K-42 |
 | M-07 | modèles | La précision de l'encodeur est le premier levier ASR, sans effet en backend `.auto` | K-42, K-77 |
 | MLX-002 | patterns | 3 occurrences réelles (masques), 22 voulues, 5 faux positifs ; les vraies fuites ne sont pas des littéraux | K-3, K-39 |
-| MLX-018, MLX-003 (variante synchrone ; « MLX-019 » provisoire), MLX-020 | patterns | Masque maison, stream à production synchrone, absence de `withError` | K-3, K-12, K-1 |
+| MLX-019, MLX-003 (variante synchrone ; « MLX-019 » provisoire), MLX-021 | patterns | Masque maison, stream à production synchrone, absence de `withError` | K-3, K-12, K-1 |
 
 ## 4. Protocole commun
 
