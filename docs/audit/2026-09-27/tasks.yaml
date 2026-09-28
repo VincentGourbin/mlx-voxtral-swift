@@ -79,6 +79,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-8 (sémantique de `maxTokens`) avant de changer un défaut public"
     task:
+      needs_decision: [ASK-8, ASK-9]
       goal: "Supprimer les troncatures silencieuses (maxTokens STT = f(durée), boucle Realtime bornée par l'audio)"
       gate: "STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur)."
       instructions: |
@@ -144,6 +145,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-17 (corriger l'entrée plutôt que la retirer ; retrait = cassant)"
     task:
+      needs_decision: [ASK-17]
       goal: "Realtime: entrée mistralai originale chargeable (params.json + consolidated), id strict"
       gate: "2 fixtures de décodage vertes (`config.json` transformers ignoré → config Mistral depuis `params.json`, `quantization == nil`) ; téléchargement de `realtime-4b` = 8,87 Go ± 1 % (au lieu de 17,72) ; chargement `verify: [.all]` : 0 clé manquante ou en trop ; transcription C-court EN identique au pack `realtime-4b-fp16` (ou WER ≤ +0,2 pt) ; test « id inconnu → erreur ; nil → défaut »."
       instructions: |
@@ -163,6 +165,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-15 (dépôt Small 8 bits retenu)"
     task:
+      needs_decision: [ASK-15]
       goal: "repoId STT: une seule source (registre), résolution par id, chargement hors ligne"
       gate: "test « chaque `VoxtralPipeline.Model` existe dans `ModelRegistry` avec le même repoId » vert (rouge avant) ; modèle Small 8 bits téléchargé par l'app puis `loadModel` en mode avion → chargé, 0 octet réseau (`nettop` ou Little Snitch) ; un seul dossier `small-8bit` sur disque."
       instructions: |
@@ -211,6 +214,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-11 (tolérance) et ASK-12 (référence mlx-audio) avant la porte de parité"
     task:
+      needs_decision: [ASK-11, ASK-12]
       goal: "Realtime: fenêtres glissantes encodeur (750) et décodeur (8192) appliquées"
       gate: "embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min)."
       instructions: |
@@ -272,6 +276,7 @@ tasks:
     subject: "[voxtral K-22] Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
     notes: "⛔ oui — ASK-28 (rester sur `main` + `Package.resolved` suivi, ou passer au prochain tag avec FluxForge)"
     task:
+      needs_decision: [ASK-28]
       goal: "Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
       gate: "`xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine)."
       instructions: |
@@ -365,6 +370,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-27 (ressource `VoxtralEncoderFull.mlmodelc` embarquée ou téléchargée)"
     task:
+      needs_decision: [ASK-27]
       goal: "Build depuis un clone neuf, empaquetage Release, démo et RuntimeBeacon robustes"
       gate: "`git clone` dans un dossier neuf + `xcodebuild` Release des 4 schémas : `** BUILD SUCCEEDED **` sans « Invalid Resource » ; app empaquetée (script réécrit en `xcodebuild` Release + bundles) lancée : transcrit C-court EN ; test FFmpeg : 1 Mo sur stderr → processus terminé ; annulation → processus tué < 1 s ; nom `../x` refusé avant l'enrôlement, écrasement demandé explicitement ; 1 000 `update` concurrents d'un `end` → 0 manifeste résiduel."
       instructions: |
@@ -399,6 +405,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-23 (dépréciation 2.3 puis suppression 3.0, ou suppression directe)"
     task:
+      needs_decision: [ASK-23]
       goal: "Déprécier l'API legacy/morte publique (2.3)"
       gate: "liste S-13 lot 2 + S-14 entièrement annotée (grep) ; build de la bibliothèque sans avertissement interne (aucun appel interne à du déprécié) ; recherche GitHub `user:VincentGourbin` sur chaque symbole = 0 usage (relue) et, si FluxForge est présent, son build n'affiche aucun avertissement de dépréciation Voxtral ; CHANGELOG (section 2.3) listant chaque symbole."
       instructions: |
@@ -418,6 +425,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-25 (liste des symboles publics conservés ; version 3.0)"
     task:
+      needs_decision: [ASK-25]
       goal: "Revue d'API publique (3.0, sur liste validée)"
       gate: "liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte."
       instructions: |
@@ -437,6 +445,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-26 (sort de `VoxtralBenchmark` : réorienté vers `bench` ou retiré)"
     task:
+      needs_decision: [ASK-26]
       goal: "Instrument VoxtralCLI bench validé en A/A (≤3 %), JSON par mesure"
       gate: "A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s."
       instructions: |
@@ -533,6 +542,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-11 (tolérance de parité : texte identique ou WER ≤ réf + 0,2 pt)"
     task:
+      needs_decision: [ASK-11]
       goal: "Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
       gate: "audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11)."
       instructions: |
@@ -552,6 +562,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-13 (écoute à l'aveugle ou porte objective seule) avant de conclure"
     task:
+      needs_decision: [ASK-11, ASK-13]
       goal: "FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
       gate: "pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige."
       instructions: |
@@ -602,6 +613,7 @@ tasks:
     subject: "[voxtral K-42] Décider backend et précision d'encodeur STT par une matrice mesurée"
     notes: "⛔ oui — ASK-6 (changer le défaut `.auto` → `.mlx` si la règle le dicte : impact FluxForge)"
     task:
+      needs_decision: [ASK-6]
       goal: "Décider backend et précision d'encodeur STT par une matrice mesurée"
       gate: "règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout."
       instructions: |
@@ -696,6 +708,7 @@ tasks:
     subject: "[voxtral K-48] Rendre flowSteps/cfgAlpha effectifs et balayer T21"
     notes: "⛔ oui — ASK-13 pour retenir une valeur < 8 (écoute)"
     task:
+      needs_decision: [ASK-13]
       goal: "Rendre flowSteps/cfgAlpha effectifs et balayer T21"
       gate: "câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté."
       instructions: |
@@ -850,6 +863,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-13 (écoute A/B) pour garder le bf16"
     task:
+      needs_decision: [ASK-13]
       goal: "Codec TTS bf16 + invariants"
       gate: "décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39)."
       instructions: |
@@ -900,6 +914,7 @@ tasks:
     subject: "[voxtral K-61] Pénalité de répétition décidée par le WER"
     notes: "⛔ oui — ASK-9 (changer un défaut public quand la porte l'emporte)"
     task:
+      needs_decision: [ASK-9]
       goal: "Pénalité de répétition décidée par le WER"
       gate: "valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue."
       instructions: |
@@ -1015,6 +1030,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-10 (compromis qualité / latence)"
     task:
+      needs_decision: [ASK-10]
       goal: "Réduire le coût du porteur de warm-up (décision mesurée)"
       gate: "TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée."
       instructions: |
@@ -1114,6 +1130,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-23 (`LlamaModel`, `VoxtralConfig`, `PythonVoxtralConfig` publics)"
     task:
+      needs_decision: [ASK-23]
       goal: "Un seul LLM typé, chargeur amont"
       gate: "parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`)."
       instructions: |
@@ -1133,6 +1150,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-24 (retrait = cassant théorique ; migration = L)"
     task:
+      needs_decision: [ASK-24]
       goal: "Conformance LanguageModel: retrait ou TokenIterator"
       gate: "(A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton."
       instructions: |
@@ -1151,6 +1169,7 @@ tasks:
     subject: "[voxtral K-76] Types de profils de référence par pipeline + CLI references/--reference"
     notes: "⛔ oui — ASK-4 (périmètre de la matrice : modèles, largeur 6 bits TTS)"
     task:
+      needs_decision: [ASK-4]
       goal: "Types de profils de référence par pipeline + CLI references/--reference"
       gate: "`$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test)."
       instructions: |
@@ -1199,6 +1218,7 @@ tasks:
     subject: "[voxtral K-79] Décider le défaut TTS par la mesure et mesurer la matrice TTS"
     notes: "⛔ oui — ASK-5 (politique de défaut) ; ASK-18 (licence) avant toute recommandation commerciale"
     task:
+      needs_decision: [ASK-5, ASK-13, ASK-18]
       goal: "Décider le défaut TTS par la mesure et mesurer la matrice TTS"
       gate: "`TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun."
       instructions: |
@@ -1218,6 +1238,7 @@ tasks:
     severity: low
     notes: "⛔ oui — ASK-22 (quels packs, quel compte) ; ASK-18 pour tout pack TTS"
     task:
+      needs_decision: [ASK-16, ASK-18, ASK-19, ASK-20, ASK-22]
       goal: "Produire et publier les packs décidés (SHA-256, cartes)"
       gate: "pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour."
       instructions: |

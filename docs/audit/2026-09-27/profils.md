@@ -289,7 +289,7 @@ public struct VoxtralSTTReferenceProfile: Sendable, Identifiable {
 //
 // Pas de applyGlobalPolicy() en v0 : aucun réglage process-wide n'existe encore. En v1 (K-52), il sera OPT-IN et
 // restaurera la valeur précédente à unload() : une bibliothèque embarquée (FluxForge) ne doit pas imposer
-// Memory.cacheLimit à son hôte (P-42, MLX-016).
+// Memory.cacheLimit à son hôte (P-42, MLX-010).
 ```
 
 ## 8. Brouillon de `docs/References.md` (d'après `templates/References.md.tmpl`)
