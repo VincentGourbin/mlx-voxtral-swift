@@ -132,7 +132,7 @@ décroissant → 5. type de profils + CLI `references` / `--reference` → 6. me
 |---|---|---|---|---|---|---|
 | K-17 | [Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire des métriques](fiches/K-17.md) | ACT-20, P-73, FA-04 | fichiers présents : `CLAUDE.md`, `BENCHMARKS.md`, `docs/Benchmarks.md`, `docs/knowledge/index.md`, `docs/knowledge/log.md`, `docs/knowledge/decisions/realtime-diagnostics-23-25.md`, ≥ 6 fichiers `docs/knowledge/pitfalls/*.md` (V-P5 stream synchrone, V-P8 même % GPU, tête liée fp32, fenêtre ignorée, clé `mode`, jeton d'arrêt hérité) ; `CLAUDE.md` contient les 3 commandes exactes de PLAN.md §5 ; glossaire : 1 définition par métrique, citée par `docs/Benchmarks.md` ; 0 chiffre sans source (relecture) ; aucun fichier `.swift` modifié (`git diff --stat`). | S | cloud | fait |
 | K-18 | [Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés)](fiches/K-18.md) | S-19, S-20, FA-02, FA-05, P-35, P-38, P-76, FV-54, ACT-52, P-31 | checklist S-20 (12 points) relue contre `9392ed1` : 0 écart ; `grep -nE 'Swift 6\.0\|Xcode 15\|macOS 14' README.md llms.txt` = 0 ; `grep -n 'true silence' README.md` = 0 ; llms.txt cite v2.2.x et les 3 pipelines ; chaque tableau de `README.md` et `docs/*benchmark*.md` / `docs/voice_cloning.md` porte définition + révision + « en session » ; FV-54 : les deux jeux de chiffres cités avec leur source ; `syntax_guard.py` : 0 erreur nouvelle sur les `.swift` touchés (commentaires seulement : `VoxtralTTSModeling.swift:480-482`, `:528`, `VoxtralVoiceEnrollment.swift:51`). | S | cloud | fait |
-| K-19 | [Annexes Python reproductibles (conversion Core ML, recherche clonage)](fiches/K-19.md) | A-03, A-21, FA-06 | contrôle argparse par AST (sans torch) : 0 argument inconnu et 0 requis manquant pour `convert.sh` et les commandes du README ; `grep -E '>=' Scripts/*/requirements.txt` = 0 ; commit amont épinglé et contrôlé par `enroll_voice.py` ; `grep -n 'Next step' Scripts/VoiceCloningResearch/README.md` = 0 ; commande de similarité ECAPA documentée ; la validation Core ML sur Mac (parité L2 ≤ 1e-2) est portée par K-42. | S | cloud | à faire |
+| K-19 | [Annexes Python reproductibles (conversion Core ML, recherche clonage)](fiches/K-19.md) | A-03, A-21, FA-06 | contrôle argparse par AST (sans torch) : 0 argument inconnu et 0 requis manquant pour `convert.sh` et les commandes du README ; `grep -E '>=' Scripts/*/requirements.txt` = 0 ; commit amont épinglé et contrôlé par `enroll_voice.py` ; `grep -n 'Next step' Scripts/VoiceCloningResearch/README.md` = 0 ; commande de similarité ECAPA documentée ; la validation Core ML sur Mac (parité L2 ≤ 1e-2) est portée par K-42. | S | cloud | fait |
 | K-20 | [Hygiène git : fichiers suivis malgré `.gitignore` (cache `.serena`, WAV)](fiches/K-20.md) | S-25 | `git ls-files -ci --exclude-standard \| wc -l` = 0 (hors exceptions déclarées dans `.gitignore`) ; `.serena/` retiré (−1 790 543 o dans l'arbre suivi) ; si ASK-30 = C : −18 274 912 o (8 WAV) ; 0 lien de doc mort ; les 4 clips du corpus (`fluxforge_{short,long}_{en,fr}_6bit.wav`) toujours présents avec leur SHA-256 noté dans `docs/Benchmarks.md`. | S | cloud | à faire (⛔ ASK-30) |
 | K-21 | [Tracker action-plans : solder #71, #307, #349 et créer le plan upstream-blocker mlx-swift-lm (> 3.31.4)](fiches/K-21.md) | FA-01, FA-02, ACT-02, ACT-03, ACT-04, ACT-07, ACT-39, ACT-41, S-18 | 0 plan `project:mlx-voxtral-swift` en `status:ready-to-act` ; #71, #307, #349 fermés `status:verified`, chacun avec le commentaire-preuve de faits-et-actions.md §3.9 ; 1 plan `kind:upstream-blocker` `github_release ml-explore/mlx-swift-lm semver_gt "3.31.4"` en `monitoring` — **après** avoir vérifié que l'amont publie des GitHub Releases (sinon : source `github_tag` ou plan `manual`, et retour skill) ; lien du plan ajouté au commentaire de `Package.swift:46-51` au prochain commit de code (K-22). | S | cloud | à faire (⛔ ASK-31) |
 | K-22 | [Package : dépendances élaguées, résolution reproductible, plancher de toolchain, profiler épinglé](fiches/K-22.md) | S-15, S-18, S-19, P-74, FA-02 | `xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine). | S | macos-gpu | à faire (⛔ ASK-28) |
@@ -540,3 +540,50 @@ Gabarits :
 - Hors périmètre (note) : littéraux de version à générer depuis le tag et résolution `from: "2.2.2"` chez un projet
   témoin (FA-02, volet macos-gpu) ne sont portés par aucune fiche ; `docs/voice_cloning.md` emploie `voxtral …` pour
   `VoxtralCLI`.
+
+## K-19 — Annexes Python reproductibles (conversion Core ML, recherche clonage) — 2026-09-27 — validée
+- Fait : `Scripts/CoreMLConversion` : `convert.sh` sans `--include-projector`, `--variant mini` passé aux deux
+  scripts, `pip install huggingface_hub` non épinglé retiré, `hf download --revision 3060fe3…` ; README (Quick Start =
+  `convert.sh`, étapes 1-5 rejouables, Python 3.11-3.13, tableau « un modèle par variante » avec la commande Small
+  `--revision da5b424…`, chiffres « ~150 ms / ~500 ms » annotés A-12/F-12 → K-42, octets du téléchargement d'après
+  `docs/Weights.md`) ; `requirements.txt` épinglé (`torch==2.7.0` : `_TORCH_MAX_VERSION = "2.7.0"`,
+  `coremltools/_deps/__init__.py:158` du wheel 9.0, avertissement dès 2.7.1 `:33-39` ; `coremltools==9.0` ;
+  numpy 2.3.5 et safetensors 0.7.0 = dernières versions à `1944576` ; `huggingface_hub==1.22.0` car 1.2.4 ne démarre
+  plus sur un venv neuf, « No module named 'click' », constaté en session). `Scripts/VoiceCloningResearch` :
+  commit amont `ac3e3f3` (tête de `main`, blobs du patch `50b812c`/`2ee2720` identiques, `git apply --check` OK)
+  épinglé dans le README et contrôlé par `enroll_voice.py` (`UPSTREAM_COMMIT`, `check_workspace`) ;
+  `torch.load(weights_only=True)` (`codes_to_embeddings.py:234` sauve un tenseur nu) ; `hf download --revision
+  b81be46…` ; `requirements.txt` = dernières versions PyPI à `f9d0ec9` (torch 2.12.1, cohérent avec « verified torch
+  2.12 »), + `torchcodec==0.14.0` (`torchaudio.load` 2.11 passe par torchcodec, `torchaudio/__init__.py:9`, `:86`) et
+  FFmpeg au README ; section « Python and Swift paths » (pertes : Python 0,5 L1 + STFT + log-mel + MFCC + 0,5
+  locuteur ECAPA avec gradients, `training_script.py:613-633` ; Swift 0,5 L1 + STFT + log-mel,
+  `VoxtralVoiceEnrollment.swift:43-45`, `:556-568` ; températures différentes ; 0,56-0,59 à 8 s contre 0,69/0,72 à
+  8/16 s : aucune conclusion de supériorité, A-21) ; commande de similarité ECAPA (`SpeakerRecognition.verify_files`,
+  `speechbrain/spkrec-ecapa-voxceleb` révision `0f99f2d…`) ; « Next step » remplacé par « Swift/MLX port (done) »
+  (`bd59931`, PR #34). En-tête (commentaire) de `VoxtralVoiceEnrollment.swift` : pertes retirées et température
+  confrontées. Révisions Hub : chaque SHA relevé dans des dépôts tiers épinglés (recherche de code GitHub), puis
+  contrôlé par le connecteur Hugging Face : révision existante (une révision fictive rend `exists: false`) et listing
+  identique à `main` (2026-09-28). Pièges cochés : V-P9 (la voie Python n'est pas une référence de gradients : ligne
+  « Spectral gradients », aucun classement des deux voies).
+- Mesure : aucune (scripts et documentation, session cloud). Parité Core ML sur Mac : K-42.
+- Porte observée :
+  `ARGPARSE convert.sh : 0 inconnu / 0 manquant · README : 0 / 0` (7 invocations : 2 de `convert.sh`, 4 du README
+  Core ML dont Small, 1 du README recherche ; avant : `convert.sh : 1 inconnu / 0 manquant · README : 2 / 2`)
+  · `PINNED requirements : 0 '>='` (`grep -E '>=' Scripts/*/requirements.txt` : 0 ligne ; 15 lignes, toutes `==`)
+  · `GREP 'Next step' : 0`
+  · `ARGPARSE enroll_voice.py → upstream : 0 inconnu / 0 manquant` (2 appels, contre l'amont à `ac3e3f3`)
+  · `HF download : 4 commande(s), 0 option inconnue, 4/4 avec --revision` (options de `hf download --help`,
+  huggingface_hub 1.22.0)
+  · `CHECK_WORKSPACE` : amont à `f3070b4` → refus « not at the pinned commit » ; `ac3e3f3` sans patch → refus « lacks
+  the MPS gradient fixes » ; `ac3e3f3` + patch → OK
+  · `RESOLVE uv pip compile --python-platform aarch64-apple-darwin` : Core ML py3.11 et 3.13 OK (3.10, 3.14 : pas de
+  solution) ; recherche (macOS 14) py3.12 et 3.14 OK (3.11 : pas de solution)
+  · `SYNTAX_GUARD 1 fichier(s) Swift, 0 erreur(s) d'analyse nouvelle(s)` (`git diff -U0 -- '*.swift'` : 0 ligne
+  modifiée hors commentaire)
+  · ECAPA : snippet du README analysé (`ast.parse` OK), `SpeakerRecognition.verify_files` et
+  `FetchConfig(revision=…)` présents dans le wheel speechbrain 1.1.0.
+- Hors périmètre (note) : `convert_to_coreml_ane.py:314-316` affiche encore `VoxtralCLI benchmark-coreml` (signalé au
+  README, fichier hors liste) ; section « Using in Swift » du README Core ML (`VoxtralConfiguration`,
+  `VoxtralGenerator(configuration:)`) non vérifiée ; dépendances transitives non verrouillées ; `hf download`
+  télécharge aussi `consolidated.safetensors` (≈ moitié du volume) ; métadonnées de version et SHA-256 du
+  `weight.bin` produit (A-03) non portés par cette fiche.

@@ -7,11 +7,22 @@
  * relaxed for gradients via Gumbel-Softmax + straight-through estimators;
  * the decoder weights never change.
  *
- * Port of upstream/training_script.py. Two deliberate differences:
+ * Port of upstream/training_script.py (MarvinRomson/voxtral-tts-codes-for-audio
+ * at ac3e3f3, the commit pinned by Scripts/VoiceCloningResearch). Differences:
  *   - Spectral losses run natively in MLX (no PyTorch MPS torch.stft
  *     backward bug — see VoxtralEnrollmentLosses).
  *   - Adam is implemented inline over the two free parameter tensors
  *     rather than through a Module optimizer.
+ *   - Loss set: 0.5 L1 + 1 multi-resolution STFT + 1 log-mel only
+ *     (Config weights, lossFn in optimizeCore). The Python run (enroll_voice.py)
+ *     also minimizes an MFCC loss (weight 1) and a speaker loss
+ *     1 - cos(ECAPA) whose gradients flow through ECAPA (weight 0.5)
+ *     (training_script.py:613-633 at ac3e3f3); both are dropped here.
+ *   - Gumbel temperature 2.0, x0.99 per epoch, floor 0.3 (Config) versus
+ *     1.0, x0.995, floor 0.5 upstream (training_script.py:770-775).
+ * The published similarities of the two paths were measured at different
+ * durations, epochs and revisions: they do not rank the two loss sets
+ * (Scripts/VoiceCloningResearch/README.md, "Python and Swift paths").
  *
  * Output is a voice embedding [T+1, 3072] (END_AUDIO frame appended),
  * ready for VoxtralTTSPipeline.synthesize(text:voiceEmbedding:).

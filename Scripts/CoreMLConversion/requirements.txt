@@ -1,8 +1,23 @@
 # Requirements for Core ML conversion scripts
-# Install with: pip install -r requirements.txt
-
-torch>=2.0.0
-coremltools>=7.0
-safetensors>=0.4.0
-numpy>=1.24.0
-huggingface_hub>=0.20.0
+# Install with: pip install -r requirements.txt   (convert.sh does it in .venv)
+#
+# Every version is pinned (audit 2026-09-27, A-03 / fiche K-19). Python 3.11-3.13:
+# the pinned torch 2.7.0 and coremltools 9.0 publish macOS arm64 wheels up to 3.13,
+# numpy 2.3.5 requires 3.11 or later (PyPI).
+#
+# - torch 2.7.0: coremltools 9.0 sets _TORCH_MAX_VERSION = "2.7.0"
+#   (coremltools/_deps/__init__.py:158 in the 9.0 wheel) and logs "has not been
+#   tested with coremltools" for any newer torch, 2.7.1 included (:33-39, :164).
+# - coremltools 9.0: latest release on PyPI (checked 2026-09-28).
+# - safetensors, numpy: latest releases when these scripts were added
+#   (commit 1944576, 2026-01-06).
+# - huggingface_hub 1.22.0: provides `hf download --revision` (convert.sh step 3,
+#   checked with `hf download --help`); the 2026-01-06 release (1.2.4) no longer
+#   starts on a fresh venv ("No module named 'click'", checked 2026-09-28), and
+#   2.0.0 dropped `huggingface-cli`.
+# Transitive dependencies are not locked.
+torch==2.7.0
+coremltools==9.0
+safetensors==0.7.0
+numpy==2.3.5
+huggingface_hub==1.22.0

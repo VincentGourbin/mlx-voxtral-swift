@@ -1,9 +1,25 @@
-torch>=2.12
-torchaudio
-accelerate
-speechbrain
-soundfile
-safetensors
-numpy
-einops
-huggingface_hub
+# Research annex dependencies. Every version is pinned (audit 2026-09-27, A-21 / fiche K-19).
+#
+# Pins = latest PyPI release at commit f9d0ec9 (2026-07-08), the commit that added this file
+# with torch 2.12 (README, "verified torch 2.12"); the exact versions of the original research
+# venv were not recorded. Python 3.12-3.14: numpy 2.5.1 requires 3.12 or later, the pinned
+# torch / torchaudio / torchcodec publish macOS arm64 wheels up to 3.14 (PyPI).
+#
+# - torchaudio 2.11.0: there is no 2.12 release; 2.11.0 declares no torch requirement.
+# - torchcodec 0.14.0 (not in the original file): torchaudio 2.11 `load`, called by
+#   upstream training_script.py:302, delegates to torchcodec (torchaudio/__init__.py:9, :86
+#   in the 2.11.0 wheel); torchcodec 0.12-0.15 support torch 2.11 and later (torchcodec
+#   README) and decode audio with the system FFmpeg (README "Setup").
+# - speechbrain 1.1.0 loads audio with soundfile (speechbrain/dataio/audio_io.py) and takes
+#   a Hub revision through FetchConfig (ECAPA similarity command, README).
+# Transitive dependencies are not locked.
+torch==2.12.1
+torchaudio==2.11.0
+torchcodec==0.14.0
+accelerate==1.14.0
+speechbrain==1.1.0
+soundfile==0.14.0
+safetensors==0.8.0
+numpy==2.5.1
+einops==0.8.2
+huggingface_hub==1.22.0

@@ -40,8 +40,28 @@ HERE = Path(__file__).resolve().parent
 UPSTREAM = HERE / "upstream"
 WEIGHTS = HERE / "voxtral-tts-weights"
 
+# Pinned upstream commit (MarvinRomson/voxtral-tts-codes-for-audio, 2026-04-06):
+# patches/upstream_fixes.patch applies to it (blobs 50b812c, 2ee2720) and the
+# Python/Swift loss comparison in README.md refers to it.
+UPSTREAM_URL = "https://github.com/MarvinRomson/voxtral-tts-codes-for-audio.git"
+UPSTREAM_COMMIT = "ac3e3f3c17244e4a6811c0168fc2b80bd4b3b332"
+# Pinned Hub revision of mistralai/Voxtral-4B-TTS-2603 (listing identical to main
+# on 2026-09-28).
+WEIGHTS_REVISION = "b81be46c3777f88621676791b512bb01dc1cb970"
+
 SAMPLING_RATE = 24_000
 FRAME_RATE = 12.5  # codec frames per second
+
+
+def upstream_head() -> str:
+    """Commit checked out in upstream/ (git rev-parse HEAD), or a reason."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown (not a git checkout, or git missing)"
 
 
 def check_workspace() -> None:
@@ -49,8 +69,17 @@ def check_workspace() -> None:
     if not (UPSTREAM / "training_script.py").exists():
         sys.exit(
             "upstream/ missing. Run:\n"
-            "  git clone https://github.com/MarvinRomson/voxtral-tts-codes-for-audio.git upstream\n"
+            f"  git clone {UPSTREAM_URL} upstream\n"
+            f"  git -C upstream checkout {UPSTREAM_COMMIT}\n"
             "  git -C upstream apply ../patches/upstream_fixes.patch"
+        )
+    head = upstream_head()
+    if head != UPSTREAM_COMMIT:
+        sys.exit(
+            f"upstream/ is at {head}, not at the pinned commit {UPSTREAM_COMMIT}.\n"
+            "Run:  git -C upstream stash   # only if the patch is already applied\n"
+            f"      git -C upstream checkout {UPSTREAM_COMMIT}\n"
+            "      git -C upstream apply ../patches/upstream_fixes.patch"
         )
     if "MPS workaround" not in (UPSTREAM / "training_script.py").read_text():
         sys.exit(
@@ -61,7 +90,8 @@ def check_workspace() -> None:
     if not (WEIGHTS / "consolidated.safetensors").exists():
         sys.exit(
             "voxtral-tts-weights/ missing. Run:\n"
-            "  .venv/bin/hf download mistralai/Voxtral-4B-TTS-2603 --local-dir voxtral-tts-weights"
+            "  .venv/bin/hf download mistralai/Voxtral-4B-TTS-2603 "
+            f"--revision {WEIGHTS_REVISION} --local-dir voxtral-tts-weights"
         )
 
 
@@ -164,7 +194,9 @@ def main() -> None:
     print("[4/4] Exporting safetensors...")
     from safetensors.torch import save_file
 
-    emb = torch.load(embedding_pt, map_location="cpu", weights_only=False)
+    # codes_to_embeddings.py saves a plain tensor (torch.save(voice_emb, ...),
+    # :234 at the pinned commit): no pickle beyond tensors is needed.
+    emb = torch.load(embedding_pt, map_location="cpu", weights_only=True)
     if isinstance(emb, dict):
         emb = next(iter(emb.values()))
     out = args.output_dir / f"{args.name}.safetensors"
