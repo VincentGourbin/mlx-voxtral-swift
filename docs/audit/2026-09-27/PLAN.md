@@ -6,9 +6,7 @@
 > [`fiches/`](fiches/). Tâches Mac : [`tasks.yaml`](tasks.yaml) (format task-dispatch).
 >
 > **82 fiches** : 6 exécutables en cloud (documentation, scripts Python, tracker), 76 sur `macos-gpu` (build, tests,
-> mesure ou écoute). Aucune n'était exécutée à la fin de la phase 4 (2026-09-27, règle du skill : on s'arrête là).
-> État courant : colonne État du §3 et journal §7 (2026-09-28 : K-17, K-81, K-18, K-19 et K-21 faites, K-20
-> partielle ; aucune fiche `macos-gpu` dispatchée).
+> mesure ou écoute). Aucune n'était exécutée à la fin de la phase 4 (2026-09-27) ; état courant : État (§3), journal §7.
 
 ## 0. Règles de mesure
 
@@ -104,9 +102,8 @@ décroissant → 5. type de profils + CLI `references` / `--reference` → 6. me
   2026-09-27** (critique de complétude) : toute fiche des lots 4 à 6 atteint, par ses prérequis, la baseline de son
   chemin (K-34 STT et chat, K-35 TTS, K-36 Realtime, K-37 enrôlement) et, si sa porte cite un WER ou une couverture
   ASR, l'outil K-33 ; K-65 (+ K-36), K-74 (+ K-34), K-82 (+ K-64), K-35 et K-36 (+ K-33) ont été corrigés pour cela.
-- Les fiches cloud **K-17…K-21 et K-81** n'ont aucune dépendance Mac : K-17, K-18, K-19 et K-81 pouvaient être
-  exécutées tout de suite, K-20 attendait ASK-30 et K-21 ASK-31. Au 2026-09-28 : toutes faites sauf K-20, partielle
-  (`.serena` retiré ; les WAV attendent toujours ASK-30).
+- Les fiches cloud **K-17…K-21 et K-81** n'ont aucune dépendance Mac : au 2026-09-27, K-17, K-18, K-19 et K-81 étaient
+  exécutables, K-20 attendait ASK-30 et K-21 ASK-31 ; au 2026-09-28, toutes faites sauf K-20 (partielle, ASK-30).
 
 ### Lot 1 — stabilité bloquante
 
