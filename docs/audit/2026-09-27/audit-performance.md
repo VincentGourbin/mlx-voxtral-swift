@@ -13,7 +13,8 @@
 >
 > Constats perf portés par d'autres rapports : A-06, A-10, A-12 ([`audit-annexes-serveur.md`](audit-annexes-serveur.md)),
 > M-07 ([`modeles-2026-09.md`](modeles-2026-09.md)), MLX-002/003/004/010/016…020
-> ([`patterns-verdicts.md`](patterns-verdicts.md)). Plan : [`PLAN.md`](PLAN.md) ; fiches : [`fiches/`](fiches/).
+> ([`patterns-verdicts.md`](patterns-verdicts.md), ids provisoires : correspondance avec le catalogue en tête du
+> rapport). Plan : [`PLAN.md`](PLAN.md) ; fiches : [`fiches/`](fiches/).
 
 ## 0. Cadre
 
@@ -208,7 +209,7 @@ Sévérités **après** vérification croisée. Statut : V = VÉRIFIÉ (mécanis
 | A-12 | annexes | Gain ANE annoncé non mesuré, unités de calcul contradictoires | K-42 |
 | M-07 | modèles | La précision de l'encodeur est le premier levier ASR, sans effet en backend `.auto` | K-42, K-77 |
 | MLX-002 | patterns | 3 occurrences réelles (masques), 22 voulues, 5 faux positifs ; les vraies fuites ne sont pas des littéraux | K-3, K-39 |
-| MLX-018/019/020 | patterns | Masque maison, stream à production synchrone, absence de `withError` | K-3, K-12, K-1 |
+| MLX-018, MLX-003 (variante synchrone ; « MLX-019 » provisoire), MLX-020 | patterns | Masque maison, stream à production synchrone, absence de `withError` | K-3, K-12, K-1 |
 
 ## 4. Protocole commun
 
