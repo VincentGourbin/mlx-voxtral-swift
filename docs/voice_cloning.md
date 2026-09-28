@@ -24,6 +24,11 @@ voxtral tts "Hello, this is my cloned voice." \
     -o hello.wav --model tts-4b --voice-embedding my_voice.safetensors
 ```
 
+> `voxtral` is only the CLI's command name (`Sources/VoxtralTranscriptionTest/VoxtralCLI.swift:23`); no binary of
+> that name is installed. The executable built by `xcodebuild` is
+> `.build/xcode/Build/Products/Release/VoxtralCLI` ([README](../README.md#clone-and-build)): use that path, or
+> `alias voxtral=…/VoxtralCLI`, for every `voxtral …` line on this page.
+
 The enrolled `.safetensors` is a `[T+1, 3072]` voice embedding. It is
 interchangeable with the built-in presets everywhere the pipeline accepts
 a voice embedding (`--voice-embedding`, or

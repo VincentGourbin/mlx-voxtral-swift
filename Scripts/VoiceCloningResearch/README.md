@@ -1,7 +1,7 @@
 # Voice Cloning Research — Voxtral TTS (Python annex)
 
 > **This is the research annex.** The supported, production path is the
-> native Swift command `voxtral enroll` — see
+> native Swift command `VoxtralCLI enroll` — see
 > [`docs/voice_cloning.md`](../../docs/voice_cloning.md). These Python
 > scripts are the original proof-of-concept, kept for reference and
 > reproducibility; they require a separate PyTorch/speechbrain toolchain
@@ -101,15 +101,15 @@ these runs were not recorded.
 
 ## Python and Swift paths
 
-The native Swift command `voxtral enroll` (`VoxtralVoiceEnrollment.swift`,
+The native Swift command `VoxtralCLI enroll` (`VoxtralVoiceEnrollment.swift`,
 commit `bd59931`) ports this loop, but not with the same objective:
 
-| | Python annex (`enroll_voice.py` → `upstream/training_script.py` at `ac3e3f3`) | Swift (`voxtral enroll`) |
+| | Python annex (`enroll_voice.py` → `upstream/training_script.py` at `ac3e3f3`) | Swift (`VoxtralCLI enroll`) |
 |---|---|---|
 | Loss | 0.5 L1 + 1 multi-resolution STFT + 1 log-mel + 1 MFCC + 0.5 speaker loss 1 − cos(ECAPA), gradients through ECAPA (`enroll_voice.py:171-172`; `training_script.py:80-82`, `:613-633`) | 0.5 L1 + 1 multi-resolution STFT + 1 log-mel (`VoxtralVoiceEnrollment.swift:43-45`, `:556-568`) |
 | Gumbel temperature | 1.0, ×0.995 per epoch, floor 0.5 (`training_script.py:770-775`) | 2.0, ×0.99, floor 0.3 (`VoxtralVoiceEnrollment.swift:46-48`) |
 | Spectral gradients | on CPU (MPS `torch.stft` backward bug, patch) | MLX, whole signal |
-| Published similarity | 0.56–0.59 at 8 s (above) | 0.69 at 8 s, 0.72 at 16 s, 2000 epochs (`docs/voice_cloning.md:36-48`, commit `ca49c7a`, in session) |
+| Published similarity | 0.56–0.59 at 8 s (above) | 0.69 at 8 s, 0.72 at 16 s, 2000 epochs (`docs/voice_cloning.md:41-53`, commit `ca49c7a`, in session) |
 
 These figures do not rank the two loss sets: the runs differ in reference
 duration, epochs, temperature schedule and code revision (audit
@@ -161,6 +161,6 @@ have the right to use.
 The enrollment loop was ported to Swift/MLX in `bd59931` (merged with
 PR #34): differentiable decoder forward and losses in MLX, which also
 sidesteps the PyTorch MPS bug, so enrollment runs without a Python
-toolchain. Use it through `voxtral enroll`: see
+toolchain. Use it through `VoxtralCLI enroll`: see
 [`docs/voice_cloning.md`](../../docs/voice_cloning.md). Its objective
 differs from this annex: see "Python and Swift paths" above.

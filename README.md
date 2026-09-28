@@ -134,8 +134,11 @@ Tested with the Fluxforge app description text (short: 1 sentence; long: 163 wor
 | Long FR | **6-bit** | fr_female | 1132ms | 174s | **1.12x** |
 
 > **Definitions.** TTFT = time from the start of `generate` (tokenization and prefill included) to the first
-> evaluated code frame (`VoxtralTTSModeling.swift:441`, `:494-497`): it is not the first audio sample and it excludes
-> the voice-prefix computation. RTF = generation time ÷ audio duration, **< 1.0 = faster than real time**
+> evaluated code frame (`VoxtralTTSModeling.swift:441`, `:496-499`): it is not the first audio sample. At v2.2.2 it
+> excludes the prefill of the voice frames only when that prefix comes from the per-voice cache (preset voices, and
+> streaming with a `voiceKey`: `VoxtralTTSPipeline.swift:210`, `:512`); that cache arrived in `f4fd21c`
+> (2026-07-10), so the TTFT values below, measured before it, include the voice prefill. RTF = generation time ÷
+> audio duration, **< 1.0 = faster than real time**
 > (`TTSSynthesisResult.realTimeFactor`, `VoxtralTTSProcessor.swift:30-33`); `VoxtralCLI profile` prints the inverse
 > as "RT factor" (`ProfileCommand.swift:274`). Glossary: [docs/Benchmarks.md](docs/Benchmarks.md) §4.
 > **Revision**: published in `1bb54bf` and `6ad4e56` (2026-04-02), code revision not recorded, before `a00024f`,
@@ -201,7 +204,7 @@ for try await chunk in stream {
 ```
 
 > **v2.2.2 limitation.** The model generates every frame inside the stream's synchronous build closure
-> (`VoxtralTTSModeling.swift:569-685`), so the first chunk is delivered only after the whole utterance has been
+> (`VoxtralTTSModeling.swift:572-688`), so the first chunk is delivered only after the whole utterance has been
 > generated: the first chunk's `elapsed` is close to the total generation time, not a time to first audio (audit
 > S-08, FA-04; fixed by fiche K-12).
 
@@ -237,13 +240,13 @@ voice once (offline), then reuse it like any preset.
 
 Reference guidance: aim for **10–16 s** of clean speech, one speaker, no
 background music. Any format (wav/mp3/m4a) works. Before optimization the
-reference is prepared in this order (`VoxtralVoiceEnrollment.swift:138-149`):
+reference is prepared in this order (`VoxtralVoiceEnrollment.swift:151-162`):
 
 1. a **70 Hz high-pass** (zero-phase Butterworth) removes rumble and DC;
 2. **loudness normalization** brings active speech to **−20 dBFS**, peak-limited
-   to 0.98 full scale (`referenceTargetRMSdB`, `:68-76`);
+   to 0.98 full scale (`referenceTargetRMSdB`, `:81-89`);
 3. a **noise gate** attenuates windows more than 30 dB below the loudest 20 ms
-   window **by 24 dB** — attenuated, not zeroed (`gateThresholdDB`, `gateAttenuationDB`, `:48-67`).
+   window **by 24 dB** — attenuated, not zeroed (`gateThresholdDB`, `gateAttenuationDB`, `:59-80`).
 
 This keeps the recording's noise floor from being baked into the cloned voice.
 Disable the steps with `--high-pass-hz 0`, `--reference-target-rms-db 0` and

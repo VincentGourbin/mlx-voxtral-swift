@@ -167,13 +167,13 @@ xcrun coremlcompiler compile ./output/VoxtralEncoderSmall.mlpackage ./output/
 ## Using in Swift
 
 See `Sources/VoxtralCore/` for the hybrid implementation that automatically uses Core ML when available.
+The backend is chosen on `VoxtralPipeline` (`Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift:194-196`;
+`.auto`, the default, uses Core ML when the encoder is available and falls back to MLX):
 
 ```swift
-// In VoxtralGenerator
-let config = VoxtralConfiguration(
-    backend: .hybrid  // or .mlx for GPU-only
-)
-let generator = try VoxtralGenerator(configuration: config)
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .hybrid)  // or .mlx for GPU-only, .auto
+try await pipeline.loadModel()
+let text = try await pipeline.transcribe(audio: audioURL, language: "en")
 ```
 
 ## License

@@ -80,7 +80,7 @@ let emb = try MLX.loadArrays(url: URL(fileURLWithPath: "voice.safetensors"))["em
 let cloned = try await tts.synthesize(text: "Any text.", voiceEmbedding: emb)
 ```
 
-The reference is prepared in this order (`TTS/VoiceCloning/VoxtralVoiceEnrollment.swift:138-149`): 70 Hz high-pass (`Config.referenceHighPassHz`), loudness normalization of active speech to −20 dBFS (`Config.referenceTargetRMSdB`), then a noise gate that attenuates windows 30 dB below the loudest 20 ms window by 24 dB (`Config.gateReference`, `gateThresholdDB`, `gateAttenuationDB`). Settings: `VoxtralVoiceEnrollment.swift:47-76`; guide: `docs/voice_cloning.md`.
+The reference is prepared in this order (`TTS/VoiceCloning/VoxtralVoiceEnrollment.swift:151-162`): 70 Hz high-pass (`Config.referenceHighPassHz`), loudness normalization of active speech to −20 dBFS (`Config.referenceTargetRMSdB`), then a noise gate that attenuates windows 30 dB below the loudest 20 ms window by 24 dB (`Config.gateReference`, `gateThresholdDB`, `gateAttenuationDB`). Settings: `VoxtralVoiceEnrollment.swift:58-89`; guide: `docs/voice_cloning.md`.
 
 ## Main APIs
 
@@ -128,9 +128,9 @@ enrollVoice(referenceURL:outputURL:config:progress:shouldContinue:)
 ```
 
 - `flowSteps`, `cfgAlpha` and `temperature` are **not read** by the TTS path at v2.2.2: 8 Euler steps and CFG alpha 1.2 are hard-coded (`TTS/VoxtralFlowMatching.swift:195-196`). The CLI options `--flow-steps`, `--cfg-alpha`, `-t` have no effect either (audit P-35; fiche K-48).
-- `synthesizeStreaming` generates every frame before yielding the first chunk at v2.2.2 (synchronous `AsyncThrowingStream` build closure, `TTS/VoxtralTTSModeling.swift:569-685`): the first chunk's `elapsed` ≈ total generation time (audit S-08, FA-04; fiche K-12).
+- `synthesizeStreaming` generates every frame before yielding the first chunk at v2.2.2 (synchronous `AsyncThrowingStream` build closure, `TTS/VoxtralTTSModeling.swift:572-688`): the first chunk's `elapsed` ≈ total generation time (audit S-08, FA-04; fiche K-12).
 - Without `seed:`, the same text and voice give a different take on every call (flow-matching noise; `VoxtralTTSModeling.swift:440`).
-- `TTSSynthesisResult.timeToFirstToken` = time to the first code frame (prefill included), not the first audio sample (`VoxtralTTSModeling.swift:441`, `:494-497`); `realTimeFactor` = generation time ÷ audio duration, < 1 = faster than real time (`VoxtralTTSProcessor.swift:30-33`). Glossary: `docs/Benchmarks.md` §4.
+- `TTSSynthesisResult.timeToFirstToken` = time to the first code frame (prefill included), not the first audio sample (`VoxtralTTSModeling.swift:441`, `:496-499`); `realTimeFactor` = generation time ÷ audio duration, < 1 = faster than real time (`VoxtralTTSProcessor.swift:30-33`). Glossary: `docs/Benchmarks.md` §4.
 - The codec decoder's weights are bf16 in every pack, but it computes in fp32: the quantizer's embeddings are fp32 and promote every layer (`TTS/VoxtralCodecDecoder.swift:336-341`, `:358-361`, `:83`; audit P-38).
 
 ### ModelDownloader / ModelRegistry
@@ -141,7 +141,7 @@ ModelDownloader.modelsDirectory                        // default ~/Library/Cach
 ModelDownloader.resolveModel(_ identifier: String) async throws -> URL
 ModelDownloader.listDownloadedModels() -> [VoxtralModelInfo]
 ModelDownloader.deleteModel(_ model: VoxtralModelInfo) throws
-ModelDownloader.isDefaultModelDownloaded() / downloadDefaultModel(progress:) / deleteDefaultModel() / defaultModel
+ModelDownloader.isDefaultModelDownloaded() / downloadDefaultModel(progress:) / deleteDefaultModel()   // default = ModelRegistry.defaultModel
 
 ModelRegistry.models / defaultModel / model(withId:) / model(withRepoId:) / miniModels / smallModels   // STT
 VoxtralTTSRegistry.models / defaultModel / model(withId:)                                           // TTS

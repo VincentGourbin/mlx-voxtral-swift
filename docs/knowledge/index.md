@@ -24,7 +24,8 @@ build, de test et de mesure : [`CLAUDE.md`](../../CLAUDE.md). Plan d'action en c
 - [Stream à production synchrone](pitfalls/async-stream-synchronous-build.md) (V-P5) — le « streaming » TTS génère
   tout avant le premier chunk ; producteur jamais annulé (K-12).
 - [Même % GPU partout](pitfalls/same-gpu-percent-instrument-artifact.md) (V-P8) — 48-49 % sur trois opérations
-  différentes et 0 % pendant 23,89 s de décodage : signature d'instrument (K-34, K-36).
+  différentes et 0 % sur les 23,89 s de la phase « Realtime Generation » (qui englobe encodage et préfill) :
+  signature d'instrument (K-34, K-36).
 - [Tête liée recopiée en fp32](pitfalls/tied-head-fp32-copy.md) — Realtime : ≈ 1,5 Gio de copie fp32 de la table
   131 072 × 3 072 à chaque pas (calcul ; K-38, K-46).
 - [Fenêtre glissante ignorée](pitfalls/declared-sliding-window-ignored.md) — Realtime : fenêtres 750 (encodeur) et

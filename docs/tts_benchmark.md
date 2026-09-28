@@ -41,8 +41,10 @@ abridged, to be checked by fiche K-33):** Full Fluxforge app description with 11
 
 > **How to read every table and the TTFT block below.**
 > - **TTFT** = time from the start of `generate` (tokenization and prefill included) to the first evaluated code
->   frame (`Sources/VoxtralCore/TTS/VoxtralTTSModeling.swift:441`, `:494-497`). It is not the first audio a listener
->   hears (TTFA), and it excludes the voice-prefix computation.
+>   frame (`Sources/VoxtralCore/TTS/VoxtralTTSModeling.swift:441`, `:496-499`). It is not the first audio a listener
+>   hears (TTFA). These runs predate the per-voice prefix cache (`f4fd21c`, 2026-07-10), so their TTFT includes the
+>   prefill of the voice frames; at v2.2.2 that prefill is excluded only when the prefix is cached (preset voices,
+>   streaming with a `voiceKey`: `Sources/VoxtralCore/TTS/Pipeline/VoxtralTTSPipeline.swift:210`, `:512`).
 > - **Frames** = 80 ms code frames generated; **Audio** = decoded duration; **GenTime** = generation time.
 > - **RTF** = GenTime ÷ Audio, **< 1.0 = faster than real time** (`TTSSynthesisResult.realTimeFactor`,
 >   `Sources/VoxtralCore/TTS/VoxtralTTSProcessor.swift:30-33`). `VoxtralCLI profile` and issues #26/#27 use the

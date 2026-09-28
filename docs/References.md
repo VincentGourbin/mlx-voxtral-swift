@@ -9,7 +9,7 @@
 > K-77 (STT), K-78 (Realtime), K-79 (TTS) and K-64 (enrollment); K-82 copies them here from
 > [`BENCHMARKS.md`](../BENCHMARKS.md), each value citing its line.
 >
-> **Not wired yet**: the profile types, `voxtral references` and `--reference` are created by
+> **Not wired yet**: the profile types, `VoxtralCLI references` and `--reference` are created by
 > [K-76](audit/2026-09-27/fiches/K-76.md) (v0 = existing knobs only). Settings whose knob does not exist yet carry the
 > fiche that creates it; they enter a profile only once created **and** measured (`profils.md:9-11`).
 >
@@ -17,13 +17,15 @@
 > `docs/audit/2026-09-27/modeles-2026-09.md`. Sizes: Hub, 2026-09-27, 1 GB = 10⁹ bytes; exact bytes, licences and
 > loadability in [Weights.md](Weights.md).
 
-`voxtral references` lists them, `voxtral <transcribe|realtime|tts|enroll|bench> --reference <id>` applies one,
+`VoxtralCLI references` lists them, `VoxtralCLI <transcribe|realtime|tts|enroll|bench> --reference <id>` applies one,
 `Voxtral{STT,Realtime,TTS,Enrollment}ReferenceProfile.all` exposes them to an app (all three from K-76). Each one pins
 every setting that matters (weights, encoder backend, compute precision, KV cache, token budget, memory limits,
 residency). Same seed + same profile = same output, comparable time on comparable hardware.
 
-Source (after K-76): `Sources/VoxtralCore/Configuration/ReferenceProfiles.swift` (`profils.md:243`). Measurements:
-[Benchmarks.md](Benchmarks.md) (protocol, corpus, metric glossary) and [`BENCHMARKS.md`](../BENCHMARKS.md) (raw lines).
+Source (after K-76): `Sources/VoxtralCore/Configuration/ReferenceProfiles.swift` (`profils.md:243`). `VoxtralCLI` is
+the executable built by `xcodebuild` ([CLAUDE.md](../CLAUDE.md)); `voxtral` in its help text is only the command
+name (`Sources/VoxtralTranscriptionTest/VoxtralCLI.swift:23`). Measurements: [Benchmarks.md](Benchmarks.md)
+(protocol, corpus, metric glossary) and [`BENCHMARKS.md`](../BENCHMARKS.md) (raw lines).
 Weights: [Weights.md](Weights.md).
 
 **28 profiles** (`profils.md:22-28`): STT Mini 6, STT Small 6, Realtime 6 (of which 2 not available), TTS 8 (6-bit
@@ -113,7 +115,7 @@ Commercial use of these weights is a legal question (ASK-18, `profils.md:176-177
 
 | Id | Weights | Reference length | Epochs | s/epoch | Peak process | ECAPA similarity | Who it is for | Source |
 |---|---|---|---|---|---|---|---|---|
-| `enroll-fast` | TTS pack of the target synthesis (bf16 = CLI default `tts-4b-mlx`) | 16 s (200 frames) | 5,000 | to measure (K-64) | to measure (K-64) | to measure (K-64); in session: 0.72 at 16 s, 2,000 epochs ([voice_cloning.md](voice_cloning.md):36-45) | to decide (K-64) | `profils.md:224-226` |
+| `enroll-fast` | TTS pack of the target synthesis (bf16 = CLI default `tts-4b-mlx`) | 16 s (200 frames) | 5,000 | to measure (K-64) | to measure (K-64) | to measure (K-64); in session: 0.72 at 16 s, 2,000 epochs ([voice_cloning.md](voice_cloning.md):41-50) | to decide (K-64) | `profils.md:224-226` |
 | `enroll-lean` | 6-bit TTS pack | 16 s (200 frames) | 5,000 (3,000 to measure) | to measure (K-64) | to measure (K-64) | to measure (K-64) | to decide (K-64) | `profils.md:224-226` |
 
 - Library default reference length is 8 s (`Config.numFrames` 100); moving it to 16 s is ASK-9 (`profils.md:225`).
@@ -142,7 +144,7 @@ Commercial use of these weights is a legal question (ASK-18, `profils.md:176-177
 ## Adding or changing a profile
 
 1. Add the entry to `.all` (every field is an existing knob, nothing new to wire) (`profils.md:9-11`).
-2. Measure with `voxtral bench <pipeline> --reference <id> --passes 2 --warmup 1 --cooldown 120` (A/B/B/A, protocol
+2. Measure with `VoxtralCLI bench <pipeline> --reference <id> --passes 2 --warmup 1 --cooldown 120` (A/B/B/A, protocol
    in [Benchmarks.md](Benchmarks.md); `bench` from K-32, `--reference` from K-76).
 3. Quality gate: WER (STT, Realtime) or ASR coverage + blind listening (TTS) against the `16bit-fast` profile, same
    seed (`profils.md:378`).
@@ -153,8 +155,8 @@ Commercial use of these weights is a legal question (ASK-18, `profils.md:176-177
 
 - After K-76: `--reference 8bit-fast` (mini) = `-m mini-3b-8bit -b <backend> --max-tokens <ceil(duration × rate) + 64>`
   plus the memory setting `.disabled` (`profils.md:383`).
-- Today there is no exact equivalent: `voxtral transcribe` takes `-m`, `--max-tokens`, `-l` and `-b mlx|hybrid`
-  only (`Sources/VoxtralTranscriptionTest/VoxtralCLI.swift:177-187`, `.auto` unreachable: `:210`), and always runs
-  `VoxtralPipeline.Configuration.default` (`:215`), whose `memoryOptimization: .recommended()` is a preset with a KV
+- Today there is no exact equivalent: `VoxtralCLI transcribe` takes `-m`, `--max-tokens`, `-l` and `-b mlx|hybrid`
+  as settings, plus `--beacon` (`Sources/VoxtralTranscriptionTest/VoxtralCLI.swift:177-190`; `.auto` unreachable:
+  `:210`), and always runs `VoxtralPipeline.Configuration.default` (`:215`), whose `memoryOptimization: .recommended()` is a preset with a KV
   window (`Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift:107-113`;
   `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift:41-90`).

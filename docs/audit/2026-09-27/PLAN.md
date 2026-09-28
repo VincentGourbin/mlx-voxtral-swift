@@ -587,3 +587,34 @@ Gabarits :
   `VoxtralGenerator(configuration:)`) non vérifiée ; dépendances transitives non verrouillées ; `hf download`
   télécharge aussi `consolidated.safetensors` (≈ moitié du volume) ; métadonnées de version et SHA-256 du
   `weight.bin` produit (A-03) non portés par cette fiche.
+
+## 2026-09-28 — revue adverse des fiches cloud K-17, K-81, K-18, K-19
+- Fait : portes des quatre fiches rejouées avec des contrôles propres à la revue (scripts du scratchpad
+  `rev3/` : liens, rejeu argparse par AST, versions PyPI à date, `check_workspace` dans trois états, clone neuf de
+  l'amont) ; relecture de chaque document contre le code à `9392ed1` et à `HEAD`. Un commit `docs(review): …`.
+- Portes rejouées : K-17 `FILES … → présents` · `PITFALLS 6 (≥ 6)` · `SWIFT git diff --stat -- '*.swift'` vide
+  (22a117f..4170f36) · `LINKS 0 mort` · commandes de `CLAUDE.md` = PLAN.md :297, :302-303, :309 ; K-81
+  `REFERENCES 28 lignes` (STT 12, Realtime 6, TTS 8, enrôlement 2) · `WEIGHTS 13 + 3 + 13` (octets recoupés avec
+  `profils.md`/`modeles` ; `aufklarer` 5 bits et FP16 relistés : 4 051 350 065 et 9 352 633 693 o) ; K-18
+  `CHECKLIST S-20 : 12/12` (greps rejoués) · `GREP 'Swift 6.0|Xcode 15|macOS 14' : 0 · 'true silence' : 0` ·
+  `SYNTAX_GUARD 3 fichier(s) Swift, 0 erreur(s) d'analyse nouvelle(s)` (`--base 9392ed1`) ; K-19
+  `ARGPARSE convert.sh : 0 inconnu / 0 manquant · README : 0 / 0` (avant : 1 / 0 et 2 / 2) · `PINNED
+  requirements : 0 '>='` · `GREP 'Next step' : 0` · amont `ac3e3f3` = tête (`git ls-remote`), blobs `50b812c`/
+  `2ee2720`, `git apply --check` OK · `check_workspace` : `f3070b4` refusé, `ac3e3f3` sans patch refusé, avec
+  patch OK. `.swift` : commentaires seulement (`git diff 9392ed1 -- '*.swift'`).
+- Défauts corrigés : (1) citations `VoxtralVoiceEnrollment.swift` et `VoxtralTTSModeling.swift` de README,
+  llms.txt, `docs/Benchmarks.md`, `docs/tts_benchmark.md` décalées par les commentaires de K-18/K-19 (jusqu'à
+  13 lignes) → numérotation de `HEAD` ; (2) « TTFT excludes the voice-prefix computation » faux pour les chiffres
+  d'avril (cache de préfixe introduit par `f4fd21c`) et pour une voix clonée en batch → README, tts_benchmark,
+  glossaire, log ; (3) llms.txt : `ModelDownloader.defaultModel` n'existe pas ; (4) `docs/References.md` :
+  `voxtral …` → `VoxtralCLI …` (le README dit que `voxtral` n'est pas un binaire installé) ; (5) `voice_cloning.md`
+  : note sur le nom `voxtral` ; `Scripts/VoiceCloningResearch/README.md` : `VoxtralCLI enroll` ; (6) README Core ML
+  « Using in Swift » : `VoxtralConfiguration(backend:)` et `VoxtralGenerator(configuration:)` inexistants →
+  `VoxtralPipeline(model:backend:)` ; (7) `convert.sh` conseillait `swift build` → `xcodebuild` ; (8)
+  `docs/knowledge/index.md` : les 23,89 s sont la phase « Realtime Generation » (encodage et préfill compris), pas
+  le décodage.
+- Non corrigé (note) : chiffres du texte courant de `voice_cloning.md` sans source en ligne (« 15× », −55/−65/−126 dB,
+  « one generation in eight ») ; « ~30 min (5000 epochs) » du README de recherche, « ~10GB » et « ~1.2GB » de `convert.sh` non
+  sourcés ; « macOS 13.0+ or iOS 16.0+ » du README Core ML = cible de déploiement du modèle (`iOS16`), pas du
+  paquet ; les pièges `docs/knowledge/pitfalls/` gardent la numérotation de `9392ed1` (datée dans leur en-tête) ;
+  audit-stabilite.md §0 donne mlx-swift `@9019419` contre `0bb916c` au §1.
