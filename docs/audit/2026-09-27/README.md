@@ -8,17 +8,23 @@
 > **Révision auditée** : `9392ed1` (= tag `v2.2.2`) · **branche** : `claude/action-plan-skills-beta-wifgmu` ·
 > **amont résolu** : mlx-swift 0.31.6 (`0bb916c`, MLX C++ `ce45c52`), mlx-swift-lm `main@ee673d6`.
 >
-> **État** : phases 0 à 4 terminées (cadrage, scan, audit vérifié, profils, plan). **Rien n'a été exécuté** : aucun
-> build, test ni mesure (session cloud Linux, sans Mac ni GPU), aucun commit et aucune écriture sur GitHub. Les
-> fichiers de ce dossier ne sont pas encore suivis par git. La phase 5 (exécution des fiches) commence après la
-> relecture de [`ASK.md`](ASK.md).
+> **État au 2026-09-27 (fin de la phase 4)** : phases 0 à 4 terminées (cadrage, scan, audit vérifié, profils,
+> plan), sans build, test ni mesure (session cloud Linux, sans Mac ni GPU), sans commit ni écriture sur GitHub.
+>
+> **État au 2026-09-28** : le dossier est suivi par git depuis `22a117f`. Phase 5, côté cloud : **K-17, K-81, K-18,
+> K-19 et K-21 sont faites** (portes des quatre premières rejouées par la revue adverse du 2026-09-28), **K-20 est
+> partielle** (`.serena` retiré de l'index ; les 22 WAV attendent ASK-30). K-21 a écrit dans le tracker (ASK-31
+> tranchée par la demande de Vincent, pas encore reportée dans la section « Réponses » d'[`ASK.md`](ASK.md)) : #71,
+> #307 et #349 fermés `verified`, #556 et #557 créés. Les 76 fiches `macos-gpu` ne sont pas dispatchées (aucune tâche
+> `kind:task` Voxtral dans `action-plans`, relu le 2026-09-28) ; 22 fiches restent ⛔ (21 `macos-gpu`, qui
+> naîtront `blocked`, et K-20). Le détail vit dans la colonne État et le journal (§7) de [`PLAN.md`](PLAN.md).
 
 ## Par où commencer
 
 1. [`PLAN.md`](PLAN.md) : règles de mesure, faits vérifiés, 82 fiches en 6 lots avec porte chiffrée, pièges,
    commandes, hors plan, journal, et en annexe A la disposition de chaque action existante.
-2. [`ASK.md`](ASK.md) : 31 décisions fermées ; 23 fiches (⛔) attendent une réponse. La section « Réponses »
-   est à remplir.
+2. [`ASK.md`](ASK.md) : 31 décisions fermées ; 23 fiches (⛔) attendaient une réponse à la fin de la phase 4, 22
+   depuis K-21 (ASK-31). La section « Réponses » est à remplir.
 3. [`profils.md`](profils.md) : matrice `<bits>bit-fast|lean` par modèle (STT Mini/Small, Realtime, TTS,
    enrôlement), poids recommandés au 2026-09-27, esquisse Swift `VoxtralReferenceProfile`, brouillon de
    `References.md`.
@@ -52,7 +58,7 @@ Relecture contre le `SKILL.md` de `mlx-swift-audit` (phases 0-4 et règles). Cor
 |---|---|---|
 | [`scan.md`](scan.md) | 1 | sortie de `scan.py` : volumes, dépendances, motifs, absence de `BENCHMARKS.md` |
 | [`patterns-scan.md`](patterns-scan.md) | 1 | sortie de `apply.py scan` (catalogue MLX-001…MLX-015) |
-| [`patterns-verdicts.md`](patterns-verdicts.md) | 2 | verdicts par occurrence ; 13 constats relus, 12 gardés, 1 écarté ; MLX-001, 005, 007, 008, 009, 011, 013, 014, 015 conformes ou sans objet ; fiches MLX-016…MLX-020 proposées au skill |
+| [`patterns-verdicts.md`](patterns-verdicts.md) | 2 | verdicts par occurrence ; 13 constats relus, 12 gardés, 1 écarté ; MLX-001, 005, 007, 008, 009, 011, 013, 014, 015 conformes ou sans objet ; fiches MLX-016…MLX-020 proposées au skill (ids provisoires : correspondance avec le catalogue mlx-swift 0.3.0 en tête du rapport) |
 | [`faits-et-actions.md`](faits-et-actions.md) | 0 | cadrage, consommateurs de l'API, 44 faits `FV-xx`, 52 actions `ACT-xx` (issues, PR, plans, TODO, docs), 9 constats `FA-xx`, capitalisation |
 | [`audit-stabilite.md`](audit-stabilite.md) | 2 | 29 constats `S-xx` (12 gardés tels quels, 17 amendés, 0 écarté) |
 | [`audit-annexes-serveur.md`](audit-annexes-serveur.md) | 2 | 23 constats `A-xx` : enrôlement, Core ML, app, scripts, serveur (13 amendés) |
@@ -112,35 +118,56 @@ sont lus nulle part (P-35, K-48).
 
 ## Exécution
 
-**Prérequis** : ce dossier doit être **poussé sur la branche** `claude/action-plan-skills-beta-wifgmu`, car chaque
-tâche Mac commence par `git pull` puis lit sa fiche. Les fichiers sont aujourd'hui non suivis (aucun `git add` ni
-commit n'a été fait pendant l'audit).
+**Prérequis** : ce dossier doit être **sur la branche distante** `claude/action-plan-skills-beta-wifgmu`, car chaque
+tâche Mac commence par `git pull` puis lit sa fiche. Il est commité depuis `22a117f` : pousser les derniers commits
+avant de dispatcher.
+
+Depuis claude-skills 0.5.0 (agent-tracker 0.2.0, contrat de tableau partagé avec `mlx-swift-audit`), `tasks.yaml` et
+`PLAN.md` donnent le même lot (rejoué le 2026-09-28) :
 
 ```bash
-# Essai à blanc (valide le fichier, ne crée rien)
-python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml
-#   → « 76 tâche(s) valides — rien créé (ajouter --create) »
+D=~/.claude/skills/task-dispatch/scripts/dispatch.py
+
+# Essai à blanc depuis tasks.yaml (valide, résume, ne crée rien)
+python3 $D docs/audit/2026-09-27/tasks.yaml
+#   → « Vagues : 12 » · « Naissent blocked (⛔) : 21 » · « Erreurs : aucune »
+#   → « 76 tâche(s) valides — rien créé (--create pour créer ; sans gh : --emit-json --issue-map map.json ; … »
+
+# Même essai depuis PLAN.md (colonnes Cible, Prérequis, État)
+python3 $D docs/audit/2026-09-27/PLAN.md --runs-on macos-gpu --requires mlx,xcode,gh,git \
+  --repo VincentGourbin/mlx-voxtral-swift --branch claude/action-plan-skills-beta-wifgmu --project mlx-voxtral-swift
+#   → « Ignorées : 5 — K-17 (fait), K-18 (fait), K-19 (fait), K-21 (fait), K-81 (fait) »
+#   → « Exclues : 1 — K-20 (cible cloud) » · mêmes vagues, mêmes 21 blocked · « 76 tâche(s) valides — rien créé … »
 
 # Création des issues de tâche dans VincentGourbin/action-plans (vagues successives selon depends_on)
-python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml --create
+python3 $D docs/audit/2026-09-27/tasks.yaml --create
 
-# Sans gh : vague de créations en JSON, puis carte id → numéro d'issue (skill task-dispatch §2 bis)
-python3 ~/.claude/skills/task-dispatch/scripts/dispatch.py docs/audit/2026-09-27/tasks.yaml --emit-json \
-  --issue-map docs/audit/2026-09-27/map.json
+# Sans gh : vague de créations en JSON, puis carte id → numéro d'issue (skill task-dispatch, « Sans gh »)
+python3 $D docs/audit/2026-09-27/tasks.yaml --emit-json --issue-map docs/audit/2026-09-27/map.json
 ```
 
 - **Première vague** (aucune dépendance) : K-1, K-4, K-6, K-7, K-10, K-11, K-14, K-16, K-22. K-10 et K-22 sont ⛔ :
-  sans réponse à ASK-15 et ASK-28, l'agent Mac les passe en `blocked` avec la question fermée.
-- **Utiliser `tasks.yaml`, pas `PLAN.md`** : essai à blanc du mode Markdown (`dispatch.py PLAN.md --runs-on macos-gpu
-  --project mlx-voxtral-swift`, 2026-09-27) : « 82 tâche(s) valides », mais le lot serait faux : (1) la colonne `Cible`
-  est ignorée, les 6 fiches cloud deviendraient `macos-gpu` ; (2) le découpage des cellules ne tient pas compte de `\|`
-  (échappement GFM) : les portes de **K-18, K-20, K-23, K-41, K-43, K-64 et K-78** sont tronquées au premier `\|`
-  et la suite glisse dans `Effort` (K-20 : `gate: '`git ls-files -ci --exclude-standard \'`) ; (3) aucun `depends_on`
-  (l'ordre imposé disparaît) ; (4) la colonne `État` (⛔ ASK) est perdue ; (5) `repo` et `branch` restent `null` sans
-  `--repo/--branch`, et les instructions citent « `PLAN.md` » sans chemin ni fiche `fiches/K-n.md` ; (6) le titre
-  garde la syntaxe de lien Markdown, coupée à 110 caractères. Défauts remontés au skill `task-dispatch`.
-- **Fiches cloud** : K-17, K-18, K-19 et K-81 n'ont aucun prérequis et peuvent être exécutées dans une session
-  cloud. K-20 (WAV) attend ASK-30 ; K-21 (écritures dans `action-plans`) attend ASK-31.
+  elles naissent `blocked` (`needs_decision` : ASK-15, ASK-28) et ne sont ni proposées ni réclamables par
+  `task-runner` tant que la réponse datée n'est pas inscrite dans `ASK.md` et la tâche rouverte.
+- **`tasks.yaml` ou `PLAN.md`** : mêmes 76 tâches, mêmes portes, cibles, capacités, dépôt, branche, `depends_on`,
+  vagues et décisions ⛔ (comparaison des sorties `--emit-json` et `--verbose`, 2026-09-28). Trois écarts restent :
+  (1) gravité : `tasks.yaml` porte celle de chaque fiche (19 `high`, 34 `medium`, 23 `low`), le mode Markdown pose
+  `--severity` (défaut `medium`) sur tout le lot ; (2) titres : `[voxtral K-n]` et objectifs reformulés dans
+  `tasks.yaml`, `[mlx-voxtral-swift K-n]` et l'Objet du plan en Markdown ; (3) instructions : `tasks.yaml` demande en
+  plus l'entrée de journal (`PLAN.md` §7, `docs/knowledge/log.md`) et cite K-81 comme prérequis cloud de K-82. Créer
+  depuis `tasks.yaml` ; le mode Markdown sert de contre-vérification.
+- **Historique** : l'essai à blanc du mode Markdown du 2026-09-27 (`dispatch.py PLAN.md --runs-on macos-gpu
+  --project mlx-voxtral-swift`, agent-tracker 0.1.0) donnait « 82 tâche(s) valides », mais le lot était faux : (1) la
+  colonne `Cible` est ignorée, les 6 fiches cloud deviendraient `macos-gpu` ; (2) le découpage des cellules ne tient
+  pas compte de `\|` (échappement GFM) : les portes de **K-18, K-20, K-23, K-41, K-43, K-64 et K-78** sont tronquées
+  au premier `\|` et la suite glisse dans `Effort` (K-20 : `gate: '`git ls-files -ci --exclude-standard \'`) ; (3)
+  aucun `depends_on` (l'ordre imposé disparaît) ; (4) la colonne `État` (⛔ ASK) est perdue ; (5) `repo` et `branch`
+  restent `null` sans `--repo/--branch`, et les instructions citent « `PLAN.md` » sans chemin ni fiche
+  `fiches/K-n.md` ; (6) le titre garde la syntaxe de lien Markdown, coupée à 110 caractères. Défauts remontés au
+  skill `task-dispatch` et corrigés dans agent-tracker 0.2.0 ; `PLAN.md` a reçu la colonne `Prérequis` (`809f45d`).
+- **Fiches cloud** : K-17, K-81, K-18 et K-19 (2026-09-27) et K-21 (2026-09-28, après ASK-31) sont faites ; K-20 est
+  partielle (`git ls-files -ci --exclude-standard` : 24 → 22, les 22 WAV attendent ASK-30). Le dispatch ignore les
+  fiches `fait` et n'envoie jamais une fiche `cloud` au Mac.
 - **Côté Mac** (skill `task-runner`) : une fiche = un commit. La porte observée est recopiée telle quelle dans le
   rapport de tâche, et chaque exécution ajoute une entrée au journal de `PLAN.md` §7. Porte non atteinte ⇒ rien
   n'est livré. Gain < 5 % ⇒ le levier est retiré.
