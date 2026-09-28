@@ -477,8 +477,10 @@ public class VoxtralTTSModel: Module {
         session?.endPhase("Prefill", category: .prefill)
 
         // 5. Autoregressive generation
-        // Optimization: check EOA every N frames to reduce GPU→CPU syncs.
-        // Between checks, GPU pipelines LLM forward passes without blocking.
+        // Check EOA every N frames to reduce GPU→CPU `.item()` reads. This does
+        // not remove the per-frame sync: `decodeOneFrame` ends with `MLX.eval(xt)`
+        // (VoxtralFlowMatching.swift:321), which also evaluates the previous LLM
+        // forward pass, so every frame still blocks once (no asyncEval pipelining).
         // May generate up to (eoaCheckInterval-1) extra frames after EOA — trimmed below.
         let eoaCheckInterval = 4
         var allCodes: [MLXArray] = []
@@ -525,7 +527,8 @@ public class VoxtralTTSModel: Module {
             let codeEmbeddings = mmAudioEmbeddings.audioCodebookEmbeddings(globalCodes)  // (1, 37, dim)
             let nextEmbedding = codeEmbeddings.sum(axis: 1, keepDims: true)  // (1, 1, dim)
 
-            // Feed through LLM — no eval() sync between EOA checks
+            // Feed through LLM. Lazy here, but the next frame's decodeOneFrame
+            // evaluates it (`MLX.eval(xt)`), so each frame still syncs once.
             hidden = llmForward(inputEmbeds: nextEmbedding, cache: cache)
 
             // Sync GPU periodically to prevent unbounded compute graph growth

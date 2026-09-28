@@ -48,8 +48,10 @@ public final class VoxtralVoiceEnrollment {
         /// Gate reference windows whose RMS falls below `gateThresholdDB`
         /// (relative to the LOUDEST 20 ms window's RMS — not the sample peak,
         /// so a single click or plosive spike cannot inflate the threshold
-        /// and gate genuine speech) to true silence. Set `false` to keep the
-        /// raw recording, ambience included.
+        /// and gate genuine speech). Gated windows are attenuated by
+        /// `gateAttenuationDB` (−24 dB by default), not zeroed; the gate runs
+        /// after the high-pass and the loudness normalization. Set `false` to
+        /// keep the raw recording, ambience included.
         public var gateReference: Bool = true
         /// Gate threshold relative to the loudest 20 ms window RMS, in dB.
         /// −30 is deliberately conservative: gating that eats soft speech is

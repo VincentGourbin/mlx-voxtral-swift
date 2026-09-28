@@ -16,7 +16,7 @@ xcodebuild -scheme VoxtralTTSStreamingDemo -configuration Release \
 
 | Control | What it does |
 |---|---|
-| **Model** | TTS model to load: `4-bit (2.5 GB)`, `6-bit (3.5 GB)`, `bf16 original (8 GB)` (mistralai), `bf16 MLX (8 GB)` (mlx-community). |
+| **Model** | TTS model to load: `4-bit (2.5 GB)`, `6-bit (3.5 GB)`, `bf16 original (8 GB)` (mistralai), `bf16 MLX (8 GB)` (mlx-community) — labels shown by the app (`StreamingDemoViewModel.swift:103-106`); exact download sizes: 2.51 / 3.47 / 8.00 / 8.00 GB ([Weights.md](Weights.md)). |
 | **Load** | Downloads (if needed) and loads the selected model. Complete models load instantly from `~/Library/Caches/models`. |
 | **Voice** | The 20 built-in presets **plus** any enrolled (cloned) voices, shown with a 🎙️ prefix. |
 | **Sanitize** | Prosody-aware text normalization (ALL-CAPS expansion, auto-punctuation) for more natural pauses. |
@@ -31,7 +31,7 @@ xcodebuild -scheme VoxtralTTSStreamingDemo -configuration Release \
 
 Streaming used to draw fresh flow-matching noise on every call, so an identical
 text and voice produced decorrelated audio run to run — measured at 84 s versus
-5 s for the same input, which read as "the first play after enrolling is broken
+5 s for the same input (PR #43, `d7a414e`; in session), which read as "the first play after enrolling is broken
 and it drifts afterwards". The **Seed** field fixes that: same seed, same audio.
 
 For **cloned** voices the app also prepends the recommended warm-up vocalise and
@@ -45,10 +45,17 @@ playback.
 
 ### Metrics row
 
-Measured for each synthesis: **TTFT** (time to first token/audio), **Total**
-time, **Audio** duration, **RTF** (real-time factor — <1 is faster than
-real time), **FPS** (frames/s), **Frames**, **Chunks**. A console below logs
-every step (and the enrollment loss when cloning).
+Measured for each synthesis (`StreamingDemoViewModel.swift:517-537`): **TTFT**
+(time until the first audio chunk arrives, the first chunk's `elapsed`),
+**Total** time, **Audio** duration, **RTF** (Total ÷ Audio — <1 is faster than
+real time), **FPS** (frames ÷ elapsed time), **Frames**, **Chunks**. A console
+below logs every step (and the enrollment loss when cloning).
+
+> At v2.2.2 the pipeline generates the whole utterance before it yields the
+> first chunk (audit S-08), so the TTFT shown is close to **Total**, not a
+> time to first audio; fiche K-12 makes the stream real. Values shown are
+> single runs, in session — not references ([Benchmarks.md](Benchmarks.md),
+> audit FA-04).
 
 ## Voice Cloning panel
 
@@ -65,7 +72,8 @@ Then set:
 
 - **Name** — the cloned voice's name (and output filename).
 - **Ref (s)** — reference length to use (4–24 s; ~16 s is the sweet spot).
-- **Epochs** — optimization epochs (default 3000; more helps quality, ~10–25 min).
+- **Epochs** — optimization epochs (default 3000; more helps quality, ~10–25 min — in session, from the first
+  version of this guide, `c868456`; per-epoch time is measured by fiche K-37).
 - **Enroll** — runs the optimization off the main thread with live
   `epoch/loss` progress. On completion the voice is saved and appears in the
   voice picker.
@@ -102,7 +110,7 @@ quiet room at a natural pace, aiming slightly past the target length — and
 **speak up**: the cloned voice inherits the reference's loudness, and the
 normalization is peak-guarded, so a very quiet take cannot be fully rescued
 (measured on one speaker: a −30 dB take gave −27 dB syntheses, a −23 dB take
-gave −22 dB). The reference is then high-passed (70 Hz), loudness-normalized,
+gave −22 dB — issue #45, in session, audit FV-56). The reference is then high-passed (70 Hz), loudness-normalized,
 noise-gated (quiet windows attenuated by 24 dB — attenuated, not zeroed, so the
 voice doesn't learn a digitally-chopped style), and trimmed to end on a natural
 pause.
@@ -110,7 +118,8 @@ pause.
 ## Notes
 
 - Cloned-voice quality: clearly recognizable but slightly hazier than the
-  official presets (~0.6–0.7 speaker similarity vs. ~0.84 for presets) — an
+  official presets (~0.6–0.7 speaker similarity vs. ~0.84 for presets, in
+  session, see the tables of voice_cloning.md) — an
   inherent limit of the encoder-less workaround. See
   [voice_cloning.md](voice_cloning.md).
 - TTS weights are CC BY-NC 4.0 (non-commercial); clone only voices you have

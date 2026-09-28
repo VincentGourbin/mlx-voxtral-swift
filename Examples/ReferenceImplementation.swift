@@ -4,7 +4,10 @@
  * This is the EXACT way to use VoxtralPipeline for transcription and chat.
  * Copy this pattern in your app.
  *
- * Tested with: v1.0.8, mini-3b-4bit, hybrid backend
+ * Not compiled by any target of Package.swift and not run by the test suite.
+ * Its API calls (VoxtralPipeline init, loadModel, transcribe, chat, unload)
+ * were read against v2.2.2 (9392ed1) by the 2026-09-27 audit (S-20); written
+ * for mini-3b-4bit with the hybrid backend. Requires macOS 15+ / Swift 6.2.
  */
 
 import Foundation

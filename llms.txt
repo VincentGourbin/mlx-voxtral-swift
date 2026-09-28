@@ -1,230 +1,256 @@
 # Voxtral Swift MLX
 
-> Native Swift implementation of Voxtral speech-to-text running on Apple Silicon with MLX
+> Native Swift implementation of Mistral's Voxtral models on Apple Silicon with MLX: speech-to-text (Mini 3B, Small 24B), realtime speech-to-text (Mini 4B Realtime) and text-to-speech (TTS 4B) with voice cloning.
 
-**Version:** 1.0.10
+**Version:** v2.2.x — latest tag `v2.2.2` = commit `9392ed1` (git tags are the version; `VoxtralCoreVersion` = "0.1.0" in `Sources/VoxtralCore/VoxtralCore.swift:45` and `VoxtralCLI --version` = "2.0.0" in `Sources/VoxtralTranscriptionTest/VoxtralCLI.swift:25` do not follow the tags)
 **Repository:** https://github.com/VincentGourbin/mlx-voxtral-swift
+**Checked against:** `9392ed1` (v2.2.2), audit of 2026-09-27 (`docs/audit/2026-09-27/`, findings S-19, S-20, FA-02)
 
 ## Overview
 
-Voxtral Swift MLX is a native Swift library for speech-to-text transcription using Mistral's Voxtral models. It runs locally on Apple Silicon Macs using MLX (Apple's ML framework) with automatic Core ML acceleration for the audio encoder (downloaded automatically from HuggingFace).
+Voxtral Swift MLX is a native Swift library (`VoxtralCore`) with three pipelines, all running locally on Apple Silicon with MLX and downloading their weights from HuggingFace on first use:
 
-## Quick Start
-
-```swift
-import VoxtralCore
-
-// High-level API
-let manager = VoxtralTranscriptionManager()
-try await manager.loadModel()
-let result = try await manager.transcribe(audioURL: audioFile)
-print(result.text)
-manager.unloadModel()
-```
-
-## Main APIs
-
-### VoxtralTranscriptionManager (Recommended)
-
-High-level facade for easy integration:
-
-```swift
-// Check/download model
-VoxtralTranscriptionManager.isDefaultModelDownloaded() -> Bool
-VoxtralTranscriptionManager.isModelDownloaded(_ model: VoxtralPipeline.Model) -> Bool
-VoxtralTranscriptionManager.downloadDefaultModel(progress:) async throws -> URL
-VoxtralTranscriptionManager.deleteDefaultModel() throws
-
-// Transcription
-let manager = VoxtralTranscriptionManager()  // Uses default model (mini-3b-8bit)
-let manager = VoxtralTranscriptionManager(model: .mini3b4bit)  // Specific model
-try await manager.loadModel()
-let result = try await manager.transcribe(audioURL: URL)
-let response = try await manager.chat(audioURL: URL, prompt: String)
-manager.unloadModel()
-
-// Result properties
-result.text          // Transcribed text
-result.tokenCount    // Number of tokens generated
-result.duration      // Generation time in seconds
-result.tokensPerSecond  // Performance metric
-```
-
-### VoxtralPipeline (Recommended for SPM Integration)
-
-Full control over model selection and backend with automatic downloads:
-
-```swift
-// Available models: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
-// Available backends: .mlx (pure GPU), .hybrid (Core ML encoder + MLX decoder), .auto
-
-let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto)
-try await pipeline.loadModel { progress, status in
-    // Downloads MLX model + Core ML encoder automatically from HuggingFace
-    print("\(Int(progress * 100))% - \(status)")
-}
-
-// Transcribe
-let text = try await pipeline.transcribe(audio: audioURL, language: "en")
-
-// Chat (ask questions about audio)
-let response = try await pipeline.chat(audio: audioURL, prompt: "Summarize this", language: "en")
-
-// Check encoder status
-print(pipeline.encoderStatus)  // "Core ML available: true" or "MLX encoder (GPU)"
-
-// Release memory
-pipeline.unload()
-
-// Configuration (before loadModel)
-var config = VoxtralPipeline.Configuration.default
-config.maxTokens = 500
-config.temperature = 0.0
-config.memoryOptimization = .recommended()
-let pipeline = VoxtralPipeline(model: .mini3b8bit, configuration: config)
-```
-
-### ModelDownloader
-
-```swift
-ModelDownloader.isDefaultModelDownloaded() -> Bool
-ModelDownloader.downloadDefaultModel(progress:) async throws -> URL
-ModelDownloader.deleteDefaultModel() throws
-ModelDownloader.defaultModel -> VoxtralModelInfo
-ModelDownloader.resolveModel(_ identifier: String) async throws -> URL
-ModelDownloader.listDownloadedModels() -> [VoxtralModelInfo]
-ModelDownloader.deleteModel(_ model: VoxtralModelInfo) throws
-```
-
-### ModelRegistry
-
-```swift
-ModelRegistry.models -> [VoxtralModelInfo]
-ModelRegistry.defaultModel -> VoxtralModelInfo  // mini-3b-8bit (recommended)
-ModelRegistry.model(withId: String) -> VoxtralModelInfo?
-ModelRegistry.model(withRepoId: String) -> VoxtralModelInfo?
-ModelRegistry.miniModels -> [VoxtralModelInfo]  // 3B models
-ModelRegistry.smallModels -> [VoxtralModelInfo]  // 24B models
-```
-
-## Available Models
-
-| ID | Name | Size | Quantization | Recommended |
-|----|------|------|--------------|-------------|
-| mini-3b | Voxtral Mini 3B | ~6 GB | float16 | |
-| mini-3b-8bit | Voxtral Mini 3B (8-bit) | ~3.5 GB | 8-bit | Yes |
-| mini-3b-4bit | Voxtral Mini 3B (4-bit) | ~2 GB | 4-bit mixed | Low RAM |
-| small-24b | Voxtral Small 24B | ~48 GB | float16 | |
-| small-24b-8bit | Voxtral Small 24B (8-bit) | ~25 GB | 8-bit | High quality |
-| small-4bit | Voxtral Small (4-bit) | ~12 GB | 4-bit mixed | |
-
-All quantized models (4-bit, 8-bit) are fully supported with @ModuleInfo annotations for proper weight loading.
-
-## Key Types
-
-- `VoxtralTranscriptionManager` - High-level transcription API (@MainActor)
-- `VoxtralPipeline` - Configurable inference pipeline (@unchecked Sendable)
-- `VoxtralPipeline.Model` - Enum: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
-- `VoxtralPipeline.Backend` - Enum: .mlx (GPU only), .hybrid (Core ML + MLX), .auto (recommended)
-- `VoxtralPipeline.Configuration` - maxTokens, temperature, topP, repetitionPenalty, memoryOptimization
-- `VoxtralPipeline.State` - Enum: .unloaded, .loading, .ready, .processing, .error(String)
-- `TranscriptionResult` - Result with text, tokenCount, duration, tokensPerSecond
-- `VoxtralModelInfo` - Model metadata (id, repoId, name, size, quantization, parameters, recommended)
-- `ModelDownloader` - Model download/cache management (~/Library/Caches/models/)
-- `ModelRegistry` - Available models catalog
-- `MemoryOptimizationConfig` - GPU memory settings (.recommended(), .aggressive, .moderate, .ultra)
-- `VoxtralMemoryManager` - Runtime memory optimization (singleton: .shared)
-- `VoxtralPipelineError` - Pipeline errors (invalidState, modelNotLoaded, processingFailed)
-- `VoxtralTranscriptionError` - Transcription errors (modelNotLoaded, audioRequired)
-- `DownloadProgressCallback` - Progress callback type: @Sendable (Double, String) -> Void
-
-## Backend Selection
-
-| Backend | Description | Core ML Download |
-|---------|-------------|------------------|
-| `.auto` | Automatically uses Core ML if available, falls back to MLX | Yes (automatic) |
-| `.hybrid` | Forces Core ML encoder + MLX decoder | Yes (required) |
-| `.mlx` | Pure MLX (GPU), no Core ML | No |
-
-**Recommendation:** Use `.auto` for best performance. Core ML encoder is downloaded automatically from HuggingFace to `~/Library/Caches/models/VincentGOURBIN/voxtral-encoder-coreml-mini/`.
-
-## Memory Optimization
-
-```swift
-// Presets
-MemoryOptimizationConfig.recommended()  // Auto-detect based on system RAM
-MemoryOptimizationConfig.moderate       // Balanced
-MemoryOptimizationConfig.aggressive     // Lower memory, slower
-MemoryOptimizationConfig.ultra          // Minimum memory
-
-// Custom
-let config = MemoryOptimizationConfig(
-    maxKVCacheSize: 8192,
-    clearCacheInterval: 50,
-    useAggressiveCleanup: true
-)
-```
-
-## CLI Usage
-
-```bash
-# Download model
-./VoxtralCLI download mini-3b-8bit
-
-# List models
-./VoxtralCLI list
-
-# Transcribe
-./VoxtralCLI transcribe audio.mp3
-./VoxtralCLI transcribe audio.mp3 --backend hybrid
-
-# Chat with audio
-./VoxtralCLI chat audio.mp3 "Summarize this audio"
-
-# With profiling
-./VoxtralCLI transcribe audio.mp3 --profile
-```
+1. **STT** — `VoxtralPipeline` (and the `@MainActor` facade `VoxtralTranscriptionManager`): transcription and chat about an audio file with Voxtral Mini 3B / Small 24B. The audio encoder can run on Core ML (backends `.auto`, `.hybrid`).
+2. **Realtime STT** — `VoxtralRealtimePipeline` (and `VoxtralRealtimeManager`): transcription of an audio file with Voxtral Mini 4B Realtime. No live-input streaming API yet.
+3. **TTS** — `VoxtralTTSPipeline` (and `VoxtralTTSSynthesisManager`): speech synthesis with Voxtral TTS 4B, 20 voice presets in 9 languages (`TTS/VoxtralVoicePresets.swift:19-45`), batch or chunked streaming, plus voice cloning (`enrollVoice`) and procedural voices (ZeroVoice, preset blending).
 
 ## Requirements
 
-- macOS 14.0+ (Sonoma)
+- macOS 15.0+ or iOS 17.0+ (`Package.swift:10-13`; iOS compiles but has never been run on a device — audit FA-09)
 - Apple Silicon (M1/M2/M3/M4)
-- Swift 6.0+
+- Xcode 26+ with the Swift 6.2 toolchain (`swift-tools-version: 6.2`, `Package.swift:1`)
+- Build the CLI and apps with `xcodebuild`, not `swift build` (MLX Metal shaders; see `CLAUDE.md`)
 
 ## Installation (Swift Package Manager)
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", from: "1.0.8")
+    // v2.2.2, pinned by revision
+    .package(url: "https://github.com/VincentGourbin/mlx-voxtral-swift", revision: "9392ed13c9be8d2e9bc1752cd57817d318f2eb40")
+    // or: branch: "main"
 ]
+// target dependency:
+.product(name: "VoxtralCore", package: "mlx-voxtral-swift")
+```
+
+Depending on v2.2.x: since v2.2.2 the package depends on `mlx-swift-lm` by `branch: "main"` (`Package.swift:52`, reason at `:46-51`). SwiftPM does not let a package required by version depend on a branch, so `from: "2.2.0"` cannot resolve to v2.2.2 (audit FA-02). Until `mlx-swift-lm` tags a release beyond `3.31.4` (its latest tag on 2026-09-27, audit FV-02), depend by `revision:` or `branch: "main"`, and if your package also depends on `mlx-swift-lm`, use `branch: "main"` for it too (a version and a branch requirement on the same package cannot be resolved together, `Package.swift:46-50`).
+
+## Quick Start
+
+### STT
+
+```swift
+import VoxtralCore
+
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto)
+try await pipeline.loadModel { progress, status in print("\(Int(progress * 100))% \(status)") }
+let text = try await pipeline.transcribe(audio: audioURL, language: "en")   // language nil = auto-detect
+let answer = try await pipeline.chat(audio: audioURL, prompt: "Summarize this", language: "en")
+pipeline.unload()
+```
+
+### Realtime STT
+
+```swift
+let realtime = VoxtralRealtimePipeline()                 // defaults: maxTokens 4096, temperature 0, transcriptionDelayMs 480 (VoxtralRealtimePipeline.swift:32)
+try await realtime.loadModel(modelId: "realtime-4b-4bit") // nil = registry default
+let text = try await realtime.transcribe(audio: audioURL)
+realtime.unload()
+```
+
+### TTS
+
+```swift
+let tts = VoxtralTTSPipeline()
+try await tts.loadModel(modelInfo: VoxtralTTSRegistry.model(withId: "tts-4b-6bit")!)  // nil = default tts-4b-mlx (bf16)
+let result = try await tts.synthesize(text: "Hello world!", voice: .neutralFemale, seed: 42)
+try WAVWriter.write(waveform: result.waveform, to: outputURL)
+
+for try await chunk in tts.synthesizeStreaming(text: "Long text…", voice: .frFemale, chunkSize: 10) {
+    // chunk.waveform, chunk.isFirst, chunk.isFinal, chunk.elapsed
+}
+tts.unload()
+```
+
+### Voice cloning (TTS)
+
+```swift
+try tts.enrollVoice(referenceURL: refURL, outputURL: URL(fileURLWithPath: "voice.safetensors"))
+let emb = try MLX.loadArrays(url: URL(fileURLWithPath: "voice.safetensors"))["embedding"]!
+let cloned = try await tts.synthesize(text: "Any text.", voiceEmbedding: emb)
+```
+
+The reference is prepared in this order (`TTS/VoiceCloning/VoxtralVoiceEnrollment.swift:138-149`): 70 Hz high-pass (`Config.referenceHighPassHz`), loudness normalization of active speech to −20 dBFS (`Config.referenceTargetRMSdB`), then a noise gate that attenuates windows 30 dB below the loudest 20 ms window by 24 dB (`Config.gateReference`, `gateThresholdDB`, `gateAttenuationDB`). Settings: `VoxtralVoiceEnrollment.swift:47-76`; guide: `docs/voice_cloning.md`.
+
+## Main APIs
+
+### VoxtralTranscriptionManager (@MainActor facade over VoxtralPipeline)
+
+```swift
+VoxtralTranscriptionManager.isDefaultModelDownloaded() -> Bool
+VoxtralTranscriptionManager.isModelDownloaded(_ model: VoxtralPipeline.Model) -> Bool
+VoxtralTranscriptionManager.downloadDefaultModel(progress:) async throws -> URL
+VoxtralTranscriptionManager.deleteDefaultModel() throws
+
+let manager = VoxtralTranscriptionManager()                    // default model mini-3b-8bit, backend .auto
+let manager = VoxtralTranscriptionManager(model: .mini3b4bit)
+try await manager.loadModel()
+let result = try await manager.transcribe(audioURL: URL)       // TranscriptionResult
+let response = try await manager.chat(audioURL: URL, prompt: String)
+manager.unloadModel()
+
+result.text             // transcribed text
+result.duration         // wall-clock seconds of the call
+result.tokenCount       // always 0 at v2.2.2 (VoxtralTranscriptionManager.swift:126) — not a metric
+result.tokensPerSecond  // tokenCount / duration, so always 0 at v2.2.2 — not a metric
+```
+
+### VoxtralPipeline (STT)
+
+```swift
+// Models: .mini3b, .mini3b8bit, .mini3b4bit, .small24b, .small24b8bit, .small4bit
+// Backends: .mlx (MLX encoder), .hybrid (Core ML encoder + MLX decoder), .auto (Core ML if available, else MLX; the default)
+var config = VoxtralPipeline.Configuration.default   // maxTokens 500, temperature 0, topP 0.95, repetitionPenalty 1.2, memoryOptimization .recommended() (VoxtralPipeline.swift:106-122)
+config.maxTokens = 2000                              // 500 tokens ≈ 3 min of speech; the rest is not transcribed (docs/audit/2026-09-27/PLAN.md §1)
+let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .auto, configuration: config)
+print(pipeline.encoderStatus)
+```
+
+### VoxtralTTSPipeline (TTS)
+
+```swift
+VoxtralTTSPipeline.Configuration(maxFrames: 2500, temperature: 0, cfgAlpha: 1.2, flowSteps: 8,   // defaults, VoxtralTTSPipeline.swift:46
+                                 sanitizeText: true, trimLeadIn: true, trimTail: false)
+synthesize(text:voice:seed:) / synthesize(text:voiceEmbedding:seed:warmUpText:warmUpLeadInFrames:)
+synthesize(text:voiceCoordinate:)                                   // ZeroVoice
+synthesizeStreaming(text:voice:chunkSize:seed:warmUpText:warmUpLeadInFrames:)
+enrollVoice(referenceURL:outputURL:config:progress:shouldContinue:)
+```
+
+- `flowSteps`, `cfgAlpha` and `temperature` are **not read** by the TTS path at v2.2.2: 8 Euler steps and CFG alpha 1.2 are hard-coded (`TTS/VoxtralFlowMatching.swift:195-196`). The CLI options `--flow-steps`, `--cfg-alpha`, `-t` have no effect either (audit P-35; fiche K-48).
+- `synthesizeStreaming` generates every frame before yielding the first chunk at v2.2.2 (synchronous `AsyncThrowingStream` build closure, `TTS/VoxtralTTSModeling.swift:569-685`): the first chunk's `elapsed` ≈ total generation time (audit S-08, FA-04; fiche K-12).
+- Without `seed:`, the same text and voice give a different take on every call (flow-matching noise; `VoxtralTTSModeling.swift:440`).
+- `TTSSynthesisResult.timeToFirstToken` = time to the first code frame (prefill included), not the first audio sample (`VoxtralTTSModeling.swift:441`, `:494-497`); `realTimeFactor` = generation time ÷ audio duration, < 1 = faster than real time (`VoxtralTTSProcessor.swift:30-33`). Glossary: `docs/Benchmarks.md` §4.
+- The codec decoder's weights are bf16 in every pack, but it computes in fp32: the quantizer's embeddings are fp32 and promote every layer (`TTS/VoxtralCodecDecoder.swift:336-341`, `:358-361`, `:83`; audit P-38).
+
+### ModelDownloader / ModelRegistry
+
+```swift
+ModelDownloader.customModelsDirectory = myURL          // set once, at startup, before any download
+ModelDownloader.modelsDirectory                        // default ~/Library/Caches/models
+ModelDownloader.resolveModel(_ identifier: String) async throws -> URL
+ModelDownloader.listDownloadedModels() -> [VoxtralModelInfo]
+ModelDownloader.deleteModel(_ model: VoxtralModelInfo) throws
+ModelDownloader.isDefaultModelDownloaded() / downloadDefaultModel(progress:) / deleteDefaultModel() / defaultModel
+
+ModelRegistry.models / defaultModel / model(withId:) / model(withRepoId:) / miniModels / smallModels   // STT
+VoxtralTTSRegistry.models / defaultModel / model(withId:)                                           // TTS
+VoxtralRealtimeRegistry.models / defaultModel / model(withId:)                                      // Realtime
+```
+
+## Available Models
+
+Download = exact bytes of the weight files on the Hub on 2026-09-27, 1 GB = 10⁹ bytes (`docs/Weights.md`). The `size` strings in the registries are approximate.
+
+| Pipeline | ID | Repository | Download (GB) | Precision | Note |
+|---|---|---|---|---|---|
+| STT | mini-3b | mistralai/Voxtral-Mini-3B-2507 | 9.36 (+ 9.35 `consolidated.safetensors`, also downloaded at v2.2.2) | bf16 | |
+| STT | mini-3b-8bit | mzbac/voxtral-mini-3b-8bit | 5.40 | 8-bit | default |
+| STT | mini-3b-4bit | mzbac/voxtral-mini-3b-4bit-mixed | 3.20 | 4-bit mixed | |
+| STT | small-24b | mistralai/Voxtral-Small-24B-2507 | 48.53 (+ 48.52 `consolidated.safetensors`) | bf16 | |
+| STT | small-24b-8bit | registry: VincentGOURBIN/voxtral-small-8bit · `VoxtralPipeline` enum: mzbac/Voxtral-Small-24B-2507-8bit | 26.50 · 28.06 | 8-bit | two repositories for one id at v2.2.2 |
+| STT | small-4bit | VincentGOURBIN/voxtral-small-4bit-mixed | 14.86 | 4-bit mixed | |
+| Realtime | realtime-4b-4bit | mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit | 3.13 | 4-bit | default |
+| Realtime | realtime-4b-fp16 | mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16 | 8.87 | fp16 | |
+| Realtime | realtime-4b | mistralai/Voxtral-Mini-4B-Realtime-2602 | 8.86 (+ 8.86 `model.safetensors`) | bf16 | does not load at v2.2.2 |
+| TTS | tts-4b-mlx | mlx-community/Voxtral-4B-TTS-2603-mlx-bf16 | 8.00 | bf16 | default (slowest) |
+| TTS | tts-4b | mistralai/Voxtral-4B-TTS-2603 | 8.00 | bf16 | original checkpoint |
+| TTS | tts-4b-4bit | mlx-community/Voxtral-4B-TTS-2603-mlx-4bit | 2.51 | 4-bit | |
+| TTS | tts-4b-6bit | mlx-community/Voxtral-4B-TTS-2603-mlx-6bit | 3.47 | 6-bit | |
+
+Backends `.auto` / `.hybrid` also download the Core ML encoder: VincentGOURBIN/voxtral-encoder-coreml-mini (1.32 GB) or -small (1.38 GB), under `~/Library/Caches/models/VincentGOURBIN/`. Licences (`docs/Weights.md`): TTS weights CC BY-NC 4.0 (non-commercial); STT and Realtime weights Apache-2.0 (Hub tag, or the base model's licence for untagged packs). Sources of the notes: `consolidated.safetensors` audit S-07, `small-24b-8bit` audit S-06 (`VoxtralPipeline.swift:47-48` vs `ModelRegistry.swift:89-97`), `realtime-4b` audit M-01, TTS default audit FA-03 (`VoxtralTTSRegistry.swift:29-37`).
+
+## Key Types
+
+- `VoxtralTranscriptionManager` — high-level STT API (@MainActor)
+- `VoxtralPipeline` — STT pipeline (`@unchecked Sendable`); `.Model`, `.Backend`, `.Configuration`, `.State` (.unloaded, .loading, .ready, .processing, .error(String))
+- `VoxtralRealtimePipeline`, `VoxtralRealtimeManager`, `VoxtralRealtimeRegistry`, `VoxtralRealtimeModelInfo` — Realtime STT
+- `VoxtralTTSPipeline`, `VoxtralTTSSynthesisManager`, `VoxtralTTSRegistry`, `VoxtralTTSModelInfo`, `VoxtralVoice` (20 presets), `TTSSynthesisResult`, `WAVWriter` — TTS
+- `VoxtralVoiceEnrollment` (`.Config`, `.Progress`) — voice cloning
+- `TranscriptionResult` — text, duration (tokenCount / tokensPerSecond are always 0 at v2.2.2)
+- `VoxtralModelInfo`, `ModelRegistry`, `ModelDownloader` — STT model catalog and downloads
+- `MemoryOptimizationConfig` — presets `.disabled`, `.light`, `.moderate`, `.aggressive`, `.ultra`, `.recommended(forRAMGB:)`
+- `VoxtralMemoryManager` — process-wide memory settings (singleton `.shared`)
+- `VoxtralPipelineError` (invalidState, modelNotLoaded, processingFailed, transcriptionFailed), `VoxtralTranscriptionError` (modelNotLoaded, audioRequired, transcriptionFailed)
+- `RuntimeBeacon` — opt-in activity manifest for external monitors (`RuntimeBeacon.isEnabled = true`)
+
+## Memory Optimization
+
+```swift
+MemoryOptimizationConfig.recommended()   // by RAM: <16 GB .ultra, 16-31 .aggressive, 32-63 .moderate, ≥64 .light (MemoryOptimizationConfig.swift:77-90)
+MemoryOptimizationConfig.disabled        // no eval/cache management, no KV cache limit
+
+// Custom (the actual fields)
+let memory = MemoryOptimizationConfig(
+    evalFrequency: 8,        // eval() every N tokens (0 = disabled)
+    clearCacheOnEval: false,
+    resetPeakMemory: true,
+    maxKVCacheSize: nil      // nil = unlimited KV cache
+)
+```
+
+Presets `.light` / `.moderate` / `.aggressive` / `.ultra` set `maxKVCacheSize` 8192 / 6144 / 4096 / 2048 (`Configuration/MemoryOptimizationConfig.swift:41-69`).
+
+## Concurrency (v2.2.2)
+
+- Use one pipeline instance for one operation at a time. `VoxtralPipeline`, `VoxtralTTSPipeline` and `VoxtralRealtimePipeline` are `@unchecked Sendable` with unguarded state: two concurrent `loadModel` calls, or `unload()` during a stream, are not protected (audit S-10; fiche K-11).
+- Never run `enrollVoice` concurrently with a synthesis or a load: enrollment does not mark the pipeline busy (`TTS/Pipeline/VoxtralTTSPipeline.swift:425-452`), and a gradient computation concurrent with inference can deadlock mlx-swift 0.31.6 (`Package.swift:43`; audit A-01; fiche K-11).
+- `ModelDownloader` is **not** thread-safe: `customModelsDirectory` and the lazily created Hub client are unguarded statics (`Utils/ModelDownloader.swift:28`, `:32-39`; audit S-11). Set `customModelsDirectory` once at startup.
+- Each `VoxtralPipeline.init` writes the process-wide `VoxtralMemoryManager.shared.config` (`Pipeline/VoxtralPipeline.swift:204`): two STT pipelines with different memory configurations overwrite each other (audit S-11; fiche K-16).
+
+## CLI Usage
+
+The executable is `VoxtralCLI` (`xcodebuild -scheme VoxtralCLI -configuration Release -derivedDataPath .build/xcode -destination 'platform=macOS' build` → `.build/xcode/Build/Products/Release/VoxtralCLI`); `voxtral` in its help text is only the command name.
+
+```bash
+./VoxtralCLI list                                   # models and download status
+./VoxtralCLI download mini-3b-8bit                  # any registry id (STT, Realtime, TTS)
+./VoxtralCLI transcribe audio.mp3 --model mini-3b-8bit --language en
+./VoxtralCLI transcribe audio.mp3 --backend hybrid  # CLI backends: mlx (default) or hybrid; no auto mode (VoxtralCLI.swift:187, :210)
+./VoxtralCLI chat audio.mp3 "Summarize this audio"
+./VoxtralCLI realtime audio.mp3 --model realtime-4b-4bit
+./VoxtralCLI tts "Bonjour !" -o out.wav --model tts-4b-6bit --voice fr_female --seed 42
+./VoxtralCLI enroll ref.wav -o voice.safetensors --model tts-4b --duration 16
+./VoxtralCLI tts "Hello." -o out.wav --model tts-4b --voice-embedding voice.safetensors --seed 7 --warm-up
+./VoxtralCLI profile …                              # profiling; its "RT factor" is audio ÷ generation, the inverse of RTF (ProfileCommand.swift:274)
 ```
 
 ## Source Files
 
-- `Sources/VoxtralCore/Pipeline/VoxtralTranscriptionManager.swift` - High-level API
-- `Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift` - Pipeline implementation
-- `Sources/VoxtralCore/Utils/ModelDownloader.swift` - Model download logic
-- `Sources/VoxtralCore/Utils/ModelRegistry.swift` - Available models catalog
-- `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift` - Memory settings
-- `Sources/VoxtralCore/Utils/VoxtralMemoryManager.swift` - Runtime memory management
-- `Sources/VoxtralCore/VoxtralModeling.swift` - Core model (VoxtralForConditionalGeneration)
-- `Sources/VoxtralCore/VoxtralProcessor.swift` - Audio/text processing
-- `Sources/VoxtralCore/Models/VoxtralLlama.swift` - Llama decoder (LlamaAttention, LlamaMLP)
-- `Sources/VoxtralCore/CoreML/VoxtralHybridEncoder.swift` - Hybrid Core ML + MLX encoder
+- `Sources/VoxtralCore/Pipeline/VoxtralPipeline.swift`, `VoxtralTranscriptionManager.swift` — STT API
+- `Sources/VoxtralCore/Realtime/` (`Pipeline/VoxtralRealtimePipeline.swift`, `VoxtralRealtimeRegistry.swift`) — Realtime STT
+- `Sources/VoxtralCore/TTS/` (`Pipeline/VoxtralTTSPipeline.swift`, `VoxtralTTSRegistry.swift`, `VoxtralTTSModeling.swift`, `VoxtralFlowMatching.swift`, `VoxtralCodecDecoder.swift`, `VoxtralZeroVoice.swift`) — TTS
+- `Sources/VoxtralCore/TTS/VoiceCloning/VoxtralVoiceEnrollment.swift` — voice cloning
+- `Sources/VoxtralCore/CoreML/` — Core ML encoder (hybrid backend)
+- `Sources/VoxtralCore/Utils/ModelDownloader.swift`, `ModelRegistry.swift` — downloads and STT catalog
+- `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift` — memory presets
+- `Sources/VoxtralCore/VoxtralModeling.swift`, `VoxtralProcessor.swift`, `Models/VoxtralLlama.swift` — STT model
+- `Sources/VoxtralTranscriptionTest/VoxtralCLI.swift` — CLI
 
 ## Important: API Usage Guidelines
 
-### ✅ Supported APIs (use these)
+### Supported APIs (use these)
 
-| API | Use Case | Thread Safety |
+| API | Use Case | Concurrency |
 |-----|----------|---------------|
 | `VoxtralTranscriptionManager` | Simple transcription/chat | @MainActor |
-| `VoxtralPipeline` | Custom configuration, backend selection | @unchecked Sendable |
-| `ModelDownloader` | MLX model download/management | Thread-safe |
-| `ModelRegistry` | Model discovery | Thread-safe |
-| `VoxtralCoreMLEncoder.downloadFromHuggingFace()` | Core ML encoder download | async |
+| `VoxtralPipeline` | STT with model, backend and configuration choice | one operation at a time per instance |
+| `VoxtralRealtimePipeline` | Realtime STT of a file | one operation at a time per instance |
+| `VoxtralTTSPipeline` | TTS, streaming, voice cloning | one operation at a time; never enroll during synthesis |
+| `ModelDownloader` | Model download/management | not thread-safe (see Concurrency) |
+| `ModelRegistry`, `VoxtralTTSRegistry`, `VoxtralRealtimeRegistry` | Model discovery | immutable catalogs (`static let`) |
 
-### ❌ Do NOT access directly
+### Do NOT access directly
 
 - `VoxtralForConditionalGeneration` - Internal model class
 - `loadVoxtralModel()` - Internal loading function
@@ -232,31 +258,35 @@ dependencies: [
 - Direct parameter access via `model.parameters()`
 
 **Why?** The internal weight loading uses key transformations (snake_case → camelCase)
-that are not exposed in the public API. Accessing internals will cause `keyNotFound` errors.
+that are not exposed in the public API.
 
-### Example: Correct Usage
+## Documentation
 
-```swift
-// ✅ CORRECT - Use VoxtralPipeline
-let pipeline = VoxtralPipeline(model: .mini3b8bit)
-try await pipeline.loadModel()
-let text = try await pipeline.transcribe(audio: audioURL)
-pipeline.unload()
-
-// ❌ WRONG - Don't access internals
-// let model = try loadVoxtralModel(...)  // Internal function
-// let params = model.parameters()         // Will have wrong keys
-```
+- `README.md` — overview, models, published benchmarks (all "in session": not references)
+- `docs/voice_cloning.md`, `docs/streaming_demo.md`, `docs/tts_benchmark.md`, `docs/zerovoice_benchmark.md`
+- `docs/Weights.md` — exact download sizes, licences, loadability per repository
+- `docs/References.md` — reference configurations (skeleton, to measure)
+- `docs/Benchmarks.md` — measurement protocol and metric glossary (RTF = generation ÷ audio; TTFT-frame ≠ TTFA)
+- `CLAUDE.md` — build, test and measurement rules for coding agents
+- `docs/audit/2026-09-27/` — audit of v2.2.2 and action plan (sources of the v2.2.2 caveats above)
 
 ## Version History
 
-- v1.0.10 - ✅ Fix: Float16 availability in Release builds (SPM integration fix)
-- v1.0.9 - ✅ Refactor: CLI and App now use only VoxtralPipeline API; automatic Core ML download
+Tags and dates: `git tag`, audit FV-01; v2.x summaries from the tag messages.
+
+
+- v2.2.2 (`9392ed1`, 2026-09-12) — mlx-swift-lm `prepare()` protocol compatibility; mlx-swift-lm tracked on `branch: "main"`
+- v2.2.1 (`1570294`, 2026-09-10) — relocated-model storage fixes (symlinked weights, `customModelsDirectory`)
+- v2.2.0 (`f5842ec`, 2026-07-10) — TTS time-to-first-token cut (PR #37)
+- v2.1.0 (`744048b`, 2026-04-03) — tag message: "docs: Add TTS streaming demo screenshot to README"
+- v2.0.0 (`54976d9`, 2026-03-31) — CLI version bump (PR #8)
+- v1.0.10 (`1c6d59c`) - Fix: Float16 availability in Release builds (SPM integration fix)
+- v1.0.9 - Refactor: CLI and App now use only VoxtralPipeline API; automatic Core ML download
 - v1.0.8 - Fix memory alignment crash (loadUnaligned) + revert broken v1.0.6/v1.0.7 changes
-- v1.0.7 - ⚠️ BROKEN - Do not use (gibberish output)
-- v1.0.6 - ⚠️ BROKEN - Do not use (gibberish output)
-- v1.0.5 - ✅ Stable - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
-- v1.0.4 - Tokenizer loading optimization (10-100x faster with binary cache)
+- v1.0.7 - BROKEN - Do not use (gibberish output)
+- v1.0.6 - BROKEN - Do not use (gibberish output)
+- v1.0.5 - Stable - Complete weight loading fix (VoxtralEncoder, LlamaDecoderLayer, LlamaModel)
+- v1.0.4 - Tokenizer loading optimization (binary cache)
 - v1.0.3 - Complete @ModuleInfo coverage for all quantized models
 - v1.0.2 - Fixed LlamaAttention/LlamaMLP quantization
 - v1.0.1 - Added VoxtralTranscriptionManager API

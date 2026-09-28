@@ -7,19 +7,26 @@ Bilingual (EN/FR) benchmark of Voxtral TTS 4B across three quantization levels o
 - **Hardware:** Apple M3 Max, 96 GB unified memory
 - **Model:** Voxtral-4B-TTS-2603 (mlx-community variants)
 - **Voices:** `neutral_male` (EN), `fr_female` (FR)
-- **Config:** cfgAlpha=1.2, flowSteps=8, temperature=0.0
+- **Config:** cfgAlpha=1.2, flowSteps=8, temperature=0.0 — these are the pipeline's default values, and the only
+  ones that apply: at this revision the three settings are not read by the TTS path, 8 Euler steps and CFG alpha 1.2
+  are hard-coded (`Sources/VoxtralCore/TTS/VoxtralFlowMatching.swift:195-196`; audit P-35, fiche K-48)
 - **Features:** Prosody-aware sanitization, lead-in silence trimming, TTFT measurement
-- **Date:** 2026-04-02
+- **Date:** 2026-04-02 — published in commit `6ad4e56`; the code revision measured was not recorded (it predates
+  `a00024f`, `0be05af` and `f4fd21c`, audit FV-30)
 
 ### Model variants
 
-| Variant | HuggingFace repo | Size on disk | Quantization |
+| Variant | HuggingFace repo | Weights (GB)* | Quantization |
 |---|---|---|---|
-| bf16 | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` | ~8 GB | bfloat16 (none) |
-| 6-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit` | ~3.5 GB | 6-bit affine, group_size=64 |
-| 4-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` | ~2.5 GB | 4-bit affine, group_size=64 |
+| bf16 | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` | 8.00 | bfloat16 (none) |
+| 6-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit` | 3.47 | 6-bit affine, group_size=64 |
+| 4-bit | `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` | 2.51 | 4-bit affine, group_size=64 |
 
-> The audio tokenizer (codec decoder) is **not** quantized — it always runs in bf16.
+<sub>*Exact bytes of the weight files on the Hub on 2026-09-27 (1 GB = 10⁹ bytes): [Weights.md](Weights.md).</sub>
+
+> The audio tokenizer (codec decoder) **weights** are not quantized: they are bf16 in every pack. Its
+> **computation** runs in fp32: the quantizer's embeddings are fp32 and promote every convolution and `Linear` that
+> follows (`Sources/VoxtralCore/TTS/VoxtralCodecDecoder.swift:336-341`, `:358-361`, `:83`; audit P-38).
 
 ## Test texts
 
@@ -27,9 +34,24 @@ Bilingual (EN/FR) benchmark of Voxtral TTS 4B across three quantization levels o
 
 **Short FR:** "Fluxforge Studio transforme votre Mac en un studio de creation IA complet."
 
-**Long (~350 words):** Full Fluxforge app description with 11 sections (Forge, Image Generation, Video, Animation, Canvas, LoRA, Training, Background Removal, Library, Privacy, Requirements). See [full text below](#full-test-texts).
+**Long (announced ~350 words; the texts printed below are 163 words EN and 202 words FR, [PLAN.md](audit/2026-09-27/PLAN.md) §1 — possibly
+abridged, to be checked by fiche K-33):** Full Fluxforge app description with 11 sections (Forge, Image Generation, Video, Animation, Canvas, LoRA, Training, Background Removal, Library, Privacy, Requirements). See [full text below](#full-test-texts).
 
 ## Results
+
+> **How to read every table and the TTFT block below.**
+> - **TTFT** = time from the start of `generate` (tokenization and prefill included) to the first evaluated code
+>   frame (`Sources/VoxtralCore/TTS/VoxtralTTSModeling.swift:441`, `:494-497`). It is not the first audio a listener
+>   hears (TTFA), and it excludes the voice-prefix computation.
+> - **Frames** = 80 ms code frames generated; **Audio** = decoded duration; **GenTime** = generation time.
+> - **RTF** = GenTime ÷ Audio, **< 1.0 = faster than real time** (`TTSSynthesisResult.realTimeFactor`,
+>   `Sources/VoxtralCore/TTS/VoxtralTTSProcessor.swift:30-33`). `VoxtralCLI profile` and issues #26/#27 use the
+>   inverse ("RT factor" = audio ÷ generation, `ProfileCommand.swift:274`): the two are not comparable
+>   (audit FA-04). Glossary: [Benchmarks.md](Benchmarks.md) §4.
+> - **Revision**: commit `6ad4e56` (2026-04-02), code revision not recorded, before `a00024f`, `0be05af` and
+>   `f4fd21c` (audit FV-30).
+> - **In session**: M3 Max 96 GB, not measured under the A/B/B/A protocol of [Benchmarks.md](Benchmarks.md) — not a
+>   reference (§6 there). The TTS baseline is re-measured by fiche K-35.
 
 ### Short text (1 sentence)
 
@@ -42,7 +64,7 @@ Bilingual (EN/FR) benchmark of Voxtral TTS 4B across three quantization levels o
 | FR | 6-bit | fr_female | 338ms | 65 | 4.80s | 6.69s | 1.39x |
 | FR | bf16 | fr_female | 864ms | 63 | 4.96s | 25.81s | 5.20x |
 
-### Long text (Fluxforge full description, ~350 words)
+### Long text (Fluxforge full description; 163 words EN / 202 words FR as printed below)
 
 | Text | Model | Voice | TTFT | Frames | Audio | GenTime | RTF |
 |---|---|---|---|---|---|---|---|
@@ -57,6 +79,9 @@ Bilingual (EN/FR) benchmark of Voxtral TTS 4B across three quantization levels o
 
 ### TTFT for conversational use (<500ms target)
 
+TTFT here is the first code frame (definition above), not the first audio heard; in streaming at this revision the
+first chunk arrives only after the whole utterance is generated (audit S-08, fiche K-12).
+
 ```
                     Short EN    Short FR    Long EN    Long FR
 4-bit                400ms      224ms       909ms      1412ms
@@ -68,7 +93,9 @@ bf16                1454ms      864ms      1523ms      1696ms
 
 ## Key findings
 
-1. **4-bit delivers 224ms TTFT on French short text** — viable for real-time conversation on Apple Silicon.
+From the in-session tables above (definitions and caveats there).
+
+1. **4-bit delivers 224ms TTFT (first code frame) on French short text** — viable for real-time conversation on Apple Silicon.
 
 2. **6-bit is the best choice for long French text** — reliable EOA detection (no maxFrames overflow), sub-real-time generation (1.12x RTF).
 

@@ -131,7 +131,7 @@ décroissant → 5. type de profils + CLI `references` / `--reference` → 6. me
 | Fiche | Objet | Source | Porte | Effort | Cible | État |
 |---|---|---|---|---|---|---|
 | K-17 | [Mémoire du projet : `CLAUDE.md`, `docs/knowledge/`, `BENCHMARKS.md`, protocole et glossaire des métriques](fiches/K-17.md) | ACT-20, P-73, FA-04 | fichiers présents : `CLAUDE.md`, `BENCHMARKS.md`, `docs/Benchmarks.md`, `docs/knowledge/index.md`, `docs/knowledge/log.md`, `docs/knowledge/decisions/realtime-diagnostics-23-25.md`, ≥ 6 fichiers `docs/knowledge/pitfalls/*.md` (V-P5 stream synchrone, V-P8 même % GPU, tête liée fp32, fenêtre ignorée, clé `mode`, jeton d'arrêt hérité) ; `CLAUDE.md` contient les 3 commandes exactes de PLAN.md §5 ; glossaire : 1 définition par métrique, citée par `docs/Benchmarks.md` ; 0 chiffre sans source (relecture) ; aucun fichier `.swift` modifié (`git diff --stat`). | S | cloud | fait |
-| K-18 | [Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés)](fiches/K-18.md) | S-19, S-20, FA-02, FA-05, P-35, P-38, P-76, FV-54, ACT-52, P-31 | checklist S-20 (12 points) relue contre `9392ed1` : 0 écart ; `grep -nE 'Swift 6\.0\|Xcode 15\|macOS 14' README.md llms.txt` = 0 ; `grep -n 'true silence' README.md` = 0 ; llms.txt cite v2.2.x et les 3 pipelines ; chaque tableau de `README.md` et `docs/*benchmark*.md` / `docs/voice_cloning.md` porte définition + révision + « en session » ; FV-54 : les deux jeux de chiffres cités avec leur source ; `syntax_guard.py` : 0 erreur nouvelle sur les `.swift` touchés (commentaires seulement : `VoxtralTTSModeling.swift:480-482`, `:528`, `VoxtralVoiceEnrollment.swift:51`). | S | cloud | à faire |
+| K-18 | [Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés)](fiches/K-18.md) | S-19, S-20, FA-02, FA-05, P-35, P-38, P-76, FV-54, ACT-52, P-31 | checklist S-20 (12 points) relue contre `9392ed1` : 0 écart ; `grep -nE 'Swift 6\.0\|Xcode 15\|macOS 14' README.md llms.txt` = 0 ; `grep -n 'true silence' README.md` = 0 ; llms.txt cite v2.2.x et les 3 pipelines ; chaque tableau de `README.md` et `docs/*benchmark*.md` / `docs/voice_cloning.md` porte définition + révision + « en session » ; FV-54 : les deux jeux de chiffres cités avec leur source ; `syntax_guard.py` : 0 erreur nouvelle sur les `.swift` touchés (commentaires seulement : `VoxtralTTSModeling.swift:480-482`, `:528`, `VoxtralVoiceEnrollment.swift:51`). | S | cloud | fait |
 | K-19 | [Annexes Python reproductibles (conversion Core ML, recherche clonage)](fiches/K-19.md) | A-03, A-21, FA-06 | contrôle argparse par AST (sans torch) : 0 argument inconnu et 0 requis manquant pour `convert.sh` et les commandes du README ; `grep -E '>=' Scripts/*/requirements.txt` = 0 ; commit amont épinglé et contrôlé par `enroll_voice.py` ; `grep -n 'Next step' Scripts/VoiceCloningResearch/README.md` = 0 ; commande de similarité ECAPA documentée ; la validation Core ML sur Mac (parité L2 ≤ 1e-2) est portée par K-42. | S | cloud | à faire |
 | K-20 | [Hygiène git : fichiers suivis malgré `.gitignore` (cache `.serena`, WAV)](fiches/K-20.md) | S-25 | `git ls-files -ci --exclude-standard \| wc -l` = 0 (hors exceptions déclarées dans `.gitignore`) ; `.serena/` retiré (−1 790 543 o dans l'arbre suivi) ; si ASK-30 = C : −18 274 912 o (8 WAV) ; 0 lien de doc mort ; les 4 clips du corpus (`fluxforge_{short,long}_{en,fr}_6bit.wav`) toujours présents avec leur SHA-256 noté dans `docs/Benchmarks.md`. | S | cloud | à faire (⛔ ASK-30) |
 | K-21 | [Tracker action-plans : solder #71, #307, #349 et créer le plan upstream-blocker mlx-swift-lm (> 3.31.4)](fiches/K-21.md) | FA-01, FA-02, ACT-02, ACT-03, ACT-04, ACT-07, ACT-39, ACT-41, S-18 | 0 plan `project:mlx-voxtral-swift` en `status:ready-to-act` ; #71, #307, #349 fermés `status:verified`, chacun avec le commentaire-preuve de faits-et-actions.md §3.9 ; 1 plan `kind:upstream-blocker` `github_release ml-explore/mlx-swift-lm semver_gt "3.31.4"` en `monitoring` — **après** avoir vérifié que l'amont publie des GitHub Releases (sinon : source `github_tag` ou plan `manual`, et retour skill) ; lien du plan ajouté au commentaire de `Package.swift:46-51` au prochain commit de code (K-22). | S | cloud | à faire (⛔ ASK-31) |
@@ -503,3 +503,40 @@ Gabarits :
   · `WEIGHTS registre 13 dépôts + 3 hors registre + 13 candidats §3.2 ; 0 ligne sans octets sourcés`
   · `SWIFT git status -- '*.swift' : vide` ; relecture : chaque réglage et chaque valeur « in session » porte sa source
   (`profils.md:N`, `modeles:N`, fichier:ligne) ; octets datés « Hub, 2026-09-27 ».
+
+## K-18 — Docs utilisateur alignées sur le code (exigences, versions, llms.txt, README, réglages TTS, chiffres requalifiés) — 2026-09-27 — validée
+- Fait : `README.md` (exigences macOS 15+ / iOS 17+, Xcode 26+ / Swift 6.2 ; section « Depending on v2.2.x » :
+  `revision:` ou `branch: "main"` tant que mlx-swift-lm n'a pas de tag > 3.31.4 ; Realtime dans l'intro, les
+  Features, une section modèles/CLI/API ; tailles réelles d'après `docs/Weights.md` ; les deux dépôts de
+  `small-24b-8bit` ; préparation de référence passe-haut 70 Hz → normalisation −20 dBFS → gate −24 dB ; réglages TTS
+  `flowSteps`/`cfgAlpha`/`temperature` signalés sans effet (P-35, K-48) ; limite du streaming (S-08) ; section Hybrid
+  réécrite (pas de mode auto en CLI, « ~660 MB » sourcé `1944576`/FV-11 et « en session ») ; arbre complet ; section
+  Documentation liant `docs/References.md`, `docs/Weights.md` (K-81), `CLAUDE.md`, `docs/Benchmarks.md` (K-17)) ;
+  `llms.txt` réécrit (v2.2.x, 3 pipelines, `tokenCount` toujours 0, `ModelDownloader` non thread-safe, section
+  Concurrency, champs réels de `MemoryOptimizationConfig`, codec calculé en fp32) ; tableaux de mesure annotés
+  (définition, révision, « en session ») dans `README.md`, `docs/tts_benchmark.md` (+ codec fp32, P-38),
+  `docs/zerovoice_benchmark.md` (juge non validé, P-78), `docs/voice_cloning.md` (FV-54 : les deux jeux, `db34ca0`
+  et `4fb44b7` ; RTF de la campagne, P-76) ; `docs/streaming_demo.md` (TTFT ≈ Total, FA-04) ; commentaires Swift
+  seulement : `VoxtralTTSModeling.swift:480-482`, `:528` (P-31), `VoxtralVoiceEnrollment.swift:51` (FA-05),
+  en-tête `Examples/ReferenceImplementation.swift`. Littéraux de version du code (`VoxtralCore.swift:45`,
+  `VoxtralCLI.swift:25`) non modifiés (code exécutable) : signalés dans les docs. Pièges cochés : 21 (révision notée
+  ou « non notée » par tableau ; dépendance de branche documentée), V-P4 (RTF = génération ÷ audio rappelé partout,
+  « RT factor » de `profile` signalé inverse).
+- Mesure : aucune (documentation, session cloud).
+- Porte observée :
+  `CHECKLIST S-20 : 12/12` (points de audit-stabilite.md:541-555 relus contre `9392ed1` : 1 version llms.txt →
+  v2.2.x ; 2 TTS/clonage/Realtime → 3 pipelines ; 3 `ModelDownloader` « Thread-safe » → 0 ; 4 `tokenCount` →
+  « always 0 » ; 5 trois versions → tag = version, 0.1.0 et 2.0.0 signalés ; 6 `small-24b-8bit` → deux dépôts ;
+  7 tailles → octets Hub ; 8 `voxtral tts` → 0 ; 9 arbre → Realtime/, CoreML/, Pipeline/, VoiceCloning/,
+  VoxtralBenchmark ; 10 Realtime dans les Features ; 11 section Hybrid `:263-267` → « Auto mode » 0, « 660 MB »
+  sourcé ; 12 en-tête Examples → « Tested with: v1.0.8 » 0)
+  · `GREP 'Swift 6.0|Xcode 15|macOS 14' : 0 · 'true silence' : 0`
+  · `SYNTAX_GUARD 0 erreur nouvelle (3 fichiers .swift, commentaires)` (sortie : « 3 fichier(s) Swift, 0 erreur(s)
+  d'analyse nouvelle(s) » ; `git diff -U0 -- '*.swift'` : 0 ligne modifiée hors commentaire)
+  · `TABLES mesure annotées : README 6/6, tts_benchmark 3/3 + bloc TTFT, zerovoice 11/11 (bloc global), voice_cloning
+  3/3` · `LLMS v2.2.x : 2 · VoxtralPipeline 16 · VoxtralRealtimePipeline 6 · VoxtralTTSPipeline 9`
+  · `FV-54 : 6.4 dB/144→88 Hz (db34ca0) et −14.5→−3.4 dB/132.6→89.6 Hz (4fb44b7) cités`
+  · `LINKS 56 liens relatifs, 0 mort`.
+- Hors périmètre (note) : littéraux de version à générer depuis le tag et résolution `from: "2.2.2"` chez un projet
+  témoin (FA-02, volet macos-gpu) ne sont portés par aucune fiche ; `docs/voice_cloning.md` emploie `voxtral …` pour
+  `VoxtralCLI`.

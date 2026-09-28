@@ -42,7 +42,10 @@ Quality depends far more on the reference than on anything else.
 
 <sub>*ECAPA speaker-embedding cosine of synthesized unseen text vs. the
 reference speaker. Same source, same text, 2000 epochs, only length
-varies. Cross-speaker baseline ≈ 0.05; official presets ≈ 0.84.</sub>
+varies. Cross-speaker baseline ≈ 0.05; official presets ≈ 0.84.
+**Revision**: published in commit `ca49c7a` (2026-07-09), code revision not recorded — before the
+enrollment high-pass fix (`f63e2a8`, 2026-07-25). **In session**: one speaker, one run per length, not a
+reference (audit FV-52; [Benchmarks.md](Benchmarks.md) §6).</sub>
 
 Practical guidance:
 
@@ -87,9 +90,19 @@ Practical guidance:
   > cannot resolve a 70 Hz corner: it attenuated a male fundamental
   > (100–120 Hz) by 24–27 dB, and since the embedding is a prefix the model
   > continues, every synthesis came out thin. Voices enrolled before this fix
-  > are worth re-enrolling — measured on one speaker, re-enrolling the *same*
-  > recording recovered 6.4 dB of fundamental and moved the synthesized pitch
-  > from a harmonic (144 Hz) back onto the speaker's own (88 Hz vs 97 Hz real).
+  > are worth re-enrolling. Re-enrolling the *same* recording of one speaker
+  > with the old and the new filter has been reported twice, with different
+  > figures (audit FV-54):
+  > - this guide (`db34ca0`, 2026-07-26): 6.4 dB of fundamental recovered, and
+  >   the synthesized pitch moved from a harmonic (144 Hz) back onto the
+  >   speaker's own (88 Hz vs 97 Hz real);
+  > - the commit that added the comparison harness (`4fb44b7`, 2026-07-25),
+  >   measured on the syntheses (median over voiced frames): F0/H2 −14.5 →
+  >   −3.4 dB, F0 132.6 → 89.6 Hz (raw mic 89.9 Hz), exact zeros 21.8 % →
+  >   0.3 %, output RMS −38.2 → −33.2 dB.
+  >
+  > Both are single-speaker observations, in session; they agree on the
+  > direction, not on the values.
 
 ## `voxtral enroll` options
 
@@ -129,6 +142,19 @@ results here are a single data point, not a recommendation:
 sentences × 5 seeds per model, transcribed with `mini-3b-8bit` and scored on
 word overlap. Small, single-speaker, single-language — quantization interacts
 with the voice and the text, so it may not transfer to yours.*
+
+> **How to read this table.** *Word coverage* = share of the input words found
+> in the ASR transcription. *Real-time factor* = wall-clock time of the
+> `synthesize` call ÷ audio duration (< 1 = faster than real time); the time
+> includes generating the warm-up vocalise, the duration excludes it once
+> trimmed, so both values are overestimated and only the comparison between
+> the two columns holds (`TTSQuantizationCampaignTests.swift:96-120`).
+> **Revision**: commit `e83778a` (2026-07-26), published here in `bff9788`.
+> **In session**: XCTest harness, build configuration not recorded (the
+> command below runs whatever `build-for-testing` produced, Debug unless told
+> otherwise), first cold synthesis of each model included, models run one after
+> the other without A/B/B/A — the RTFs are not references (audit P-76, FV-41;
+> [Benchmarks.md](Benchmarks.md)).
 
 What this does rule out is the earlier assumption that a quantized model drops
 words with enrolled voices: on this sample q6 dropped **fewer** than bf16. That
@@ -229,7 +255,9 @@ speak a sentence it never uttered. Audio in [`docs/examples/`](examples/).
 
 <sub>*ECAPA speaker cosine of the synthesized phrase vs. the reference
 speaker (3000 epochs). Cross-checks are near zero — each clone matches its
-own target speaker, not the other.</sub>
+own target speaker, not the other. **Revision**: commit `ca49c7a`
+(2026-07-09), before the enrollment high-pass fix (`f63e2a8`). **In session**:
+one take per voice, not a reference (audit FV-52).</sub>
 
 Reproduce:
 

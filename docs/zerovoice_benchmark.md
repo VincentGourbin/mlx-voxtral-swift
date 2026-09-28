@@ -12,6 +12,17 @@ transcribed back using the Voxtral Realtime 4B-4bit STT model.
 - **Method**: Generate speech with blended voice → transcribe back → compare with original text
 - **Blend technique**: Row-wise SLERP on 3072-dim voice embedding hypersphere with norm calibration
 
+> **How to read every table on this page.**
+> - **Definitions**: *Blend t* = SLERP weight toward the second voice (0 = first voice unchanged); *Frames* = 80 ms
+>   code frames generated, *Duration* = audio length; *Transcription* = output of the judge, Voxtral Realtime 4B
+>   4-bit; *Quality* = the author's verdict comparing that transcription with the input text (not a WER). The judge
+>   has never been validated (no WER on a reference corpus, no parity with mlx-audio), and clips longer than 15 s
+>   (20.8 s, 18.8 s) fall outside its encoder window, so an *(empty)* cell cannot be attributed to the TTS rather
+>   than to the judge (audit P-78, P-62).
+> - **Revision**: commit `1cbf014` (2026-03-31); the code revision measured was not recorded.
+> - **In session**: one take per cell, without a fixed seed (TTS seeding exists since `07e6317`, 2026-07-19), so a
+>   cell can change from run to run; not a reference ([Benchmarks.md](Benchmarks.md) §6, audit FV-47).
+
 ## Benchmark 1: Blend Strength Sweep (EN)
 
 Text: *"Hello, this is a procedurally generated voice using ZeroVoice coordinates."*
