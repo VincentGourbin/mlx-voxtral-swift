@@ -244,7 +244,7 @@ tasks:
         Porte : 0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
   - id: K-15
-    subject: "[voxtral K-15] Annulation coopérative (<2 s) et calcul hors pool coopératif"
+    subject: "[voxtral K-15] Annulation coopérative (moins de 2 s) et calcul hors pool coopératif"
     task:
       goal: "Annulation coopérative (<2 s) et calcul hors pool coopératif"
       gate: "annulation d'une transcription de C-long (≈ 11 min) → `CancellationError` en < 2 s, pipeline `.ready` ; idem TTS batch (texte long) et Realtime ; app `VoxtralApp` : 0 blocage > 250 ms du main thread pendant `loadModel` (Instruments, Hangs) ; tests rouges sans le correctif."
@@ -1110,7 +1110,7 @@ tasks:
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-42, K-56]
   - id: K-73
-    subject: "[voxtral K-73] R&D : pas spéculatifs de remplissage (Realtime)"
+    subject: "[voxtral K-73] R et D : pas spéculatifs de remplissage (Realtime)"
     severity: low
     task:
       goal: "R&D : pas spéculatifs de remplissage (Realtime)"

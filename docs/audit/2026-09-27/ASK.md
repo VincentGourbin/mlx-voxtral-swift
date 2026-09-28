@@ -534,4 +534,4 @@ réponse datée ici.
 | ASK-28 | | | |
 | ASK-29 | | | |
 | ASK-30 | | | |
-| ASK-31 | | | |
+| ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
