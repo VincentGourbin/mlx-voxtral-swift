@@ -292,9 +292,11 @@ class TranscriptionManager: ObservableObject {
         // Try setting a temporary low cache limit to force cleanup
         let currentCache = Memory.cacheMemory
         if currentCache > 0 {
+            // Int.max is not MLX's default (block_limit): restore the value read before (K-52, MLX-010)
+            let previous = Memory.cacheLimit
             Memory.cacheLimit = 0  // Temporarily disable caching
             Memory.clearCache()
-            Memory.cacheLimit = Int.max  // Restore default (unlimited)
+            Memory.cacheLimit = previous
         }
     }
 

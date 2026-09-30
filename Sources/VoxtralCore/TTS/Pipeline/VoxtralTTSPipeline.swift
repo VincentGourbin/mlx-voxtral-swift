@@ -37,12 +37,16 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// boundaries, e.g. lip-sync video generation). Like `trimLeadIn`,
         /// ignored by `synthesizeStreaming`.
         public var trimTail: Bool
+        /// MLX buffer-cache limit set after loading and restored at `unload()`; nil leaves the host's
+        /// process-wide setting alone (K-52)
+        public var cacheLimitBytes: Int?
 
         public static var `default`: Configuration {
             Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true, trimTail: false)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false) {
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false, cacheLimitBytes: Int? = nil) {
+            self.cacheLimitBytes = cacheLimitBytes
             self.maxFrames = maxFrames
             self.temperature = temperature
             self.cfgAlpha = cfgAlpha
@@ -77,6 +81,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     /// State, running operation and generation token, changed atomically
     let gate = PipelineGate<State>(.unloaded)
+
+    /// Opt-in MLX cache limit held while loaded (K-52)
+    private let cachePolicy = MLXCachePolicy()
 
     private var ttsModel: VoxtralTTSModel?
     private var tokenizer: TekkenTokenizer?
@@ -183,6 +190,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                 progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
                 loadedModelID = resolvedInfo.id
+                cachePolicy.apply(configuration.cacheLimitBytes)
                 gate.end(generation, state: .ready)
 
             } catch {
@@ -204,7 +212,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let generation = try gate.begin(
                 "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralTTSError.busy, state: .synthesizing)
-            defer { gate.end(generation, state: .ready) }
+            defer {
+                cachePolicy.endOfResponse()
+                gate.end(generation, state: .ready)
+            }
             guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
@@ -321,7 +332,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let generation = try gate.begin(
                 "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralTTSError.busy, state: .synthesizing)
-            defer { gate.end(generation, state: .ready) }
+            defer {
+                cachePolicy.endOfResponse()
+                gate.end(generation, state: .ready)
+            }
             guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
@@ -702,6 +716,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 }
 
                 // Ignored when the pipeline was unloaded or reloaded meanwhile (stale Task)
+                ctx.pipeline.cachePolicy.endOfResponse()
                 ctx.pipeline.gate.end(generation, state: .ready)
             }
         }
@@ -717,6 +732,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         modelDirectory = nil
         loadedModelID = nil
         gate.reset(.unloaded)
+        cachePolicy.restore()
     }
 
     public var isReady: Bool { state.isReady }

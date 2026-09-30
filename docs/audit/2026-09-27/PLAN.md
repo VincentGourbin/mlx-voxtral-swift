@@ -902,3 +902,27 @@ Gabarits :
   - `LONG_AUDIO aggressive(16GB) : 0 crash · first EN OK · last FR KO (K-5)`
   - `74063779984  peak memory footprint` (/usr/bin/time -l, C-long, mini-3b-8bit, .mlx) — dont MLX actif 8 557,4 Mo
 - Mesure : diagnostic, pas une référence (une passe, machine sous pression mémoire).
+
+## K-52 — Politique mémoire MLX opt-in par pipeline — 2026-09-30 — validée (avancée avant K-5/K-32 par Vincent)
+- Fait : `Utils/MLXCachePolicy.swift` : `cacheLimitBytes: Int?` opt-in (`MemoryOptimizationConfig`, configurations TTS et
+  Realtime ; `nil` partout par défaut = l'hôte n'est pas touché) ; la limite est posée à la fin du chargement, le cache
+  vidé en fin de réponse (si la limite est active), la valeur de l'hôte restaurée et le cache vidé à `unload()`.
+  `profile run --cache-limit-mb`. App : la fonction morte qui posait `cacheLimit = Int.max` restaure la valeur lue.
+- Écarts : exécutée sans K-51 (prérequis) et hors tracker (lot 4, pas encore dispatché) ; mesurée par
+  swift-mlx-profiler (`profile run`) et `/usr/bin/time -l`, faute de `$CLI bench` (K-32) ; profils fast/lean non encore
+  définis (K-76) : volet « lean » TTS (pic −20 % pour ≤ +5 % de temps) non mesuré ; vidage aveugle Realtime tous les
+  256 pas inchangé (step p50 non mesuré).
+- Porte observée :
+  - `STT 10 min : peak_footprint 10 994 750 480 ≤ active 8 555 Mo + cacheLimit 2 048 Mo + coreml 0 (+5 %)` —
+    C-long (11 min 21 s), mini-3b-8bit, `.mlx` ; sans limite : 74 070 104 208 (processus 70,6 Go, swap) ; 6/6 points B
+    entre 10 343 et 10 472 Mo de pic processus.
+  - Temps (génération, 4 096 jetons) : série 1 A 138,5 / B 166,8 / B 134,9 / A 138,1 s ; série 2 (balise + veille des
+    balises étrangères : 0) A 183,3 / B 153,3 / B 133,6 / A 134,3 s ; B3/B4 138,5 / 148,6 s. Dispersion A/A de la machine
+    jusqu'à 36 % (GPU 89–99 % occupé ; ReportCrashService à 85 % CPU au machine-check), donc ±5 % non démontrable au sens
+    strict ; points voisins B2/A2 : −0,5 %, meilleur B / meilleur A : −0,5 % → aucun coût détecté.
+  - `TTS unload : footprint ref + 6 Mo (≤ 200)` ; `RT unload : +43 Mo (≤ 200)` (tts-4b-4bit, realtime-4b-4bit, limite
+    512 Mo ; la mémoire revient en ≈ 1–5 s : le pilote GPU reprend les buffers Metal libérés de façon asynchrone ;
+    MLX actif et cache à 0 dès `unload()`).
+  - `MLXCachePolicyTests` 3/3 ; suite `Executed 520 tests, with 19 tests skipped and 0 failures (0 unexpected)`
+- Catalogue : `apply.py scan --pattern MLX-010` : 2 → 0.
+- Mesure : diagnostic comparatif A/B, pas une baseline (pas de ligne `BENCHMARKS.md` : l'instrument `bench` est K-32).

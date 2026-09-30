@@ -23,12 +23,16 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         public var maxTokens: Int
         public var temperature: Float
         public var transcriptionDelayMs: Int
+        /// MLX buffer-cache limit set after loading and restored at `unload()`; nil leaves the host's
+        /// process-wide setting alone (K-52)
+        public var cacheLimitBytes: Int?
 
         public static var `default`: Configuration {
             Configuration(maxTokens: 4096, temperature: 0.0, transcriptionDelayMs: 480)
         }
 
-        public init(maxTokens: Int = 4096, temperature: Float = 0.0, transcriptionDelayMs: Int = 480) {
+        public init(maxTokens: Int = 4096, temperature: Float = 0.0, transcriptionDelayMs: Int = 480, cacheLimitBytes: Int? = nil) {
+            self.cacheLimitBytes = cacheLimitBytes
             self.maxTokens = maxTokens
             self.temperature = temperature
             self.transcriptionDelayMs = transcriptionDelayMs
@@ -52,6 +56,9 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     /// State, running operation and generation token, changed atomically
     let gate = PipelineGate<State>(.unloaded)
+
+    /// Opt-in MLX cache limit held while loaded (K-52)
+    private let cachePolicy = MLXCachePolicy()
     public let sampleRate: Int = 16000
 
     private var model: VoxtralRealtimeModel?
@@ -112,6 +119,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.endPhase("2. Model Loading", category: .modelLoad)
 
                 progress?(1.0, "Realtime model ready")
+                cachePolicy.apply(configuration.cacheLimitBytes)
                 gate.end(generation, state: .ready)
 
             } catch {
@@ -129,7 +137,10 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
             let generation = try gate.begin(
                 "transcription", accepts: { $0.isReady }, refusal: VoxtralRealtimeError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralRealtimeError.busy, state: .processing)
-            defer { gate.end(generation, state: .ready) }
+            defer {
+                cachePolicy.endOfResponse()
+                gate.end(generation, state: .ready)
+            }
             guard let model, let tokenizer else {
                 throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
             }
@@ -199,6 +210,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         tokenizer = nil
         modelDirectory = nil
         gate.reset(.unloaded)
+        cachePolicy.restore()
     }
 
     public var isReady: Bool { state.isReady }

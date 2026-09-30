@@ -175,6 +175,9 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// State, running operation and generation token, changed atomically
     let gate = PipelineGate<State>(.unloaded)
 
+    /// Opt-in MLX cache limit held while loaded (K-52)
+    private let cachePolicy = MLXCachePolicy()
+
     /// Loaded Voxtral model
     private var voxtralModel: VoxtralModel?
 
@@ -272,6 +275,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 try await encoderTask
                 session?.endPhase("4. Encoder Setup", category: .modelLoad)
 
+                cachePolicy.apply(configuration.memoryOptimization.cacheLimitBytes)
                 gate.end(generation, state: .ready)
                 progress?(1.0, "Model ready!")
 
@@ -332,7 +336,10 @@ public class VoxtralPipeline: @unchecked Sendable {
             let generation = try gate.begin(
                 "transcription", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
                 busy: VoxtralPipelineError.busy, state: .processing)
-            defer { gate.end(generation, state: .ready) }
+            defer {
+                cachePolicy.endOfResponse()
+                gate.end(generation, state: .ready)
+            }
 
             guard let model = voxtralModel, let processor = processor else {
                 throw VoxtralPipelineError.modelNotLoaded
@@ -413,7 +420,10 @@ public class VoxtralPipeline: @unchecked Sendable {
             let generation = try gate.begin(
                 "chat", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
                 busy: VoxtralPipelineError.busy, state: .processing)
-            defer { gate.end(generation, state: .ready) }
+            defer {
+                cachePolicy.endOfResponse()
+                gate.end(generation, state: .ready)
+            }
 
             guard let model = voxtralModel, let processor = processor else {
                 throw VoxtralPipelineError.modelNotLoaded
@@ -501,6 +511,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         processor = nil
         hybridEncoder = nil
         gate.reset(.unloaded)
+        cachePolicy.restore()
 
         // Full memory cleanup
         VoxtralMemoryManager.shared.fullCleanup()

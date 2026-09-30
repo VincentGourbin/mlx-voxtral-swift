@@ -65,3 +65,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   sur C-long, MLX actif 8,6 Go stable, cache MLX 24,5 → 56,7 Go sans `cacheLimit`, compression de 45 Go et swap.
   Toujours lire « MLX Active » vs « MLX Cache » du profileur avant de conclure sur la mémoire ; `/usr/bin/time -l`
   (footprint) compte le cache. Conséquence : la politique mémoire (K-52) passe avant les baselines.
+- 2026-09-30 — **K-52 : `cacheLimit` opt-in** : C-long STT 70,6 Go → 10,4 Go de pic processus (actif 8,6 Go + 2 Go), plus
+  de swap, aucun coût en temps détecté (−0,5 % sur points voisins ; bruit machine jusqu'à 36 %). Après `unload()`, la
+  mémoire revient en 1 à 5 s (pilote GPU asynchrone) : mesurer un footprint de déchargement après stabilisation.
+  Mesures faites avec la balise active et une veille des balises d'autres runtimes (aucune pendant la série 2).

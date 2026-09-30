@@ -27,6 +27,10 @@ public struct MemoryOptimizationConfig: Sendable {
     /// generation throw `VoxtralError.contextTooLong` when prompt + `maxTokens` exceed it (K-2).
     public var maxKVCacheSize: Int?
 
+    /// MLX buffer-cache limit (`Memory.cacheLimit`) set by the pipeline after loading, restored at
+    /// `unload()`. `nil` (default, every preset) leaves the host's process-wide setting alone (K-52).
+    public var cacheLimitBytes: Int?
+
     // MARK: - Presets
 
     /// Disabled - no memory optimization (fastest, highest memory)
@@ -101,12 +105,14 @@ public struct MemoryOptimizationConfig: Sendable {
         evalFrequency: Int = 0,
         clearCacheOnEval: Bool = false,
         resetPeakMemory: Bool = false,
-        maxKVCacheSize: Int? = nil
+        maxKVCacheSize: Int? = nil,
+        cacheLimitBytes: Int? = nil
     ) {
         self.evalFrequency = evalFrequency
         self.clearCacheOnEval = clearCacheOnEval
         self.resetPeakMemory = resetPeakMemory
         self.maxKVCacheSize = maxKVCacheSize
+        self.cacheLimitBytes = cacheLimitBytes
     }
 
     // MARK: - Description
@@ -117,6 +123,7 @@ public struct MemoryOptimizationConfig: Sendable {
         if clearCacheOnEval { parts.append("clearCache") }
         if resetPeakMemory { parts.append("resetPeak") }
         if let maxKV = maxKVCacheSize { parts.append("maxKV=\(maxKV)") }
+        if let limit = cacheLimitBytes { parts.append("cacheLimit=\(limit / 1_048_576)MB") }
         return "MemoryOptimizationConfig(\(parts.joined(separator: ", ")))"
     }
 }
@@ -128,7 +135,8 @@ extension MemoryOptimizationConfig: Equatable {
         return lhs.evalFrequency == rhs.evalFrequency &&
                lhs.clearCacheOnEval == rhs.clearCacheOnEval &&
                lhs.resetPeakMemory == rhs.resetPeakMemory &&
-               lhs.maxKVCacheSize == rhs.maxKVCacheSize
+               lhs.maxKVCacheSize == rhs.maxKVCacheSize &&
+               lhs.cacheLimitBytes == rhs.cacheLimitBytes
     }
 }
 

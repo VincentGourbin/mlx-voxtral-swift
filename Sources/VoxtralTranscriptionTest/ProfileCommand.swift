@@ -65,6 +65,11 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "STT language code (e.g. en, fr); omit for auto-detection")
     var language: String?
 
+    @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); omit to leave it unset")
+    var cacheLimitMb: Int?
+
+    private var cacheLimitBytes: Int? { cacheLimitMb.map { $0 * 1_048_576 } }
+
     @Option(name: [.customShort("t"), .long], help: "Temperature (0.0 = greedy, default 0.7 for chat)")
     var temperature: Float?
 
@@ -178,6 +183,7 @@ struct ProfileRun: AsyncParsableCommand {
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
         config.temperature = temperature ?? 0.0
+        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes
 
         let sttBackend: VoxtralPipeline.Backend
         switch backend {
@@ -219,6 +225,7 @@ struct ProfileRun: AsyncParsableCommand {
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
         config.temperature = temperature ?? 0.7
+        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes
 
         let chatPipeline = VoxtralPipeline(model: pipelineModel, configuration: config)
 
@@ -252,6 +259,7 @@ struct ProfileRun: AsyncParsableCommand {
 
         var config = VoxtralTTSPipeline.Configuration.default
         config.maxFrames = maxTokens
+        config.cacheLimitBytes = cacheLimitBytes
 
         let ttsPipeline = VoxtralTTSPipeline(configuration: config)
 
@@ -299,6 +307,7 @@ struct ProfileRun: AsyncParsableCommand {
 
         var config = VoxtralRealtimePipeline.Configuration.default
         config.maxTokens = maxTokens
+        config.cacheLimitBytes = cacheLimitBytes
 
         let realtimePipeline = VoxtralRealtimePipeline(configuration: config)
 
