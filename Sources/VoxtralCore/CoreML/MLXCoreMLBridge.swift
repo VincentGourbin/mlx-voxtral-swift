@@ -78,7 +78,6 @@ private func float16BitsToFloat(_ bits: UInt16) -> Float {
 }
 
 /// Bridge utilities for MLX <-> Core ML tensor conversion
-@available(macOS 13.0, iOS 16.0, *)
 public struct MLXCoreMLBridge {
 
     // MARK: - MLXArray to MLMultiArray
@@ -280,7 +279,6 @@ public enum MLXCoreMLBridgeError: Error, LocalizedError {
 
 // MARK: - MLXArray Extensions
 
-@available(macOS 13.0, iOS 16.0, *)
 extension MLXArray {
 
     /// Convert this MLXArray to Core ML MLMultiArray
@@ -292,7 +290,6 @@ extension MLXArray {
 
 // MARK: - MLMultiArray Extensions
 
-@available(macOS 13.0, iOS 16.0, *)
 extension MLMultiArray {
 
     /// Convert this MLMultiArray to MLX MLXArray
@@ -304,7 +301,6 @@ extension MLMultiArray {
 
 // MARK: - Performance Utilities
 
-@available(macOS 13.0, iOS 16.0, *)
 extension MLXCoreMLBridge {
 
     /// Measure conversion time for benchmarking

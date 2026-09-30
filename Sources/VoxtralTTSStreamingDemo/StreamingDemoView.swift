@@ -3,7 +3,6 @@ import AppKit
 import UniformTypeIdentifiers
 import VoxtralCore
 
-@available(macOS 14.0, *)
 struct StreamingDemoView: View {
     @StateObject private var vm = StreamingDemoViewModel()
     @State private var showRefBuilder = false

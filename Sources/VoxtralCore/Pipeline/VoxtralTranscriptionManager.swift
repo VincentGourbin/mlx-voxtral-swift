@@ -47,7 +47,6 @@ public struct TranscriptionResult: Sendable {
 
 /// High-level API for Voxtral transcription
 /// Thread-safe wrapper around VoxtralPipeline for easy integration
-@available(macOS 13.0, iOS 16.0, *)
 @MainActor
 public class VoxtralTranscriptionManager: @unchecked Sendable {
 
@@ -159,7 +158,6 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
 
 // MARK: - Static Convenience Methods
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralTranscriptionManager {
 
     /// Check if the default model is downloaded

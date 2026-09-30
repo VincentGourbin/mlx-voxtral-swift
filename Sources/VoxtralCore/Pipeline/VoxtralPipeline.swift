@@ -19,7 +19,6 @@ import MLXNN
 import MLXProfiler
 
 /// Simplified facade for Voxtral speech-to-text
-@available(macOS 13.0, iOS 16.0, *)
 public class VoxtralPipeline: @unchecked Sendable {
 
     // MARK: - Model Selection
@@ -557,7 +556,6 @@ public enum VoxtralPipelineError: Error, LocalizedError {
 
 // MARK: - Convenience Extensions
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralPipeline {
 
     /// Quick transcription without explicit load (loads if needed)

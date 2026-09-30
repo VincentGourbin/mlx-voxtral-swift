@@ -16,7 +16,6 @@ import MLX
 import MLXLMCommon
 import MLXProfiler
 
-@available(macOS 14.0, *)
 public class VoxtralTTSPipeline: @unchecked Sendable {
 
     // MARK: - Configuration

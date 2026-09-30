@@ -59,7 +59,6 @@ public struct VoxtralEncoderStatus {
 }
 
 /// Hybrid encoder supporting both Core ML and MLX backends
-@available(macOS 13.0, iOS 16.0, *)
 public class VoxtralHybridEncoder {
 
     // MARK: - Properties
@@ -405,7 +404,6 @@ public class VoxtralHybridEncoder {
 
 // MARK: - Factory Methods
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralHybridEncoder {
 
     /// Create hybrid encoder with Core ML downloaded from HuggingFace
@@ -469,7 +467,6 @@ extension VoxtralHybridEncoder {
 
 // MARK: - Integration with VoxtralForConditionalGeneration
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralForConditionalGeneration {
 
     /// Create a hybrid encoder for this model

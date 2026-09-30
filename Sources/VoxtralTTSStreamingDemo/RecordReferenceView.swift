@@ -3,7 +3,6 @@ import SwiftUI
 /// Record an enrollment reference from the microphone while the user reads a
 /// prompt aloud. When the recording reaches the target length it becomes the
 /// enrollment reference.
-@available(macOS 14.0, *)
 struct RecordReferenceView: View {
     @ObservedObject var vm: StreamingDemoViewModel
     @Environment(\.dismiss) private var dismiss

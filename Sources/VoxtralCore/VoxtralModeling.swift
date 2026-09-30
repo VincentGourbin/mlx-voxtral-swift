@@ -10,7 +10,6 @@ import Foundation
 import MLX
 import MLXNN
 import MLXLMCommon  // For LanguageModel protocol and KVCacheSimple
-import MLXLLM       // For official LlamaModel
 import MLXRandom
 import MLXProfiler
 

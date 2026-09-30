@@ -172,7 +172,6 @@ public struct VoxtralCoreMLConfig {
 }
 
 /// Core ML wrapper for Voxtral audio encoder
-@available(macOS 13.0, iOS 16.0, *)
 public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     // MARK: - Static Configuration
@@ -558,7 +557,6 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
 // MARK: - Async Support
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralCoreMLEncoder {
 
     /// Async version of encode
@@ -580,7 +578,6 @@ extension VoxtralCoreMLEncoder {
 
 // MARK: - Performance Monitoring
 
-@available(macOS 13.0, iOS 16.0, *)
 extension VoxtralCoreMLEncoder {
 
     /// Measure encoding time for benchmarking

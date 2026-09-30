@@ -33,7 +33,6 @@ import AVFoundation
 import MLX
 import MLXRandom
 
-@available(macOS 14.0, *)
 public final class VoxtralVoiceEnrollment {
 
     public struct Config {

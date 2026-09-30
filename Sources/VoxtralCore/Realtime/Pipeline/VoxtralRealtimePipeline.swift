@@ -15,7 +15,6 @@ import Foundation
 import MLX
 import MLXProfiler
 
-@available(macOS 14.0, *)
 public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     // MARK: - Configuration

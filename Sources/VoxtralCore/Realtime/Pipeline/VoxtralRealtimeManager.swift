@@ -17,7 +17,6 @@
 import Foundation
 import MLX
 
-@available(macOS 14.0, *)
 public class VoxtralRealtimeManager: @unchecked Sendable {
 
     private let pipeline: VoxtralRealtimePipeline

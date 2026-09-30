@@ -50,7 +50,7 @@ let package = Package(
         // change (added `prefill: PrefillParameters`) that this package's LanguageModel
         // conformances were updated for. Revisit once ml-explore cuts a tag beyond 3.31.4.
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", branch: "main"),
-        .package(url: "https://github.com/VincentGourbin/swift-mlx-profiler", from: "1.4.0")
+        .package(url: "https://github.com/VincentGourbin/swift-mlx-profiler", from: "1.5.1")
     ],
     targets: [
         // Core library containing all Voxtral model implementations
@@ -60,14 +60,14 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXFFT", package: "mlx-swift"),
-                .product(name: "MLXOptimizers", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "Transformers", package: "swift-transformers"),
+                // Only the Hub module of swift-transformers is imported (ModelDownloader)
+                .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXProfiler", package: "swift-mlx-profiler")
-            ]
+            ],
+            // Dead ArgumentParser script (0 callers): kept out of the library until K-23 removes it
+            exclude: ["Scripts/VoxtralGenerate.swift"]
         ),
         // SwiftUI macOS application
         .executableTarget(
@@ -85,6 +85,7 @@ let package = Package(
             name: "VoxtralTranscriptionTest",
             dependencies: [
                 "VoxtralCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "MLXProfiler", package: "swift-mlx-profiler")
             ]
         ),

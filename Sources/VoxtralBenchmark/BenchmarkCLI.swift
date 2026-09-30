@@ -155,7 +155,6 @@ struct BenchmarkCLI: ParsableCommand {
 
     // MARK: - Real Bridge Benchmark
 
-    @available(macOS 13.0, *)
     func runRealBridgeBenchmark(testFloats: [Float], shape: [Int]) throws {
         // Create MLXArray
         let mlxArray = MLXArray(testFloats).reshaped(shape).asType(.float16)

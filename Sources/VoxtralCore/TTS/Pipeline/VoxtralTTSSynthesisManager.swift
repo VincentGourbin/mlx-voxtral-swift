@@ -16,7 +16,6 @@
 import Foundation
 import MLX
 
-@available(macOS 14.0, *)
 public class VoxtralTTSSynthesisManager: @unchecked Sendable {
 
     /// The underlying pipeline

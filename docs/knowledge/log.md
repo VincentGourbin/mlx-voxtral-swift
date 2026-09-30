@@ -58,3 +58,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-09-30 — **K-11 : une opération GPU à la fois par pipeline** (`PipelineGate`) : l'interblocage ABBA compile ×
   vjp de mlx-swift 0.31.6 est **reproduit** (enrôlement ∥ streaming : blocage dès le 1er essai) et évité (20/20, refus
   `busy` immédiat). `unload()` pendant une opération : la Task périmée ne réécrit plus l'état (jeton de génération).
+- 2026-09-30 — **K-22 : `Package.resolved` suivi** (ASK-28 = A, mlx-swift-lm reste sur `main@604fae7`) et
+  dépendances élaguées de `VoxtralCore` (`MLXLLM`, `MLXOptimizers`, `ArgumentParser`, `Transformers` → `Hub`) ;
+  profiler 1.5.1. Build propre Release de la CLI : 122 s → 96 s.

@@ -4,7 +4,6 @@ import AppKit
 import VoxtralCore
 import MLX
 
-@available(macOS 14.0, *)
 @MainActor
 final class StreamingDemoViewModel: ObservableObject {
 

@@ -383,7 +383,6 @@ struct Chat: AsyncParsableCommand {
 
 // MARK: - TTS Command (Uses VoxtralTTSPipeline)
 
-@available(macOS 14.0, *)
 struct TTS: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tts",
@@ -569,7 +568,6 @@ struct TTS: AsyncParsableCommand {
 
 // MARK: - Enroll Command (voice cloning)
 
-@available(macOS 14.0, *)
 struct Enroll: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "enroll",
@@ -673,7 +671,6 @@ struct Enroll: AsyncParsableCommand {
 
 // MARK: - Realtime Command (Uses VoxtralRealtimePipeline)
 
-@available(macOS 14.0, *)
 struct Realtime: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "realtime",

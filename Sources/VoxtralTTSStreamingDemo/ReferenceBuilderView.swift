@@ -5,7 +5,6 @@ import UniformTypeIdentifiers
 /// Build a voice-cloning reference from a video/audio file: pick the source,
 /// select one or more extracts (start/end sliders + preview), and assemble
 /// them into a single reference of the target length.
-@available(macOS 14.0, *)
 struct ReferenceBuilderView: View {
     @ObservedObject var vm: StreamingDemoViewModel
     @Environment(\.dismiss) private var dismiss

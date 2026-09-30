@@ -853,3 +853,23 @@ Gabarits :
   pour la suite : ASK-8 et ASK-9 (K-5, prérequis de K-32), ASK-4 (K-76), ASK-5, ASK-13, ASK-18 (K-79).
 - ASK-8 = A et ASK-9 = A (Vincent, 2026-09-30, même session) : #579 (K-5) et #564 (K-14) rouvertes. Chemin vers les
   baselines : K-2 (#567) → K-5 (#579) ; K-22 (#566) ; puis K-32 (#584).
+
+## K-22 — Package : dépendances élaguées, résolution reproductible, profiler 1.5.1, `@available` nettoyés — 2026-09-30 — validée
+- Fait (ASK-28 = A) : `VoxtralCore` ne dépend plus de `MLXLLM` (import sans symbole retiré), `MLXOptimizers`,
+  `ArgumentParser` ni du produit `Transformers` (seulement `Hub`) ; `Scripts/VoxtralGenerate.swift` (interne, mort,
+  seul importateur d'`ArgumentParser`) exclu de la cible en attendant sa suppression (K-23) ; `ArgumentParser`
+  déclaré par la cible CLI ; swift-mlx-profiler `from: "1.5.1"` ; `Package.resolved` suivi (retiré du `.gitignore`) ;
+  28 `@available(macOS 13|14…)` sous le plancher (macOS 15 / iOS 17) retirés. `VoxtralBenchmark` gardé ici : son
+  retrait (ASK-26 = B) revient à K-32.
+- FluxForge : sources de l'app sans import de `MLXLLM`, `MLXOptimizers`, `Transformers`, `ArgumentParser` ; non
+  compilé ici (il suit `main` de ce dépôt par branche et son dépôt porte des changements d'une autre session).
+- Porte observée :
+  - `** BUILD SUCCEEDED ** × 4 (VoxtralCLI, VoxtralApp, VoxtralBenchmark, VoxtralTTSStreamingDemo)`
+  - `Executed 515 tests, with 16 tests skipped and 0 failures (0 unexpected)`
+  - `DEPS swift-mlx-profiler 1.5.1 · mlx-swift-lm main@604fae7 · mlx-swift 0.31.6` (seul le profiler a bougé :
+    1.4.0@b2a83b3 → 1.5.1@bfe71d8)
+  - `GREP @available(macOS 1[34] : 0`
+  - `BUILD_TIME clean VoxtralCore avant 122 s après 96 s` (build propre Release de `VoxtralCLI`, dossier neuf,
+    `-onlyUsePackageVersionsFromResolvedFile`)
+  - `Package.resolved` : révisions identiques après `swift package resolve` sur deux clones neufs (voir rapport)
+- Mesure : temps de build seulement (une passe chacun, pas de banc).

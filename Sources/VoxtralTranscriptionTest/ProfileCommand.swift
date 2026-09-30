@@ -29,7 +29,6 @@ enum PipelineType: String, ExpressibleByArgument, CaseIterable {
 
 // MARK: - Profile Run
 
-@available(macOS 14.0, *)
 struct ProfileRun: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "run",
