@@ -16,7 +16,6 @@
 
 import Foundation
 @preconcurrency import CoreML
-import Hub
 
 /// Errors specific to Core ML encoder operations
 public enum VoxtralCoreMLError: Error, LocalizedError {
@@ -225,6 +224,15 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         } catch {
             throw VoxtralCoreMLError.modelLoadFailed(error.localizedDescription)
         }
+
+        // A mini encoder (3072) under a small config (5120), or the reverse, would produce
+        // embeddings of the wrong width: refuse it here rather than at the first transcription.
+        if let declared = model.modelDescription.outputDescriptionsByName[outputName]?
+            .multiArrayConstraint?.shape.map({ $0.intValue }),
+           let width = declared.last, width != config.variant.hiddenSize {
+            throw VoxtralCoreMLError.modelLoadFailed(
+                "\(modelURL.lastPathComponent) outputs \(declared), expected width \(config.variant.hiddenSize) for the \(config.variant.rawValue) variant")
+        }
     }
 
     /// Initialize by searching for the model in common locations
@@ -242,13 +250,15 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         modelNames.append(config.variant.modelName)
         modelNames.append(config.variant.modelName.replacingOccurrences(of: ".mlmodelc", with: ".mlpackage"))
 
-        // Add generic fallback names (legacy support)
-        modelNames.append(contentsOf: [
-            "VoxtralEncoderFull.mlmodelc",
-            "VoxtralEncoderFull.mlpackage",
-            "VoxtralEncoder.mlmodelc",
-            "VoxtralEncoder.mlpackage"
-        ])
+        // Generic legacy names are mini encoders (3072): never offer them to another variant
+        if config.variant == .mini {
+            modelNames.append(contentsOf: [
+                "VoxtralEncoderFull.mlmodelc",
+                "VoxtralEncoderFull.mlpackage",
+                "VoxtralEncoder.mlmodelc",
+                "VoxtralEncoder.mlpackage"
+            ])
+        }
         var foundURL: URL?
 
         // Search in main bundle
@@ -372,6 +382,10 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         guard let audioEmbeddings = output.featureValue(for: outputName)?.multiArrayValue else {
             throw VoxtralCoreMLError.outputExtractionFailed("Output '\(outputName)' not found or not MLMultiArray")
         }
+        let outputShape = audioEmbeddings.shape.map { $0.intValue }
+        guard outputShape == config.outputShape else {
+            throw VoxtralCoreMLError.outputExtractionFailed("Output shape \(outputShape), expected \(config.outputShape)")
+        }
 
         return audioEmbeddings
     }
@@ -453,71 +467,44 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
         progress?(0.0, "Checking cache for \(variant.rawValue) encoder...")
 
-        // Check if already cached. Honors ModelDownloader.customModelsDirectory so the
-        // Core ML encoder lands under the same app-chosen root as every other model
-        // instead of always writing to ~/Library/Caches.
-        let cacheDir = ModelDownloader.modelsDirectory
-            .appendingPathComponent(repo.replacingOccurrences(of: "/", with: "--"))
-
-        let modelPath = cacheDir.appendingPathComponent(modelName)
-
-        // Check if model exists in cache
-        if FileManager.default.fileExists(atPath: modelPath.path) {
-            // Verify it's a valid Core ML model
-            let compiledPath = modelPath.appendingPathComponent("model.mil")
-            let weightsPath = modelPath.appendingPathComponent("weights")
-            if FileManager.default.fileExists(atPath: compiledPath.path) ||
-               FileManager.default.fileExists(atPath: weightsPath.path) {
-                progress?(1.0, "Core ML \(variant.rawValue) model found in cache")
-                return modelPath
-            }
+        // Same layout and completeness manifest as every other model (K-6):
+        // modelsDirectory/<org>/<repo>/<name>, under customModelsDirectory when the app sets one.
+        // No HubApi: nothing is written to ~/.cache/huggingface and a verified copy loads offline.
+        let repoDir = ModelDownloader.modelsDirectory.appendingPathComponent(repo)
+        let modelPath = repoDir.appendingPathComponent(modelName)
+        if isCompleteEncoder(repoDir: repoDir, modelPath: modelPath) {
+            progress?(1.0, "Core ML \(variant.rawValue) model found in cache")
+            return modelPath
         }
 
         progress?(0.1, "Downloading \(variant.rawValue) encoder from HuggingFace...")
         VoxtralDebug.log("Downloading Core ML \(variant.rawValue) encoder from \(repo)")
 
-        // Create Hub API. HubApi appends "models/" to downloadBase, so pass the
-        // parent of modelsDirectory (which already ends in ".../models").
-        let hubApi = HubApi(
-            downloadBase: ModelDownloader.modelsDirectory.deletingLastPathComponent(),
-            useOfflineMode: false
-        )
-
-        // Download the model
+        let callback = Locked(progress)
         do {
-            progress?(0.2, "Fetching \(modelName)...")
-
-            // Download the entire repository snapshot
-            // The model is stored as a directory (VoxtralEncoderMini.mlmodelc/)
-            let snapshotURL = try await hubApi.snapshot(
-                from: repo,
-                matching: ["\(modelName)/*", "\(modelName)/**/*"]
+            // The glob does not cross "/" (no `**`): the .mlmodelc is two levels deep at most
+            _ = try await ModelDownloader.downloadRepoDirect(
+                repoId: repo,
+                matching: ["\(modelName)/*", "\(modelName)/*/*"],
+                progress: { fraction, message in callback.get()?(0.1 + 0.85 * fraction, message) }
             )
-
-            progress?(0.9, "Verifying download...")
-
-            // The snapshot URL points to the repo directory, find the model inside
-            let downloadedModelPath = snapshotURL.appendingPathComponent(modelName)
-
-            if FileManager.default.fileExists(atPath: downloadedModelPath.path) {
-                progress?(1.0, "Core ML \(variant.rawValue) encoder downloaded!")
-                return downloadedModelPath
-            }
-
-            // If exact path doesn't work, try finding it
-            let enumerator = FileManager.default.enumerator(at: snapshotURL, includingPropertiesForKeys: nil)
-            while let url = enumerator?.nextObject() as? URL {
-                if url.lastPathComponent == modelName && url.hasDirectoryPath {
-                    progress?(1.0, "Core ML \(variant.rawValue) encoder downloaded!")
-                    return url
-                }
-            }
-
-            throw VoxtralCoreMLError.modelNotFound("Model \(modelName) not found in downloaded snapshot from \(repo)")
-
         } catch {
             throw VoxtralCoreMLError.modelLoadFailed("Failed to download \(variant.rawValue) encoder from HuggingFace: \(error.localizedDescription)")
         }
+
+        guard isCompleteEncoder(repoDir: repoDir, modelPath: modelPath) else {
+            throw VoxtralCoreMLError.modelNotFound("\(modelName) incomplete after download from \(repo) (\(repoDir.path))")
+        }
+        progress?(1.0, "Core ML \(variant.rawValue) encoder downloaded!")
+        return modelPath
+    }
+
+    /// A downloaded encoder is usable when its repo folder carries a verified manifest
+    /// and the compiled model holds both its program and its weights.
+    private static func isCompleteEncoder(repoDir: URL, modelPath: URL) -> Bool {
+        ModelDownloader.hasCompleteManifest(repoDir)
+            && ModelDownloader.fileSize(at: modelPath.appendingPathComponent("model.mil")) != nil
+            && ModelDownloader.fileSize(at: modelPath.appendingPathComponent("weights/weight.bin")) != nil
     }
 
     /// Download Core ML encoder for a specific MLX model

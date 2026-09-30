@@ -35,3 +35,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   types `@unchecked Sendable` porteurs d'`MLXArray` évaluent dans leur `init`. Avant : 11 courses TSan dans
   VoxtralCore et un plantage du test concurrent ; après : 0. **TSan signale toujours 2 courses dans MLX**
   (`MetalAllocator`, `active_memory_` lu sans verrou, jusqu'à mlx main) : bruit amont, à ignorer dans les portes TSan.
+- 2026-09-30 — **K-25 : encodeur Core ML sous `customModelsDirectory`** : téléchargé par `downloadRepoDirect` avec
+  le manifeste K-6 (`<racine>/<org>/<repo>/<nom>.mlmodelc`), rechargé hors ligne, plus rien dans
+  `~/.cache/huggingface`. Un encodeur mini sous configuration small, ou l'encodeur MLX aléatoire par défaut, lève
+  une erreur. Astuce de test : `sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))'`
+  coupe le réseau d'un seul processus sans toucher au Wi-Fi.

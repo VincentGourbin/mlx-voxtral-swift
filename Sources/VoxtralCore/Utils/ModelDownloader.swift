@@ -421,6 +421,12 @@ public class ModelDownloader {
         try encoder.encode(manifest).write(to: folder.appendingPathComponent(manifestFileName), options: .atomic)
     }
 
+    /// True when `folder` holds a readable manifest and every file it lists is present with its size.
+    static func hasCompleteManifest(_ folder: URL) -> Bool {
+        guard let manifest = readManifest(at: folder), !manifest.files.isEmpty else { return false }
+        return manifest.files.allSatisfy { fileSize(at: folder.appendingPathComponent($0.path)) == $0.size }
+    }
+
     /// Single completeness rule for STT, TTS and Realtime folders.
     ///
     /// With a manifest: every listed file is present with its recorded size. Without one
@@ -430,8 +436,7 @@ public class ModelDownloader {
     static func isComplete(folder: URL, requiresVoices: Bool = false) -> Bool {
         let fm = FileManager.default
         if fm.fileExists(atPath: folder.appendingPathComponent(manifestFileName).path) {
-            guard let manifest = readManifest(at: folder), !manifest.files.isEmpty else { return false }
-            return manifest.files.allSatisfy { fileSize(at: folder.appendingPathComponent($0.path)) == $0.size }
+            return hasCompleteManifest(folder)
         }
 
         guard fm.fileExists(atPath: folder.appendingPathComponent("model.safetensors.index.json").path),

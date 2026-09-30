@@ -709,3 +709,24 @@ Gabarits :
     `PARITY WAV identiques : sha256 b7ed7956… avant = après correctif (245 804 o)`
   - suite complète : `Executed 496 tests, with 13 tests skipped and 0 failures (0 unexpected)`
 - Mesure : aucune (fiche de stabilité).
+
+## K-25 — Encodeur Core ML : chemin unique sous `customModelsDirectory`, hors ligne, erreurs explicites — 2026-09-30 — validée
+- Fait : `VoxtralCoreMLEncoder.downloadFromHuggingFace` passe par `ModelDownloader.downloadRepoDirect`
+  (globs `<nom>/*`, `<nom>/*/*`) vers `modelsDirectory/<org>/<repo>/<nom>`, avec le manifeste K-6 ; une copie
+  vérifiée (manifeste + `model.mil` + `weights/weight.bin`) se recharge sans réseau ; plus de `HubApi` (ni
+  `import Hub`) dans l'encodeur. Forme de sortie vérifiée au chargement (largeur déclarée ≠ variante ⇒ erreur) et à
+  chaque `encode` ; noms legacy (`VoxtralEncoderFull`…) réservés à `.mini` ; l'encodeur hybride transmet sa
+  configuration de variante, ne charge plus de Core ML quand `.mlx` est demandé, et refuse d'encoder avec l'encodeur
+  MLX aléatoire par défaut (un encodeur fourni par `setMLXEncoder` reste utilisable) ; `mlxAvailable` = poids
+  chargés ; repli MLX et statut d'encodeur journalisés (`VoxtralDebug.always`).
+- Écart : « réseau coupé » simulé par `URLProtocol` dans le test et par `sandbox-exec` (sortie IP interdite, vérifié :
+  `curl` → 000) pour le CLI, qui n'a pas d'option de dossier (contrôle réel sous `~/Library/Caches/models`).
+- Porte observée :
+  - `RED   testMiniEncoderUnderSmallConfigThrows, testUninitializedMLXEncoderThrows : Executed 2 tests, with 2 failures`
+  - `GREEN CoreMLEncoderPathTests : Executed 3 tests, with 0 failures (0 unexpected)` (lourds inclus,
+    `customModelsDirectory = <tmp>/VoxtralModels`, encodeur trouvé sous ce dossier)
+  - `OFFLINE 2e chargement hybride : Core ML available: true` (test : 0 requête ; CLI sous sandbox-exec :
+    `Encoder: Core ML (Neural Engine), Core ML available: true`, transcription correcte)
+  - `HFCACHE ~/.cache/huggingface : +0 octet` (test : 3 393 475 543 → 3 393 475 543 ; CLI : 3 314 216 Ko avant/après)
+  - suite complète : `Executed 499 tests, with 15 tests skipped and 0 failures (0 unexpected)`
+- Mesure : aucune.

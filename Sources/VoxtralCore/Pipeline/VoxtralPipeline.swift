@@ -288,11 +288,14 @@ public class VoxtralPipeline: @unchecked Sendable {
                 )
                 VoxtralDebug.log("Hybrid encoder created with Core ML: \(hybridEncoder?.status.description ?? "nil")")
             } catch {
-                // If Core ML download fails, fall back to pure MLX
-                VoxtralDebug.log("Core ML download failed (\(error)), using MLX fallback")
+                // If Core ML download fails, fall back to pure MLX (said, not silent)
+                VoxtralDebug.always("Core ML encoder unavailable (\(error.localizedDescription)); using the MLX encoder")
                 hybridEncoder = voxtralModel.createHybridEncoder(
                     preferredBackend: .mlx
                 )
+            }
+            if let status = hybridEncoder?.status {
+                VoxtralDebug.always("Encoder: \(status.backend.displayName), Core ML available: \(status.coreMLAvailable)")
             }
 
         case .mlx:

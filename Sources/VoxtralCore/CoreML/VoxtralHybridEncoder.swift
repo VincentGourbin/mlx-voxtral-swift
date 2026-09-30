@@ -69,6 +69,8 @@ public class VoxtralHybridEncoder {
 
     /// MLX encoder and projector (fallback)
     private var mlxEncoder: VoxtralEncoder?
+    /// False for the randomly initialized default encoder, true once one is supplied via setMLXEncoder
+    private var mlxEncoderHasWeights = false
     private var mlxProjector: VoxtralMultiModalProjector?
 
     /// Currently active backend
@@ -109,13 +111,16 @@ public class VoxtralHybridEncoder {
         self.preferredBackend = preferredBackend
         self.activeBackend = .mlx  // Will be updated
 
-        // Try to load Core ML encoder
-        if let url = coreMLModelURL {
+        // Try to load Core ML encoder (never when MLX is explicitly requested: the
+        // bundled .mlmodelc would be loaded for nothing)
+        if preferredBackend == .mlx {
+            VoxtralDebug.log("MLX encoder requested: Core ML not loaded")
+        } else if let url = coreMLModelURL {
             do {
-                self.coreMLEncoder = try VoxtralCoreMLEncoder(modelURL: url)
+                self.coreMLEncoder = try VoxtralCoreMLEncoder(modelURL: url, config: coreMLConfig ?? .default)
                 VoxtralDebug.log("Core ML encoder loaded successfully")
             } catch {
-                VoxtralDebug.log("Failed to load Core ML encoder: \(error)")
+                VoxtralDebug.always("Failed to load Core ML encoder (\(error)); using MLX")
             }
         } else {
             // Try auto-discovery with variant-specific config
@@ -146,6 +151,7 @@ public class VoxtralHybridEncoder {
     /// - Parameter encoder: The VoxtralEncoder instance with loaded weights
     public func setMLXEncoder(_ encoder: VoxtralEncoder) {
         self.mlxEncoder = encoder
+        self.mlxEncoderHasWeights = true
     }
 
     /// Set the MLX encoder from VoxtralStandardEncoder (with loaded weights)
@@ -286,14 +292,12 @@ public class VoxtralHybridEncoder {
             return result
         }
 
-        // Fallback to basic MLX encoder (uninitialized weights - not recommended)
-        guard let encoder = mlxEncoder else {
-            throw VoxtralCoreMLError.notAvailable("MLX encoder not initialized")
+        // The default MLX encoder has random weights: its output would be noise, so refuse
+        guard let encoder = mlxEncoder, mlxEncoderHasWeights else {
+            throw VoxtralCoreMLError.notAvailable(
+                "MLX encoder has no loaded weights: call setMLXEncoderFromStandard(_:) or setMLXEncoder(_:), or use a Core ML encoder")
         }
 
-        VoxtralDebug.log("WARNING: Using MLX encoder without loaded weights")
-
-        // Process through encoder
         let (hiddenStates, _, _) = encoder(inputFeatures)  // [numChunks, 1500, 1280]
 
         // Reshape for projector: [numChunks, 1500, 1280] -> [-1, 5120]
@@ -324,7 +328,7 @@ public class VoxtralHybridEncoder {
             backend: activeBackend,
             isReady: coreMLEncoder != nil || mlxEncoder != nil,
             coreMLAvailable: coreMLEncoder != nil,
-            mlxAvailable: mlxEncoder != nil,
+            mlxAvailable: standardEncoder != nil || mlxEncoderHasWeights,
             lastInferenceTimeMs: lastInferenceTimeMs
         )
     }
@@ -369,7 +373,7 @@ public class VoxtralHybridEncoder {
         }
 
         // Benchmark MLX
-        if mlxEncoder != nil {
+        if standardEncoder != nil || mlxEncoderHasWeights {
             let originalBackend = activeBackend
             activeBackend = .mlx
 
@@ -425,9 +429,10 @@ extension VoxtralHybridEncoder {
             progress: progress
         )
 
-        // Create hybrid encoder with downloaded model
+        // Create hybrid encoder with downloaded model (variant config: output width checked)
         return VoxtralHybridEncoder(
             coreMLModelURL: modelURL,
+            coreMLConfig: variant == .small ? .small : .mini,
             encoderConfig: encoderConfig,
             projectorIntermediateSize: projectorIntermediateSize,
             preferredBackend: preferredBackend
