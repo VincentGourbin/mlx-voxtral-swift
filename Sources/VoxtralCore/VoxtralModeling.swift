@@ -444,6 +444,12 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     @ModuleInfo(key: "audio_tower") public var audioTower: VoxtralEncoder
     @ModuleInfo(key: "multi_modal_projector") public var multiModalProjector: VoxtralMultiModalProjector
 
+    /// Token ids that end STT generation, shared by both generation loops. Tekken defaults:
+    /// `</s>` (2) and `[/INST]` (4). Special ids are < 1 000 (text id = rank + 1 000): the former
+    /// 32000 was "␣Capital" and cut transcriptions at that word (S-01). `VoxtralPipeline` sets them
+    /// from its tokenizer (`generation_config.json`).
+    public var stopTokenIds: [Int] = [2, 4]
+
     // CRITICAL: Store reference to standardModel for using loaded audio components
     // Internal access needed for VoxtralHybridEncoder extension to use loaded audio tower
     var standardModel: VoxtralStandardModel?
@@ -1123,7 +1129,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
-            let stopTokens = [2, 4, 32000]
+            let stopTokens = stopTokenIds
 
             let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
 
@@ -1319,7 +1325,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
-            let stopTokens = [2, 4, 32000]
+            let stopTokens = stopTokenIds
 
             // Merge token embeddings with pre-computed audio embeddings
             let inputsEmbeds = mergeInputEmbeddingsWithAudioEmbeds(inputIds: inputIds, audioEmbeds: audioEmbeds)

@@ -777,3 +777,22 @@ Gabarits :
 - Révisions : mlx-swift `0bb916c67f4b9e5c682cbe02a42c701c93ab5021`, mlx-swift-lm
   `604fae710a4e3324346fc59e3845952350acd4b7`, swift-mlx-profiler `b2a83b36a24b2e252573369644259a648fbaf18a`
   (identiques A et B).
+
+## K-4 — Jetons d'arrêt dérivés du tokenizer (fin de la troncature sur « ␣Capital ») — 2026-09-30 — validée
+- Fait : `VoxtralForConditionalGeneration.stopTokenIds` (additif), une seule définition pour `generateStream` et
+  `generateStreamWithAudioEmbeds`, par défaut `[2, 4]` (`</s>`, `[/INST]`) ; `VoxtralPipeline.loadModel` la pose depuis
+  son tokenizer (`eosToken` de `generation_config.json`, `getControlToken("[/INST]")`). 32000 (« ␣Capital ») supprimé.
+- Écart : la preuve rouge ne passe pas par `git stash` (le test lit `stopTokenIds`, absent avant) : la propriété a
+  d'abord été introduite avec la liste historique `[2, 4, 32000]` (refonte sans changement de comportement), test
+  rouge, puis la valeur corrigée. Porte « One » : l'ASR écrit « 1 » (normalisation des nombres, pas une troncature) ;
+  jugée atteinte par Vincent.
+- Catalogue : `apply.py scan --pattern MLX-017` : 2 → 1 (reste la valeur de repli `[2, 4]`, deux ids spéciaux ; le
+  détecteur ne distingue pas un id spécial d'un id texte).
+- Porte observée :
+  - `RED   StopTokenTests.testStopTokensAreSpecialIds : 32000 ≥ 1000`
+  - `GREEN Executed 2 tests, with 0 failures (0 unexpected)` ; suite complète :
+    `Executed 503 tests, with 15 tests skipped and 0 failures (0 unexpected)`
+  - `CAPITAL before: « Capital A's and Capital »  after: « Capital A's and Capital 1 are two different things. The
+    capital of France is Paris, »` (clip `tts-4b-6bit`, `neutral_female`, graine 42 ; « One » rendu « 1 »)
+  - `PARITY greedy 3/3 identiques (C-court EN, C-court FR, C-moyen EN)` (`mini-3b-8bit`, `-b mlx`, `cmp`)
+- Mesure : aucune.

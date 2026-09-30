@@ -260,6 +260,10 @@ public class VoxtralPipeline: @unchecked Sendable {
                 async let encoderTask: Void = setupEncoder()
 
                 self.processor = try await tokenizerTask
+                // Stop on the tokenizer's own special tokens, never on a hard-coded id (K-4)
+                if let tokenizer = self.processor?.tokenizer {
+                    self.voxtralModel?.stopTokenIds = [tokenizer.eosToken, tokenizer.getControlToken("[/INST]")]
+                }
                 session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
                 try await encoderTask
