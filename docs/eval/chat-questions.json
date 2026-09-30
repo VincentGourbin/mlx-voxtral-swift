@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "about": "Fixed questions for `VoxtralCLI bench chat` on C-court / C-moyen EN (K-32). Never edit a question in place: add a new version.",
+  "questions": [
+    "Summarize the audio in one sentence.",
+    "Which product is described?",
+    "List three features mentioned.",
+    "What does the speaker say about the cloud?"
+  ]
+}

@@ -950,3 +950,27 @@ Gabarits :
   - `STT  C-moyen EN last OK · C-moyen FR last OK` ; anti-boucle EN 520 ≤ 777, FR 693 ≤ 1 043 jetons ; C-long → K-33
   - `RT   C-long` → K-13 (P-62)
 - Mesure : aucune (taux de parole consignés ; balise active pendant les inférences).
+
+## K-32 — Instrument de baseline `VoxtralCLI bench` (STT, TTS, Realtime, enrôlement, chat) — 2026-09-30 — validée
+- Fait : `Sources/VoxtralTranscriptionTest/BenchCommand.swift` : `bench stt|tts|realtime|enroll|chat` par les pipelines
+  publics ; refus d'un binaire Debug (`REFUSED debug build`) et d'une machine occupée (processus MLX, **balise vivante d'un
+  autre runtime** : `REFUSED busy`) ; chargement exclu, `--warmup` exclu, `--cooldown` avant chaque passe ; phases et pas
+  par les points d'accroche MLXProfiler (session légère, sans échantillonneur) ; pic MLX exact (remis à zéro par
+  l'instrument) + pic `phys_footprint` et pic MLX par phase (échantillonneur 5 ms) ; une ligne `BENCH {json}` par passe
+  (stdout + `bench.jsonl`), puis `AA …`. `docs/bench.schema.json`, `docs/eval/chat-questions.json`,
+  `VOXTRAL_DTYPE_AUDIT=1` (mel, sortie encodeur, cache KV, logits ; STT et Realtime). Bibliothèque : plus aucun
+  `GPU.resetPeakMemory` (le champ public `resetPeakMemory` reste, sans effet, pour la compatibilité). ASK-26 = B :
+  `VoxtralBenchmark` retiré (Package.swift, sources, CLAUDE.md, README, docs/Benchmarks.md). `profile` : bloc LLM retiré
+  pour le Realtime.
+- Écarts : `grep -rn resetPeakMemory Sources/VoxtralCore` = 10 (champ public conservé ; 0 appel) ; `--trace` non livré
+  (le diagnostic fin reste `profile run`, avec `--backend/--language/--cache-limit-mb`) ; Realtime : `pad_fraction` et
+  `first_text_token_ms` non exposés (pas d'accès aux jetons) ; enrôlement non reproductible avant K-26 (graine).
+  Pendant la série : `appstoreagent` ≈ 95 % d'un cœur CPU (noté dans `top_process`), sans effet visible sur la dispersion.
+- Porte observée :
+  - `AA dispersion total_ms=0.09% step_ms_p50=0.14% out_sha256=identical → PASS (≤ 3 %)` (stt, mini-3b-8bit, C-moyen EN, .mlx)
+  - `AA dispersion total_ms=0.16% step_ms_p50=0.00% out_sha256=identical → PASS (≤ 3 %)` (tts, tts-4b-6bit, texte court, graine 42)
+  - `AA dispersion total_ms=0.31% step_ms_p50=0.11% out_sha256=identical → PASS (≤ 3 %)` (realtime-4b-4bit, C-moyen EN)
+  - `AA q1 dispersion ttft_ms=0.20% tok_s=0.50% out_sha256=identical → PASS (≤ 3 %)` (chat, C-court EN, greedy)
+  - 8 lignes valides contre `docs/bench.schema.json` (jsonschema), recopiées dans `BENCHMARKS.md` ; `REFUSED debug build`
+    (binaire Debug) ; suite `Executed 525 tests, with 20 tests skipped and 0 failures (0 unexpected)`
+- Révisions (sur chaque ligne) : mlx-swift 0.31.6@0bb916c67, mlx-swift-lm main@604fae710, swift-mlx-profiler 1.5.1@bfe71d834.

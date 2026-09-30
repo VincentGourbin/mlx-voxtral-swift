@@ -145,7 +145,11 @@ struct ProfileRun: AsyncParsableCommand {
 
         // Print LLM/TTS metrics
         switch pipeline {
-        case .stt, .chat, .realtime:
+        case .realtime:
+            // The LLM block (prefill/generation of a token loop) does not describe the Realtime
+            // frame loop; its phases and steps are in the report above (K-32, P-75)
+            break
+        case .stt, .chat:
             let llmMetrics = profiler.getLLMMetrics()
             print("\nLLM Metrics:")
             print(llmMetrics.summary)

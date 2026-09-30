@@ -27,11 +27,6 @@ let package = Package(
             name: "VoxtralCLI",
             targets: ["VoxtralTranscriptionTest"]
         ),
-        // Performance benchmark tool
-        .executable(
-            name: "VoxtralBenchmark",
-            targets: ["VoxtralBenchmark"]
-        ),
         // TTS Streaming demo app
         .executable(
             name: "VoxtralTTSStreamingDemo",
@@ -87,14 +82,6 @@ let package = Package(
                 "VoxtralCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "MLXProfiler", package: "swift-mlx-profiler")
-            ]
-        ),
-        // Performance benchmark
-        .executableTarget(
-            name: "VoxtralBenchmark",
-            dependencies: [
-                "VoxtralCore",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
         // TTS Streaming demo app

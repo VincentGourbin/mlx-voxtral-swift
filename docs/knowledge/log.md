@@ -74,3 +74,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   **dégénère au-delà de ≈ 30 s** (P-62, octets NUL ; correctif K-13) ; un audio EN/FR alterné ne se transcrit pas avec
   une langue imposée (fin de séquence en FR, boucle en EN) ; les références de `docs/tts_benchmark.md` ne couvrent pas
   les clips C-moyen (K-33).
+- 2026-09-30 — **K-32 : `VoxtralCLI bench` validé en A/A** (≤ 0,5 % sur STT, TTS, Realtime et chat, sorties
+  identiques) : c'est désormais l'instrument de toutes les mesures (`BENCH {json}` → `BENCHMARKS.md`). Il refuse un
+  binaire Debug et toute balise vivante d'un autre runtime. Piège trouvé en l'écrivant : lire la sortie d'un `Process`
+  **avant** `waitUntilExit()` (sinon `ps` remplit le pipe et tout se bloque).

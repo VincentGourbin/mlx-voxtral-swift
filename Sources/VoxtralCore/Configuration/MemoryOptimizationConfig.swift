@@ -19,7 +19,8 @@ public struct MemoryOptimizationConfig: Sendable {
     /// Whether to clear GPU cache after each evaluation cycle
     public var clearCacheOnEval: Bool
 
-    /// Whether to reset peak memory tracking periodically
+    /// Kept for source compatibility, no effect since K-32: the library no longer resets MLX's
+    /// peak-memory counter (a measuring tool does, at the start of what it measures)
     public var resetPeakMemory: Bool
 
     /// Maximum KV cache size (nil = unlimited, the default of every preset).

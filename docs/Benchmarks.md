@@ -25,9 +25,8 @@ Source : PLAN.md §2 (tableaux de baseline).
   [`CLAUDE.md`](../CLAUDE.md)). Tests en Debug, mesures en Release : une campagne XCTest chronométrée n'est pas une
   référence, sauf build Release avec `ENABLE_TESTABILITY=YES`.
 - **Instrument dans le chemin de la bibliothèque** (piège 33) : `VoxtralCLI bench` (K-32) passe par les pipelines
-  publics. `VoxtralBenchmark` mesure des conversions Float16 sur données aléatoires, hors du chemin des
-  consommateurs : ses chiffres ne sont pas des mesures de Voxtral (audit-performance-realtime-instruments.md §5.1 ;
-  A-16, ASK-26).
+  publics. L'ancien `VoxtralBenchmark` (conversions Float16 sur données aléatoires, hors du chemin
+  des consommateurs) est retiré (ASK-26 = B, K-32) : ses chiffres n'étaient pas des mesures de Voxtral.
 - **Machine prête** : `machine-check.sh` sans ligne `KO`, refroidissement de 120 s avant chaque point, aucune autre
   charge GPU.
 - **Un levier par comparaison**, ordre **A/B/B/A** (deux passes par variante, une requête d'amorçage exclue).

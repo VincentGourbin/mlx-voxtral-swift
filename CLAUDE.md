@@ -16,7 +16,7 @@ issue #11). Toutes les mesures se font sur ce binaire Release :
 xcodebuild -scheme VoxtralCLI -configuration Release -derivedDataPath .build/xcode -destination 'platform=macOS' build
 ```
 `$CLI` = `.build/xcode/Build/Products/Release/VoxtralCLI`. Autres schémas (même commande, `-scheme <nom>`) :
-VoxtralApp, VoxtralBenchmark, VoxtralTTSStreamingDemo.
+VoxtralApp, VoxtralTTSStreamingDemo. Mesures : `$CLI bench` (K-32).
 
 ## Tests : Debug, sans parallélisme
 ```bash

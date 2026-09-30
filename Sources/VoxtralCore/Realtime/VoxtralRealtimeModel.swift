@@ -75,6 +75,8 @@ public class VoxtralRealtimeModel: Module {
         // A caught MLX error leaves empty arrays: stop before reading shapes or items;
         // the public boundary (withMLXErrors) then throws VoxtralError.mlx (K-1)
         if MLXErrorScope.hasError { return ([], adapterOut) }
+        DTypeAudit.report("realtime", "mel", mel)
+        DTypeAudit.report("realtime", "encoder_out", adapterOut)
         let nAudioTotal = adapterOut.dim(0)
         MLX.eval(adapterOut)
         session?.endPhase("Audio Encoding", category: .audioEncode)
@@ -111,6 +113,8 @@ public class VoxtralRealtimeModel: Module {
         if MLXErrorScope.hasError { return ([], adapterOut) }
         var logits = decoder.logits(hidden[hidden.dim(0) - 1])
         MLX.eval(logits)
+        DTypeAudit.report("realtime", "logits", logits)
+        DTypeAudit.report("realtime", cache: cache)
         if MLXErrorScope.hasError { return ([], adapterOut) }
         session?.endPhase("Prefill", category: .prefill)
 

@@ -31,7 +31,8 @@ struct VoxtralCLI: AsyncParsableCommand {
             TTS.self,
             Enroll.self,
             Realtime.self,
-            Profile.self
+            Profile.self,
+            Bench.self
         ],
         defaultSubcommand: Transcribe.self
     )

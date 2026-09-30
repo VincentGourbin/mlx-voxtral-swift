@@ -1142,6 +1142,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             let stopTokens = stopTokenIds
 
             let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
+            DTypeAudit.report("stt", "mel", inputFeatures)
+            DTypeAudit.report("stt", "encoder_embeddings", inputsEmbeds)
 
             // Python: batch_size = input_ids.shape[0]
             let batchSize = inputIds.shape[0]
@@ -1214,6 +1216,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                 try errors.check()  // an MLX error leaves empty arrays: stop before reading shapes
                 let logits = modelOutput.logits
+                if tokenIndex == 0 {
+                    DTypeAudit.report("stt", "logits", logits)
+                    DTypeAudit.report("stt", cache: cache)
+                }
                 let seqLen = logits.shape[1]
                 let lastTokenLogits = logits[0..., seqLen-1, 0...]
 
@@ -1259,10 +1265,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                     if memConfig.clearCacheOnEval {
                         Memory.clearCache()
-                    }
-
-                    if memConfig.resetPeakMemory {
-                        GPU.resetPeakMemory()
                     }
                 }
 
@@ -1336,6 +1338,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             // Merge token embeddings with pre-computed audio embeddings
             let inputsEmbeds = mergeInputEmbeddingsWithAudioEmbeds(inputIds: inputIds, audioEmbeds: audioEmbeds)
+            DTypeAudit.report("stt", "encoder_embeddings", inputsEmbeds)
 
             let batchSize = inputIds.shape[0]
 
@@ -1402,6 +1405,10 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                 try errors.check()  // an MLX error leaves empty arrays: stop before reading shapes
                 let logits = modelOutput.logits
+                if tokenIndex == 0 {
+                    DTypeAudit.report("stt", "logits", logits)
+                    DTypeAudit.report("stt", cache: cache)
+                }
                 let seqLen = logits.shape[1]
                 let lastTokenLogits = logits[0..., seqLen-1, 0...]
 
@@ -1443,10 +1450,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                     if memConfig.clearCacheOnEval {
                         Memory.clearCache()
-                    }
-
-                    if memConfig.resetPeakMemory {
-                        GPU.resetPeakMemory()
                     }
                 }
 

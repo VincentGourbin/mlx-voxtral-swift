@@ -425,7 +425,6 @@ mlx-voxtral-swift/
 │   │   └── Voxtral*.swift          # STT model, processor, feature extractor, generator
 │   ├── VoxtralApp/                 # SwiftUI macOS application (transcription, chat)
 │   ├── VoxtralTranscriptionTest/   # CLI executable VoxtralCLI (command name `voxtral`): STT, chat, TTS, enroll, realtime, profile
-│   ├── VoxtralBenchmark/           # Float16 conversion micro-benchmark (not a Voxtral pipeline measurement)
 │   └── VoxtralTTSStreamingDemo/    # SwiftUI TTS streaming + voice cloning demo
 ├── Tests/VoxtralCoreTests/
 ├── Examples/                       # ReferenceImplementation.swift (STT usage, not compiled by any target)

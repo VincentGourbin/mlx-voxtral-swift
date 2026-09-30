@@ -46,11 +46,11 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
         VoxtralDebug.log("🧹 GPU cache cleared")
     }
 
-    /// Full cleanup: clear cache and reset peak memory tracking
+    /// Full cleanup: clear cache and reset the eval counter. The peak-memory counter is left alone:
+    /// resetting it belongs to the measuring tool, not to the library (K-32, P-77)
     /// Use this between transcription sessions for maximum memory recovery
     public func fullCleanup() {
         Memory.clearCache()
-        GPU.resetPeakMemory()  // resetPeakMemory still on GPU
         lock.lock()
         evalCounter = 0
         lock.unlock()
@@ -97,11 +97,6 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
             // Clear cache if configured
             if config.clearCacheOnEval {
                 Memory.clearCache()
-            }
-
-            // Reset peak memory tracking if configured
-            if config.resetPeakMemory {
-                GPU.resetPeakMemory()
             }
         }
     }
