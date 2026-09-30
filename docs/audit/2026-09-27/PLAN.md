@@ -926,3 +926,27 @@ Gabarits :
   - `MLXCachePolicyTests` 3/3 ; suite `Executed 520 tests, with 19 tests skipped and 0 failures (0 unexpected)`
 - Catalogue : `apply.py scan --pattern MLX-010` : 2 → 0.
 - Mesure : diagnostic comparatif A/B, pas une baseline (pas de ligne `BENCHMARKS.md` : l'instrument `bench` est K-32).
+
+## K-5 — Plus de troncature silencieuse : `maxTokens` STT selon la durée, Realtime borné par l'audio — 2026-09-30 — validée
+- Fait (ASK-8 = A, ASK-9 = A) : STT `Configuration.maxTokens: Int?`, défaut `nil` ⇒ budget
+  `automaticMaxTokens(forDuration:) = max(500, ⌈s × 6⌉ + 64)` (6 = 1,5 × le taux mesuré le plus dense) ; une valeur
+  explicite reste un plafond, signalé par `lastResultTruncated` (transcribe et chat). Realtime : boucle extraite
+  (`decodeLoop`), un pas par trame audio, `maxTokens` = budget de jetons **texte** (pads et spéciaux gratuits), `>=`,
+  `lastGenerationTruncated` / `lastTranscriptionTruncated`. CLI `transcribe`/`chat` et `profile` : `--max-tokens`
+  optionnel (auto) ; app : 0 = auto. CHANGELOG à faire (défaut public changé : version mineure, FluxForge prévenu).
+- Taux mesurés (C-moyen, 4 096 jetons, mini-3b-8bit, `.mlx`) : EN 520 jetons / 167 s = 3,1 j/s ; FR 693 / 173,8 s = 4,0 j/s.
+  L'ancien défaut 500 tronquait déjà C-moyen EN.
+- Écarts (décisions de Vincent) : « longueur ≤ 1,5 × la référence » remplacé par un contrôle anti-boucle (jetons ≤ 1,5 ×
+  durée × taux) : les références du §5 (`docs/tts_benchmark.md`) sont condensées et ne couvrent pas l'audio (C-moyen EN
+  transcrit fidèlement = 2,6 × la référence) : vraies références = K-33. Critères C-long reportés : STT C-long bilingue
+  (EN/FR alternés) → K-33 (`-l fr` : fin de séquence après 2 244 jetons ; `-l en` : boucle arrêtée par le budget, 4 153
+  jetons, `truncated`) ; Realtime C-long → K-13 : l'encodeur dégénère au-delà de ≈ 30 s (P-62 : sortie correcte puis
+  octets NUL, déjà sur C-moyen 167 s, non lié à K-5). Incohérence du plan : K-5 exigeait un résultat que seule K-13
+  (qui dépend de K-5) peut donner.
+- Porte observée :
+  - `RED  RealtimeStepBudgetTests.testStepsEqualFrames : steps=4097 frames=5000 (avant)` (refonte à sémantique d'origine)
+  - `GREEN RealtimeStepBudgetTests + MaxTokensForDurationTests : Executed 5 tests, with 0 failures` (dont signal
+    `truncated` réel : plafond 5 sur C-court ⇒ vrai ; auto ⇒ faux) ; suite `Executed 525 tests, with 20 tests skipped and 0 failures`
+  - `STT  C-moyen EN last OK · C-moyen FR last OK` ; anti-boucle EN 520 ≤ 777, FR 693 ≤ 1 043 jetons ; C-long → K-33
+  - `RT   C-long` → K-13 (P-62)
+- Mesure : aucune (taux de parole consignés ; balise active pendant les inférences).

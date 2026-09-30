@@ -114,40 +114,37 @@ public class VoxtralRealtimeModel: Module {
         if MLXErrorScope.hasError { return ([], adapterOut) }
         session?.endPhase("Prefill", category: .prefill)
 
-        // Autoregressive decode
-        var generated: [Int] = []
+        // Autoregressive decode: one step per audio frame after the prompt (K-5)
+        var stepStart = CFAbsoluteTimeGetCurrent()
+        let loop = Self.decodeLoop(
+            promptLen: promptLen, nAudioTotal: nAudioTotal, maxTextTokens: maxTokens, eosTokenId: config.eosTokenId,
+            sample: { nextToken(logits: logits, temperature: temperature) },
+            advance: { pos, token, count in
+                // Build next input: audio_embed[pos] + tok_embed[token]
+                let audioEmb = adapterOut[pos]
+                let tokEmb = decoder.embedToken(token)
+                let embed = audioEmb + tokEmb
 
-        for pos in promptLen..<nAudioTotal {
-            let stepStart = CFAbsoluteTimeGetCurrent()
-            let token = nextToken(logits: logits, temperature: temperature)
-            generated.append(token)
+                hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
+                logits = decoder.logits(hidden[0])
+                MLX.eval(logits)
+                if MLXErrorScope.hasError { return false }
 
-            if token == config.eosTokenId || generated.count > maxTokens {
                 let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
-                session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
-                break
-            }
+                session?.recordStep(index: count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
+                stepStart = CFAbsoluteTimeGetCurrent()
 
-            // Build next input: audio_embed[pos] + tok_embed[token]
-            let audioEmb = adapterOut[pos]
-            let tokEmb = decoder.embedToken(token)
-            let embed = audioEmb + tokEmb
-
-            hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
-            logits = decoder.logits(hidden[0])
-            MLX.eval(logits)
-            if MLXErrorScope.hasError { return (generated, adapterOut) }
-
-            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
-            session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)
-
-            if generated.count % 256 == 0 {
-                Memory.clearCache()
-            }
-        }
+                if count % 256 == 0 {
+                    Memory.clearCache()
+                }
+                return true
+            })
+        var generated = loop.tokens
+        lastGenerationTruncated = loop.truncated
+        if MLXErrorScope.hasError { return (generated, adapterOut) }
 
         // Read final pending positions (audio exhausted, text-only generation)
-        if generated.isEmpty || (generated.last != config.eosTokenId && generated.count <= maxTokens) {
+        if generated.isEmpty || (generated.last != config.eosTokenId && !loop.stopped) {
             let token = nextToken(logits: logits, temperature: temperature)
             if token != config.eosTokenId {
                 generated.append(token)
@@ -160,6 +157,35 @@ public class VoxtralRealtimeModel: Module {
         }
 
         return (generated, adapterOut)
+    }
+
+    /// True when the last `generate` stopped on its text-token budget rather than the audio end (K-5)
+    public private(set) var lastGenerationTruncated = false
+
+    /// The decode loop's bounds, separated from the model so they can be tested: one step per
+    /// audio frame after the prompt; `sample()` gives the next token, `advance(pos, token, count)`
+    /// feeds it back (false stops, e.g. on an MLX error). `stopped` is true when the loop ended
+    /// before the audio did.
+    static func decodeLoop(
+        promptLen: Int, nAudioTotal: Int, maxTextTokens: Int, eosTokenId: Int,
+        sample: () -> Int, advance: (_ pos: Int, _ token: Int, _ count: Int) -> Bool
+    ) -> (tokens: [Int], steps: Int, truncated: Bool, stopped: Bool) {
+        var generated: [Int] = []
+        var steps = 0
+        var textTokens = 0
+        for pos in promptLen ..< nAudioTotal {
+            let token = sample()
+            generated.append(token)
+            steps += 1
+            if token == eosTokenId { return (generated, steps, false, true) }
+            // Only text tokens spend the budget: streaming pads and specials (Tekken ids < 1000) are free
+            if token >= 1_000 {
+                textTokens += 1
+                if textTokens >= maxTextTokens { return (generated, steps, true, true) }
+            }
+            if !advance(pos, token, generated.count) { return (generated, steps, false, true) }
+        }
+        return (generated, steps, false, false)
     }
 
     private func nextToken(logits: MLXArray, temperature: Float) -> Int {

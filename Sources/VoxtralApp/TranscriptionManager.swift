@@ -65,7 +65,7 @@ class TranscriptionManager: ObservableObject {
     @Published var mode: VoxtralMode = .transcription
     @Published var selectedAudioPath: String?
     @Published var chatPrompt: String = "What is being said in this audio?"
-    @Published var maxTokens: Int = 500
+    @Published var maxTokens: Int = 0  // 0 = automatic budget from the audio duration (K-5)
     @Published var temperature: Float = 0.0
     @Published var contextSize: Int = 8192  // KV cache size limit (1024-32768) when limitContext is on
     /// Off by default: no KV limit (the LM has no sliding window); on, a too-long audio fails explicitly (K-2)
@@ -209,7 +209,7 @@ class TranscriptionManager: ObservableObject {
 
             // Create pipeline configuration
             var config = VoxtralPipeline.Configuration.default
-            config.maxTokens = maxTokens
+            config.maxTokens = maxTokens > 0 ? maxTokens : nil
             config.temperature = temperature
             config.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 
@@ -344,7 +344,7 @@ class TranscriptionManager: ObservableObject {
         currentStep = .processingAudio
 
         // Update pipeline configuration if needed
-        pipeline.configuration.maxTokens = maxTokens
+        pipeline.configuration.maxTokens = maxTokens > 0 ? maxTokens : nil
         pipeline.configuration.temperature = temperature
         pipeline.configuration.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 
@@ -415,7 +415,7 @@ class TranscriptionManager: ObservableObject {
         currentStep = .processingAudio
 
         // Update pipeline configuration if needed
-        pipeline.configuration.maxTokens = maxTokens
+        pipeline.configuration.maxTokens = maxTokens > 0 ? maxTokens : nil
         pipeline.configuration.temperature = temperature
         pipeline.configuration.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 

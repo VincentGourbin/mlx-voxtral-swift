@@ -273,7 +273,7 @@ struct ControlPanelView: View {
                         .font(.headline)
 
                     HStack {
-                        Text("Max tokens:")
+                        Text("Max tokens (0 = auto):")
                         Spacer()
                         TextField("", value: $manager.maxTokens, format: .number)
                             .frame(width: 80)

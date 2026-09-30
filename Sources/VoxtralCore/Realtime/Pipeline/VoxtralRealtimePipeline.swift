@@ -215,6 +215,9 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     public var isReady: Bool { state.isReady }
 
+    /// True when the last `transcribe` stopped on its text budget (`maxTokens`) before the audio ended (K-5)
+    public var lastTranscriptionTruncated: Bool { model?.lastGenerationTruncated ?? false }
+
     // MARK: - Audio Preparation
 
     /// Prepare mel spectrogram with streaming padding protocol.

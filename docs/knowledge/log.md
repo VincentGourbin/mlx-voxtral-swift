@@ -69,3 +69,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   de swap, aucun coût en temps détecté (−0,5 % sur points voisins ; bruit machine jusqu'à 36 %). Après `unload()`, la
   mémoire revient en 1 à 5 s (pilote GPU asynchrone) : mesurer un footprint de déchargement après stabilisation.
   Mesures faites avec la balise active et une veille des balises d'autres runtimes (aucune pendant la série 2).
+- 2026-09-30 — **K-5 : budget STT selon la durée** (6 jetons/s + 64, ≥ 500 ; parole mesurée 3,1 j/s EN, 4,0 j/s FR ;
+  l'ancien 500 tronquait déjà C-moyen EN) et Realtime borné par les trames (budget texte). Constats : le Realtime
+  **dégénère au-delà de ≈ 30 s** (P-62, octets NUL ; correctif K-13) ; un audio EN/FR alterné ne se transcrit pas avec
+  une langue imposée (fin de séquence en FR, boucle en EN) ; les références de `docs/tts_benchmark.md` ne couvrent pas
+  les clips C-moyen (K-33).

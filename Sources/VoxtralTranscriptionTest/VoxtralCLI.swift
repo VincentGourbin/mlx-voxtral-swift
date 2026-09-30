@@ -177,8 +177,8 @@ struct Transcribe: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Model: mini-3b, mini-3b-8bit, mini-3b-4bit, small-24b, small-24b-8bit, small-4bit")
     var model: String = "mini-3b-8bit"
 
-    @Option(name: .long, help: "Maximum tokens to generate")
-    var maxTokens: Int = 500
+    @Option(name: .long, help: "Maximum text tokens (default: proportional to the audio duration)")
+    var maxTokens: Int?
 
     @Option(name: [.customShort("l"), .long], help: "Language code (e.g., 'en', 'fr')")
     var language: String = "en"
@@ -288,8 +288,8 @@ struct Chat: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Model: mini-3b, mini-3b-8bit, mini-3b-4bit, small-24b, small-24b-8bit, small-4bit")
     var model: String = "mini-3b-8bit"
 
-    @Option(name: .long, help: "Maximum tokens to generate")
-    var maxTokens: Int = 500
+    @Option(name: .long, help: "Maximum text tokens (default: proportional to the audio duration)")
+    var maxTokens: Int?
 
     @Option(name: [.customShort("t"), .long], help: "Temperature for generation (0.0 = deterministic)")
     var temperature: Float = 0.7

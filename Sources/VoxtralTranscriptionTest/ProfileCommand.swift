@@ -56,8 +56,8 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "Voice preset for TTS")
     var voice: String = "neutral_female"
 
-    @Option(name: .long, help: "Maximum tokens to generate")
-    var maxTokens: Int = 500
+    @Option(name: .long, help: "Maximum tokens (STT: default from the audio duration; Realtime: text tokens, default 4096; TTS frames: default 500)")
+    var maxTokens: Int?
 
     @Option(name: .long, help: "STT encoder backend: mlx, hybrid, auto (default: auto)")
     var backend: String = "auto"
@@ -258,7 +258,7 @@ struct ProfileRun: AsyncParsableCommand {
         print("Voice: \(voice)")
 
         var config = VoxtralTTSPipeline.Configuration.default
-        config.maxFrames = maxTokens
+        config.maxFrames = maxTokens ?? 500
         config.cacheLimitBytes = cacheLimitBytes
 
         let ttsPipeline = VoxtralTTSPipeline(configuration: config)
@@ -306,7 +306,8 @@ struct ProfileRun: AsyncParsableCommand {
         print("Model: \(realtimeModel)")
 
         var config = VoxtralRealtimePipeline.Configuration.default
-        config.maxTokens = maxTokens
+        // The loop is bounded by the audio frames; maxTokens only caps text tokens (K-5)
+        if let maxTokens { config.maxTokens = maxTokens }
         config.cacheLimitBytes = cacheLimitBytes
 
         let realtimePipeline = VoxtralRealtimePipeline(configuration: config)

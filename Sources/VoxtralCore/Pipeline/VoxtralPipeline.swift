@@ -13,6 +13,7 @@
  * ```
  */
 
+import AVFoundation
 import Foundation
 import MLX
 import MLXNN
@@ -87,8 +88,10 @@ public class VoxtralPipeline: @unchecked Sendable {
 
     /// Pipeline configuration
     public struct Configuration: Sendable {
-        /// Maximum tokens to generate
-        public var maxTokens: Int
+        /// Text-token budget. `nil` (default): proportional to the audio duration
+        /// (`automaticMaxTokens(forDuration:)`), so a long audio is never cut silently; a value is a
+        /// hard cap, reported by `lastResultTruncated` when reached (ASK-8 = A, K-5)
+        public var maxTokens: Int?
 
         /// Sampling temperature (0 = deterministic)
         public var temperature: Float
@@ -105,7 +108,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         /// Default configuration
         public static var `default`: Configuration {
             Configuration(
-                maxTokens: 500,
+                maxTokens: nil,
                 temperature: 0.0,
                 topP: 0.95,
                 repetitionPenalty: 1.2,
@@ -114,7 +117,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
 
         public init(
-            maxTokens: Int = 500,
+            maxTokens: Int? = nil,
             temperature: Float = 0.0,
             topP: Float = 0.95,
             repetitionPenalty: Float = 1.2,
@@ -127,6 +130,32 @@ public class VoxtralPipeline: @unchecked Sendable {
             self.memoryOptimization = memoryOptimization
         }
     }
+
+    // MARK: - Token budget (K-5)
+
+    /// Speech rate the automatic budget allows: 1.5 × the densest measured rate (C-moyen FR:
+    /// 693 tokens for 173.8 s ≈ 4.0 tokens/s; EN: 520 for 167 s ≈ 3.1), so a runaway loop still stops.
+    public static let automaticTokensPerSecond = 6.0
+
+    /// Budget used when `maxTokens` is nil: ⌈duration × 6⌉ + 64, never below the former default 500.
+    public static func automaticMaxTokens(forDuration seconds: Double) -> Int {
+        max(500, Int((seconds * automaticTokensPerSecond).rounded(.up)) + 64)
+    }
+
+    /// True when the last `transcribe`/`chat` stopped on its token budget, not on an end token
+    public private(set) var lastResultTruncated = false
+
+    private func tokenBudget(for audio: URL) -> Int {
+        if let explicit = configuration.maxTokens { return explicit }
+        let seconds = (try? AVAudioFile(forReading: audio)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+        return Self.automaticMaxTokens(forDuration: seconds)
+    }
+
+    private func recordTruncation(_ tokenIds: [Int], budget: Int) {
+        lastResultTruncated = tokenIds.count >= budget && !(tokenIds.last.map(voxtralModelStopTokens.contains) ?? false)
+    }
+
+    private var voxtralModelStopTokens: [Int] { voxtralModel?.stopTokenIds ?? [2, 4] }
 
     // MARK: - State
 
@@ -361,7 +390,8 @@ public class VoxtralPipeline: @unchecked Sendable {
             )
             session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
 
-            // Generate transcription
+            // Generate transcription within the text-token budget (explicit, or from the duration: K-5)
+            let budget = tokenBudget(for: audio)
             let tokenIds: [Int]
 
             if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
@@ -374,7 +404,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 tokenIds = try model.generateStreamWithAudioEmbeds(
                     inputIds: inputs.inputIds,
                     audioEmbeds: audioEmbeds,
-                    maxNewTokens: configuration.maxTokens,
+                    maxNewTokens: budget,
                     temperature: configuration.temperature,
                     topP: configuration.topP,
                     repetitionPenalty: configuration.repetitionPenalty,
@@ -388,7 +418,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 tokenIds = try model.generateStream(
                     inputIds: inputs.inputIds,
                     inputFeatures: inputs.inputFeatures,
-                    maxNewTokens: configuration.maxTokens,
+                    maxNewTokens: budget,
                     temperature: configuration.temperature,
                     topP: configuration.topP,
                     repetitionPenalty: configuration.repetitionPenalty,
@@ -397,6 +427,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 )
                 session?.endPhase("Generation", category: .generation)
             }
+
+            recordTruncation(tokenIds, budget: budget)
 
             // Decode tokens to text
             session?.beginPhase("Token Decoding", category: .decoding)
@@ -461,6 +493,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
 
             // Generate response
+            let budget = tokenBudget(for: audio)
             let tokenIds: [Int]
 
             if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
@@ -472,7 +505,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 tokenIds = try model.generateStreamWithAudioEmbeds(
                     inputIds: inputIds,
                     audioEmbeds: audioEmbeds,
-                    maxNewTokens: configuration.maxTokens,
+                    maxNewTokens: budget,
                     temperature: configuration.temperature,
                     topP: configuration.topP,
                     repetitionPenalty: configuration.repetitionPenalty,
@@ -485,7 +518,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 tokenIds = try model.generateStream(
                     inputIds: inputIds,
                     inputFeatures: inputFeatures,
-                    maxNewTokens: configuration.maxTokens,
+                    maxNewTokens: budget,
                     temperature: configuration.temperature,
                     topP: configuration.topP,
                     repetitionPenalty: configuration.repetitionPenalty,
@@ -494,6 +527,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 )
                 session?.endPhase("Generation", category: .generation)
             }
+
+            recordTruncation(tokenIds, budget: budget)
 
             session?.beginPhase("Token Decoding", category: .decoding)
             let response = try processor.decode(tokenIds, skipSpecialTokens: true)
