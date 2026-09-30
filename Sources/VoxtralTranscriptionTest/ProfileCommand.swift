@@ -59,6 +59,12 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "Maximum tokens to generate")
     var maxTokens: Int = 500
 
+    @Option(name: .long, help: "STT encoder backend: mlx, hybrid, auto (default: auto)")
+    var backend: String = "auto"
+
+    @Option(name: .long, help: "STT language code (e.g. en, fr); omit for auto-detection")
+    var language: String?
+
     @Option(name: [.customShort("t"), .long], help: "Temperature (0.0 = greedy, default 0.7 for chat)")
     var temperature: Float?
 
@@ -173,14 +179,22 @@ struct ProfileRun: AsyncParsableCommand {
         config.maxTokens = maxTokens
         config.temperature = temperature ?? 0.0
 
-        let sttPipeline = VoxtralPipeline(model: pipelineModel, configuration: config)
+        let sttBackend: VoxtralPipeline.Backend
+        switch backend {
+        case "mlx": sttBackend = .mlx
+        case "hybrid": sttBackend = .hybrid
+        case "auto": sttBackend = .auto
+        default: throw ValidationError("Unknown backend: \(backend) (mlx, hybrid, auto)")
+        }
+        session.metadata["backend"] = backend
+        let sttPipeline = VoxtralPipeline(model: pipelineModel, backend: sttBackend, configuration: config)
 
         try await sttPipeline.loadModel { progress, status in
             print("  [\(Int(progress * 100))%] \(status)")
         }
 
         let audioURL = URL(fileURLWithPath: audio)
-        let transcription = try await sttPipeline.transcribe(audio: audioURL)
+        let transcription = try await sttPipeline.transcribe(audio: audioURL, language: language)
 
         print("\nResult: \(transcription.prefix(200))...")
         session.metadata["resultLength"] = "\(transcription.count)"
