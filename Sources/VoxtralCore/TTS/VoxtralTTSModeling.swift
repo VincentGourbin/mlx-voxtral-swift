@@ -564,6 +564,15 @@ public class VoxtralTTSModel: Module {
         public let totalFrames: Int
         /// Whether this is the final chunk
         public let isFinal: Bool
+
+        /// `accumulatedCodes` is evaluated here: chunks are consumed on another task (MLX-004).
+        init(accumulatedCodes: MLXArray, newFrameCount: Int, totalFrames: Int, isFinal: Bool) {
+            MLX.eval(accumulatedCodes)
+            self.accumulatedCodes = accumulatedCodes
+            self.newFrameCount = newFrameCount
+            self.totalFrames = totalFrames
+            self.isFinal = isFinal
+        }
     }
 
     /// Generate speech codes as a stream, yielding chunks of accumulated codes every `chunkSize` frames.

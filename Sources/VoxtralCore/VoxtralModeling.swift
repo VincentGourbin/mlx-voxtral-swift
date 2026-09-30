@@ -14,9 +14,13 @@ import MLXLLM       // For official LlamaModel
 import MLXRandom
 import MLXProfiler
 
-// Global debug dump function - can be set by VoxtralTest2
-// Swift 6: nonisolated(unsafe) for debug callback
-nonisolated(unsafe) public var writeDebugToDump: (String) -> Void = { message in
+// Global debug dump function - can be set by VoxtralTest2 (read and replaced under a lock)
+public var writeDebugToDump: (String) -> Void {
+    get { _writeDebugToDump.get() }
+    set { _writeDebugToDump.set(newValue) }
+}
+
+private let _writeDebugToDump = Locked<(String) -> Void>({ message in
     // Default: write to a temporary file
     let debugFile = "/tmp/swift_debug_generation.txt"
     let fileManager = FileManager.default
@@ -30,7 +34,7 @@ nonisolated(unsafe) public var writeDebugToDump: (String) -> Void = { message in
         }
         fileHandle.closeFile()
     }
-}
+})
 
 /**
  * Direct Python equivalent: @dataclass class VoxtralModelOutput
@@ -898,15 +902,11 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Before: O(seqLength) CPU loops with .item() calls → ~25 seconds
      * After: O(1) GPU operations with cumsum/takeAlong/where → <1 second expected
      */
-    // Swift 6: nonisolated(unsafe) for debug counter
-    nonisolated(unsafe) private static var _mergeCallCount = 0
     private func mergeInputEmbeddings(
         inputIds: MLXArray? = nil,
         inputFeatures: MLXArray? = nil,
         inputsEmbeds: MLXArray? = nil
     ) -> MLXArray {
-        VoxtralForConditionalGeneration._mergeCallCount += 1
-
         // Python: if inputs_embeds is None:
         var embeddings: MLXArray
         if let embeds = inputsEmbeds {

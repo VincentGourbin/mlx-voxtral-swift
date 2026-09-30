@@ -30,3 +30,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   présent et ses tailles justes ; les dossiers anciens (index + shards + `tekken.json` + voix) reçoivent leur
   manifeste au premier contrôle, les dépôts sans index (originaux Mistral) repassent une fois en ligne. Coupure à
   51 % puis relance : reprise complète. Le détecteur MLX-012 ne voit pas ces variantes (0/0).
+- 2026-09-30 — **K-16 : état partagé protégé** : plus aucun `nonisolated(unsafe)` dans `VoxtralCore` (boîte `Locked`),
+  la configuration mémoire est portée par chaque pipeline (créer une pipeline écrasait celle des autres), et les
+  types `@unchecked Sendable` porteurs d'`MLXArray` évaluent dans leur `init`. Avant : 11 courses TSan dans
+  VoxtralCore et un plantage du test concurrent ; après : 0. **TSan signale toujours 2 courses dans MLX**
+  (`MetalAllocator`, `active_memory_` lu sans verrou, jusqu'à mlx main) : bruit amont, à ignorer dans les portes TSan.

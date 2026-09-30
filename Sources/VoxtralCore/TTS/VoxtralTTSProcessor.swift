@@ -23,6 +23,16 @@ public struct TTSSynthesisResult: @unchecked Sendable {
     /// Time to first token: prefill + first frame generation
     public let timeToFirstToken: TimeInterval
 
+    /// `waveform` is evaluated here: the result may be consumed on another actor (MLX-004).
+    init(waveform: MLXArray, numFrames: Int, sampleRate: Int, generationTime: TimeInterval, timeToFirstToken: TimeInterval) {
+        MLX.eval(waveform)
+        self.waveform = waveform
+        self.numFrames = numFrames
+        self.sampleRate = sampleRate
+        self.generationTime = generationTime
+        self.timeToFirstToken = timeToFirstToken
+    }
+
     public var duration: TimeInterval {
         Double(waveform.dim(0)) / Double(sampleRate)
     }
@@ -321,7 +331,7 @@ public func trimLeadingCarrier(
 
 /// A chunk of decoded audio from the streaming TTS pipeline.
 public struct TTSStreamingChunk: @unchecked Sendable {
-    /// Decoded waveform samples for this chunk (float32 PCM, 24kHz mono)
+    /// Decoded waveform samples for this chunk (24 kHz mono, decoder dtype), already evaluated
     public let waveform: MLXArray
     /// Index of the first frame in this chunk
     public let frameIndex: Int
@@ -337,6 +347,20 @@ public struct TTSStreamingChunk: @unchecked Sendable {
     public let isFinal: Bool
     /// Time elapsed since generation started
     public let elapsed: TimeInterval
+
+    /// `waveform` is evaluated here: chunks are consumed on another actor (MLX-004).
+    init(waveform: MLXArray, frameIndex: Int, frameCount: Int, totalFrames: Int, sampleRate: Int,
+         isFirst: Bool, isFinal: Bool, elapsed: TimeInterval) {
+        MLX.eval(waveform)
+        self.waveform = waveform
+        self.frameIndex = frameIndex
+        self.frameCount = frameCount
+        self.totalFrames = totalFrames
+        self.sampleRate = sampleRate
+        self.isFirst = isFirst
+        self.isFinal = isFinal
+        self.elapsed = elapsed
+    }
 
     /// Duration of audio in this chunk
     public var duration: TimeInterval {

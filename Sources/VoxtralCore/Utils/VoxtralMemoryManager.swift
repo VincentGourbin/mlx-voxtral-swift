@@ -9,7 +9,8 @@ import Foundation
 import MLX
 
 /// Centralized memory manager for Voxtral GPU operations
-/// Thread-safe singleton for managing MLX GPU memory
+/// Singleton for managing MLX GPU memory; `config` and the eval counter are guarded by `lock`.
+/// Pipelines pass their own configuration and never write `config` (S-11).
 public final class VoxtralMemoryManager: @unchecked Sendable {
 
     // MARK: - Singleton
@@ -19,8 +20,12 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
 
     // MARK: - Properties
 
-    /// Current memory optimization configuration
-    public var config: MemoryOptimizationConfig = .recommended()
+    /// Default memory optimization configuration, used only when a caller passes none
+    public var config: MemoryOptimizationConfig {
+        get { lock.lock(); defer { lock.unlock() }; return _config }
+        set { lock.lock(); _config = newValue; lock.unlock() }
+    }
+    private var _config: MemoryOptimizationConfig = .recommended()
 
     /// Counter for tracking eval cycles (for periodic cleanup)
     private var evalCounter: Int = 0
@@ -46,7 +51,9 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     public func fullCleanup() {
         Memory.clearCache()
         GPU.resetPeakMemory()  // resetPeakMemory still on GPU
+        lock.lock()
         evalCounter = 0
+        lock.unlock()
         VoxtralDebug.log("🧹 Full GPU cleanup performed")
     }
 
@@ -72,6 +79,11 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     /// Called during generation to apply memory optimization based on config
     /// - Parameter tokenIndex: Current token index in generation
     public func optimizeIfNeeded(tokenIndex: Int) {
+        optimizeIfNeeded(tokenIndex: tokenIndex, config: config)
+    }
+
+    /// Same, with the caller's configuration (a pipeline passes its own)
+    public func optimizeIfNeeded(tokenIndex: Int, config: MemoryOptimizationConfig) {
         guard config.evalFrequency > 0 else { return }
 
         lock.lock()

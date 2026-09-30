@@ -200,8 +200,8 @@ public class VoxtralPipeline: @unchecked Sendable {
         self.backend = backend
         self.configuration = configuration
 
-        // Apply memory optimization settings
-        VoxtralMemoryManager.shared.config = configuration.memoryOptimization
+        // configuration.memoryOptimization is passed to each generation: the shared
+        // VoxtralMemoryManager.config is never overwritten by a pipeline (S-11)
     }
 
     // MARK: - Model Loading
@@ -329,7 +329,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             beacon?.end()
             state = .ready
             // Apply memory optimization
-            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0)
+            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
         }
 
         // Create transcription request (note: method name has typo in original)
@@ -357,7 +357,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 temperature: configuration.temperature,
                 topP: configuration.topP,
                 repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize
+                contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                memoryOptimization: configuration.memoryOptimization
             )
             session?.endPhase("Generation", category: .generation)
         } else {
@@ -370,7 +371,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 temperature: configuration.temperature,
                 topP: configuration.topP,
                 repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize
+                contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                memoryOptimization: configuration.memoryOptimization
             )
             session?.endPhase("Generation", category: .generation)
         }
@@ -405,7 +407,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         defer {
             beacon?.end()
             state = .ready
-            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0)
+            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
         }
 
         // Create chat conversation with audio
@@ -448,7 +450,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 temperature: configuration.temperature,
                 topP: configuration.topP,
                 repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize
+                contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                memoryOptimization: configuration.memoryOptimization
             )
             session?.endPhase("Generation", category: .generation)
         } else {
@@ -460,7 +463,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 temperature: configuration.temperature,
                 topP: configuration.topP,
                 repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize
+                contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                memoryOptimization: configuration.memoryOptimization
             )
             session?.endPhase("Generation", category: .generation)
         }

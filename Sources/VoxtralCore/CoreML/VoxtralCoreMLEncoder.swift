@@ -180,8 +180,11 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     /// Set this to the app's resource bundle before creating encoder instances
     /// VoxtralApp should set this to Bundle.module in its initialization
-    /// Safe because it's set once at app startup before any concurrent access
-    nonisolated(unsafe) public static var resourceBundle: Bundle?
+    public static var resourceBundle: Bundle? {
+        get { _resourceBundle.get() }
+        set { _resourceBundle.set(newValue) }
+    }
+    private static let _resourceBundle = Locked<Bundle?>(nil)
 
     // MARK: - Properties
 

@@ -26,17 +26,22 @@ private func platformHomeDirectory() -> URL {
 public class ModelDownloader {
 
     /// Override the default models directory. Set before first download.
-    nonisolated(unsafe) public static var customModelsDirectory: URL? = nil
+    public static var customModelsDirectory: URL? {
+        get { _customModelsDirectory.get() }
+        set { _customModelsDirectory.set(newValue) }
+    }
+    private static let _customModelsDirectory = Locked<URL?>(nil)
 
-    /// Hub API instance
-    // Swift 6: nonisolated(unsafe) for lazy-initialized singleton
-    nonisolated(unsafe) private static var _hubApi: HubApi? = nil
+    /// Hub API instance (lazily created once, under a lock)
+    private static let _hubApi = Locked<HubApi?>(nil)
 
     public static var hubApi: HubApi {
-        if let existing = _hubApi { return existing }
-        let api = createHubApi()
-        _hubApi = api
-        return api
+        _hubApi.withLock { api in
+            if let existing = api { return existing }
+            let created = createHubApi()
+            api = created
+            return created
+        }
     }
 
     private static func createHubApi() -> HubApi {
@@ -65,7 +70,7 @@ public class ModelDownloader {
     /// Recreate the HubApi to pick up a new customModelsDirectory.
     /// Call after setting customModelsDirectory.
     public static func reconfigureHubApi() {
-        _hubApi = createHubApi()
+        _hubApi.set(createHubApi())
     }
 
     // MARK: - Direct downloader (URLSession)

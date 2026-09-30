@@ -687,3 +687,25 @@ Gabarits :
   - `RESUME tts-4b-4bit : coupure à 51.0 % → relance → manifeste écrit, SHA-256 OK (1/1)` (25 fichiers, 22 avec
     SHA-256 ; `model.safetensors` a62a28f0… = `shasum -a 256` ; `list -d` : absent après coupure, présent après)
 - Mesure : aucune (fiche sans levier de performance).
+
+## K-16 — Globaux protégés, `MLXArray` évalués avant transfert entre acteurs — 2026-09-30 — validée
+- Fait : `Locked<Value>` (verrou, `Utils/Locked.swift`) remplace les 8 déclarations `nonisolated(unsafe)` : cache
+  mel (filtres évalués avant mise en cache), `writeDebugToDump`, `customModelsDirectory`, `_hubApi`,
+  `resourceBundle`, `VoxtralDebug.enabled`/`verboseGeneration` (propriétés publiques devenues calculées, même API) ;
+  `_mergeCallCount` (jamais lu) supprimé. `VoxtralMemoryManager.config` et `evalCounter` sous verrou ; la pipeline
+  n'écrit plus la configuration globale et passe la sienne à `generateStream*` et à
+  `optimizeIfNeeded(tokenIndex:config:)` (surcharge additive). `TTSSynthesisResult`, `TTSStreamingChunk` et
+  `GenerationChunk` évaluent leur tableau dans leur `init` (couvre tous les `return`/`yield`).
+- Catalogue : `apply.py scan --pattern MLX-004` (claude-skills `04c888b`) : 0 avant, 0 après (le détecteur ne cherche
+  que `nonisolated(unsafe) let` et `UncheckedTransfer(`).
+- Porte observée :
+  - `GREP nonisolated(unsafe) : 8 déclarations (13 lignes) → 0 déclaration (1 ligne : commentaire de Locked.swift)`
+  - `RED   SharedStateTests : testTwoPipelinesKeepTheirOwnMemoryConfiguration échoue (evalFreq=0 ≠ evalFreq=8) ;
+    testConcurrentSharedSettings plante le process de test` ; TSan avant : 14 avertissements (11 VoxtralCore, 3 MLX)
+  - `GREEN SharedStateTests (TSan) : 0 avertissement VoxtralCore ; 2 dans MLX (MetalAllocator::malloc,
+    allocator.cpp:165 / get_active_memory, allocator.h:28 : compteur lu sans verrou, présent jusqu'à mlx main et
+    mlx-swift 0.32.2, hors de ce dépôt, sans objet pour la fiche — décision de Vincent)`
+  - `CrossActorWaveformTests 20/20` (tts-4b-4bit sur /Volumes/Lexar/models, graine 42) ;
+    `PARITY WAV identiques : sha256 b7ed7956… avant = après correctif (245 804 o)`
+  - suite complète : `Executed 496 tests, with 13 tests skipped and 0 failures (0 unexpected)`
+- Mesure : aucune (fiche de stabilité).

@@ -246,8 +246,8 @@ func melFilterBankSlaney(sr: Int, nFft: Int, nMels: Int, fmin: Float = 0.0, fmax
 }
 
 // Python: _mel_filters_cache = {}
-// Swift 6: nonisolated(unsafe) for cache - worst case is computing twice
-nonisolated(unsafe) var _melFiltersCache: [Int: MLXArray] = [:]
+// Shared across threads (concurrent feature extractions): locked, filters evaluated before caching (MLX-004)
+let _melFiltersCache = Locked<[Int: MLXArray]>([:])
 
 /**
  * Direct Python equivalent: def get_mel_filters(n_mels: int = N_MELS) -> mx.array
@@ -257,7 +257,7 @@ func getMelFilters(nMels: Int = N_MELS) -> MLXArray {
     //             _mel_filters_cache[n_mels] = mel_filter_bank_slaney(SAMPLE_RATE, N_FFT, n_mels, fmax=8000)
     //         return _mel_filters_cache[n_mels]
     
-    if let cached = _melFiltersCache[nMels] {
+    if let cached = _melFiltersCache.withLock({ $0[nMels] }) {
         return cached
     }
     
@@ -267,8 +267,12 @@ func getMelFilters(nMels: Int = N_MELS) -> MLXArray {
         nMels: nMels, 
         fmax: 8000.0
     )
-    _melFiltersCache[nMels] = filters
-    return filters
+    MLX.eval(filters)
+    return _melFiltersCache.withLock { cache in
+        if let existing = cache[nMels] { return existing }
+        cache[nMels] = filters
+        return filters
+    }
 }
 
 /**

@@ -7,11 +7,18 @@ import Foundation
 
 public enum VoxtralDebug {
     /// Enable/disable all debug output
-    // Swift 6: nonisolated(unsafe) for debug flags
-    nonisolated(unsafe) public static var enabled: Bool = false
+    public static var enabled: Bool {
+        get { _enabled.get() }
+        set { _enabled.set(newValue) }
+    }
+    private static let _enabled = Locked(false)
 
     /// Enable/disable verbose generation logs (token-by-token)
-    nonisolated(unsafe) public static var verboseGeneration: Bool = false
+    public static var verboseGeneration: Bool {
+        get { _verboseGeneration.get() }
+        set { _verboseGeneration.set(newValue) }
+    }
+    private static let _verboseGeneration = Locked(false)
 
     /// Log a debug message (only if enabled)
     public static func log(_ message: String) {
