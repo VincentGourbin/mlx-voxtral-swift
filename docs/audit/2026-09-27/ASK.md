@@ -511,8 +511,8 @@ réponse datée ici.
 | ASK-5 | | | |
 | ASK-6 | | | |
 | ASK-7 | | | (posée après la mesure de K-2 si le pic dépasse 12 Go) |
-| ASK-8 | | | |
-| ASK-9 | | | |
+| ASK-8 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : défaut `nil`, budget proportionnel à la durée (STT), boucle bornée par l'audio (Realtime) ; valeur explicite = plafond de jetons texte signalé `truncated` (K-5). |
+| ASK-9 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : un défaut public change quand la porte l'emporte (version mineure, CHANGELOG, FluxForge prévenu) ; A pour K-5 et K-14, fiche par fiche pour K-51, K-61, K-64. |
 | ASK-10 | | | |
 | ASK-11 | | | |
 | ASK-12 | | | |

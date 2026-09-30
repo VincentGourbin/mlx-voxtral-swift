@@ -851,3 +851,5 @@ Gabarits :
   remplacé par `VoxtralCLI bench`). Inscrites dans `ASK.md` (Réponses). #566 (K-22) et #584 (K-32) rouvertes.
 - Chemin vers les profils mesurés : K-22 → K-32 → K-33 → baselines K-34…K-37 → K-76…K-79 (+ K-64) ; restent ouvertes
   pour la suite : ASK-8 et ASK-9 (K-5, prérequis de K-32), ASK-4 (K-76), ASK-5, ASK-13, ASK-18 (K-79).
+- ASK-8 = A et ASK-9 = A (Vincent, 2026-09-30, même session) : #579 (K-5) et #564 (K-14) rouvertes. Chemin vers les
+  baselines : K-2 (#567) → K-5 (#579) ; K-22 (#566) ; puis K-32 (#584).
