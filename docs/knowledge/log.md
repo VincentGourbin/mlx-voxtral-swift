@@ -55,3 +55,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `realtime-4b-fp16` chargeait toute l'attention du décodeur au hasard (noms `wq/wk/wv/wo` non traduits) : il
   transcrivait « .. » ; corrigé. Une constante calculée stockée en `MLXArray` sur un `Module` compte comme paramètre :
   la préfixer par `_`. Le CLI ignore `--seed` avec `-v <voix>` : pour une parité TTS, passer `--voice-embedding`.
+- 2026-09-30 — **K-11 : une opération GPU à la fois par pipeline** (`PipelineGate`) : l'interblocage ABBA compile ×
+  vjp de mlx-swift 0.31.6 est **reproduit** (enrôlement ∥ streaming : blocage dès le 1er essai) et évité (20/20, refus
+  `busy` immédiat). `unload()` pendant une opération : la Task périmée ne réécrit plus l'état (jeton de génération).

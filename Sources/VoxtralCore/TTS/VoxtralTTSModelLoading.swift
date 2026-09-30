@@ -233,6 +233,8 @@ public enum VoxtralTTSError: Error, LocalizedError {
     case modelLoadingFailed(String)
     case synthesisError(String)
     case voiceNotFound(String)
+    /// Another operation (enrollment, synthesis, loading) holds the pipeline (K-11)
+    case busy(String)
 
     public var errorDescription: String? {
         switch self {
@@ -241,6 +243,7 @@ public enum VoxtralTTSError: Error, LocalizedError {
         case .modelLoadingFailed(let msg): return "Model loading failed: \(msg)"
         case .synthesisError(let msg): return "Synthesis error: \(msg)"
         case .voiceNotFound(let msg): return "Voice not found: \(msg)"
+        case .busy(let msg): return "Pipeline busy: \(msg)"
         }
     }
 }

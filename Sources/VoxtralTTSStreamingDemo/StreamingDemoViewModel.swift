@@ -387,6 +387,22 @@ No account required. No data sent to the cloud. All models run locally on your A
             .sorted { $0.name < $1.name }
     }
 
+    /// Set by Cancel, polled by the enrollment loop through `shouldContinue` (read off the main actor).
+    private final class CancelFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var raised = false
+        var isRaised: Bool { lock.withLock { raised } }
+        func set(_ value: Bool) { lock.withLock { raised = value } }
+    }
+    private let enrollCancel = CancelFlag()
+
+    /// Stop the running enrollment at its next epoch.
+    func cancelEnroll() {
+        guard isEnrolling else { return }
+        enrollCancel.set(true)
+        enrollStatus = "Cancelling…"
+    }
+
     /// Enroll a voice from `referenceURL` using the currently loaded model.
     /// Runs the (long) optimization off the main actor and streams progress.
     func enroll() {
@@ -396,6 +412,8 @@ No account required. No data sent to the cloud. All models run locally on your A
         guard !name.isEmpty else { log("Enter a name for the cloned voice"); return }
 
         isEnrolling = true
+        enrollCancel.set(false)
+        let cancel = enrollCancel
         enrollProgress = 0
         enrollStatus = "Preparing…"
         let epochs = cloneEpochs
@@ -414,24 +432,34 @@ No account required. No data sent to the cloud. All models run locally on your A
             config.epochs = epochs
             config.logEvery = 100
             do {
-                try box.p.enrollVoice(referenceURL: ref, outputURL: outURL, config: config) { progress in
-                    // Extract Sendable value types before hopping to the main actor.
-                    let epoch = progress.epoch
-                    let loss = progress.totalLoss
-                    Task { @MainActor in
-                        self?.enrollProgress = Double(epoch) / Double(epochs)
-                        self?.enrollStatus = "epoch \(epoch)/\(epochs) · loss \(String(format: "%.3f", loss))"
-                        // Also record to the log file so the loss curve is
-                        // observable outside the UI.
-                        self?.log("enroll epoch \(epoch)/\(epochs) loss \(String(format: "%.4f", loss))")
-                    }
-                }
+                try box.p.enrollVoice(
+                    referenceURL: ref, outputURL: outURL, config: config,
+                    progress: { progress in
+                        // Extract Sendable value types before hopping to the main actor.
+                        let epoch = progress.epoch
+                        let loss = progress.totalLoss
+                        Task { @MainActor in
+                            self?.enrollProgress = Double(epoch) / Double(epochs)
+                            self?.enrollStatus = "epoch \(epoch)/\(epochs) · loss \(String(format: "%.3f", loss))"
+                            // Also record to the log file so the loss curve is
+                            // observable outside the UI.
+                            self?.log("enroll epoch \(epoch)/\(epochs) loss \(String(format: "%.4f", loss))")
+                        }
+                    },
+                    shouldContinue: { !cancel.isRaised }
+                )
                 await MainActor.run {
                     self?.log("Voice enrolled: \(name)")
                     self?.enrollStatus = "Done"
                     self?.isEnrolling = false
                     self?.refreshClonedVoices()
                     self?.selectedVoice = "cloned:\(name)"
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self?.log("Enrollment cancelled")
+                    self?.enrollStatus = "Cancelled"
+                    self?.isEnrolling = false
                 }
             } catch {
                 await MainActor.run {

@@ -823,3 +823,25 @@ Gabarits :
     rouge avant (aucune erreur levée)
   - `PARITY stt identique ; cmp tts : aucune différence` (SHA `66ef9ca0…` A = B, 4/4) ; ids Tekken identiques 20/20
 - Mesure : aucune. Modèles sur `/Volumes/Lexar/models` via liens de dossier depuis `~/Library/Caches/models`.
+
+## K-11 — Exclusion enrôlement / inférence et machine d'états atomique des pipelines — 2026-09-30 — validée
+- Fait : `Utils/PipelineGate.swift` (`OSAllocatedUnfairLock`) : état, opération en cours et jeton de génération changés
+  sous un seul verrou ; STT, TTS et Realtime lisent `state` depuis la porte (propriété publique en lecture seule, même
+  API) ; `begin` refuse une seconde opération (`busy`, nouveau cas additif de `VoxtralPipelineError`,
+  `VoxtralTTSError`, `VoxtralRealtimeError`) ; `loadModel` fait un test-et-pose atomique ; `enrollVoice` tient la
+  pipeline (synthèse, streaming ou chargement pendant l'enrôlement ⇒ `busy`) ; `unload` pose une nouvelle génération :
+  la fin d'une Task périmée n'écrit plus `.ready`. Enrôlement dans `withRandomState(MLXRandom.RandomState())` (graine
+  fixe : K-26). Démo : sélecteur de modèle, Load et Play désactivés pendant `isEnrolling`, bouton Annuler branché sur
+  `shouldContinue` (« Cancelled »).
+- Écart : étape 8 (capture de la démo pendant un enrôlement) non faite ici (clics dans l'app) : **à faire par Vincent**
+  à la vérification ; la démo compile.
+- Catalogue : `apply.py scan --pattern MLX-024` : 1 → 1 (le détecteur pointe le site du gradient,
+  `VoxtralVoiceEnrollment.swift:583` ; la protection est l'exclusion au niveau de la pipeline, qu'il ne voit pas).
+- Porte observée :
+  - `RED   EnrollInferenceExclusionTests : timeout 120 s / chevauchement détecté (correctif retiré)` — « run 1: no
+    completion within 120 s (deadlock) », 0/20 (interblocage compile × vjp reproduit)
+  - `GREEN EnrollInferenceExclusionTests : 20/20 OK, refus busy en 0 ms (< 1 s)` (tts-4b-4bit, 50 époques ∥
+    `synthesizeStreaming`)
+  - `GREEN PipelineStateStressTests (TSan) : 10/10, ThreadSanitizer: 0 warnings` (4 scénarios × 10)
+  - `Executed 515 tests, with 16 tests skipped and 0 failures (0 unexpected)`
+- Mesure : aucune.

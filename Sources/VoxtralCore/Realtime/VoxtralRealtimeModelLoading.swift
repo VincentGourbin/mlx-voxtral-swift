@@ -236,6 +236,8 @@ public enum VoxtralRealtimeError: Error, LocalizedError {
     case invalidConfiguration(String)
     case modelLoadingFailed(String)
     case transcriptionError(String)
+    /// Another operation (transcription, loading) holds the pipeline (K-11)
+    case busy(String)
 
     public var errorDescription: String? {
         switch self {
@@ -243,6 +245,7 @@ public enum VoxtralRealtimeError: Error, LocalizedError {
         case .invalidConfiguration(let msg): return "Invalid configuration: \(msg)"
         case .modelLoadingFailed(let msg): return "Model loading failed: \(msg)"
         case .transcriptionError(let msg): return "Transcription error: \(msg)"
+        case .busy(let msg): return "Pipeline busy: \(msg)"
         }
     }
 }

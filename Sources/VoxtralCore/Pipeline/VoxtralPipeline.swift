@@ -170,7 +170,11 @@ public class VoxtralPipeline: @unchecked Sendable {
     public var configuration: Configuration
 
     /// Current pipeline state
-    public private(set) var state: State = .unloaded
+    /// Read-only view of the gate: every transition happens under its lock (K-11)
+    public var state: State { gate.state }
+
+    /// State, running operation and generation token, changed atomically
+    let gate = PipelineGate<State>(.unloaded)
 
     /// Loaded Voxtral model
     private var voxtralModel: VoxtralModel?
@@ -211,11 +215,11 @@ public class VoxtralPipeline: @unchecked Sendable {
     public func loadModel(progress: ProgressCallback? = nil) async throws {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         try await withMLXErrors { _ in
-            guard state.isUnloaded || state.isError else {
-                throw VoxtralPipelineError.invalidState("Model already loaded or loading")
-            }
-
-            state = .loading
+            // Atomic check-and-set: a concurrent load or a running operation is refused (K-11)
+            let generation = try gate.begin(
+                "loading", accepts: { $0.isUnloaded || $0.isError },
+                refusal: VoxtralPipelineError.invalidState("Model already loaded or loading"),
+                busy: VoxtralPipelineError.busy, state: .loading, newGeneration: true)
             progress?(0.0, "Starting model download...")
 
             let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
@@ -269,11 +273,11 @@ public class VoxtralPipeline: @unchecked Sendable {
                 try await encoderTask
                 session?.endPhase("4. Encoder Setup", category: .modelLoad)
 
-                state = .ready
+                gate.end(generation, state: .ready)
                 progress?(1.0, "Model ready!")
 
             } catch {
-                state = .error(error.localizedDescription)
+                gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
         }
@@ -326,20 +330,19 @@ public class VoxtralPipeline: @unchecked Sendable {
     public func transcribe(audio: URL, language: String? = nil) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady else {
-                throw VoxtralPipelineError.invalidState("Model not loaded")
-            }
+            let generation = try gate.begin(
+                "transcription", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
+                busy: VoxtralPipelineError.busy, state: .processing)
+            defer { gate.end(generation, state: .ready) }
 
             guard let model = voxtralModel, let processor = processor else {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
-            state = .processing
             let session = MLXProfiler.shared.activeSession
             let beacon = RuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
             defer {
                 beacon?.end()
-                state = .ready
                 // Apply memory optimization
                 VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
             }
@@ -408,20 +411,19 @@ public class VoxtralPipeline: @unchecked Sendable {
     public func chat(audio: URL, prompt: String, language: String? = nil) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady else {
-                throw VoxtralPipelineError.invalidState("Model not loaded")
-            }
+            let generation = try gate.begin(
+                "chat", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
+                busy: VoxtralPipelineError.busy, state: .processing)
+            defer { gate.end(generation, state: .ready) }
 
             guard let model = voxtralModel, let processor = processor else {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
-            state = .processing
             let session = MLXProfiler.shared.activeSession
             let beacon = RuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
             defer {
                 beacon?.end()
-                state = .ready
                 VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
             }
 
@@ -499,7 +501,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         voxtralModel = nil
         processor = nil
         hybridEncoder = nil
-        state = .unloaded
+        gate.reset(.unloaded)
 
         // Full memory cleanup
         VoxtralMemoryManager.shared.fullCleanup()
@@ -534,6 +536,8 @@ public enum VoxtralPipelineError: Error, LocalizedError {
     case modelNotLoaded
     case processingFailed(String)
     case transcriptionFailed(String)
+    /// Another operation (transcription, chat, loading) holds the pipeline (K-11)
+    case busy(String)
 
     public var errorDescription: String? {
         switch self {
@@ -545,6 +549,8 @@ public enum VoxtralPipelineError: Error, LocalizedError {
             return "Processing failed: \(message)"
         case .transcriptionFailed(let message):
             return "Transcription failed: \(message)"
+        case .busy(let message):
+            return "Pipeline busy: \(message)"
         }
     }
 }

@@ -72,8 +72,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     public static let recommendedWarmUpVocalise = "La la la la la la la la."
 
     public var configuration: Configuration
-    public private(set) var state: State = .unloaded
+    /// Read-only view of the gate: every transition happens under its lock (K-11)
+    public var state: State { gate.state }
     public let sampleRate: Int = 24000
+
+    /// State, running operation and generation token, changed atomically
+    let gate = PipelineGate<State>(.unloaded)
 
     private var ttsModel: VoxtralTTSModel?
     private var tokenizer: TekkenTokenizer?
@@ -125,11 +129,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     public func loadModel(modelInfo: VoxtralTTSModelInfo? = nil, progress: ProgressCallback? = nil) async throws {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         try await withMLXErrors { _ in
-            guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
-                throw VoxtralTTSError.invalidConfiguration("Model already loaded or loading")
-            }
-
-            state = .loading
+            // Atomic check-and-set: a concurrent load or a running operation is refused (K-11)
+            let generation = try gate.begin(
+                "loading", accepts: { current in current.isUnloaded || { if case .error = current { return true }; return false }() },
+                refusal: VoxtralTTSError.invalidConfiguration("Model already loaded or loading"),
+                busy: VoxtralTTSError.busy, state: .loading, newGeneration: true)
             prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
 
             let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
@@ -180,10 +184,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                 progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
                 loadedModelID = resolvedInfo.id
-                state = .ready
+                gate.end(generation, state: .ready)
 
             } catch {
-                state = .error(error.localizedDescription)
+                gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
         }
@@ -198,7 +202,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     ) async throws -> TTSSynthesisResult {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady, let model = ttsModel, let tokenizer else {
+            let generation = try gate.begin(
+                "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
+                busy: VoxtralTTSError.busy, state: .synthesizing)
+            defer { gate.end(generation, state: .ready) }
+            guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
 
@@ -206,7 +214,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 throw VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")
             }
 
-            state = .synthesizing
             let startTime = Date()
             let profiler = MLXProfiler.shared
             let session = profiler.activeSession
@@ -231,7 +238,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
-                    state = .ready
                     throw VoxtralTTSError.synthesisError("No audio frames generated")
                 }
 
@@ -248,7 +254,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 let generationTime = Date().timeIntervalSince(startTime)
                 let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
                 profiler.setAudioDuration(audioDuration)
-                state = .ready
 
                 return TTSSynthesisResult(
                     waveform: waveform,
@@ -258,7 +263,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     timeToFirstToken: ttft
                 )
             } catch {
-                state = .ready
                 throw error
             }
         }
@@ -315,11 +319,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     ) async throws -> TTSSynthesisResult {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady, let model = ttsModel, let tokenizer else {
+            let generation = try gate.begin(
+                "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
+                busy: VoxtralTTSError.busy, state: .synthesizing)
+            defer { gate.end(generation, state: .ready) }
+            guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
 
-            state = .synthesizing
             let startTime = Date()
             let profiler = MLXProfiler.shared
             let session = profiler.activeSession
@@ -351,7 +358,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
-                    state = .ready
                     throw VoxtralTTSError.synthesisError("No audio frames generated")
                 }
 
@@ -393,7 +399,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 let generationTime = Date().timeIntervalSince(startTime)
                 let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
                 profiler.setAudioDuration(audioDuration)
-                state = .ready
 
                 return TTSSynthesisResult(
                     waveform: waveform,
@@ -403,7 +408,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     timeToFirstToken: ttft
                 )
             } catch {
-                state = .ready
                 throw error
             }
         }
@@ -442,7 +446,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     ) throws -> MLXArray {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady, let model = ttsModel else {
+            // The enrollment (gradient) holds the pipeline: a synthesis or a load meanwhile gets
+            // `busy` instead of racing it into the compile × vjp deadlock (K-11, piège 20)
+            let generation = try gate.begin(
+                "enrollment", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
+                busy: VoxtralTTSError.busy)
+            defer { gate.end(generation) }
+            guard let model = ttsModel else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
             let enroller = VoxtralVoiceEnrollment(model: model, config: config)
@@ -516,7 +526,17 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         warmUpText: String? = nil,
         warmUpLeadInFrames: Int = 0
     ) -> AsyncThrowingStream<TTSStreamingChunk, Error> {
-        guard state.isReady, let model = ttsModel, let tokenizer else {
+        let generation: UInt64
+        do {
+            generation = try gate.begin(
+                "streaming synthesis", accepts: { $0.isReady },
+                refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
+                busy: VoxtralTTSError.busy, state: .synthesizing)
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
+        }
+        guard let model = ttsModel, let tokenizer else {
+            gate.end(generation, state: .ready)
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
         }
         let voiceEmb = voiceEmbedding
@@ -526,7 +546,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             voicePrefix(model, for: voiceEmb, key: $0)
         }
 
-        state = .synthesizing
         let startTime = Date()
         let beacon = RuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
 
@@ -683,7 +702,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     continuation.finish(throwing: error)
                 }
 
-                ctx.pipeline.state = .ready
+                // Ignored when the pipeline was unloaded or reloaded meanwhile (stale Task)
+                ctx.pipeline.gate.end(generation, state: .ready)
             }
         }
     }
@@ -697,7 +717,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         prefixCacheEntry = nil
         modelDirectory = nil
         loadedModelID = nil
-        state = .unloaded
+        gate.reset(.unloaded)
     }
 
     public var isReady: Bool { state.isReady }

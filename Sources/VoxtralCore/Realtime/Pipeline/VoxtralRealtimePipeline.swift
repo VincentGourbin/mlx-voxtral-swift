@@ -48,7 +48,11 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     // MARK: - Properties
 
     public var configuration: Configuration
-    public private(set) var state: State = .unloaded
+    /// Read-only view of the gate: every transition happens under its lock (K-11)
+    public var state: State { gate.state }
+
+    /// State, running operation and generation token, changed atomically
+    let gate = PipelineGate<State>(.unloaded)
     public let sampleRate: Int = 16000
 
     private var model: VoxtralRealtimeModel?
@@ -71,11 +75,11 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     ) async throws {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         try await withMLXErrors { _ in
-            guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
-                throw VoxtralRealtimeError.invalidConfiguration("Model already loaded or loading")
-            }
-
-            state = .loading
+            // Atomic check-and-set: a concurrent load or a running operation is refused (K-11)
+            let generation = try gate.begin(
+                "loading", accepts: { current in current.isUnloaded || { if case .error = current { return true }; return false }() },
+                refusal: VoxtralRealtimeError.invalidConfiguration("Model already loaded or loading"),
+                busy: VoxtralRealtimeError.busy, state: .loading, newGeneration: true)
 
             let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
                 ?? VoxtralRealtimeRegistry.defaultModel
@@ -109,10 +113,10 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.endPhase("2. Model Loading", category: .modelLoad)
 
                 progress?(1.0, "Realtime model ready")
-                state = .ready
+                gate.end(generation, state: .ready)
 
             } catch {
-                state = .error(error.localizedDescription)
+                gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
         }
@@ -123,11 +127,14 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     public func transcribe(audio: URL) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady, let model, let tokenizer else {
+            let generation = try gate.begin(
+                "transcription", accepts: { $0.isReady }, refusal: VoxtralRealtimeError.invalidConfiguration("Model not loaded"),
+                busy: VoxtralRealtimeError.busy, state: .processing)
+            defer { gate.end(generation, state: .ready) }
+            guard let model, let tokenizer else {
                 throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
             }
 
-            state = .processing
             let session = MLXProfiler.shared.activeSession
             let beacon = RuntimeBeacon.begin(task: "transcribe-realtime")
             defer { beacon?.end() }
@@ -151,12 +158,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.beginPhase("Token Decoding", category: .decoding)
                 let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
                 session?.endPhase("Token Decoding", category: .decoding)
-                state = .ready
                 return text
-
-            } catch {
-                state = .ready
-                throw error
             }
         }
     }
@@ -168,7 +170,11 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     public func extractAudioEmbeddings(audio: URL) async throws -> MLXArray {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         return try withMLXErrors { _ in
-            guard state.isReady, let model else {
+            let generation = try gate.begin(
+                "embedding extraction", accepts: { $0.isReady },
+                refusal: VoxtralRealtimeError.invalidConfiguration("Model not loaded"), busy: VoxtralRealtimeError.busy)
+            defer { gate.end(generation) }
+            guard let model else {
                 throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
             }
 
@@ -193,7 +199,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         model = nil
         tokenizer = nil
         modelDirectory = nil
-        state = .unloaded
+        gate.reset(.unloaded)
     }
 
     public var isReady: Bool { state.isReady }

@@ -505,7 +505,19 @@ public final class VoxtralVoiceEnrollment {
         return codes
     }
 
+    /// Runs the loop in its own random state: the enrollment no longer draws from (nor advances)
+    /// the global RNG shared with synthesis (K-11); a fixed seed is K-26's.
     private func optimizeCore(
+        reference: MLXArray,
+        progress: ((Progress) -> Void)?,
+        shouldContinue: (() -> Bool)?
+    ) -> (codes: MLXArray, cancelled: Bool, failed: Bool) {
+        withRandomState(MLXRandom.RandomState()) {
+            optimizeLoop(reference: reference, progress: progress, shouldContinue: shouldContinue)
+        }
+    }
+
+    private func optimizeLoop(
         reference: MLXArray,
         progress: ((Progress) -> Void)?,
         shouldContinue: (() -> Bool)?

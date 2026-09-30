@@ -34,12 +34,14 @@ struct StreamingDemoView: View {
                         }
                         .labelsHidden()
                         .frame(width: 140)
+                        .disabled(vm.isEnrolling)
                     }
 
                     Button(vm.isModelLoaded ? "Loaded" : "Load") {
                         Task { await vm.loadModel() }
                     }
-                    .disabled(vm.isLoading)
+                    // The pipeline refuses a load during an enrollment (busy); say it in the UI too
+                    .disabled(vm.isLoading || vm.isEnrolling)
                     .onChange(of: vm.selectedModelId) { _, _ in
                         vm.isModelLoaded = false
                     }
@@ -103,7 +105,7 @@ struct StreamingDemoView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(vm.isSynthesizing ? .red : .accentColor)
-                    .disabled(!vm.isModelLoaded || vm.isLoading)
+                    .disabled(!vm.isModelLoaded || vm.isLoading || vm.isEnrolling)
 
                     HStack(spacing: 4) {
                         Text("Seed:")
@@ -240,6 +242,11 @@ struct StreamingDemoView: View {
                     }
                     .controlSize(.small)
                     .disabled(!vm.isModelLoaded || vm.isEnrolling || vm.isSynthesizing || vm.referenceURL == nil)
+
+                    if vm.isEnrolling {
+                        Button("Cancel") { vm.cancelEnroll() }
+                            .controlSize(.small)
+                    }
 
                     Spacer()
                 }
