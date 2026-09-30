@@ -845,3 +845,9 @@ Gabarits :
   - `GREEN PipelineStateStressTests (TSan) : 10/10, ThreadSanitizer: 0 warnings` (4 scénarios × 10)
   - `Executed 515 tests, with 16 tests skipped and 0 failures (0 unexpected)`
 - Mesure : aucune.
+
+## ASK-26 et ASK-28 répondues — 2026-09-30
+- Vincent : ASK-28 = A (mlx-swift-lm sur `main`, `Package.resolved` suivi) ; ASK-26 = B (`VoxtralBenchmark` retiré,
+  remplacé par `VoxtralCLI bench`). Inscrites dans `ASK.md` (Réponses). #566 (K-22) et #584 (K-32) rouvertes.
+- Chemin vers les profils mesurés : K-22 → K-32 → K-33 → baselines K-34…K-37 → K-76…K-79 (+ K-64) ; restent ouvertes
+  pour la suite : ASK-8 et ASK-9 (K-5, prérequis de K-32), ASK-4 (K-76), ASK-5, ASK-13, ASK-18 (K-79).

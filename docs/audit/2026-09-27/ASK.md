@@ -529,9 +529,9 @@ réponse datée ici.
 | ASK-23 | | | |
 | ASK-24 | | | |
 | ASK-25 | | | |
-| ASK-26 | | | |
+| ASK-26 | B | 2026-09-30 | Donnée par Vincent dans la session Mac : `VoxtralBenchmark` retiré du `Package.swift`, remplacé par `VoxtralCLI bench` (K-32). |
 | ASK-27 | | | |
-| ASK-28 | | | |
+| ASK-28 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : rester sur `main` de mlx-swift-lm, `Package.resolved` suivi dans git (K-22) ; premier tag ensuite (plan `upstream-blocker`). |
 | ASK-29 | | | |
 | ASK-30 | | | |
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
