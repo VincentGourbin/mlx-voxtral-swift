@@ -72,6 +72,9 @@ public class VoxtralRealtimeModel: Module {
         // Encode audio
         session?.beginPhase("Audio Encoding", category: .audioEncode)
         let adapterOut = encodeAudio(mel)  // [n_audio_total, decoder_dim]
+        // A caught MLX error leaves empty arrays: stop before reading shapes or items;
+        // the public boundary (withMLXErrors) then throws VoxtralError.mlx (K-1)
+        if MLXErrorScope.hasError { return ([], adapterOut) }
         let nAudioTotal = adapterOut.dim(0)
         MLX.eval(adapterOut)
         session?.endPhase("Audio Encoding", category: .audioEncode)
@@ -105,8 +108,10 @@ public class VoxtralRealtimeModel: Module {
         // Prefill
         session?.beginPhase("Prefill", category: .prefill)
         var hidden = decoder.forward(embeds: prefixEmbeds, cache: cache)
+        if MLXErrorScope.hasError { return ([], adapterOut) }
         var logits = decoder.logits(hidden[hidden.dim(0) - 1])
         MLX.eval(logits)
+        if MLXErrorScope.hasError { return ([], adapterOut) }
         session?.endPhase("Prefill", category: .prefill)
 
         // Autoregressive decode
@@ -131,6 +136,7 @@ public class VoxtralRealtimeModel: Module {
             hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
             logits = decoder.logits(hidden[0])
             MLX.eval(logits)
+            if MLXErrorScope.hasError { return (generated, adapterOut) }
 
             let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
             session?.recordStep(index: generated.count, total: nAudioTotal - promptLen, durationUs: stepDurationUs, category: .generationStep)

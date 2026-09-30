@@ -750,3 +750,30 @@ Gabarits :
 - Porte observée : `wc -l < CLAUDE.md` = 60 ; `git grep -n "'Voxtral\.\*'" -- CLAUDE.md docs/audit/2026-09-27` → 0
   ligne ; `tasks.yaml` : `depends_on_status: verified` = 5, `Amendement du planificateur` = 7 ; `dispatch.py` (essai à
   blanc) : « Naissent blocked (⛔) : 23 », « Erreurs : aucune ».
+
+## K-1 — Erreurs MLX levées au lieu de terminer le processus hôte — 2026-09-30 — validée
+- Fait : `VoxtralError.mlx(String)` ; `Utils/MLXErrorBoundary.swift` : `withMLXErrors` (sync et async) autour de
+  `withError`, qui convertit `MLXError.caught` et publie l'`ErrorBox` en `@TaskLocal` (`MLXErrorScope`). Enveloppés :
+  `generateStream`, `generateStreamWithAudioEmbeds` (`try errors.check()` après chaque appel du modèle, chaque `eval`
+  et avant `item`), `VoxtralPipeline.loadModel/transcribe/chat`, `VoxtralTTSPipeline.loadModel/synthesize(voice)/
+  synthesize(voiceEmbedding)/enrollVoice` et le streaming **dans** sa `Task` productrice (`check()` après l'`eval` de
+  chaque chunk), `VoxtralRealtimePipeline.loadModel/transcribe/extractAudioEmbeddings`. Amendement appliqué : avec le
+  correctif, le test (b) s'arrêtait sur « Index out of range » (la couche suivante lit la forme d'un tableau vide) ;
+  la boucle du décodeur (`LlamaStandardModel`) et `VoxtralRealtimeModel.generate` s'arrêtent dès qu'une erreur est
+  enregistrée (`MLXErrorScope.hasError`), sans changer de signature publique.
+- Catalogue : `apply.py scan --pattern MLX-021` (claude-skills `f0ebb9a`, 0.6.0) : 1 → 0.
+- Porte observée :
+  - `RED   MLXErrorBoundaryTests.testPrefillBeyondRotatingWindowThrows : crash du runner (fatalError) — correctif retiré`
+    (`Fatal error: [broadcast_shapes] Shapes (512,2560) and (1,4,512,2559) cannot be broadcast`, fast.cpp:629)
+  - `GREEN Executed 2 tests, with 0 failures (0 unexpected)`
+  - `Executed 501 tests, with 15 tests skipped and 0 failures (0 unexpected)` (suite complète)
+  - `OVERHEAD real A=15,76 B=15,75 B=15,75 A=15,72 → écart +0,06 % (≤ 5 %)` ; dispersion A/A 0,25 % ;
+    transcriptions identiques (sha `d3a452…`, 4/4)
+- Mesure : `/usr/bin/time -p $CLI transcribe docs/examples/fluxforge_long_en_6bit.wav -m mini-3b-8bit -b mlx -l en`
+  (C-moyen EN, 167 s), A = `0742d08e` (worktree), B = correctif, `Package.resolved` de B copié dans A, les deux
+  construits avec `-onlyUsePackageVersionsFromResolvedFile` ; `machine-check --procs 'Voxtral.*|FluxForge.*'` sans KO ;
+  amorçage A puis B exclus ; 120 s entre points. Une 1ʳᵉ série avait amorcé B seul : A1 = 17,84 (1ᵉʳ lancement du
+  binaire A, cache Metal froid), B = 15,71/15,74, A2 = 15,72 — non conclusive (dispersion A/A 13 %), refaite.
+- Révisions : mlx-swift `0bb916c67f4b9e5c682cbe02a42c701c93ab5021`, mlx-swift-lm
+  `604fae710a4e3324346fc59e3845952350acd4b7`, swift-mlx-profiler `b2a83b36a24b2e252573369644259a648fbaf18a`
+  (identiques A et B).

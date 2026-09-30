@@ -721,4 +721,6 @@ public enum VoxtralError: Error {
     case configurationNotFound
     /// A public entry point that cannot do what it is asked (e.g. the legacy `downloadModel(modelId:)`)
     case unsupported(String)
+    /// An MLX error (shape, dtype, mask…) caught at a public entry point instead of terminating the host
+    case mlx(String)
 }

@@ -1108,177 +1108,184 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         contextSize: Int? = nil,  // nil = unlimited (KVCacheSimple), set value = limited (RotatingKVCache)
         memoryOptimization: MemoryOptimizationConfig? = nil  // nil = use VoxtralMemoryManager.shared.config
     ) throws -> [Int] {
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        try withMLXErrors { errors in
 
-        var tokenIds: [Int] = []
+            var tokenIds: [Int] = []
 
-        guard inputIds.size > 0 else {
-            throw VoxtralError.invalidInput("input_ids must be provided")
-        }
-
-        // Get memory optimization config (use shared manager if not provided)
-        let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
-
-        // Override contextSize if memory optimization specifies maxKVCacheSize
-        let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
-
-        let stopTokens = [2, 4, 32000]
-
-        let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
-
-        // Python: batch_size = input_ids.shape[0]
-        let batchSize = inputIds.shape[0]
-
-        // Create KV cache - with or without size limit
-        let numLayers = getLanguageModelLayerCount()
-        var cache: [any KVCache]? = []
-
-        if let maxContext = effectiveContextSize {
-            // RotatingKVCache: limits memory by discarding old tokens when exceeding maxSize
-            // keep: 4 = preserve first 4 tokens (BOS + critical prompt tokens)
-            for _ in 0..<numLayers {
-                cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+            guard inputIds.size > 0 else {
+                throw VoxtralError.invalidInput("input_ids must be provided")
             }
-            VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
-        } else {
-            // KVCacheSimple: unlimited growth (original behavior)
-            for _ in 0..<numLayers {
-                cache!.append(KVCacheSimple())
+
+            // Get memory optimization config (use shared manager if not provided)
+            let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
+
+            // Override contextSize if memory optimization specifies maxKVCacheSize
+            let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
+
+            let stopTokens = [2, 4, 32000]
+
+            let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
+
+            // Python: batch_size = input_ids.shape[0]
+            let batchSize = inputIds.shape[0]
+
+            // Create KV cache - with or without size limit
+            let numLayers = getLanguageModelLayerCount()
+            var cache: [any KVCache]? = []
+
+            if let maxContext = effectiveContextSize {
+                // RotatingKVCache: limits memory by discarding old tokens when exceeding maxSize
+                // keep: 4 = preserve first 4 tokens (BOS + critical prompt tokens)
+                for _ in 0..<numLayers {
+                    cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+                }
+                VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
+            } else {
+                // KVCacheSimple: unlimited growth (original behavior)
+                for _ in 0..<numLayers {
+                    cache!.append(KVCacheSimple())
+                }
             }
-        }
 
-        var generated = inputIds
-        var recentTokenIds: [Int] = []  // Keep only Int IDs for repetition penalty
-        var currentAttentionMask = attentionMask
+            var generated = inputIds
+            var recentTokenIds: [Int] = []  // Keep only Int IDs for repetition penalty
+            var currentAttentionMask = attentionMask
 
-        // Reset memory optimization cycle counter
-        VoxtralMemoryManager.shared.resetOptimizationCycle()
+            // Reset memory optimization cycle counter
+            VoxtralMemoryManager.shared.resetOptimizationCycle()
 
-        let profiler = MLXProfiler.shared
-        let session = profiler.activeSession
+            let profiler = MLXProfiler.shared
+            let session = profiler.activeSession
 
-        for tokenIndex in 0..<maxNewTokens {
-            let stepStart = CFAbsoluteTimeGetCurrent()
-            var modelOutput: VoxtralModelOutput!
+            for tokenIndex in 0..<maxNewTokens {
+                let stepStart = CFAbsoluteTimeGetCurrent()
+                var modelOutput: VoxtralModelOutput!
 
-            if cache![0].offset == 0 {
-                // Chunked prefill: process embeddings in chunks to reduce peak memory
-                // Instead of one massive forward pass (which allocates attention matrices
-                // proportional to seqLen²), process in chunks of prefillChunkSize.
-                // The KV cache accumulates across chunks via cache.offset.
-                profiler.startPrefill()
-                let prefillChunkSize = 512
-                let totalSeqLen = inputsEmbeds.shape[1]
+                if cache![0].offset == 0 {
+                    // Chunked prefill: process embeddings in chunks to reduce peak memory
+                    // Instead of one massive forward pass (which allocates attention matrices
+                    // proportional to seqLen²), process in chunks of prefillChunkSize.
+                    // The KV cache accumulates across chunks via cache.offset.
+                    profiler.startPrefill()
+                    let prefillChunkSize = 512
+                    let totalSeqLen = inputsEmbeds.shape[1]
 
-                if totalSeqLen > prefillChunkSize {
-                    for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
-                        let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
-                        let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
+                    if totalSeqLen > prefillChunkSize {
+                        for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                            let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                            let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 
-                        let chunkOutput = self.callAsFunction(
+                            let chunkOutput = self.callAsFunction(
+                                inputIds: nil,
+                                attentionMask: nil,
+                                inputFeatures: nil,
+                                inputsEmbeds: embedsChunk,
+                                pastKeyValues: cache
+                            )
+                            modelOutput = chunkOutput
+
+                            // Eval between chunks to materialize KV cache and free intermediates
+                            eval(chunkOutput.logits)
+                            try errors.check()
+                        }
+                    } else {
+                        modelOutput = self.callAsFunction(
                             inputIds: nil,
-                            attentionMask: nil,
+                            attentionMask: currentAttentionMask,
                             inputFeatures: nil,
-                            inputsEmbeds: embedsChunk,
+                            inputsEmbeds: inputsEmbeds,
                             pastKeyValues: cache
                         )
-                        modelOutput = chunkOutput
-
-                        // Eval between chunks to materialize KV cache and free intermediates
-                        eval(chunkOutput.logits)
                     }
                 } else {
+                    let seqLen = generated.shape[1]
+                    let lastToken = generated[0..., (seqLen-1)..<seqLen]
                     modelOutput = self.callAsFunction(
-                        inputIds: nil,
+                        inputIds: lastToken,
                         attentionMask: currentAttentionMask,
                         inputFeatures: nil,
-                        inputsEmbeds: inputsEmbeds,
+                        inputsEmbeds: nil,
                         pastKeyValues: cache
                     )
                 }
-            } else {
-                let seqLen = generated.shape[1]
-                let lastToken = generated[0..., (seqLen-1)..<seqLen]
-                modelOutput = self.callAsFunction(
-                    inputIds: lastToken,
-                    attentionMask: currentAttentionMask,
-                    inputFeatures: nil,
-                    inputsEmbeds: nil,
-                    pastKeyValues: cache
-                )
-            }
 
-            let logits = modelOutput.logits
-            let seqLen = logits.shape[1]
-            let lastTokenLogits = logits[0..., seqLen-1, 0...]
+                try errors.check()  // an MLX error leaves empty arrays: stop before reading shapes
+                let logits = modelOutput.logits
+                let seqLen = logits.shape[1]
+                let lastTokenLogits = logits[0..., seqLen-1, 0...]
 
-            var processedLogits = lastTokenLogits
+                var processedLogits = lastTokenLogits
 
-            if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
-                let tokens = Array(recentTokenIds.suffix(20))
-                processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
-            }
-
-            let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
-
-            // Extract token ID immediately to avoid keeping MLXArray references
-            let currentTokenId = nextToken.squeezed().item(Int.self)
-            tokenIds.append(currentTokenId)
-            recentTokenIds.append(currentTokenId)
-
-            // End prefill phase after first token is generated
-            if tokenIndex == 0 {
-                profiler.endPrefill()
-                profiler.startGeneration()
-            }
-
-            // Record per-token step timing
-            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
-            session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
-
-            // Python: generated = mx.concatenate([generated, next_tokens], axis=1)
-            generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
-
-            // Python: if attention_mask is not None
-            if currentAttentionMask != nil {
-                let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
-                currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
-            }
-
-            // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
-            if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
-                // Force evaluation to prevent memory buildup from lazy computation
-                eval(generated)
-
-                if memConfig.clearCacheOnEval {
-                    Memory.clearCache()
+                if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
+                    let tokens = Array(recentTokenIds.suffix(20))
+                    processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
                 }
 
-                if memConfig.resetPeakMemory {
-                    GPU.resetPeakMemory()
+                let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
+
+                // Extract token ID immediately to avoid keeping MLXArray references
+                try errors.check()
+                let currentTokenId = nextToken.squeezed().item(Int.self)
+                tokenIds.append(currentTokenId)
+                recentTokenIds.append(currentTokenId)
+
+                // End prefill phase after first token is generated
+                if tokenIndex == 0 {
+                    profiler.endPrefill()
+                    profiler.startGeneration()
                 }
-            }
 
-            // Python: if current_token_id in stop_tokens: break
-            if stopTokens.contains(currentTokenId) {
-                break
-            }
+                // Record per-token step timing
+                let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+                session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
 
-            // Repetition detection
-            if recentTokenIds.count >= 10 {
-                let last10 = recentTokenIds.suffix(10)
-                if last10.allSatisfy({ $0 == currentTokenId }) {
+                // Python: generated = mx.concatenate([generated, next_tokens], axis=1)
+                generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
+
+                // Python: if attention_mask is not None
+                if currentAttentionMask != nil {
+                    let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
+                    currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
+                }
+
+                // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
+                if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
+                    // Force evaluation to prevent memory buildup from lazy computation
+                    eval(generated)
+                    try errors.check()
+
+                    if memConfig.clearCacheOnEval {
+                        Memory.clearCache()
+                    }
+
+                    if memConfig.resetPeakMemory {
+                        GPU.resetPeakMemory()
+                    }
+                }
+
+                // Python: if current_token_id in stop_tokens: break
+                if stopTokens.contains(currentTokenId) {
                     break
                 }
+
+                // Repetition detection
+                if recentTokenIds.count >= 10 {
+                    let last10 = recentTokenIds.suffix(10)
+                    if last10.allSatisfy({ $0 == currentTokenId }) {
+                        break
+                    }
+                }
             }
+
+            profiler.endGeneration(tokenCount: tokenIds.count)
+
+            // 🧹 Clear KV cache and intermediate tensors
+            cache = nil
+            Memory.clearCache()
+
+            return tokenIds
         }
-
-        profiler.endGeneration(tokenCount: tokenIds.count)
-
-        // 🧹 Clear KV cache and intermediate tensors
-        cache = nil
-        Memory.clearCache()
-
-        return tokenIds
     }
 
     /**
@@ -1297,162 +1304,169 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         contextSize: Int? = nil,
         memoryOptimization: MemoryOptimizationConfig? = nil  // nil = use VoxtralMemoryManager.shared.config
     ) throws -> [Int] {
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        try withMLXErrors { errors in
 
-        var tokenIds: [Int] = []
+            var tokenIds: [Int] = []
 
-        guard inputIds.size > 0 else {
-            throw VoxtralError.invalidInput("input_ids must be provided")
-        }
-
-        // Get memory optimization config (use shared manager if not provided)
-        let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
-
-        // Override contextSize if memory optimization specifies maxKVCacheSize
-        let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
-
-        let stopTokens = [2, 4, 32000]
-
-        // Merge token embeddings with pre-computed audio embeddings
-        let inputsEmbeds = mergeInputEmbeddingsWithAudioEmbeds(inputIds: inputIds, audioEmbeds: audioEmbeds)
-
-        let batchSize = inputIds.shape[0]
-
-        // Create KV cache
-        let numLayers = getLanguageModelLayerCount()
-        var cache: [any KVCache]? = []
-
-        if let maxContext = effectiveContextSize {
-            for _ in 0..<numLayers {
-                cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+            guard inputIds.size > 0 else {
+                throw VoxtralError.invalidInput("input_ids must be provided")
             }
-            VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
-        } else {
-            for _ in 0..<numLayers {
-                cache!.append(KVCacheSimple())
+
+            // Get memory optimization config (use shared manager if not provided)
+            let memConfig = memoryOptimization ?? VoxtralMemoryManager.shared.config
+
+            // Override contextSize if memory optimization specifies maxKVCacheSize
+            let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
+
+            let stopTokens = [2, 4, 32000]
+
+            // Merge token embeddings with pre-computed audio embeddings
+            let inputsEmbeds = mergeInputEmbeddingsWithAudioEmbeds(inputIds: inputIds, audioEmbeds: audioEmbeds)
+
+            let batchSize = inputIds.shape[0]
+
+            // Create KV cache
+            let numLayers = getLanguageModelLayerCount()
+            var cache: [any KVCache]? = []
+
+            if let maxContext = effectiveContextSize {
+                for _ in 0..<numLayers {
+                    cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
+                }
+                VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
+            } else {
+                for _ in 0..<numLayers {
+                    cache!.append(KVCacheSimple())
+                }
             }
-        }
 
-        var generated = inputIds
-        var recentTokenIds: [Int] = []
-        var currentAttentionMask = attentionMask
+            var generated = inputIds
+            var recentTokenIds: [Int] = []
+            var currentAttentionMask = attentionMask
 
-        // Reset memory optimization cycle counter
-        VoxtralMemoryManager.shared.resetOptimizationCycle()
+            // Reset memory optimization cycle counter
+            VoxtralMemoryManager.shared.resetOptimizationCycle()
 
-        let profiler = MLXProfiler.shared
-        let session = profiler.activeSession
+            let profiler = MLXProfiler.shared
+            let session = profiler.activeSession
 
-        for tokenIndex in 0..<maxNewTokens {
-            let stepStart = CFAbsoluteTimeGetCurrent()
-            var modelOutput: VoxtralModelOutput!
+            for tokenIndex in 0..<maxNewTokens {
+                let stepStart = CFAbsoluteTimeGetCurrent()
+                var modelOutput: VoxtralModelOutput!
 
-            if cache![0].offset == 0 {
-                // Chunked prefill (same as generateStream)
-                profiler.startPrefill()
-                let prefillChunkSize = 512
-                let totalSeqLen = inputsEmbeds.shape[1]
+                if cache![0].offset == 0 {
+                    // Chunked prefill (same as generateStream)
+                    profiler.startPrefill()
+                    let prefillChunkSize = 512
+                    let totalSeqLen = inputsEmbeds.shape[1]
 
-                if totalSeqLen > prefillChunkSize {
-                    for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
-                        let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
-                        let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
+                    if totalSeqLen > prefillChunkSize {
+                        for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                            let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                            let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 
-                        let chunkOutput = self.callAsFunction(
+                            let chunkOutput = self.callAsFunction(
+                                inputIds: nil,
+                                attentionMask: nil,
+                                inputFeatures: nil,
+                                inputsEmbeds: embedsChunk,
+                                pastKeyValues: cache
+                            )
+                            modelOutput = chunkOutput
+                            eval(chunkOutput.logits)
+                            try errors.check()
+                        }
+                    } else {
+                        modelOutput = self.callAsFunction(
                             inputIds: nil,
-                            attentionMask: nil,
+                            attentionMask: currentAttentionMask,
                             inputFeatures: nil,
-                            inputsEmbeds: embedsChunk,
+                            inputsEmbeds: inputsEmbeds,
                             pastKeyValues: cache
                         )
-                        modelOutput = chunkOutput
-                        eval(chunkOutput.logits)
                     }
                 } else {
+                    let seqLen = generated.shape[1]
+                    let lastToken = generated[0..., (seqLen-1)..<seqLen]
                     modelOutput = self.callAsFunction(
-                        inputIds: nil,
+                        inputIds: lastToken,
                         attentionMask: currentAttentionMask,
                         inputFeatures: nil,
-                        inputsEmbeds: inputsEmbeds,
+                        inputsEmbeds: nil,
                         pastKeyValues: cache
                     )
                 }
-            } else {
-                let seqLen = generated.shape[1]
-                let lastToken = generated[0..., (seqLen-1)..<seqLen]
-                modelOutput = self.callAsFunction(
-                    inputIds: lastToken,
-                    attentionMask: currentAttentionMask,
-                    inputFeatures: nil,
-                    inputsEmbeds: nil,
-                    pastKeyValues: cache
-                )
-            }
 
-            let logits = modelOutput.logits
-            let seqLen = logits.shape[1]
-            let lastTokenLogits = logits[0..., seqLen-1, 0...]
+                try errors.check()  // an MLX error leaves empty arrays: stop before reading shapes
+                let logits = modelOutput.logits
+                let seqLen = logits.shape[1]
+                let lastTokenLogits = logits[0..., seqLen-1, 0...]
 
-            var processedLogits = lastTokenLogits
+                var processedLogits = lastTokenLogits
 
-            if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
-                let tokens = Array(recentTokenIds.suffix(20))
-                processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
-            }
-
-            let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
-
-            let currentTokenId = nextToken.squeezed().item(Int.self)
-            tokenIds.append(currentTokenId)
-            recentTokenIds.append(currentTokenId)
-
-            // End prefill phase after first token is generated
-            if tokenIndex == 0 {
-                profiler.endPrefill()
-                profiler.startGeneration()
-            }
-
-            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
-            session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
-
-            generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
-
-            if currentAttentionMask != nil {
-                let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
-                currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
-            }
-
-            // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
-            if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
-                // Force evaluation to prevent memory buildup from lazy computation
-                eval(generated)
-
-                if memConfig.clearCacheOnEval {
-                    Memory.clearCache()
+                if repetitionPenalty != 1.0 && !recentTokenIds.isEmpty {
+                    let tokens = Array(recentTokenIds.suffix(20))
+                    processedLogits = applyRepetitionPenalty(logits: processedLogits, tokens: tokens, penalty: repetitionPenalty)
                 }
 
-                if memConfig.resetPeakMemory {
-                    GPU.resetPeakMemory()
+                let nextToken = try sample(logits: processedLogits, temperature: temperature, topP: topP)
+
+                try errors.check()
+                let currentTokenId = nextToken.squeezed().item(Int.self)
+                tokenIds.append(currentTokenId)
+                recentTokenIds.append(currentTokenId)
+
+                // End prefill phase after first token is generated
+                if tokenIndex == 0 {
+                    profiler.endPrefill()
+                    profiler.startGeneration()
                 }
-            }
 
-            if stopTokens.contains(currentTokenId) {
-                break
-            }
+                let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+                session?.recordStep(index: tokenIndex + 1, total: maxNewTokens, durationUs: stepDurationUs, category: .generationStep)
 
-            if recentTokenIds.count >= 10 {
-                let last10 = recentTokenIds.suffix(10)
-                if last10.allSatisfy({ $0 == currentTokenId }) {
+                generated = concatenated([generated, nextToken.reshaped([1, 1])], axis: 1)
+
+                if currentAttentionMask != nil {
+                    let ones = MLXArray.ones([batchSize, 1], dtype: currentAttentionMask!.dtype)
+                    currentAttentionMask = concatenated([currentAttentionMask!, ones], axis: 1)
+                }
+
+                // 🔧 Apply memory optimization (aligned with flux-2-swift-mlx patterns)
+                if memConfig.evalFrequency > 0 && (tokenIndex + 1) % memConfig.evalFrequency == 0 {
+                    // Force evaluation to prevent memory buildup from lazy computation
+                    eval(generated)
+                    try errors.check()
+
+                    if memConfig.clearCacheOnEval {
+                        Memory.clearCache()
+                    }
+
+                    if memConfig.resetPeakMemory {
+                        GPU.resetPeakMemory()
+                    }
+                }
+
+                if stopTokens.contains(currentTokenId) {
                     break
                 }
+
+                if recentTokenIds.count >= 10 {
+                    let last10 = recentTokenIds.suffix(10)
+                    if last10.allSatisfy({ $0 == currentTokenId }) {
+                        break
+                    }
+                }
             }
+
+            profiler.endGeneration(tokenCount: tokenIds.count)
+
+            cache = nil
+            Memory.clearCache()
+
+            return tokenIds
         }
-
-        profiler.endGeneration(tokenCount: tokenIds.count)
-
-        cache = nil
-        Memory.clearCache()
-
-        return tokenIds
     }
 
     /**

@@ -43,3 +43,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-09-30 — **rôles consignés (#599)** : seule la session Voxtral du Mac committe ici ; planification et
   vérification dans action-plans par une session cloud ; ASK et fusions à Vincent. `machine-check.sh` doit recevoir
   `--procs 'Voxtral.*|FluxForge.*'` : FluxForge Studio charge MLX sur le même GPU.
+- 2026-09-30 — **K-1 : erreurs MLX converties en `VoxtralError.mlx`** aux points d'entrée publics (STT, TTS, Realtime)
+  : le déclencheur P-03 (préfill de 2 600 positions dans un cache glissant de 2 048) ne tue plus le processus.
+  Leçon : une erreur capturée laisse des tableaux vides et la couche suivante piège en Swift en lisant leur forme ;
+  il faut s'arrêter entre les couches (`MLXErrorScope.hasError`). Surcoût : +0,06 % (bruit). Mesure : amorcer
+  **chaque** binaire avant A/B/B/A (le 1ᵉʳ lancement d'un binaire neuf coûte ≈ 2 s de cache Metal).

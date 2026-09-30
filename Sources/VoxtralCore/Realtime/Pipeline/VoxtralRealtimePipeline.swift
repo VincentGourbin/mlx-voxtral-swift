@@ -69,87 +69,93 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         modelId: String? = nil,
         progress: ProgressCallback? = nil
     ) async throws {
-        guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
-            throw VoxtralRealtimeError.invalidConfiguration("Model already loaded or loading")
-        }
-
-        state = .loading
-
-        let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
-            ?? VoxtralRealtimeRegistry.defaultModel
-        let beacon = RuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
-        defer { beacon?.end() }
-
-        do {
-            let session = MLXProfiler.shared.activeSession
-
-            progress?(0.05, "Resolving Realtime model...")
-            session?.beginPhase("1. Model Download", category: .modelLoad)
-            let modelDir = try await ModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
-                progress?(0.05 + p * 0.35, msg)
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        try await withMLXErrors { _ in
+            guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
+                throw VoxtralRealtimeError.invalidConfiguration("Model already loaded or loading")
             }
-            self.modelDirectory = modelDir
-            session?.endPhase("1. Model Download", category: .modelLoad)
 
-            progress?(0.40, "Loading Realtime model...")
-            session?.beginPhase("2. Model Loading", category: .modelLoad)
-            let loadedModel = try loadVoxtralRealtimeModel(from: modelDir) { p, msg in
-                progress?(0.40 + Double(p) * 0.40, msg)
+            state = .loading
+
+            let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
+                ?? VoxtralRealtimeRegistry.defaultModel
+            let beacon = RuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
+            defer { beacon?.end() }
+
+            do {
+                let session = MLXProfiler.shared.activeSession
+
+                progress?(0.05, "Resolving Realtime model...")
+                session?.beginPhase("1. Model Download", category: .modelLoad)
+                let modelDir = try await ModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
+                    progress?(0.05 + p * 0.35, msg)
+                }
+                self.modelDirectory = modelDir
+                session?.endPhase("1. Model Download", category: .modelLoad)
+
+                progress?(0.40, "Loading Realtime model...")
+                session?.beginPhase("2. Model Loading", category: .modelLoad)
+                let loadedModel = try loadVoxtralRealtimeModel(from: modelDir) { p, msg in
+                    progress?(0.40 + Double(p) * 0.40, msg)
+                }
+                self.model = loadedModel
+                session?.endPhase("2. Model Loading", category: .modelLoad)
+
+                progress?(0.85, "Loading tokenizer...")
+                session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
+                self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+                session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+
+                progress?(1.0, "Realtime model ready")
+                state = .ready
+
+            } catch {
+                state = .error(error.localizedDescription)
+                throw error
             }
-            self.model = loadedModel
-            session?.endPhase("2. Model Loading", category: .modelLoad)
-
-            progress?(0.85, "Loading tokenizer...")
-            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
-            self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
-            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
-
-            progress?(1.0, "Realtime model ready")
-            state = .ready
-
-        } catch {
-            state = .error(error.localizedDescription)
-            throw error
         }
     }
 
     // MARK: - Transcription
 
     public func transcribe(audio: URL) async throws -> String {
-        guard state.isReady, let model, let tokenizer else {
-            throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
-        }
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady, let model, let tokenizer else {
+                throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
+            }
 
-        state = .processing
-        let session = MLXProfiler.shared.activeSession
-        let beacon = RuntimeBeacon.begin(task: "transcribe-realtime")
-        defer { beacon?.end() }
+            state = .processing
+            let session = MLXProfiler.shared.activeSession
+            let beacon = RuntimeBeacon.begin(task: "transcribe-realtime")
+            defer { beacon?.end() }
 
-        do {
-            session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
-            let mel = try prepareMel(from: audio, config: model.config)
-            session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
+            do {
+                session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
+                let mel = try prepareMel(from: audio, config: model.config)
+                session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
 
-            // Generate transcription
-            session?.beginPhase("Realtime Generation", category: .generation)
-            let (tokens, _) = model.generate(
-                mel: mel,
-                tokenizer: tokenizer,
-                maxTokens: configuration.maxTokens,
-                temperature: configuration.temperature,
-                delayMs: configuration.transcriptionDelayMs
-            )
-            session?.endPhase("Realtime Generation", category: .generation)
+                // Generate transcription
+                session?.beginPhase("Realtime Generation", category: .generation)
+                let (tokens, _) = model.generate(
+                    mel: mel,
+                    tokenizer: tokenizer,
+                    maxTokens: configuration.maxTokens,
+                    temperature: configuration.temperature,
+                    delayMs: configuration.transcriptionDelayMs
+                )
+                session?.endPhase("Realtime Generation", category: .generation)
 
-            session?.beginPhase("Token Decoding", category: .decoding)
-            let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
-            session?.endPhase("Token Decoding", category: .decoding)
-            state = .ready
-            return text
+                session?.beginPhase("Token Decoding", category: .decoding)
+                let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
+                session?.endPhase("Token Decoding", category: .decoding)
+                state = .ready
+                return text
 
-        } catch {
-            state = .ready
-            throw error
+            } catch {
+                state = .ready
+                throw error
+            }
         }
     }
 
@@ -158,22 +164,25 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     /// Extract audio embeddings from an audio file.
     /// Returns embeddings of shape [1, n_tokens, 3072].
     public func extractAudioEmbeddings(audio: URL) async throws -> MLXArray {
-        guard state.isReady, let model else {
-            throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady, let model else {
+                throw VoxtralRealtimeError.invalidConfiguration("Model not loaded")
+            }
+
+            let session = MLXProfiler.shared.activeSession
+
+            session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
+            let mel = try prepareMel(from: audio, config: model.config)
+            session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
+
+            session?.beginPhase("Audio Encoding", category: .audioEncode)
+            let embeddings = model.extractAudioEmbeddings(mel)
+            MLX.eval(embeddings)
+            session?.endPhase("Audio Encoding", category: .audioEncode)
+
+            return embeddings
         }
-
-        let session = MLXProfiler.shared.activeSession
-
-        session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
-        let mel = try prepareMel(from: audio, config: model.config)
-        session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
-
-        session?.beginPhase("Audio Encoding", category: .audioEncode)
-        let embeddings = model.extractAudioEmbeddings(mel)
-        MLX.eval(embeddings)
-        session?.endPhase("Audio Encoding", category: .audioEncode)
-
-        return embeddings
     }
 
     // MARK: - Resource Management

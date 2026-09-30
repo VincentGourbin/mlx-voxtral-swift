@@ -209,66 +209,69 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// Load the model
     /// - Parameter progress: Optional progress callback (progress 0-1, status message)
     public func loadModel(progress: ProgressCallback? = nil) async throws {
-        guard state.isUnloaded || state.isError else {
-            throw VoxtralPipelineError.invalidState("Model already loaded or loading")
-        }
-
-        state = .loading
-        progress?(0.0, "Starting model download...")
-
-        let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
-        defer { beacon?.end() }
-
-        do {
-            let profiler = MLXProfiler.shared
-            let session = profiler.activeSession
-
-            // Download/resolve model path
-            progress?(0.1, "Downloading model...")
-            session?.beginPhase("1. Model Download", category: .modelLoad)
-            let modelPath = try await ModelDownloader.resolveModel(model.repoId) { downloadProgress, status in
-                progress?(0.1 + downloadProgress * 0.4, status)
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        try await withMLXErrors { _ in
+            guard state.isUnloaded || state.isError else {
+                throw VoxtralPipelineError.invalidState("Model already loaded or loading")
             }
-            session?.endPhase("1. Model Download", category: .modelLoad)
 
-            // Load model using the working loadVoxtralStandardModel approach
-            progress?(0.5, "Loading model...")
-            session?.beginPhase("2. Model Loading", category: .modelLoad)
-            let (standardModel, _) = try loadVoxtralStandardModel(
-                modelPath: modelPath.path,
-                dtype: .float16
-            )
-            self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
-            session?.endPhase("2. Model Loading", category: .modelLoad)
+            state = .loading
+            progress?(0.0, "Starting model download...")
 
-            // Load tokenizer and setup encoder IN PARALLEL
-            // CoreML compilation (encoder setup) can take 1-2 min on first run,
-            // so we overlap it with tokenizer loading to reduce total wait time.
-            progress?(0.6, "Loading tokenizer & compiling encoder...")
+            let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
+            defer { beacon?.end() }
 
-            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
-            session?.beginPhase("4. Encoder Setup", category: .modelLoad)
+            do {
+                let profiler = MLXProfiler.shared
+                let session = profiler.activeSession
 
-            let capturedModelPath = modelPath.path
-            async let tokenizerTask: VoxtralProcessor = {
-                try VoxtralProcessor.fromPretrained(capturedModelPath) { processorProgress, status in
-                    progress?(0.6 + processorProgress * 0.15, status)
+                // Download/resolve model path
+                progress?(0.1, "Downloading model...")
+                session?.beginPhase("1. Model Download", category: .modelLoad)
+                let modelPath = try await ModelDownloader.resolveModel(model.repoId) { downloadProgress, status in
+                    progress?(0.1 + downloadProgress * 0.4, status)
                 }
-            }()
-            async let encoderTask: Void = setupEncoder()
+                session?.endPhase("1. Model Download", category: .modelLoad)
 
-            self.processor = try await tokenizerTask
-            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+                // Load model using the working loadVoxtralStandardModel approach
+                progress?(0.5, "Loading model...")
+                session?.beginPhase("2. Model Loading", category: .modelLoad)
+                let (standardModel, _) = try loadVoxtralStandardModel(
+                    modelPath: modelPath.path,
+                    dtype: .float16
+                )
+                self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
+                session?.endPhase("2. Model Loading", category: .modelLoad)
 
-            try await encoderTask
-            session?.endPhase("4. Encoder Setup", category: .modelLoad)
+                // Load tokenizer and setup encoder IN PARALLEL
+                // CoreML compilation (encoder setup) can take 1-2 min on first run,
+                // so we overlap it with tokenizer loading to reduce total wait time.
+                progress?(0.6, "Loading tokenizer & compiling encoder...")
 
-            state = .ready
-            progress?(1.0, "Model ready!")
+                session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
+                session?.beginPhase("4. Encoder Setup", category: .modelLoad)
 
-        } catch {
-            state = .error(error.localizedDescription)
-            throw error
+                let capturedModelPath = modelPath.path
+                async let tokenizerTask: VoxtralProcessor = {
+                    try VoxtralProcessor.fromPretrained(capturedModelPath) { processorProgress, status in
+                        progress?(0.6 + processorProgress * 0.15, status)
+                    }
+                }()
+                async let encoderTask: Void = setupEncoder()
+
+                self.processor = try await tokenizerTask
+                session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+
+                try await encoderTask
+                session?.endPhase("4. Encoder Setup", category: .modelLoad)
+
+                state = .ready
+                progress?(1.0, "Model ready!")
+
+            } catch {
+                state = .error(error.localizedDescription)
+                throw error
+            }
         }
     }
 
@@ -317,75 +320,78 @@ public class VoxtralPipeline: @unchecked Sendable {
     ///     without hardcoding a source language.
     /// - Returns: Transcribed text
     public func transcribe(audio: URL, language: String? = nil) async throws -> String {
-        guard state.isReady else {
-            throw VoxtralPipelineError.invalidState("Model not loaded")
-        }
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady else {
+                throw VoxtralPipelineError.invalidState("Model not loaded")
+            }
 
-        guard let model = voxtralModel, let processor = processor else {
-            throw VoxtralPipelineError.modelNotLoaded
-        }
+            guard let model = voxtralModel, let processor = processor else {
+                throw VoxtralPipelineError.modelNotLoaded
+            }
 
-        state = .processing
-        let session = MLXProfiler.shared.activeSession
-        let beacon = RuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
-        defer {
-            beacon?.end()
-            state = .ready
-            // Apply memory optimization
-            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
-        }
+            state = .processing
+            let session = MLXProfiler.shared.activeSession
+            let beacon = RuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
+            defer {
+                beacon?.end()
+                state = .ready
+                // Apply memory optimization
+                VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
+            }
 
-        // Create transcription request (note: method name has typo in original)
-        session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
-        let inputs = try processor.applyTranscritionRequest(
-            audio: audio.path,
-            language: language
-        )
-        session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
-
-        // Generate transcription
-        let tokenIds: [Int]
-
-        if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
-            // Hybrid mode: use Core ML for audio encoding
-            session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
-            let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-            session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
-
-            session?.beginPhase("Generation", category: .generation)
-            tokenIds = try model.generateStreamWithAudioEmbeds(
-                inputIds: inputs.inputIds,
-                audioEmbeds: audioEmbeds,
-                maxNewTokens: configuration.maxTokens,
-                temperature: configuration.temperature,
-                topP: configuration.topP,
-                repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                memoryOptimization: configuration.memoryOptimization
+            // Create transcription request (note: method name has typo in original)
+            session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
+            let inputs = try processor.applyTranscritionRequest(
+                audio: audio.path,
+                language: language
             )
-            session?.endPhase("Generation", category: .generation)
-        } else {
-            // Pure MLX mode
-            session?.beginPhase("Generation", category: .generation)
-            tokenIds = try model.generateStream(
-                inputIds: inputs.inputIds,
-                inputFeatures: inputs.inputFeatures,
-                maxNewTokens: configuration.maxTokens,
-                temperature: configuration.temperature,
-                topP: configuration.topP,
-                repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                memoryOptimization: configuration.memoryOptimization
-            )
-            session?.endPhase("Generation", category: .generation)
+            session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
+
+            // Generate transcription
+            let tokenIds: [Int]
+
+            if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
+                // Hybrid mode: use Core ML for audio encoding
+                session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
+                let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
+                session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
+
+                session?.beginPhase("Generation", category: .generation)
+                tokenIds = try model.generateStreamWithAudioEmbeds(
+                    inputIds: inputs.inputIds,
+                    audioEmbeds: audioEmbeds,
+                    maxNewTokens: configuration.maxTokens,
+                    temperature: configuration.temperature,
+                    topP: configuration.topP,
+                    repetitionPenalty: configuration.repetitionPenalty,
+                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                    memoryOptimization: configuration.memoryOptimization
+                )
+                session?.endPhase("Generation", category: .generation)
+            } else {
+                // Pure MLX mode
+                session?.beginPhase("Generation", category: .generation)
+                tokenIds = try model.generateStream(
+                    inputIds: inputs.inputIds,
+                    inputFeatures: inputs.inputFeatures,
+                    maxNewTokens: configuration.maxTokens,
+                    temperature: configuration.temperature,
+                    topP: configuration.topP,
+                    repetitionPenalty: configuration.repetitionPenalty,
+                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                    memoryOptimization: configuration.memoryOptimization
+                )
+                session?.endPhase("Generation", category: .generation)
+            }
+
+            // Decode tokens to text
+            session?.beginPhase("Token Decoding", category: .decoding)
+            let transcription = try processor.decode(tokenIds, skipSpecialTokens: true)
+            session?.endPhase("Token Decoding", category: .decoding)
+
+            return transcription
         }
-
-        // Decode tokens to text
-        session?.beginPhase("Token Decoding", category: .decoding)
-        let transcription = try processor.decode(tokenIds, skipSpecialTokens: true)
-        session?.endPhase("Token Decoding", category: .decoding)
-
-        return transcription
     }
 
     /// Chat with audio context
@@ -396,87 +402,90 @@ public class VoxtralPipeline: @unchecked Sendable {
     ///     — `nil` lets the model auto-detect the spoken language.
     /// - Returns: Model response
     public func chat(audio: URL, prompt: String, language: String? = nil) async throws -> String {
-        guard state.isReady else {
-            throw VoxtralPipelineError.invalidState("Model not loaded")
-        }
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady else {
+                throw VoxtralPipelineError.invalidState("Model not loaded")
+            }
 
-        guard let model = voxtralModel, let processor = processor else {
-            throw VoxtralPipelineError.modelNotLoaded
-        }
+            guard let model = voxtralModel, let processor = processor else {
+                throw VoxtralPipelineError.modelNotLoaded
+            }
 
-        state = .processing
-        let session = MLXProfiler.shared.activeSession
-        let beacon = RuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
-        defer {
-            beacon?.end()
-            state = .ready
-            VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
-        }
+            state = .processing
+            let session = MLXProfiler.shared.activeSession
+            let beacon = RuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
+            defer {
+                beacon?.end()
+                state = .ready
+                VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
+            }
 
-        // Create chat conversation with audio
-        session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
-        let conversation: [[String: Any]] = [
-            [
-                "role": "user",
-                "content": [
-                    ["type": "audio", "audio": audio.path],
-                    ["type": "text", "text": prompt]
+            // Create chat conversation with audio
+            session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
+            let conversation: [[String: Any]] = [
+                [
+                    "role": "user",
+                    "content": [
+                        ["type": "audio", "audio": audio.path],
+                        ["type": "text", "text": prompt]
+                    ]
                 ]
             ]
-        ]
 
-        // Process through chat template
-        guard let chatResult = try processor.applyChatTemplate(
-            conversation: conversation,
-            tokenize: true,
-            returnTensors: "mlx"
-        ) as? [String: MLXArray],
-              let inputIds = chatResult["input_ids"],
-              let inputFeatures = chatResult["input_features"] else {
-            throw VoxtralPipelineError.processingFailed("Failed to process chat template")
+            // Process through chat template
+            guard let chatResult = try processor.applyChatTemplate(
+                conversation: conversation,
+                tokenize: true,
+                returnTensors: "mlx"
+            ) as? [String: MLXArray],
+                  let inputIds = chatResult["input_ids"],
+                  let inputFeatures = chatResult["input_features"] else {
+                throw VoxtralPipelineError.processingFailed("Failed to process chat template")
+            }
+            session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
+
+            // Generate response
+            let tokenIds: [Int]
+
+            if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
+                session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
+                let audioEmbeds = try hybrid.encode(inputFeatures)
+                session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
+
+                session?.beginPhase("Generation", category: .generation)
+                tokenIds = try model.generateStreamWithAudioEmbeds(
+                    inputIds: inputIds,
+                    audioEmbeds: audioEmbeds,
+                    maxNewTokens: configuration.maxTokens,
+                    temperature: configuration.temperature,
+                    topP: configuration.topP,
+                    repetitionPenalty: configuration.repetitionPenalty,
+                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                    memoryOptimization: configuration.memoryOptimization
+                )
+                session?.endPhase("Generation", category: .generation)
+            } else {
+                session?.beginPhase("Generation", category: .generation)
+                tokenIds = try model.generateStream(
+                    inputIds: inputIds,
+                    inputFeatures: inputFeatures,
+                    maxNewTokens: configuration.maxTokens,
+                    temperature: configuration.temperature,
+                    topP: configuration.topP,
+                    repetitionPenalty: configuration.repetitionPenalty,
+                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
+                    memoryOptimization: configuration.memoryOptimization
+                )
+                session?.endPhase("Generation", category: .generation)
+            }
+
+            session?.beginPhase("Token Decoding", category: .decoding)
+            let response = try processor.decode(tokenIds, skipSpecialTokens: true)
+            session?.endPhase("Token Decoding", category: .decoding)
+
+            return response
         }
-        session?.endPhase("Audio Feature Extraction", category: .audioFeatureExtract)
-
-        // Generate response
-        let tokenIds: [Int]
-
-        if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
-            session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
-            let audioEmbeds = try hybrid.encode(inputFeatures)
-            session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
-
-            session?.beginPhase("Generation", category: .generation)
-            tokenIds = try model.generateStreamWithAudioEmbeds(
-                inputIds: inputIds,
-                audioEmbeds: audioEmbeds,
-                maxNewTokens: configuration.maxTokens,
-                temperature: configuration.temperature,
-                topP: configuration.topP,
-                repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                memoryOptimization: configuration.memoryOptimization
-            )
-            session?.endPhase("Generation", category: .generation)
-        } else {
-            session?.beginPhase("Generation", category: .generation)
-            tokenIds = try model.generateStream(
-                inputIds: inputIds,
-                inputFeatures: inputFeatures,
-                maxNewTokens: configuration.maxTokens,
-                temperature: configuration.temperature,
-                topP: configuration.topP,
-                repetitionPenalty: configuration.repetitionPenalty,
-                contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                memoryOptimization: configuration.memoryOptimization
-            )
-            session?.endPhase("Generation", category: .generation)
-        }
-
-        session?.beginPhase("Token Decoding", category: .decoding)
-        let response = try processor.decode(tokenIds, skipSpecialTokens: true)
-        session?.endPhase("Token Decoding", category: .decoding)
-
-        return response
     }
 
     // MARK: - Cleanup

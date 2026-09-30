@@ -123,65 +123,68 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     // MARK: - Model Loading
 
     public func loadModel(modelInfo: VoxtralTTSModelInfo? = nil, progress: ProgressCallback? = nil) async throws {
-        guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
-            throw VoxtralTTSError.invalidConfiguration("Model already loaded or loading")
-        }
-
-        state = .loading
-        prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
-
-        let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
-        let beacon = RuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
-        defer { beacon?.end() }
-
-        do {
-            let session = MLXProfiler.shared.activeSession
-
-            progress?(0.05, "Resolving TTS model...")
-            session?.beginPhase("1. Model Download", category: .modelLoad)
-            let modelInfo = resolvedInfo
-            let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
-                progress?(0.05 + p * 0.35, msg)
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        try await withMLXErrors { _ in
+            guard state.isUnloaded || { if case .error = state { return true }; return false }() else {
+                throw VoxtralTTSError.invalidConfiguration("Model already loaded or loading")
             }
-            self.modelDirectory = modelDir
-            session?.endPhase("1. Model Download", category: .modelLoad)
 
-            progress?(0.40, "Loading TTS model...")
-            session?.beginPhase("2. Model Loading", category: .modelLoad)
-            let model = try loadVoxtralTTSModel(from: modelDir) { p, msg in
-                progress?(0.40 + Double(p) * 0.40, msg)
-            }
-            self.ttsModel = model
-            session?.endPhase("2. Model Loading", category: .modelLoad)
+            state = .loading
+            prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
 
-            progress?(0.85, "Loading tokenizer...")
-            session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
-            // TekkenTokenizer expects the MODEL DIRECTORY, not the tekken.json file path
-            self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
-            session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+            let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
+            let beacon = RuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
+            defer { beacon?.end() }
 
-            // Load voice embeddings
-            progress?(0.90, "Loading voice embeddings...")
-            session?.beginPhase("4. Voice Embeddings", category: .voiceEmbedding)
-            let voiceDir = modelDir.appendingPathComponent("voice_embedding")
-            for voice in VoxtralVoice.allCases {
-                let safetensorsPath = voiceDir.appendingPathComponent("\(voice.rawValue).safetensors")
-                if FileManager.default.fileExists(atPath: safetensorsPath.path) {
-                    let data = try MLX.loadArrays(url: safetensorsPath)
-                    if let emb = data["embedding"] ?? data.values.first {
-                        voiceEmbeddings[voice.rawValue] = emb
+            do {
+                let session = MLXProfiler.shared.activeSession
+
+                progress?(0.05, "Resolving TTS model...")
+                session?.beginPhase("1. Model Download", category: .modelLoad)
+                let modelInfo = resolvedInfo
+                let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
+                    progress?(0.05 + p * 0.35, msg)
+                }
+                self.modelDirectory = modelDir
+                session?.endPhase("1. Model Download", category: .modelLoad)
+
+                progress?(0.40, "Loading TTS model...")
+                session?.beginPhase("2. Model Loading", category: .modelLoad)
+                let model = try loadVoxtralTTSModel(from: modelDir) { p, msg in
+                    progress?(0.40 + Double(p) * 0.40, msg)
+                }
+                self.ttsModel = model
+                session?.endPhase("2. Model Loading", category: .modelLoad)
+
+                progress?(0.85, "Loading tokenizer...")
+                session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
+                // TekkenTokenizer expects the MODEL DIRECTORY, not the tekken.json file path
+                self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+                session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+
+                // Load voice embeddings
+                progress?(0.90, "Loading voice embeddings...")
+                session?.beginPhase("4. Voice Embeddings", category: .voiceEmbedding)
+                let voiceDir = modelDir.appendingPathComponent("voice_embedding")
+                for voice in VoxtralVoice.allCases {
+                    let safetensorsPath = voiceDir.appendingPathComponent("\(voice.rawValue).safetensors")
+                    if FileManager.default.fileExists(atPath: safetensorsPath.path) {
+                        let data = try MLX.loadArrays(url: safetensorsPath)
+                        if let emb = data["embedding"] ?? data.values.first {
+                            voiceEmbeddings[voice.rawValue] = emb
+                        }
                     }
                 }
+                session?.endPhase("4. Voice Embeddings", category: .voiceEmbedding)
+
+                progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
+                loadedModelID = resolvedInfo.id
+                state = .ready
+
+            } catch {
+                state = .error(error.localizedDescription)
+                throw error
             }
-            session?.endPhase("4. Voice Embeddings", category: .voiceEmbedding)
-
-            progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
-            loadedModelID = resolvedInfo.id
-            state = .ready
-
-        } catch {
-            state = .error(error.localizedDescription)
-            throw error
         }
     }
 
@@ -192,68 +195,71 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         voice: VoxtralVoice = .neutralFemale,
         seed: UInt64? = nil
     ) async throws -> TTSSynthesisResult {
-        guard state.isReady, let model = ttsModel, let tokenizer else {
-            throw VoxtralTTSError.invalidConfiguration("Model not loaded")
-        }
-
-        guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
-            throw VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")
-        }
-
-        state = .synthesizing
-        let startTime = Date()
-        let profiler = MLXProfiler.shared
-        let session = profiler.activeSession
-        let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
-        defer { beacon?.end() }
-
-        let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
-        do {
-            // Generate audio codes (semantic code generation + flow matching inside)
-            profiler.startSemanticGen()
-            let (codes, numFrames, ttft) = model.generate(
-                text: text,
-                voiceEmbedding: voiceEmb,
-                tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames,
-                sanitize: configuration.sanitizeText,
-                seed: seed,
-                prefixCache: prefix.cache,
-                prefixLen: prefix.len
-            )
-            profiler.endSemanticGen(frameCount: numFrames)
-            profiler.setTTFT(ttft)
-
-            guard numFrames > 0 else {
-                state = .ready
-                throw VoxtralTTSError.synthesisError("No audio frames generated")
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady, let model = ttsModel, let tokenizer else {
+                throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
 
-            // Decode to waveform, optionally trim lead-in silence
-            profiler.startCodecDecode()
-            let rawWaveform = model.decodeToWaveform(codes)
-            MLX.eval(rawWaveform)
-            profiler.endCodecDecode()
+            guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
+                throw VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")
+            }
 
-            session?.beginPhase("Audio Post-processing", category: .postProcess)
-            let waveform = applyTrims(rawWaveform)
-            session?.endPhase("Audio Post-processing", category: .postProcess)
+            state = .synthesizing
+            let startTime = Date()
+            let profiler = MLXProfiler.shared
+            let session = profiler.activeSession
+            let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+            defer { beacon?.end() }
 
-            let generationTime = Date().timeIntervalSince(startTime)
-            let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
-            profiler.setAudioDuration(audioDuration)
-            state = .ready
+            let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
+            do {
+                // Generate audio codes (semantic code generation + flow matching inside)
+                profiler.startSemanticGen()
+                let (codes, numFrames, ttft) = model.generate(
+                    text: text,
+                    voiceEmbedding: voiceEmb,
+                    tokenizer: tokenizer,
+                    maxTokens: configuration.maxFrames,
+                    sanitize: configuration.sanitizeText,
+                    seed: seed,
+                    prefixCache: prefix.cache,
+                    prefixLen: prefix.len
+                )
+                profiler.endSemanticGen(frameCount: numFrames)
+                profiler.setTTFT(ttft)
 
-            return TTSSynthesisResult(
-                waveform: waveform,
-                numFrames: numFrames,
-                sampleRate: sampleRate,
-                generationTime: generationTime,
-                timeToFirstToken: ttft
-            )
-        } catch {
-            state = .ready
-            throw error
+                guard numFrames > 0 else {
+                    state = .ready
+                    throw VoxtralTTSError.synthesisError("No audio frames generated")
+                }
+
+                // Decode to waveform, optionally trim lead-in silence
+                profiler.startCodecDecode()
+                let rawWaveform = model.decodeToWaveform(codes)
+                MLX.eval(rawWaveform)
+                profiler.endCodecDecode()
+
+                session?.beginPhase("Audio Post-processing", category: .postProcess)
+                let waveform = applyTrims(rawWaveform)
+                session?.endPhase("Audio Post-processing", category: .postProcess)
+
+                let generationTime = Date().timeIntervalSince(startTime)
+                let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
+                profiler.setAudioDuration(audioDuration)
+                state = .ready
+
+                return TTSSynthesisResult(
+                    waveform: waveform,
+                    numFrames: numFrames,
+                    sampleRate: sampleRate,
+                    generationTime: generationTime,
+                    timeToFirstToken: ttft
+                )
+            } catch {
+                state = .ready
+                throw error
+            }
         }
     }
 
@@ -306,96 +312,99 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         warmUpText: String? = nil,
         warmUpLeadInFrames: Int = 0
     ) async throws -> TTSSynthesisResult {
-        guard state.isReady, let model = ttsModel, let tokenizer else {
-            throw VoxtralTTSError.invalidConfiguration("Model not loaded")
-        }
-
-        state = .synthesizing
-        let startTime = Date()
-        let profiler = MLXProfiler.shared
-        let session = profiler.activeSession
-        let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
-        defer { beacon?.end() }
-
-        // Prepend the warm-up carrier as its own sentence so the model puts a
-        // detectable pause between it and the real content.
-        let genText: String
-        if let warmUpText, !warmUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let carrier = warmUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let sep = carrier.last.map { ".!?…".contains($0) } == true ? " " : ". "
-            genText = carrier + sep + text
-        } else {
-            genText = text
-        }
-
-        do {
-            profiler.startSemanticGen()
-            let (codes, numFrames, ttft) = model.generate(
-                text: genText,
-                voiceEmbedding: voiceEmbedding,
-                tokenizer: tokenizer,
-                maxTokens: configuration.maxFrames,
-                sanitize: configuration.sanitizeText,
-                seed: seed
-            )
-            profiler.endSemanticGen(frameCount: numFrames)
-            profiler.setTTFT(ttft)
-
-            guard numFrames > 0 else {
-                state = .ready
-                throw VoxtralTTSError.synthesisError("No audio frames generated")
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady, let model = ttsModel, let tokenizer else {
+                throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
 
-            profiler.startCodecDecode()
-            let rawWaveform = model.decodeToWaveform(codes)
-            MLX.eval(rawWaveform)
-            profiler.endCodecDecode()
+            state = .synthesizing
+            let startTime = Date()
+            let profiler = MLXProfiler.shared
+            let session = profiler.activeSession
+            let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+            defer { beacon?.end() }
 
-            session?.beginPhase("Audio Post-processing", category: .postProcess)
-            // Drop the warm-up carrier's audio. When it trims, the carrier trim
-            // already positions the content start (including any kept
-            // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
-            // it would strip that lead-in back off. Apply only the tail trim.
-            // Locate the cut with a purely ABSOLUTE silence floor rather than
-            // the default peak-relative threshold. An enrolled voice renders
-            // the carrier much quieter than the content, so a peak-relative
-            // threshold lands ABOVE the carrier: the "skip leading silence"
-            // scan then consumes the carrier *and* its terminal pause, and the
-            // first gap it finds is the pause after the first sentence — which
-            // is cut away with the carrier (measured: a 2-sentence text lost
-            // its whole first sentence, 18.9 s → 11.8 s). The carrier's
-            // terminal pause is true digital silence (~−110 dB), far below any
-            // speech, so a fixed low floor isolates it whatever the content
-            // loudness.
-            let (carrierTrimmed, carrierCut) = genText != text
-                ? trimLeadingCarrierAdaptive(rawWaveform, sampleRate: sampleRate,
-                                             leadInFrames: warmUpLeadInFrames)
-                : (rawWaveform, 0)
-            let waveform: MLXArray
-            if carrierCut > 0 {
-                waveform = configuration.trimTail
-                    ? trimTrailingSilence(carrierTrimmed, sampleRate: sampleRate)
-                    : carrierTrimmed
+            // Prepend the warm-up carrier as its own sentence so the model puts a
+            // detectable pause between it and the real content.
+            let genText: String
+            if let warmUpText, !warmUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let carrier = warmUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let sep = carrier.last.map { ".!?…".contains($0) } == true ? " " : ". "
+                genText = carrier + sep + text
             } else {
-                waveform = applyTrims(rawWaveform)
+                genText = text
             }
-            session?.endPhase("Audio Post-processing", category: .postProcess)
 
-            let generationTime = Date().timeIntervalSince(startTime)
-            let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
-            profiler.setAudioDuration(audioDuration)
-            state = .ready
+            do {
+                profiler.startSemanticGen()
+                let (codes, numFrames, ttft) = model.generate(
+                    text: genText,
+                    voiceEmbedding: voiceEmbedding,
+                    tokenizer: tokenizer,
+                    maxTokens: configuration.maxFrames,
+                    sanitize: configuration.sanitizeText,
+                    seed: seed
+                )
+                profiler.endSemanticGen(frameCount: numFrames)
+                profiler.setTTFT(ttft)
 
-            return TTSSynthesisResult(
-                waveform: waveform,
-                numFrames: numFrames,
-                sampleRate: sampleRate,
-                generationTime: generationTime,
-                timeToFirstToken: ttft
-            )
-        } catch {
-            state = .ready
-            throw error
+                guard numFrames > 0 else {
+                    state = .ready
+                    throw VoxtralTTSError.synthesisError("No audio frames generated")
+                }
+
+                profiler.startCodecDecode()
+                let rawWaveform = model.decodeToWaveform(codes)
+                MLX.eval(rawWaveform)
+                profiler.endCodecDecode()
+
+                session?.beginPhase("Audio Post-processing", category: .postProcess)
+                // Drop the warm-up carrier's audio. When it trims, the carrier trim
+                // already positions the content start (including any kept
+                // `warmUpLeadInFrames` breath), so DON'T also run trimLeadInSilence —
+                // it would strip that lead-in back off. Apply only the tail trim.
+                // Locate the cut with a purely ABSOLUTE silence floor rather than
+                // the default peak-relative threshold. An enrolled voice renders
+                // the carrier much quieter than the content, so a peak-relative
+                // threshold lands ABOVE the carrier: the "skip leading silence"
+                // scan then consumes the carrier *and* its terminal pause, and the
+                // first gap it finds is the pause after the first sentence — which
+                // is cut away with the carrier (measured: a 2-sentence text lost
+                // its whole first sentence, 18.9 s → 11.8 s). The carrier's
+                // terminal pause is true digital silence (~−110 dB), far below any
+                // speech, so a fixed low floor isolates it whatever the content
+                // loudness.
+                let (carrierTrimmed, carrierCut) = genText != text
+                    ? trimLeadingCarrierAdaptive(rawWaveform, sampleRate: sampleRate,
+                                                 leadInFrames: warmUpLeadInFrames)
+                    : (rawWaveform, 0)
+                let waveform: MLXArray
+                if carrierCut > 0 {
+                    waveform = configuration.trimTail
+                        ? trimTrailingSilence(carrierTrimmed, sampleRate: sampleRate)
+                        : carrierTrimmed
+                } else {
+                    waveform = applyTrims(rawWaveform)
+                }
+                session?.endPhase("Audio Post-processing", category: .postProcess)
+
+                let generationTime = Date().timeIntervalSince(startTime)
+                let audioDuration = Double(waveform.dim(0)) / Double(sampleRate)
+                profiler.setAudioDuration(audioDuration)
+                state = .ready
+
+                return TTSSynthesisResult(
+                    waveform: waveform,
+                    numFrames: numFrames,
+                    sampleRate: sampleRate,
+                    generationTime: generationTime,
+                    timeToFirstToken: ttft
+                )
+            } catch {
+                state = .ready
+                throw error
+            }
         }
     }
 
@@ -430,25 +439,28 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         progress: ((VoxtralVoiceEnrollment.Progress) -> Void)? = nil,
         shouldContinue: (() -> Bool)? = nil
     ) throws -> MLXArray {
-        guard state.isReady, let model = ttsModel else {
-            throw VoxtralTTSError.invalidConfiguration("Model not loaded")
+        // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
+        return try withMLXErrors { _ in
+            guard state.isReady, let model = ttsModel else {
+                throw VoxtralTTSError.invalidConfiguration("Model not loaded")
+            }
+            let enroller = VoxtralVoiceEnrollment(model: model, config: config)
+            let reference = try enroller.prepareReference(url: referenceURL)
+            // Always go through the throwing overload (a nil `shouldContinue`
+            // becomes a never-cancel poll) so a diverged run surfaces as an error
+            // on every path, GUI included, instead of silently saving a bad voice.
+            let codes = try enroller.optimize(
+                reference: reference, progress: progress, shouldContinue: shouldContinue ?? { true })
+            let embedding = enroller.codesToVoiceEmbedding(codes)
+            // Hard guarantee: never write a non-finite embedding. A NaN prefix is
+            // continued into every synthesis as runaway babble to the frame cap.
+            guard embedding.sum().item(Float.self).isFinite else {
+                throw VoxtralTTSError.synthesisError(
+                    "Enrollment produced a non-finite voice embedding; refusing to save")
+            }
+            try MLX.save(arrays: ["embedding": embedding], url: outputURL)
+            return embedding
         }
-        let enroller = VoxtralVoiceEnrollment(model: model, config: config)
-        let reference = try enroller.prepareReference(url: referenceURL)
-        // Always go through the throwing overload (a nil `shouldContinue`
-        // becomes a never-cancel poll) so a diverged run surfaces as an error
-        // on every path, GUI included, instead of silently saving a bad voice.
-        let codes = try enroller.optimize(
-            reference: reference, progress: progress, shouldContinue: shouldContinue ?? { true })
-        let embedding = enroller.codesToVoiceEmbedding(codes)
-        // Hard guarantee: never write a non-finite embedding. A NaN prefix is
-        // continued into every synthesis as runaway babble to the frame cap.
-        guard embedding.sum().item(Float.self).isFinite else {
-            throw VoxtralTTSError.synthesisError(
-                "Enrollment produced a non-finite voice embedding; refusing to save")
-        }
-        try MLX.save(arrays: ["embedding": embedding], url: outputURL)
-        return embedding
     }
 
     /// Blend two named voice presets.
@@ -566,102 +578,106 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 var isFirst = true
 
                 do {
-                    let codeStream = ctx.model.generateStreaming(
-                        text: ctx.genText,
-                        voiceEmbedding: ctx.voiceEmb,
-                        tokenizer: ctx.tokenizer,
-                        maxTokens: capturedMaxFrames,
-                        chunkSize: chunkSize,
-                        sanitize: capturedSanitize,
-                        seed: ctx.seed,
-                        prefixCache: ctx.prefixCache,
-                        prefixLen: ctx.prefixLen
-                    )
+                    // The MLX error handler is task-local: the boundary lives in this producing Task (K-1)
+                    try await withMLXErrors { errors in
+                        let codeStream = ctx.model.generateStreaming(
+                            text: ctx.genText,
+                            voiceEmbedding: ctx.voiceEmb,
+                            tokenizer: ctx.tokenizer,
+                            maxTokens: capturedMaxFrames,
+                            chunkSize: chunkSize,
+                            sanitize: capturedSanitize,
+                            seed: ctx.seed,
+                            prefixCache: ctx.prefixCache,
+                            prefixLen: ctx.prefixLen
+                        )
 
-                    for try await chunk in codeStream {
-                        // Decode all accumulated codes to get full waveform
-                        let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
-                        MLX.eval(fullWaveform)
+                        for try await chunk in codeStream {
+                            // Decode all accumulated codes to get full waveform
+                            let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
+                            MLX.eval(fullWaveform)
+                            try errors.check()
 
-                        let totalSamples = fullWaveform.dim(0)
+                            let totalSamples = fullWaveform.dim(0)
 
-                        // Locate the warm-up carrier's end once, then drop it.
-                        // Wait until the adaptive scan window (3 s) has actually
-                        // accumulated — deciding on a partial waveform can latch
-                        // onto a micro-pause inside the carrier and hold that
-                        // wrong cut for the rest of the stream. The batch path
-                        // never sees a partial waveform, so it needs no such
-                        // guard; this keeps both paths deciding on the same view.
-                        let scanWindowSamples = capturedSampleRate * 3
-                        if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
-                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
-                            continue
-                        }
-                        if contentStart == nil {
-                            // Same adaptive cut as the batch path: no absolute
-                            // level is assumed. The carrier's terminal pause is
-                            // whatever the generation made it — measured −55 dB,
-                            // −65 dB and −126 dB across three seeds on one voice
-                            // — so a fixed floor finds it only sometimes, and a
-                            // peak-relative one rides up with the content and
-                            // swallows the carrier. Deriving the reference from
-                            // the carrier's own level sidesteps both.
-                            let (_, cutFrames) = trimLeadingCarrierAdaptive(
-                                fullWaveform, sampleRate: capturedSampleRate,
-                                leadInFrames: ctx.warmUpLeadInFrames)
-                            if cutFrames > 0 {
-                                contentStart = cutFrames * frameSize
-                            } else if chunk.isFinal {
-                                contentStart = 0  // pause never found — emit everything
-                            } else {
-                                // Still inside the carrier; nothing to emit yet.
+                            // Locate the warm-up carrier's end once, then drop it.
+                            // Wait until the adaptive scan window (3 s) has actually
+                            // accumulated — deciding on a partial waveform can latch
+                            // onto a micro-pause inside the carrier and hold that
+                            // wrong cut for the rest of the stream. The batch path
+                            // never sees a partial waveform, so it needs no such
+                            // guard; this keeps both paths deciding on the same view.
+                            let scanWindowSamples = capturedSampleRate * 3
+                            if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
                                 beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                                 continue
                             }
-                        }
-                        let start = contentStart!
-                        guard totalSamples > start else {
-                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
-                            if !chunk.isFinal { continue }
-                            // Final chunk with no content past the cut: emit an
-                            // empty final marker so consumers see completion.
+                            if contentStart == nil {
+                                // Same adaptive cut as the batch path: no absolute
+                                // level is assumed. The carrier's terminal pause is
+                                // whatever the generation made it — measured −55 dB,
+                                // −65 dB and −126 dB across three seeds on one voice
+                                // — so a fixed floor finds it only sometimes, and a
+                                // peak-relative one rides up with the content and
+                                // swallows the carrier. Deriving the reference from
+                                // the carrier's own level sidesteps both.
+                                let (_, cutFrames) = trimLeadingCarrierAdaptive(
+                                    fullWaveform, sampleRate: capturedSampleRate,
+                                    leadInFrames: ctx.warmUpLeadInFrames)
+                                if cutFrames > 0 {
+                                    contentStart = cutFrames * frameSize
+                                } else if chunk.isFinal {
+                                    contentStart = 0  // pause never found — emit everything
+                                } else {
+                                    // Still inside the carrier; nothing to emit yet.
+                                    beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                                    continue
+                                }
+                            }
+                            let start = contentStart!
+                            guard totalSamples > start else {
+                                beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                                if !chunk.isFinal { continue }
+                                // Final chunk with no content past the cut: emit an
+                                // empty final marker so consumers see completion.
+                                continuation.yield(TTSStreamingChunk(
+                                    waveform: fullWaveform[(totalSamples)...],
+                                    frameIndex: chunk.totalFrames, frameCount: 0,
+                                    totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
+                                    isFirst: isFirst, isFinal: true,
+                                    elapsed: Date().timeIntervalSince(startTime)))
+                                break
+                            }
+
+                            // Content samples generated so far, and the new slice.
+                            let contentTotal = totalSamples - start
+                            let newWaveform: MLXArray
+                            if previousContentSamples > 0 && previousContentSamples < contentTotal {
+                                newWaveform = fullWaveform[(start + previousContentSamples)...]
+                            } else {
+                                newWaveform = fullWaveform[start...]
+                            }
+
+                            let elapsed = Date().timeIntervalSince(startTime)
+
                             continuation.yield(TTSStreamingChunk(
-                                waveform: fullWaveform[(totalSamples)...],
-                                frameIndex: chunk.totalFrames, frameCount: 0,
-                                totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
-                                isFirst: isFirst, isFinal: true,
-                                elapsed: Date().timeIntervalSince(startTime)))
-                            break
+                                waveform: newWaveform,
+                                frameIndex: chunk.totalFrames - chunk.newFrameCount,
+                                frameCount: chunk.newFrameCount,
+                                totalFrames: chunk.totalFrames,
+                                sampleRate: capturedSampleRate,
+                                isFirst: isFirst,
+                                isFinal: chunk.isFinal,
+                                elapsed: elapsed
+                            ))
+
+                            previousContentSamples = contentTotal
+                            isFirst = false
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                         }
 
-                        // Content samples generated so far, and the new slice.
-                        let contentTotal = totalSamples - start
-                        let newWaveform: MLXArray
-                        if previousContentSamples > 0 && previousContentSamples < contentTotal {
-                            newWaveform = fullWaveform[(start + previousContentSamples)...]
-                        } else {
-                            newWaveform = fullWaveform[start...]
-                        }
-
-                        let elapsed = Date().timeIntervalSince(startTime)
-
-                        continuation.yield(TTSStreamingChunk(
-                            waveform: newWaveform,
-                            frameIndex: chunk.totalFrames - chunk.newFrameCount,
-                            frameCount: chunk.newFrameCount,
-                            totalFrames: chunk.totalFrames,
-                            sampleRate: capturedSampleRate,
-                            isFirst: isFirst,
-                            isFinal: chunk.isFinal,
-                            elapsed: elapsed
-                        ))
-
-                        previousContentSamples = contentTotal
-                        isFirst = false
-                        beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                        continuation.finish()
                     }
-
-                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }

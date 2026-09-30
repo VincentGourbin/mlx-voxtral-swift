@@ -419,6 +419,8 @@ public class LlamaStandardModel: Module {
         for (layer, layerCache) in zip(layers, layerCaches) {
             // Python: h = layer(h, mask, cache=c)
             hiddenStates = layer.callAsFunction(hiddenStates, attentionMask: attentionMask, cache: layerCache)
+            // A caught MLX error leaves empty arrays: the next layer would trap reading their shape (K-1)
+            if MLXErrorScope.hasError { return hiddenStates }
         }
 
         // Python: return self.norm(h)
