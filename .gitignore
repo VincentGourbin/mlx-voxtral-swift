@@ -120,3 +120,6 @@ default.profraw
 voxtral_tts_trace.json
 *.pdf
 .xcodebuild*/
+
+# Corpus lists and bench outputs (never versioned)
+.local-runs/

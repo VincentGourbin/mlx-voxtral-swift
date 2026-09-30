@@ -23,6 +23,25 @@ tasks:
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-1.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28, relecture de la fiche contre les scripts et le code) — prime sur la fiche :
+          - Prérequis : claude-skills ≥ 0.6.0 sur le Mac (apply.py --pattern MLX-021 et machine-check.sh --procs n'existent
+            pas avant) ; sinon report-task.py --status blocked.
+          - Test (b) : construire un VoxtralForConditionalGeneration(standardModel:) réduit à poids aléatoires (graine fixée,
+            au moins 2 couches) et appeler directement try model.generateStream(inputIds: <2 600 positions>, maxNewTokens: 1,
+            memoryOptimization: .ultra), SANS withMLXErrors dans le test ; attendre VoxtralError.mlx (XCTAssertThrowsError puis
+            guard case .mlx). Le correctif ouvre withMLXErrors dans le corps de generateStream (et des autres points d'entrée).
+          - Si, correctif en place, le test (b) s'arrête sur un piège Swift (ex. « Index out of range » en lisant la forme d'un
+            tableau vide rendu par l'opération fautive) au lieu de lever VoxtralError.mlx : vérifier la boîte d'erreur après
+            chaque couche du décodeur (boucle interne throws, sans changer de signature publique), avant toute lecture de forme.
+          - Étape 3 (rouge) : garder VoxtralError.mlx, MLXErrorBoundary.swift et le test ; ne retirer que l'enveloppement
+            withMLXErrors et les `try error.check()` (sinon la cible de test ne compile pas ; git stash ne prend pas un fichier
+            non suivi sans -u). Ligne RED attendue inchangée.
+          - Étape 7 (A/B/B/A) : A = commit parent construit dans un worktree ; copier le Package.resolved de B à la racine de A ;
+            construire A et B avec xcodebuild … -onlyUsePackageVersionsFromResolvedFile ; après les builds, noter pour chaque
+            arbre `git -C <arbre>/.build/xcode/SourcePackages/checkouts/<p> rev-parse HEAD` pour mlx-swift, mlx-swift-lm et
+            swift-mlx-profiler (identiques, recopiées dans l'entrée §7) ; une passe d'amorçage exclue avant A/B/B/A.
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon).
+          - Ne committer que les fichiers nommés (pas de git add -A).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : test `MLXErrorBoundaryTests` : invite synthétique de 2 600 positions préfillée avec `MemoryOptimizationConfig.ultra` (déclencheur P-03, présent tant que K-2 n'est pas livré) → `VoxtralError.mlx` levée, processus vivant (rouge sans correctif = plantage du runner de test, piège 38) ; suite complète verte ; durée totale de `VoxtralCLI transcribe` sur C-moyen EN inchangée à ±5 % (A/B/B/A, `/usr/bin/time`).
@@ -130,11 +149,14 @@ tasks:
     task:
       goal: "Décoder la quantification comme l'amont (mode/per-layer), refuser les modes non affines"
       gate: "5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite."
+      needs_decision: [ASK-21]
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-8.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-21 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : 5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite.
@@ -234,11 +256,14 @@ tasks:
     task:
       goal: "Plafond de frames TTS proportionnel au texte"
       gate: "0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés."
+      needs_decision: [ASK-9]
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-14.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Avant de commencer : lire la réponse à ASK-9 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
+        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : 0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés.
@@ -455,6 +480,9 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-26 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s.
@@ -465,11 +493,15 @@ tasks:
     task:
       goal: "Commande eval (WER) reproductible, juge ASR validé, auto-détection de langue vérifiée"
       gate: "texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts."
+      depends_on_status: verified
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-33.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts.
@@ -481,11 +513,15 @@ tasks:
     task:
       goal: "Baseline STT mesurée (Mini/Small × backends × clips) + occupation GPU réelle + verdict Small 32 Go"
       gate: "A/A ≤ 3 % sur 2 passes pour chaque ligne ; une ligne `BENCHMARKS.md` par (modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} × backend ∈ {.mlx, .auto} × clip ∈ {C-court EN, C-moyen EN, C-moyen FR, C-long}) avec la révision résolue et le WER ; occupation GPU du préfill Mini et Small consignée par les deux instruments (écart noté) ; small-4bit, 8 min d'audio : pic `phys_footprint` mesuré ≤ 24 Go (marge d'un Mac 32 Go), sinon verdict « non supporté sur 32 Go » écrit dans `docs/knowledge/decisions/small-32gb.md` ; chat : une ligne `BENCHMARKS.md` par backend ∈ {.mlx, .auto} pour mini-3b-8bit sur C-moyen EN × 4 questions fixes (greedy), avec `ttft_ms` de chaque question et tok/s (référence de K-49 et K-70)."
+      depends_on_status: verified
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-34.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : A/A ≤ 3 % sur 2 passes pour chaque ligne ; une ligne `BENCHMARKS.md` par (modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} × backend ∈ {.mlx, .auto} × clip ∈ {C-court EN, C-moyen EN, C-moyen FR, C-long}) avec la révision résolue et le WER ; occupation GPU du préfill Mini et Small consignée par les deux instruments (écart noté) ; small-4bit, 8 min d'audio : pic `phys_footprint` mesuré ≤ 24 Go (marge d'un Mac 32 Go), sinon verdict « non supporté sur 32 Go » écrit dans `docs/knowledge/decisions/small-32gb.md` ; chat : une ligne `BENCHMARKS.md` par backend ∈ {.mlx, .auto} pour mini-3b-8bit sur C-moyen EN × 4 questions fixes (greedy), avec `ttft_ms` de chaque question et tok/s (référence de K-49 et K-70).
@@ -496,11 +532,15 @@ tasks:
     task:
       goal: "Baseline TTS mesurée (matrice packs × textes × voix × batch/streaming)"
       gate: "A/A ≤ 3 % ; baseline enregistrée pour {tts-4b-4bit, tts-4b-6bit, tts-4b-mlx} × {court, 60 s, long} × graines {1, 2, 3} × {neutral_female, voix clonée `docs/examples/clone_fr.wav` enrôlée} × {batch, streaming} ; ligne dédiée « consommateur » (6 bits + clonée + `--warm-up`, batch) ; frames du porteur / frames totales consignées ; couverture ASR (aller-retour TTS → STT, outil K-33) consignée par (pack × texte × graine) en batch : référence des portes qualité de K-39, K-48, K-58 et K-79."
+      depends_on_status: verified
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-35.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : A/A ≤ 3 % ; baseline enregistrée pour {tts-4b-4bit, tts-4b-6bit, tts-4b-mlx} × {court, 60 s, long} × graines {1, 2, 3} × {neutral_female, voix clonée `docs/examples/clone_fr.wav` enrôlée} × {batch, streaming} ; ligne dédiée « consommateur » (6 bits + clonée + `--warm-up`, batch) ; frames du porteur / frames totales consignées ; couverture ASR (aller-retour TTS → STT, outil K-33) consignée par (pack × texte × graine) en batch : référence des portes qualité de K-39, K-48, K-58 et K-79.
@@ -511,11 +551,15 @@ tasks:
     task:
       goal: "Baseline Realtime + occupation GPU réelle (re-diagnostic #23-#25)"
       gate: "A/A ≤ 3 % ; lignes `BENCHMARKS.md` pour realtime-4b-4bit et realtime-4b-fp16 sur C-court, C-moyen EN/FR, C-long ; trace swift-mlx-profiler 1.5.x `.fineGrained` (`.ioReportResidency`) et Metal System Trace sur C-moyen complet : occupation GPU du décodage rapportée des deux façons, écart ≤ 10 pts ; décision « #23-#25 caducs » complétée par les chiffres ; `pad_fraction` consignée (entrée de K-73) ; WER (outil K-33) consigné pour chaque ligne : référence des portes de K-38, K-46, K-65 et K-78."
+      depends_on_status: verified
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-36.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : A/A ≤ 3 % ; lignes `BENCHMARKS.md` pour realtime-4b-4bit et realtime-4b-fp16 sur C-court, C-moyen EN/FR, C-long ; trace swift-mlx-profiler 1.5.x `.fineGrained` (`.ioReportResidency`) et Metal System Trace sur C-moyen complet : occupation GPU du décodage rapportée des deux façons, écart ≤ 10 pts ; décision « #23-#25 caducs » complétée par les chiffres ; `pad_fraction` consignée (entrée de K-73) ; WER (outil K-33) consigné pour chaque ligne : référence des portes de K-38, K-46, K-65 et K-78.
@@ -527,11 +571,15 @@ tasks:
     task:
       goal: "Baseline enrôlement (s/époque, pic, scénarios de résidence)"
       gate: "A/A ≤ 3 % sur `epoch_ms_p50` (200 époques, graine 7) ; pics (i) et (ii) consignés pour tts-4b-6bit et tts-4b-mlx ; décision écrite : si (ii) − (i) < 5 %, le volet résidence de K-64 est retiré sans code."
+      depends_on_status: verified
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-37.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-09-28) — prime sur la fiche :
+          - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
+            il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : A/A ≤ 3 % sur `epoch_ms_p50` (200 époques, graine 7) ; pics (i) et (ii) consignés pour tts-4b-6bit et tts-4b-mlx ; décision écrite : si (ii) − (i) < 5 %, le volet résidence de K-64 est retiré sans code.

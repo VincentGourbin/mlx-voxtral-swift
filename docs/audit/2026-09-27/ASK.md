@@ -164,7 +164,7 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Options** : A) oui : version mineure, entrée CHANGELOG, FluxForge prévenu ; B) non : défauts gelés, et le
   nouveau comportement n'est accessible que par un profil ou un paramètre explicite.
 - **Proposé** : A pour K-5 et K-14 (stabilité), fiche par fiche pour K-51, K-61 et K-64.
-- **Fiches** : ⛔ K-61 ; K-5, K-14, K-51, K-64.
+- **Fiches** : ⛔ K-61 ; K-5, ⛔ K-14, K-51, K-64.
 
 ### ASK-10 — Warm-up des voix clonées : qualité contre latence
 
@@ -337,7 +337,7 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Question** : confirme-t-on ces modes **hors profils**, refusés explicitement au chargement ?
 - **Options** : A) oui : erreur explicite (K-8) ; B) non : chargement accepté en expérimental, sans profil.
 - **Proposé** : A.
-- **Fiches** : K-8.
+- **Fiches** : ⛔ K-8.
 
 ### ASK-22 — Packs à publier et compte de publication
 

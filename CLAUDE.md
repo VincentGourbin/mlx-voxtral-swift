@@ -1,9 +1,12 @@
 # CLAUDE.md — mlx-voxtral-swift
 
-Consignes pour un agent qui travaille dans ce dépôt. Source : plan d'audit du 2026-09-27
-([`PLAN.md`](docs/audit/2026-09-27/PLAN.md) §0 règles, §5 commandes). Mémoire du projet :
-[`docs/knowledge/index.md`](docs/knowledge/index.md). Toute conclusion durable (mesure, hypothèse réfutée,
-correctif) s'ajoute à [`docs/knowledge/log.md`](docs/knowledge/log.md).
+Consignes d'agent, tirées du plan d'audit du 2026-09-27 ([`PLAN.md`](docs/audit/2026-09-27/PLAN.md) §0, §5).
+Mémoire : [`docs/knowledge/index.md`](docs/knowledge/index.md) ; toute conclusion durable va dans [`log.md`](docs/knowledge/log.md).
+
+## Rôles (décidés par Vincent le 2026-09-28)
+- La session Voxtral du Mac est la seule à committer ici ; tout autre agent passe par une tâche action-plans.
+- Planification et vérification (applied → verified) : une session cloud, dans action-plans uniquement.
+- Réponses aux ASK et fusions : Vincent.
 
 ## Build : `xcodebuild`, jamais `swift build`
 `swift build` ne compile ni n'embarque complètement les shaders Metal de MLX (commentaire du mainteneur,
@@ -29,7 +32,7 @@ xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
 
 ## Mesures : Release, machine prête, A/B/B/A
 ```bash
-~/.claude/skills/mlx-swift-audit/scripts/machine-check.sh $CLI --cooldown 120 --procs 'Voxtral.*'
+~/.claude/skills/mlx-swift-audit/scripts/machine-check.sh $CLI --cooldown 120 --procs 'Voxtral.*|FluxForge.*'
 ```
 - Aucune ligne `KO` avant de mesurer ; une autre charge GPU (autre app MLX) invalide la mesure (la noter).
 - Refroidissement 120 s, un levier par comparaison, A/B/B/A avec amorçage exclu ; une différence ne compte que

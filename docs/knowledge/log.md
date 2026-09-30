@@ -40,3 +40,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `~/.cache/huggingface`. Un encodeur mini sous configuration small, ou l'encodeur MLX aléatoire par défaut, lève
   une erreur. Astuce de test : `sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))'`
   coupe le réseau d'un seul processus sans toucher au Wi-Fi.
+- 2026-09-30 — **rôles consignés (#599)** : seule la session Voxtral du Mac committe ici ; planification et
+  vérification dans action-plans par une session cloud ; ASK et fusions à Vincent. `machine-check.sh` doit recevoir
+  `--procs 'Voxtral.*|FluxForge.*'` : FluxForge Studio charge MLX sur le même GPU.
