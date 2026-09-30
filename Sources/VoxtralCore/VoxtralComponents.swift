@@ -107,6 +107,34 @@ public class TekkenTokenizer {
     /// Progress callback type for tokenizer loading
     public typealias TokenizerProgressCallback = (Double, String) -> Void
 
+    /// Loads `tekken.json` from the model directory or throws: a missing or unreadable file, an
+    /// empty vocabulary or a split pattern that does not compile is an error, never a silent
+    /// byte-level demo tokenizer (S-05).
+    public static func load(modelPath: String, progress: TokenizerProgressCallback? = nil) throws -> TekkenTokenizer {
+        let tekkenPath = "\(modelPath)/tekken.json"
+        guard FileManager.default.fileExists(atPath: tekkenPath) else {
+            throw VoxtralError.fileNotFound(tekkenPath)
+        }
+        let tokenizer = TekkenTokenizer(unloadedModelPath: modelPath)
+        try tokenizer.loadTekkenStrict(modelPath: modelPath, progress: progress)
+        guard tokenizer.compiledRegex != nil, !tokenizer.mergeableRanks.isEmpty else {
+            throw VoxtralError.invalidTokenizer("\(tekkenPath): empty vocabulary or invalid split pattern")
+        }
+        return tokenizer
+    }
+
+    /// Byte-level demo tokenizer, for tests only: never a stand-in for a model's `tekken.json`.
+    static func demo() -> TekkenTokenizer {
+        let tokenizer = TekkenTokenizer(unloadedModelPath: nil)
+        tokenizer.loadDemoTokenizerData()
+        return tokenizer
+    }
+
+    private init(unloadedModelPath modelPath: String?) {
+        self.modelPath = modelPath
+    }
+
+    @available(*, deprecated, message: "Use TekkenTokenizer.load(modelPath:), which throws instead of falling back to a demo tokenizer")
     public init(modelPath: String? = nil, progress: TokenizerProgressCallback? = nil) {
         self.modelPath = modelPath
         loadTokenizerData(progress: progress)
@@ -120,7 +148,18 @@ public class TekkenTokenizer {
         }
     }
 
+    /// Non-throwing load kept for the deprecated `init`: on failure it falls back to the demo tokenizer.
     public func loadTekkenTokenizerFromFile(modelPath: String, progress: TokenizerProgressCallback? = nil) {
+        do {
+            try loadTekkenStrict(modelPath: modelPath, progress: progress)
+        } catch {
+            VoxtralDebug.log("Cannot load \(modelPath)/tekken.json (\(error)), using demo tokenizer")
+            loadDemoTokenizerData()
+        }
+    }
+
+    /// Loads the vocabulary from `tekken.cache` or `tekken.json`, throwing on an unreadable file.
+    func loadTekkenStrict(modelPath: String, progress: TokenizerProgressCallback? = nil) throws {
         // Reset tokenizer state before loading new data
         mergeableRanks.removeAll()
         reverseVocabulary.removeAll()
@@ -138,15 +177,21 @@ public class TekkenTokenizer {
 
         progress?(0.0, "Loading tokenizer vocabulary...")
 
-        guard let jsonData = try? Data(contentsOf: URL(fileURLWithPath: tekkenPath)) else {
-            VoxtralDebug.log("Cannot load \(tekkenPath), using demo tokenizer")
-            loadDemoTokenizerData()
-            return
+        let jsonData: Data
+        do {
+            jsonData = try Data(contentsOf: URL(fileURLWithPath: tekkenPath))
+        } catch {
+            throw VoxtralError.fileNotFound(tekkenPath)
         }
 
         do {
             progress?(0.1, "Parsing tokenizer JSON...")
-            let tekkenVocab = try JSONDecoder().decode(TekkenVocab.self, from: jsonData)
+            let tekkenVocab: TekkenVocab
+            do {
+                tekkenVocab = try JSONDecoder().decode(TekkenVocab.self, from: jsonData)
+            } catch {
+                throw VoxtralError.invalidTokenizer("\(tekkenPath): \(error.localizedDescription)")
+            }
 
             // 1. Charger la regex pattern (équivalent pat_str dans tiktoken)
             regexPattern = tekkenVocab.config.pattern
@@ -198,9 +243,6 @@ public class TekkenTokenizer {
 
             progress?(1.0, "Tokenizer ready")
 
-        } catch {
-            VoxtralDebug.log("Error parsing Tekken JSON: \(error)")
-            loadDemoTokenizerData()
         }
     }
 
@@ -629,7 +671,7 @@ public class TekkenTokenizer {
         _ modelPath: String,
         progress: TokenizerProgressCallback? = nil
     ) throws -> TekkenTokenizer {
-        return TekkenTokenizer(modelPath: modelPath, progress: progress)
+        return try load(modelPath: modelPath, progress: progress)
     }
     
     public func batchDecode(_ tokenIdsList: [[Int]], skipSpecialTokens: Bool = true) -> [String] {

@@ -93,6 +93,13 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 self.modelDirectory = modelDir
                 session?.endPhase("1. Model Download", category: .modelLoad)
 
+                // Tokenizer first: a missing or invalid tekken.json fails before gigabytes of weights (K-7)
+                progress?(0.35, "Loading tokenizer...")
+                session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
+                // TekkenTokenizer expects the MODEL DIRECTORY, not the tekken.json file path
+                self.tokenizer = try TekkenTokenizer.load(modelPath: modelDir.path)
+                session?.endPhase("3. Tokenizer Loading", category: .tokenization)
+
                 progress?(0.40, "Loading Realtime model...")
                 session?.beginPhase("2. Model Loading", category: .modelLoad)
                 let loadedModel = try loadVoxtralRealtimeModel(from: modelDir) { p, msg in
@@ -100,11 +107,6 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 }
                 self.model = loadedModel
                 session?.endPhase("2. Model Loading", category: .modelLoad)
-
-                progress?(0.85, "Loading tokenizer...")
-                session?.beginPhase("3. Tokenizer Loading", category: .tokenization)
-                self.tokenizer = TekkenTokenizer(modelPath: modelDir.path)
-                session?.endPhase("3. Tokenizer Loading", category: .tokenization)
 
                 progress?(1.0, "Realtime model ready")
                 state = .ready

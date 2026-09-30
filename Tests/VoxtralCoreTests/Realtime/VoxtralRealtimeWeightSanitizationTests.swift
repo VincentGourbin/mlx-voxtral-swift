@@ -80,7 +80,8 @@ final class VoxtralRealtimeWeightSanitizationTests: XCTestCase {
             "layers.0.feed_forward.w3.weight": [1, 1],
         ])
         let sanitized = sanitizeRealtimeWeights(weights)
-        XCTAssertNotNil(sanitized["decoder.layers.0.attention.wq.weight"])
+        // The decoder attention is q/k/v/o_proj: keeping "wq" left it randomly initialized (K-7)
+        XCTAssertNotNil(sanitized["decoder.layers.0.attention.q_proj.weight"])
         XCTAssertNotNil(sanitized["decoder.layers.0.feed_forward_w1.weight"])
         XCTAssertNotNil(sanitized["decoder.layers.0.feed_forward_w2.weight"])
         XCTAssertNotNil(sanitized["decoder.layers.0.feed_forward_w3.weight"])

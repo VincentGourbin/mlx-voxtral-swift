@@ -68,7 +68,7 @@ private func loadWithConfig(
 
     // Step 5: Apply
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
-    try model.update(parameters: parameters, verify: .none)
+    try model.updateVerified(parameters: parameters)
 
     progressCallback?(1.0, "Model loaded successfully")
     return model
@@ -116,6 +116,22 @@ private func detectQuantizedLayers(in weights: [String: MLXArray]) -> Set<String
 // MARK: - Load All Weights (single or sharded)
 
 private func loadAllWeights(from directory: URL) throws -> [String: MLXArray] {
+    // Sharded model with an index: every shard it names is required
+    let indexURL = directory.appendingPathComponent("model.safetensors.index.json")
+    if let data = try? Data(contentsOf: indexURL),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let weightMap = json["weight_map"] as? [String: String], !weightMap.isEmpty {
+        var weights: [String: MLXArray] = [:]
+        for shard in Set(weightMap.values).sorted() {
+            let url = directory.appendingPathComponent(shard)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw VoxtralTTSError.fileNotFound("\(shard) (listed in model.safetensors.index.json) not found in \(directory.path)")
+            }
+            for (k, v) in try MLX.loadArrays(url: url) { weights[k] = v }
+        }
+        return weights
+    }
+
     // Check for sharded model first
     let shard1 = directory.appendingPathComponent("model-00001-of-00002.safetensors")
     let shard2 = directory.appendingPathComponent("model-00002-of-00002.safetensors")

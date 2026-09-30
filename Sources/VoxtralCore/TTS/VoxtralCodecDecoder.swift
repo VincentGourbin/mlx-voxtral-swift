@@ -407,12 +407,13 @@ public class VoxtralCodecDecoder: Module {
     @ModuleInfo(key: "decoder_blocks") var decoderBlocks: [Module]
     @ModuleInfo(key: "output_proj") var outputProj: ConvBlock
 
-    let alibiSlopes: MLXArray
+    // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
+    let _alibiSlopes: MLXArray
     let strides: [Int]
 
     public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self.config = config
-        self.alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
+        self._alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
         self.strides = config.decoderConvsStrides
 
         self._quantizer.wrappedValue = MistralAudioCodebook(config: config)
@@ -466,7 +467,7 @@ public class VoxtralCodecDecoder: Module {
             // Transformer block (odd index)
             let window = stageIdx < windowSizes.count ? windowSizes[stageIdx] : 16
             if let xformerBlock = decoderBlocks[i + 1] as? CodecTransformerBlock {
-                x = xformerBlock(x, alibiSlopes: alibiSlopes, windowSize: window)
+                x = xformerBlock(x, alibiSlopes: _alibiSlopes, windowSize: window)
             }
         }
 

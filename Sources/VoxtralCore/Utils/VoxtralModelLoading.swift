@@ -723,4 +723,8 @@ public enum VoxtralError: Error {
     case unsupported(String)
     /// An MLX error (shape, dtype, mask…) caught at a public entry point instead of terminating the host
     case mlx(String)
+    /// Model parameters absent from the weight files (they would stay randomly initialized)
+    case missingWeights([String])
+    /// `tekken.json` unreadable or unusable (the loader no longer falls back to a demo tokenizer)
+    case invalidTokenizer(String)
 }

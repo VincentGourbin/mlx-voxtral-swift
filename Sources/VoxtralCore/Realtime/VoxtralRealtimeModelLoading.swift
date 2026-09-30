@@ -52,7 +52,7 @@ public func loadVoxtralRealtimeModel(
 
     // Step 6: Apply
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
-    try model.update(parameters: parameters, verify: .none)
+    try model.updateVerified(parameters: parameters)
 
     progressCallback?(1.0, "Model loaded successfully")
     return model
@@ -189,6 +189,12 @@ func sanitizeRealtimeWeights(_ weights: [String: MLXArray]) -> [String: MLXArray
                 paramPath = paramPath.replacingOccurrences(of: "feed_forward.w1.", with: "feed_forward_w1.")
                 paramPath = paramPath.replacingOccurrences(of: "feed_forward.w2.", with: "feed_forward_w2.")
                 paramPath = paramPath.replacingOccurrences(of: "feed_forward.w3.", with: "feed_forward_w3.")
+                // Map decoder attention names like Format B (Mistral wq/wk/wv/wo → q/k/v/o_proj);
+                // without it the attention stayed randomly initialized (found by verified loading, K-7)
+                paramPath = paramPath.replacingOccurrences(of: "attention.wq.", with: "attention.q_proj.")
+                paramPath = paramPath.replacingOccurrences(of: "attention.wk.", with: "attention.k_proj.")
+                paramPath = paramPath.replacingOccurrences(of: "attention.wv.", with: "attention.v_proj.")
+                paramPath = paramPath.replacingOccurrences(of: "attention.wo.", with: "attention.o_proj.")
                 // Map Ada RMS-Norm: .0. → .ada_down., .2. → .ada_up.
                 paramPath = paramPath.replacingOccurrences(of: "ada_rms_norm_t_cond.0.", with: "ada_rms_norm_t_cond.ada_down.")
                 paramPath = paramPath.replacingOccurrences(of: "ada_rms_norm_t_cond.2.", with: "ada_rms_norm_t_cond.ada_up.")

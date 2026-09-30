@@ -796,3 +796,30 @@ Gabarits :
     capital of France is Paris, »` (clip `tts-4b-6bit`, `neutral_female`, graine 42 ; « One » rendu « 1 »)
   - `PARITY greedy 3/3 identiques (C-court EN, C-court FR, C-moyen EN)` (`mini-3b-8bit`, `-b mlx`, `cmp`)
 - Mesure : aucune.
+
+## K-7 — Chargement vérifié et tokenizer strict — 2026-09-30 — validée
+- Fait : `Module.updateVerified(parameters:)` (`Utils/VerifiedWeights.swift`) dans les 3 chargeurs vivants (STT
+  `VoxtralStandardLoader`, TTS, Realtime) : clés du modèle absentes ⇒ `VoxtralError.missingWeights([clés])`, puis
+  `update(…, verify: [.allModelKeysSet, .shapeMismatch])` ; TTS : shards lus depuis l'index. `TekkenTokenizer.load(modelPath:)
+  throws` (`fileNotFound`, `VoxtralError.invalidTokenizer`, vocabulaire vide ou regex invalide) ; `init` déprécié (repli
+  démo conservé pour lui seul) ; `demo()` pour les tests ; `fromPretrained` (STT) passe par `load` ; TTS et Realtime
+  chargent le tokenizer avant les poids.
+- Trouvés par la vérification (sans affaiblir celle-ci) : (1) 3 constantes calculées du TTS étaient comptées comme
+  paramètres (`timeEmbedding.invFreq`, `alibiSlopes`, `codebookOffsets`) → préfixe `_` (hors `parameters()`) ;
+  (2) **`realtime-4b-fp16` chargeait ses 104 poids d'attention décodeur au hasard** (noms Mistral `attention.wq/wk/wv/wo`
+  non traduits en format A) et transcrivait « .. » : traduction ajoutée (choix de Vincent), il transcrit maintenant
+  comme le 4 bits ; le test `testFormatADecoderLayers`, qui figeait l'ancien nom, est corrigé.
+- Écarts : parité TTS faite par `--voice-embedding …/fr_female.safetensors --seed 42` (le CLI ignore `--seed` pour les
+  voix prédéfinies : `-v fr_female` n'est pas reproductible, avant comme après) ; A = worktree `4a51497e`. `tts-4b`
+  (poids Mistral) : poids chargés sans clé manquante, mais voix en `.pt` non lues (« 0 voices loaded »), comme avant K-7.
+- Catalogue : MLX-018 7 → 3 (restent les chargeurs hérités `MLXLMBridge`, `VoxtralModelLoading.loadWeights`, hors des 3
+  vivants) ; MLX-022 4 → 3 (restent `demo()` et le repli de l'`init` déprécié, voulus).
+- Porte observée :
+  - `GREEN VerifiedLoadingTests + TekkenStrictLoadTests : Executed 7 tests, with 0 failures` ; suite complète
+    `Executed 510 tests, with 15 tests skipped and 0 failures (0 unexpected)`
+  - `LOAD mini-3b-4bit OK · mini-3b-8bit OK · mini-3b OK · tts-4b-4bit OK · tts-4b-6bit OK · tts-4b-mlx OK · tts-4b OK
+    (poids ; voix .pt non lues) · realtime-4b-4bit OK · realtime-4b-fp16 OK (après traduction wq→q_proj)`
+  - `MISSING-SHARD → VoxtralError.missingWeights([…])` : 750 clés de couche nommées (ex. `audioTower.layers.0.fc1.bias`) ;
+    rouge avant (aucune erreur levée)
+  - `PARITY stt identique ; cmp tts : aucune différence` (SHA `66ef9ca0…` A = B, 4/4) ; ids Tekken identiques 20/20
+- Mesure : aucune. Modèles sur `/Volumes/Lexar/models` via liens de dossier depuis `~/Library/Caches/models`.

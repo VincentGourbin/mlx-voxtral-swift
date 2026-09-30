@@ -51,3 +51,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-09-30 — **K-4 : jetons d'arrêt STT = ceux du tokenizer** (`</s>`, `[/INST]`), plus l'id 32000 (« ␣Capital ») :
   le clip de test passe de « Capital A's and Capital » à la phrase complète ; greedy identique sur C-court EN/FR et
   C-moyen EN. En Tekken, un id ≥ 1 000 est toujours un mot (id = rang + 1 000).
+- 2026-09-30 — **K-7 : poids vérifiés au chargement, tokenizer strict**. La vérification a trouvé que
+  `realtime-4b-fp16` chargeait toute l'attention du décodeur au hasard (noms `wq/wk/wv/wo` non traduits) : il
+  transcrivait « .. » ; corrigé. Une constante calculée stockée en `MLXArray` sur un `Module` compte comme paramètre :
+  la préfixer par `_`. Le CLI ignore `--seed` avec `-v <voix>` : pour une parité TTS, passer `--voice-embedding`.

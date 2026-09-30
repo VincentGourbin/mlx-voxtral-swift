@@ -264,7 +264,8 @@ public class VoxtralTTSModel: Module {
     // Computed constants
     let nSpecial: Int32 = 2  // empty_audio=0, end_audio=1
     // Pre-computed codebook offset array (avoids rebuilding per frame)
-    let codebookOffsets: MLXArray
+    // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
+    let _codebookOffsets: MLXArray
 
     public init(config: VoxtralTTSConfiguration) {
         self.config = config
@@ -287,7 +288,7 @@ public class VoxtralTTSModel: Module {
         for i in 0..<config.audioModel.nAcousticCodebook {
             offsets.append(Int32(semanticSize + i * acousticSize))
         }
-        self.codebookOffsets = MLXArray(offsets).reshaped(1, offsets.count)
+        self._codebookOffsets = MLXArray(offsets).reshaped(1, offsets.count)
 
         super.init()
     }
@@ -382,7 +383,7 @@ public class VoxtralTTSModel: Module {
     ///
     /// Reference: voxtral_tts.py lines 621-644
     public func codesToGlobalIndices(_ codes: MLXArray) -> MLXArray {
-        codes + codebookOffsets
+        codes + _codebookOffsets
     }
 
     // MARK: - Voice prefix KV cache (TTFT optimization)

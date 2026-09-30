@@ -127,11 +127,12 @@ public class FMFeedForward: Module {
 /// Sinusoidal time embedding matching vllm-omni convention: (cos, sin) order.
 /// Reference: acoustic_head.py lines 112-129
 public class TimeEmbedding: Module {
-    let invFreq: MLXArray
+    // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
+    let _invFreq: MLXArray
 
     public init(dim: Int, theta: Float = 10000.0) {
         let half = dim / 2
-        self.invFreq = MLX.exp(
+        self._invFreq = MLX.exp(
             MLXArray(-log(theta)) * MLXArray(0..<half).asType(.float32) / MLXArray(Float(half))
         )
         super.init()
@@ -143,7 +144,7 @@ public class TimeEmbedding: Module {
         if tInput.ndim == 1 {
             tInput = MLX.expandedDimensions(tInput, axis: -1)  // (B, 1)
         }
-        let emb = tInput * invFreq  // (B, half)
+        let emb = tInput * _invFreq  // (B, half)
         // (cos, sin) order — matches vllm-omni convention
         return MLX.concatenated([MLX.cos(emb), MLX.sin(emb)], axis: -1)
     }

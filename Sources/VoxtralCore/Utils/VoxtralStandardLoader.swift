@@ -1322,7 +1322,7 @@ public func loadVoxtralStandardModel(
 
         // Step 4: Load using ModuleParameters approach that works for quantized
         let parameters = ModuleParameters.unflattened(sanitizedWeights)
-        quantizedModel.update(parameters: parameters)
+        try quantizedModel.updateVerified(parameters: parameters)
 
         finalModel = quantizedModel
     } else {
@@ -1337,7 +1337,7 @@ public func loadVoxtralStandardModel(
 
         // Step 3: Load using ModuleParameters.unflattened() like in the original
         let parameters = ModuleParameters.unflattened(sanitizedWeights)
-        model.update(parameters: parameters)
+        try model.updateVerified(parameters: parameters)
 
         finalModel = model
     }

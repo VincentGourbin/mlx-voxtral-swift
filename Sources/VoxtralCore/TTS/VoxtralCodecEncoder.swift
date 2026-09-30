@@ -37,7 +37,8 @@ public class VoxtralCodecEncoder: Module {
     /// Quantizer for encoding (same as decoder's quantizer — shared codebook)
     let quantizer: MistralAudioCodebook
 
-    let alibiSlopes: MLXArray
+    // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
+    let _alibiSlopes: MLXArray
     let encoderLoaded: Bool
 
     /// Encoder hyperparameters from paper Table 1
@@ -49,7 +50,7 @@ public class VoxtralCodecEncoder: Module {
     public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration, quantizer: MistralAudioCodebook) {
         self.config = config
         self.quantizer = quantizer
-        self.alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
+        self._alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
         self.encoderLoaded = false  // Will be true only if weights are loaded
 
         // Input projection: patch_size → dim
@@ -114,7 +115,7 @@ public class VoxtralCodecEncoder: Module {
 
             // Transformer block
             if let xformerBlock = encoderBlocks[i] as? CodecTransformerBlock {
-                h = xformerBlock(h, alibiSlopes: alibiSlopes, windowSize: windowSize)
+                h = xformerBlock(h, alibiSlopes: _alibiSlopes, windowSize: windowSize)
             }
 
             // Conv block (downsampling)
