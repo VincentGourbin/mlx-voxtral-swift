@@ -11,56 +11,13 @@ import MLXNN
 
 /**
  * Direct Python equivalent: def download_model(model_id: str, revision: Optional[str] = None) -> Path
+ *
+ * Never downloaded anything: it created an empty folder and printed the patterns. It now throws
+ * without touching the disk; use `ModelDownloader.download(_:)` or `ModelDownloader.downloadByRepoId(_:)`.
  */
 public func downloadModel(modelId: String, revision: String? = nil) throws -> URL {
-    // Python: model_path = Path(snapshot_download(repo_id=model_id, revision=revision, allow_patterns=..., ignore_patterns=...))
-    
-    let fileManager = FileManager.default
-    let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    let modelPath = documentsPath.appendingPathComponent("models").appendingPathComponent(modelId)
-    
-    if !fileManager.fileExists(atPath: modelPath.path) {
-        print("Downloading model from Hugging Face: \(modelId)")
-        try fileManager.createDirectory(at: modelPath, withIntermediateDirectories: true)
-        
-        // Python: snapshot_download with EXACT patterns:
-        // allow_patterns=["*.safetensors", "*.json", "config.json", "tekken.json", "params.json"]
-        // ignore_patterns=["consolidated.safetensors", "consolidated.*.safetensors"]
-        
-        // This would use HuggingFace Hub Swift library to download with EXACT same filters:
-        let allowPatterns = ["*.safetensors", "*.json", "config.json", "tekken.json", "params.json"]
-        let ignorePatterns = ["consolidated.safetensors", "consolidated.*.safetensors"]
-        
-        // Swift equivalent of Python snapshot_download with exact same patterns
-        try downloadFromHuggingFaceHub(
-            repoId: modelId,
-            revision: revision,
-            allowPatterns: allowPatterns,
-            ignorePatterns: ignorePatterns,
-            localDir: modelPath
-        )
-        
-        print("Model downloaded to: \(modelPath.path)")
-    }
-    
-    return modelPath
-}
-
-/**
- * Helper function that would integrate with actual Hugging Face Hub Swift client
- * Direct equivalent of Python snapshot_download function
- */
-private func downloadFromHuggingFaceHub(
-    repoId: String,
-    revision: String?,
-    allowPatterns: [String],
-    ignorePatterns: [String],
-    localDir: URL
-) throws {
-    // This would integrate with actual HF Hub Swift library
-    // Python: snapshot_download(repo_id=repo_id, revision=revision, allow_patterns=allow_patterns, ignore_patterns=ignore_patterns)
-    print("Downloading \(repoId) with allow patterns: \(allowPatterns)")
-    print("Ignoring patterns: \(ignorePatterns)")
+    throw VoxtralError.unsupported(
+        "downloadModel(modelId:) does not download; use ModelDownloader.download(_:) or ModelDownloader.downloadByRepoId(_:) for \(modelId)")
 }
 
 /**
@@ -762,4 +719,6 @@ public enum VoxtralError: Error {
     case languageNotSupported(String)
     // From MLXLMBridge.swift
     case configurationNotFound
+    /// A public entry point that cannot do what it is asked (e.g. the legacy `downloadModel(modelId:)`)
+    case unsupported(String)
 }

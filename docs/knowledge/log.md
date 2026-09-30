@@ -25,3 +25,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   patterns issus de cet audit sont MLX-017…025 dans claude-skills 0.6.0 (mlx-swift 0.4.0, claude-skills#1).
   Correspondance provisoire → définitif en tête de `docs/audit/2026-09-27/patterns-verdicts.md`. MLX-016 sur ce
   dépôt : 3 filtres `Linear || Embedding`, sans objet (aucun module MoE).
+- 2026-09-30 — **K-6 : complétude des téléchargements prouvée** : un modèle n'est « téléchargé » que si
+  `.voxtral-complete.json` (écrit en dernier par `downloadRepoDirect`, SHA-256 `lfs.oid` vérifié par fichier) est
+  présent et ses tailles justes ; les dossiers anciens (index + shards + `tekken.json` + voix) reçoivent leur
+  manifeste au premier contrôle, les dépôts sans index (originaux Mistral) repassent une fois en ligne. Coupure à
+  51 % puis relance : reprise complète. Le détecteur MLX-012 ne voit pas ces variantes (0/0).

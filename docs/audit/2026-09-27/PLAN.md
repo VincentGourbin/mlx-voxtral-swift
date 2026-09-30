@@ -664,3 +664,26 @@ Gabarits :
 - Porte observée : `apply.py scan` (claude-skills `f0ebb9a`) sur ce dépôt : 25 patterns, identifiants uniques ;
   MLX-016 relève 3 filtres `Linear || Embedding` (`MLXLMBridge.swift:612`, `:706`, `VoxtralQuantization.swift:65`),
   sans objet ici : aucun `SwitchLinear` ni module MoE dans `Sources/`.
+
+## K-6 — Téléchargements prouvés complets (manifeste + SHA-256), `downloadModel` factice neutralisé — 2026-09-30 — validée
+- Fait : `downloadRepoDirect` lit `lfs.oid`, vérifie taille et SHA-256 (CryptoKit, lecture par blocs de 8 Mio) avant de
+  placer chaque fichier, retire puis écrit en dernier `.voxtral-complete.json` (liste, tailles, SHA-256, révision) ;
+  `isComplete(folder:requiresVoices:)` commun à STT, TTS et Realtime (manifeste vérifié ; sans manifeste : index +
+  tous ses shards + `tekken.json` (+ voix en TTS) ⇒ manifeste écrit) ; `verifyShardedModel` ne dit plus « complet »
+  sans index (sauf `model.safetensors` unique) ni sur index illisible ; `download()`, `downloadTTSModel`,
+  `downloadRealtimeModel` lèvent si incomplet ; champ `revision` optionnel dans les 3 registres ;
+  `downloadModel(modelId:)` lève `VoxtralError.unsupported` (nouveau cas) sans rien créer.
+- Écarts à la fiche : `modelSize` et `deleteModel` localisent le dossier sans exiger la complétude (sinon
+  `ModelDownloaderSizeTests` rougit, et un téléchargement partiel ne se supprimerait plus) ; la taille suit les
+  liens symboliques (`stat`) ; coupure réseau simulée par `kill -9` du CLI (choix de Vincent) plutôt que Wi-Fi coupé ;
+  CLI sans option de dossier : téléchargement dans `~/Library/Caches/models`, supprimé après.
+- Catalogue : `apply.py scan . --pattern MLX-012` (claude-skills `04c888b`) : 0 avant, 0 après — le détecteur
+  (`contains { $0.hasSuffix(".safetensors") }`) ne voit pas les variantes de ce dépôt.
+- Porte observée :
+  - `RED   DownloadCompletenessTests : Executed 6 tests, with 18 failures (0 unexpected)` (6/6 tests rouges, correctif stashé)
+  - `GREEN Executed 6 tests, with 0 failures (0 unexpected)`
+  - `GREEN ModelDownloaderSizeTests, ModelLoadingSymlinkedDirectoryTests : 0 failures` ; suite complète :
+    `Executed 492 tests, with 12 tests skipped and 0 failures (0 unexpected)`
+  - `RESUME tts-4b-4bit : coupure à 51.0 % → relance → manifeste écrit, SHA-256 OK (1/1)` (25 fichiers, 22 avec
+    SHA-256 ; `model.safetensors` a62a28f0… = `shasum -a 256` ; `list -d` : absent après coupure, présent après)
+- Mesure : aucune (fiche sans levier de performance).

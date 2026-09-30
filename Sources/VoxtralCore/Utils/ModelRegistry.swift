@@ -17,6 +17,8 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
     public let quantization: String
     public let parameters: String
     public let recommended: Bool
+    /// Hub revision (commit or tag) to download; nil = `main`
+    public let revision: String?
 
     public init(
         id: String,
@@ -26,7 +28,8 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
         size: String,
         quantization: String,
         parameters: String,
-        recommended: Bool = false
+        recommended: Bool = false,
+        revision: String? = nil
     ) {
         self.id = id
         self.repoId = repoId
@@ -36,6 +39,7 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
         self.quantization = quantization
         self.parameters = parameters
         self.recommended = recommended
+        self.revision = revision
     }
 }
 

@@ -13,13 +13,17 @@ public struct VoxtralRealtimeModelInfo: Identifiable, Sendable {
     public let quantization: String
     public let parameters: String
     public let recommended: Bool
+    /// Hub revision (commit or tag) to download; nil = `main`
+    public let revision: String?
 
     public init(
         id: String, repoId: String, name: String, description: String,
-        size: String, quantization: String, parameters: String, recommended: Bool = false
+        size: String, quantization: String, parameters: String, recommended: Bool = false,
+        revision: String? = nil
     ) {
         self.id = id; self.repoId = repoId; self.name = name; self.description = description
         self.size = size; self.quantization = quantization; self.parameters = parameters; self.recommended = recommended
+        self.revision = revision
     }
 }
 
