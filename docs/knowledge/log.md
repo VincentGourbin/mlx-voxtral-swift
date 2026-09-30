@@ -61,3 +61,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-09-30 — **K-22 : `Package.resolved` suivi** (ASK-28 = A, mlx-swift-lm reste sur `main@604fae7`) et
   dépendances élaguées de `VoxtralCore` (`MLXLLM`, `MLXOptimizers`, `ArgumentParser`, `Transformers` → `Hub`) ;
   profiler 1.5.1. Build propre Release de la CLI : 122 s → 96 s.
+- 2026-09-30 — **70 Go pour un modèle de 5 Go = cache de buffers MLX, pas le modèle** (K-2, swift-mlx-profiler) :
+  sur C-long, MLX actif 8,6 Go stable, cache MLX 24,5 → 56,7 Go sans `cacheLimit`, compression de 45 Go et swap.
+  Toujours lire « MLX Active » vs « MLX Cache » du profileur avant de conclure sur la mémoire ; `/usr/bin/time -l`
+  (footprint) compte le cache. Conséquence : la politique mémoire (K-52) passe avant les baselines.

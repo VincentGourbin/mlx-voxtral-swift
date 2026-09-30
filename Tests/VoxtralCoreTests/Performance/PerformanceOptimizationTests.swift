@@ -13,29 +13,15 @@ final class PerformanceOptimizationTests: XCTestCase {
 
     // MARK: - MemoryOptimizationConfig Tests
 
-    func testLightPresetHasKVCacheLimit() {
-        let config = MemoryOptimizationConfig.light
-        XCTAssertNotNil(config.maxKVCacheSize, "Light preset should have KV cache limit")
-        XCTAssertEqual(config.maxKVCacheSize, 8192)
-        XCTAssertEqual(config.evalFrequency, 16)
-    }
-
-    func testModeratePresetHasKVCacheLimit() {
-        let config = MemoryOptimizationConfig.moderate
-        XCTAssertNotNil(config.maxKVCacheSize, "Moderate preset should have KV cache limit")
-        XCTAssertEqual(config.maxKVCacheSize, 6144)
-    }
-
-    func testAggressivePresetHasKVCacheLimit() {
-        let config = MemoryOptimizationConfig.aggressive
-        XCTAssertEqual(config.maxKVCacheSize, 4096)
-        XCTAssertTrue(config.clearCacheOnEval)
-    }
-
-    func testUltraPresetHasKVCacheLimit() {
-        let config = MemoryOptimizationConfig.ultra
-        XCTAssertEqual(config.maxKVCacheSize, 2048)
-        XCTAssertEqual(config.evalFrequency, 2)
+    // K-2: Voxtral's LM has no sliding window, so no preset limits the KV cache; presets differ by
+    // their eval / cache-clearing rhythm.
+    func testPresetsHaveNoKVCacheLimit() {
+        for config in [MemoryOptimizationConfig.light, .moderate, .aggressive, .ultra, .disabled] {
+            XCTAssertNil(config.maxKVCacheSize, "\(config.description)")
+        }
+        XCTAssertEqual(MemoryOptimizationConfig.light.evalFrequency, 16)
+        XCTAssertEqual(MemoryOptimizationConfig.ultra.evalFrequency, 2)
+        XCTAssertTrue(MemoryOptimizationConfig.aggressive.clearCacheOnEval)
     }
 
     func testDisabledPresetHasNoKVCacheLimit() {
@@ -45,18 +31,10 @@ final class PerformanceOptimizationTests: XCTestCase {
     }
 
     func testRecommendedNeverReturnsDisabled() {
-        // For any RAM size, recommended() should return a config with KV cache limit
-        let config8 = MemoryOptimizationConfig.recommended(forRAMGB: 8)
-        let config16 = MemoryOptimizationConfig.recommended(forRAMGB: 16)
-        let config32 = MemoryOptimizationConfig.recommended(forRAMGB: 32)
-        let config64 = MemoryOptimizationConfig.recommended(forRAMGB: 64)
-        let config128 = MemoryOptimizationConfig.recommended(forRAMGB: 128)
-
-        XCTAssertNotNil(config8.maxKVCacheSize)
-        XCTAssertNotNil(config16.maxKVCacheSize)
-        XCTAssertNotNil(config32.maxKVCacheSize)
-        XCTAssertNotNil(config64.maxKVCacheSize)
-        XCTAssertNotNil(config128.maxKVCacheSize)
+        // For any RAM size, recommended() returns a config that evaluates periodically
+        for ram in [8, 16, 32, 64, 128] {
+            XCTAssertGreaterThan(MemoryOptimizationConfig.recommended(forRAMGB: ram).evalFrequency, 0, "\(ram) GB")
+        }
     }
 
     func testRecommendedPresetScaling() {
@@ -64,16 +42,16 @@ final class PerformanceOptimizationTests: XCTestCase {
         let config16 = MemoryOptimizationConfig.recommended(forRAMGB: 16)
         let config64 = MemoryOptimizationConfig.recommended(forRAMGB: 64)
 
-        // More RAM → larger KV cache limit
-        XCTAssertLessThan(config8.maxKVCacheSize!, config16.maxKVCacheSize!)
-        XCTAssertLessThan(config16.maxKVCacheSize!, config64.maxKVCacheSize!)
+        // Less RAM → more frequent evaluation
+        XCTAssertLessThan(config8.evalFrequency, config16.evalFrequency)
+        XCTAssertLessThan(config16.evalFrequency, config64.evalFrequency)
     }
 
     func testRecommendedAutoDetection() {
         // Should not crash and return a valid config
         let config = MemoryOptimizationConfig.recommended()
         XCTAssertGreaterThan(config.evalFrequency, 0, "Auto-detected config should have eval frequency > 0")
-        XCTAssertNotNil(config.maxKVCacheSize)
+        XCTAssertNil(config.maxKVCacheSize, "no preset limits the KV cache (K-2)")
     }
 
     // MARK: - Audio Loading Tests

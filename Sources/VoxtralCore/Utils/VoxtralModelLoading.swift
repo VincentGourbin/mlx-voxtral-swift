@@ -727,4 +727,6 @@ public enum VoxtralError: Error {
     case missingWeights([String])
     /// `tekken.json` unreadable or unusable (the loader no longer falls back to a demo tokenizer)
     case invalidTokenizer(String)
+    /// Prompt + `maxTokens` exceed an explicit KV cache limit (`maxKVCacheSize` / `contextSize`)
+    case contextTooLong(prompt: Int, maxTokens: Int, limit: Int)
 }

@@ -22,8 +22,9 @@ public struct MemoryOptimizationConfig: Sendable {
     /// Whether to reset peak memory tracking periodically
     public var resetPeakMemory: Bool
 
-    /// Maximum KV cache size (nil = unlimited)
-    /// Set to limit memory for very long sequences
+    /// Maximum KV cache size (nil = unlimited, the default of every preset).
+    /// Voxtral's LM has no sliding window: a limit does not evict the beginning of the audio, it makes
+    /// generation throw `VoxtralError.contextTooLong` when prompt + `maxTokens` exceed it (K-2).
     public var maxKVCacheSize: Int?
 
     // MARK: - Presets
@@ -37,12 +38,11 @@ public struct MemoryOptimizationConfig: Sendable {
     )
 
     /// Light - minimal optimization for large RAM (64+ GB)
-    /// Uses RotatingKVCache to cap memory growth on long sequences
     public static let light = MemoryOptimizationConfig(
         evalFrequency: 16,
         clearCacheOnEval: false,
         resetPeakMemory: true,
-        maxKVCacheSize: 8192
+        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
     )
 
     /// Moderate - balanced optimization (recommended for 32-64GB RAM)
@@ -50,7 +50,7 @@ public struct MemoryOptimizationConfig: Sendable {
         evalFrequency: 8,
         clearCacheOnEval: false,
         resetPeakMemory: true,
-        maxKVCacheSize: 6144
+        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
     )
 
     /// Aggressive - maximum memory savings (for 16-32GB RAM)
@@ -58,7 +58,7 @@ public struct MemoryOptimizationConfig: Sendable {
         evalFrequency: 4,
         clearCacheOnEval: true,
         resetPeakMemory: true,
-        maxKVCacheSize: 4096
+        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
     )
 
     /// Ultra - extreme memory savings (for 8-16GB RAM)
@@ -66,7 +66,7 @@ public struct MemoryOptimizationConfig: Sendable {
         evalFrequency: 2,
         clearCacheOnEval: true,
         resetPeakMemory: true,
-        maxKVCacheSize: 2048
+        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
     )
 
     // MARK: - Auto-detection

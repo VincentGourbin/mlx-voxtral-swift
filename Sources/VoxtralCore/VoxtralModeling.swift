@@ -1110,7 +1110,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         repetitionPenalty: Float = 1.2,
-        contextSize: Int? = nil,  // nil = unlimited (KVCacheSimple), set value = limited (RotatingKVCache)
+        contextSize: Int? = nil,  // nil = no limit; a value makes a longer request throw contextTooLong (K-2)
         memoryOptimization: MemoryOptimizationConfig? = nil  // nil = use VoxtralMemoryManager.shared.config
     ) throws -> [Int] {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
@@ -1128,6 +1128,17 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
+
+            // Voxtral's LM has no sliding window: a rotating cache would drop the start of the audio or
+
+            // stop at the prefill (P-03). An explicit limit is honoured by refusing, before any compute (K-2).
+
+            if let limit = effectiveContextSize, inputIds.dim(1) + maxNewTokens > limit {
+
+                throw VoxtralError.contextTooLong(prompt: inputIds.dim(1), maxTokens: maxNewTokens, limit: limit)
+
+            }
+
             let stopTokens = stopTokenIds
 
             let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
@@ -1135,23 +1146,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Python: batch_size = input_ids.shape[0]
             let batchSize = inputIds.shape[0]
 
-            // Create KV cache - with or without size limit
+            // KV cache without a window: the LM has none; an explicit limit was checked above (K-2)
             let numLayers = getLanguageModelLayerCount()
-            var cache: [any KVCache]? = []
-
-            if let maxContext = effectiveContextSize {
-                // RotatingKVCache: limits memory by discarding old tokens when exceeding maxSize
-                // keep: 4 = preserve first 4 tokens (BOS + critical prompt tokens)
-                for _ in 0..<numLayers {
-                    cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
-                }
-                VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
-            } else {
-                // KVCacheSimple: unlimited growth (original behavior)
-                for _ in 0..<numLayers {
-                    cache!.append(KVCacheSimple())
-                }
-            }
+            var cache: [any KVCache]? = (0..<numLayers).map { _ in KVCacheSimple() }
 
             var generated = inputIds
             var recentTokenIds: [Int] = []  // Keep only Int IDs for repetition penalty
@@ -1324,6 +1321,17 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
 
+
+            // Voxtral's LM has no sliding window: a rotating cache would drop the start of the audio or
+
+            // stop at the prefill (P-03). An explicit limit is honoured by refusing, before any compute (K-2).
+
+            if let limit = effectiveContextSize, inputIds.dim(1) + maxNewTokens > limit {
+
+                throw VoxtralError.contextTooLong(prompt: inputIds.dim(1), maxTokens: maxNewTokens, limit: limit)
+
+            }
+
             let stopTokens = stopTokenIds
 
             // Merge token embeddings with pre-computed audio embeddings
@@ -1331,20 +1339,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             let batchSize = inputIds.shape[0]
 
-            // Create KV cache
+            // KV cache without a window: the LM has none; an explicit limit was checked above (K-2)
             let numLayers = getLanguageModelLayerCount()
-            var cache: [any KVCache]? = []
-
-            if let maxContext = effectiveContextSize {
-                for _ in 0..<numLayers {
-                    cache!.append(RotatingKVCache(maxSize: maxContext, keep: 4))
-                }
-                VoxtralDebug.log("Using RotatingKVCache with maxSize=\(maxContext)")
-            } else {
-                for _ in 0..<numLayers {
-                    cache!.append(KVCacheSimple())
-                }
-            }
+            var cache: [any KVCache]? = (0..<numLayers).map { _ in KVCacheSimple() }
 
             var generated = inputIds
             var recentTokenIds: [Int] = []

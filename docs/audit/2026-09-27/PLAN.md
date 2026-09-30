@@ -873,3 +873,32 @@ Gabarits :
     `-onlyUsePackageVersionsFromResolvedFile`)
   - `Package.resolved` : révisions identiques après `swift package resolve` sur deux clones neufs (voir rapport)
 - Mesure : temps de build seulement (une passe chacun, pas de banc).
+
+## K-2 — STT : cache KV sans fenêtre par défaut + garde-fou explicite — 2026-09-30 — validée
+- Fait : les 4 préréglages passent à `maxKVCacheSize: nil` ; les deux boucles `generateStream*` utilisent toujours
+  `KVCacheSimple` ; une limite explicite (`contextSize` ou `maxKVCacheSize`) est vérifiée avant tout calcul :
+  `invite + maxTokens > limite` ⇒ `VoxtralError.contextTooLong(prompt:maxTokens:limit:)` (nouveau cas) ; l'app ne force
+  plus 8 192 (interrupteur « Limit context », éteint par défaut). Test K-1 (b) basculé du déclencheur P-03 (disparu)
+  sur P-17 (masque fp32 sur modèle bf16, présent jusqu'à K-3) ; `PerformanceOptimizationTests` (qui figeaient les
+  fenêtres des préréglages, et dont un plantait sur `!`) réécrits. CHANGELOG à faire : sémantique des préréglages publics.
+- **Diagnostic mémoire (swift-mlx-profiler, `profile run --backend mlx`, C-long, mini-3b-8bit, 4 096 jetons)** : pic
+  MLX **actif 8,6 Go**, stable (7,2 → 7,8 Go) ; le pic du processus (70,6 Go ; 74 Go sous `/usr/bin/time -l`) est le
+  **cache de buffers MLX** (24,5 Go après le préfill → 56,7 Go en fin de décodage, ≈ 8 Mo par jeton), faute de
+  `cacheLimit` (P-09) ; il a fait compresser 45 Go et swapper la machine (96 Go). La porte « pic > 12 Go ⇒ ASK-7 » se lit
+  sur la mémoire du modèle : 8,6 Go < 12 Go, **ASK-7 non posée**. Décision de Vincent : la politique mémoire (K-52,
+  `cacheLimit`) passe **avant** K-5, K-32 et les baselines (des baselines sous swap ne vaudraient rien).
+- Écart (décision de Vincent) : les phrases de la porte sont reportées à K-5 : l'ASR écrit « complete **iCreative**
+  studio » (déjà ainsi sur C-moyen) ; la dernière phrase FR exige un budget de jetons selon la durée (en langue auto le
+  modèle s'arrête après le 1ᵉʳ segment EN, 4 923 caractères ; en `-l en`, 4 096 jetons sont atteints, 20 733 caractères).
+  Au passage : `profile run` en backend `auto`/hybride reste bloqué dans `VoxtralCoreMLEncoder.encode` (`prediction`)
+  sur C-long (23 fenêtres, > 20 min) : à instruire (K-25/K-42).
+- Catalogue : `apply.py scan --pattern MLX-020` : 2 → 0.
+- Porte observée :
+  - `RED   LongPromptKVCacheTests.testUltraPreset2600Positions : VoxtralError.mlx (avec K-1)` ([broadcast_shapes]
+    (512,2560) vs (1,4,512,2559)) ; `testExplicitLimitThrowsContextTooLong` rouge (mlx au lieu de contextTooLong)
+  - `GREEN Executed 3 tests, with 0 failures (0 unexpected)` ; suite complète
+    `Executed 515 tests, with 17 tests skipped and 0 failures (0 unexpected)`
+  - `LONG_AUDIO ultra(8GB)       : 0 crash · first EN OK · last FR KO (K-5)`
+  - `LONG_AUDIO aggressive(16GB) : 0 crash · first EN OK · last FR KO (K-5)`
+  - `74063779984  peak memory footprint` (/usr/bin/time -l, C-long, mini-3b-8bit, .mlx) — dont MLX actif 8 557,4 Mo
+- Mesure : diagnostic, pas une référence (une passe, machine sous pression mémoire).

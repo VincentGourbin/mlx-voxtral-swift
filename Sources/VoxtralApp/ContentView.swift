@@ -294,9 +294,9 @@ struct ControlPanelView: View {
                     // Context Size control for memory management
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("Context Size:")
+                            Toggle("Limit context:", isOn: $manager.limitContext)
                             Spacer()
-                            Text("\(manager.contextSize / 1024)k")
+                            Text(manager.limitContext ? "\(manager.contextSize / 1024)k" : "Unlimited")
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                         }
@@ -308,7 +308,8 @@ struct ControlPanelView: View {
                             in: 1024...32768,
                             step: 1024
                         )
-                        Text("Lower = less GPU memory")
+                        .disabled(!manager.limitContext)
+                        Text("A limit caps GPU memory; longer audio then fails with a clear error")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

@@ -67,7 +67,9 @@ class TranscriptionManager: ObservableObject {
     @Published var chatPrompt: String = "What is being said in this audio?"
     @Published var maxTokens: Int = 500
     @Published var temperature: Float = 0.0
-    @Published var contextSize: Int = 8192  // KV cache size limit (1024-32768), default 8k balanced
+    @Published var contextSize: Int = 8192  // KV cache size limit (1024-32768) when limitContext is on
+    /// Off by default: no KV limit (the LM has no sliding window); on, a too-long audio fails explicitly (K-2)
+    @Published var limitContext = false
     @Published var useHybridBackend: Bool = false  // Core ML encoder + MLX decoder
 
     // Hybrid encoder status (updated after model load)
@@ -209,7 +211,7 @@ class TranscriptionManager: ObservableObject {
             var config = VoxtralPipeline.Configuration.default
             config.maxTokens = maxTokens
             config.temperature = temperature
-            config.memoryOptimization.maxKVCacheSize = contextSize
+            config.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 
             // Always use .auto to download Core ML if available
             // The useHybridBackend toggle controls whether we USE Core ML, not whether we download it
@@ -342,7 +344,7 @@ class TranscriptionManager: ObservableObject {
         // Update pipeline configuration if needed
         pipeline.configuration.maxTokens = maxTokens
         pipeline.configuration.temperature = temperature
-        pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
+        pipeline.configuration.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 
         // Start profiling
         let profiler = MLXProfiler.shared
@@ -413,7 +415,7 @@ class TranscriptionManager: ObservableObject {
         // Update pipeline configuration if needed
         pipeline.configuration.maxTokens = maxTokens
         pipeline.configuration.temperature = temperature
-        pipeline.configuration.memoryOptimization.maxKVCacheSize = contextSize
+        pipeline.configuration.memoryOptimization.maxKVCacheSize = limitContext ? contextSize : nil
 
         // Start profiling
         let profiler = MLXProfiler.shared
