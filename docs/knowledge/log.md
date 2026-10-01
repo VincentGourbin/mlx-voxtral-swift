@@ -100,3 +100,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `MTLCommandQueue commandBuffer`, 0 % CPU) ; `.auto`, défaut du pipeline, était touché. Préréglages Core ML sur l'ANE
   (Vincent). Instrument `bench` : phases en temps exclusif (le décodage STT était compté deux fois), `pad_fraction`
   (0,72 sur C-moyen EN), `--trace`.
+- 2026-10-01 — **K-3 : masques construits par le cache** (booléens, forme des clés) : bf16 possible (prérequis K-40),
+  décodeur hérité sans arrêt au 2ᵉ tronçon de préfill ; logits STT identiques (L2 0,0), temps inchangé (+0,07 %).
+  Le chargeur hérité `loadVoxtralModel(modelPath:…)` ne charge pas le dossier HF bf16 (`keyNotFound audio_tower.conv2`).

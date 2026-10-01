@@ -1126,3 +1126,25 @@ Gabarits :
     managedappdistri 46 %) ; le diagnostic sur le même binaire avant commit donnait 59,1 s (1,14 ×). Textes C-long
     `.auto` ≠ `.mlx` (5 549 / 5 160 car., C-long bilingue, K-33) ; C-moyen : `.auto` (ANE) = `.mlx` (même sha).
   - Suite `Executed 540 tests, with 29 tests skipped and 0 failures (0 unexpected)`.
+
+## K-3 — Masques d'attention construits par le cache (décodeur STT vivant et décodeur hérité) — 2026-10-01 — validée
+- Fait (commit `988c256b`) : décodeur vivant (`LlamaStandardModel`) : masque booléen de `cache.makeMask(n:windowSize:
+  returnArray: true)` (forme des clés que le cache présente : offset, fenêtre tournante), sinon
+  `MLXLMCommon.createCausalMask(n:offset:)`, `nil` pour un jeton ; décodeur hérité (`LlamaModel`) : plus de masque
+  `[T, T]` fait main, `nil` ⇒ `.causal` dans `LlamaAttention` à tout offset. Amendement : le test (b) de
+  `MLXErrorBoundaryTests` a un déclencheur durable (poids de forme fausse injecté par `update(parameters:)` sans
+  vérification). Point d'accroche de test interne `prefillLogitsObserver`.
+- Porte observée :
+  - `GREEN AttentionMaskTests : Executed 4 tests, with 0 failures (0 unexpected)` ; rouge avec les anciens masques :
+    préfill bf16 → `mlx("[scaled_dot_product_attention] …")`, décodeur hérité 600 positions → `Fatal error: Index out
+    of range` (runner arrêté) ; le test du `RotatingKVCache` enroulé (`[[6, 6, 6], [6, 12, 12]]`, masque `.bool`)
+    passait déjà avec l'ancien masque (même largeur offset + T).
+  - `PARITY greedy 3/3 identiques ; logits L2 rel max=0.0` (C-court EN/FR, C-moyen EN, mini-3b-8bit `.mlx`).
+  - `LEGACY prompt 600 positions … : OK (pas d'arrêt)`. Écart : via un décodeur hérité réduit construit comme le fait
+    `loadVoxtralModel(modelPath:dtype:lazy:)` (`VoxtralForConditionalGeneration(config:)`) ; ce chargeur ne charge pas
+    le seul dossier bf16 présent (`mistralai/Voxtral-Mini-3B-2507` : `keyNotFound audio_tower.conv2.weight` après son
+    `sanitize`), défaut séparé du chargeur hérité (K-30).
+  - `TIME C-moyen EN A=15.937 B=15.949 B=15.948 A=15.941 s → écart +0,07 % (≤ 5 %)` (`bench stt`, sorties identiques,
+    `dirty:false` ; machine-check sans KO, balises : nos pids seulement).
+  - Suite `Executed 545 tests, with 30 tests skipped and 0 failures (0 unexpected)` ; MLX-019 : 2 → 1 (reste
+    `createCausalMask(N:…)` public, inchangé, K-30).
