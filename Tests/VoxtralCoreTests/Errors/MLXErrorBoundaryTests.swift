@@ -7,6 +7,7 @@
  */
 
 import MLX
+import MLXNN
 import MLXRandom
 import XCTest
 @testable import VoxtralCore
@@ -51,21 +52,22 @@ final class MLXErrorBoundaryTests: XCTestCase {
         return VoxtralForConditionalGeneration(standardModel: VoxtralStandardModel(configuration: configuration))
     }
 
-    // (b) an MLX error inside generation: P-17, a bf16 model fed the hand-made fp32 additive mask
-    // ("Mask type must promote to output type"), present until K-3. The P-03 trigger (prefill beyond a
-    // rotating window) was used before K-2 removed the window from every preset.
+    // (b) an MLX error inside generation: a weight of the wrong shape injected without verification
+    // (update(parameters:), not updateVerified) makes the first projection fail its matmul. Durable trigger:
+    // P-17 (bf16 model and fp32 mask) was used until K-3 removed it, P-03 until K-2.
     func testGenerationMLXErrorThrowsVoxtralError() throws {
         let model = try reducedModel()
-        model.update(parameters: model.parameters().mapValues { $0.asType(.bfloat16) })
+        let parameters = model.parameters().flattened()
+        let (key, weight) = try XCTUnwrap(parameters.first { $0.0.contains("language_model") && ($0.0.hasSuffix("q_proj.weight") || $0.0.hasSuffix("qProj.weight")) })
+        model.update(parameters: ModuleParameters.unflattened([key: MLXArray.zeros([weight.dim(0), weight.dim(1) + 3])]))
         let inputIds = MLXArray((0 ..< 16).map { Int32(30 + $0) }).reshaped([1, 16])
 
         XCTAssertThrowsError(try model.generateStream(
             inputIds: inputIds, maxNewTokens: 1, memoryOptimization: .disabled)
         ) { error in
-            guard case VoxtralError.mlx(let message) = error else {
+            guard case VoxtralError.mlx = error else {
                 return XCTFail("expected VoxtralError.mlx, got \(error)")
             }
-            XCTAssertTrue(message.lowercased().contains("mask"), message)
         }
     }
 }

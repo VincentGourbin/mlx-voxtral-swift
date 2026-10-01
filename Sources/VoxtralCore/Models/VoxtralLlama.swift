@@ -329,12 +329,9 @@ public class LlamaModel: Module {
             h = embedTokens(inputs!)
         }
 
-        var attentionMask = mask
-        // Python: if mask is None:
-        if attentionMask == nil {
-            // Python: mask = create_attention_mask(h, cache)
-            attentionMask = mlxLMCreateAttentionMask(h, cache: cache)
-        }
+        // No hand-made mask: nil lets LlamaAttention use .causal for a prefill at any cache offset and no mask for
+        // one token. The [T, T] mask built here stopped the second prefill chunk (keys = offset + T) (K-3)
+        let attentionMask = mask
 
         var layerCaches: [(any KVCache)?]
         // Python: if cache is None:

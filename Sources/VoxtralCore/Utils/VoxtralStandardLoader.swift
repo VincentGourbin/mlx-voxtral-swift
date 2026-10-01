@@ -445,41 +445,21 @@ public class LlamaStandardModel: Module {
      *   else:
      *       mask = None
      *
-     * MLX Swift's scaledDotProductAttention expects an additive mask:
-     * - 0 where attention is allowed
-     * - -inf (or large negative) where attention should be blocked
+     * The mask is boolean (true = attend) and comes from the cache (K-3).
      */
     private func createCausalAttentionMask(hiddenStates: MLXArray, cache: [any KVCache]?) -> MLXArray? {
-        let T = hiddenStates.shape[1]  // Sequence length
+        Self.causalMask(n: hiddenStates.shape[1], cache: cache?.first)
+    }
 
-        // Python: if T > 1 -> return "causal" (or causal mask array)
-        // For single token (T == 1), return nil (no mask needed)
-        if T <= 1 {
-            return nil
+    /// Boolean causal mask built by the cache, shaped like the keys it will present (offset, rotating window),
+    /// with no dtype of its own: a bf16 model no longer meets "Mask type must promote to output type" (P-17),
+    /// and a wrapped `RotatingKVCache` gets the right shape (P-02). `nil` for a single token (K-3).
+    static func causalMask(n: Int, cache: (any KVCache)?) -> MLXArray? {
+        guard n > 1 else { return nil }
+        if let cache, case .array(let mask) = cache.makeMask(n: n, windowSize: nil, returnArray: true) {
+            return mask
         }
-
-        // Get offset from cache if available
-        let offset = cache?.first?.offset ?? 0
-
-        // Total sequence length including cached positions
-        let totalLen = T + offset
-
-        // Create indices for comparison
-        // Row indices for queries (the new tokens at positions offset..offset+T)
-        // Col indices for keys (all positions 0..totalLen)
-        let rowIndices = MLXArray((offset..<(offset+T)).map { Float($0) }).reshaped([T, 1])
-        let colIndices = MLXArray((0..<totalLen).map { Float($0) }).reshaped([1, totalLen])
-
-        // Causal mask: block positions where col > row (future positions)
-        // MLX expects additive mask: 0 for allowed, -inf for blocked
-        let futureMask = colIndices .> rowIndices  // True where col > row
-
-        // Convert boolean mask to additive mask: True -> -inf, False -> 0
-        let minusInf = MLXArray(-Float.infinity)
-        let zero = MLXArray(Float(0))
-        let additiveMask = MLX.where(futureMask, minusInf, zero)
-
-        return additiveMask
+        return MLXLMCommon.createCausalMask(n: n, offset: cache?.offset ?? 0)
     }
 }
 

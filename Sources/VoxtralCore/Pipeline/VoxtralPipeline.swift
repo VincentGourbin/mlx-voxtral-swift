@@ -208,7 +208,7 @@ public class VoxtralPipeline: @unchecked Sendable {
     private let cachePolicy = MLXCachePolicy()
 
     /// Loaded Voxtral model
-    private var voxtralModel: VoxtralModel?
+    private(set) var voxtralModel: VoxtralModel?
 
     /// Loaded processor
     private var processor: VoxtralProcessor?

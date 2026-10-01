@@ -449,6 +449,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /// from its tokenizer (`generation_config.json`).
     public var stopTokenIds: [Int] = [2, 4]
 
+    /// Tests (K-3): receives the last-position logits of the prefill (first generation step)
+    var prefillLogitsObserver: ((MLXArray) -> Void)?
+
     // CRITICAL: Store reference to standardModel for using loaded audio components
     // Internal access needed for VoxtralHybridEncoder extension to use loaded audio tower
     var standardModel: VoxtralStandardModel?
@@ -1222,6 +1225,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 }
                 let seqLen = logits.shape[1]
                 let lastTokenLogits = logits[0..., seqLen-1, 0...]
+                if tokenIndex == 0 { prefillLogitsObserver?(lastTokenLogits) }
 
                 var processedLogits = lastTokenLogits
 
@@ -1411,6 +1415,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                 }
                 let seqLen = logits.shape[1]
                 let lastTokenLogits = logits[0..., seqLen-1, 0...]
+                if tokenIndex == 0 { prefillLogitsObserver?(lastTokenLogits) }
 
                 var processedLogits = lastTokenLogits
 
