@@ -1052,3 +1052,24 @@ Gabarits :
 - Obligations à la fusion de la branche sur `main` : compiler FluxForge Studio contre la branche (K-22) ; publier la
   version mineure décrite dans `CHANGELOG.md` (ASK-9 = A, défauts publics changés).
 - Tableau du §3 : colonne État alignée sur le tracker (verified, applied, partielle, en cours).
+
+## K-12 — Streaming TTS réel et annulable (production dans une `Task`, `onTermination`, `checkCancellation`) — 2026-10-01 — validée
+- Fait : `VoxtralTTSModel.generateStreaming` rend `AsyncThrowingStream.makeStream()` et produit dans une `Task`
+  (`produceStreaming`, `try Task.checkCancellation()` à chaque frame) annulée par `onTermination` ; avant, toute la
+  génération s'exécutait dans la closure de construction du flux. `VoxtralTTSPipeline.synthesizeStreaming` : même
+  schéma (hunk MLX-003), `checkCancellation()` en tête de la boucle de chunks, état `.ready` rendu à la sortie.
+  Compteur interne `streamingFramesProduced` (tests) ; `ttsModel`, `tokenizer`, `voiceEmbeddings` en `private(set)`.
+- Porte observée :
+  - `GREEN TTSStreamingCancellationTests : Executed 4 tests, with 0 failures` (gardé `VOXTRAL_TTS_STREAM=1`) ; rouge
+    sans correctif (3 tests, 6 échecs) : `generateStreaming returned in 676983.9 ms`, annulation : `.ready` non atteint
+    en 30 s (`synthesizing`), `frames=1934 > 1607`, puis `busy` sur le test suivant.
+  - `STREAM generateStreaming returned in 0.2 ms (< 50) ; first chunk 624.5 ms ≤ 1,5 × ttft batch 527 ms` (Release,
+    `bench tts`, machine-check OK, balises : nos pids seulement ; A/A batch 0,03 %).
+  - `CANCEL after 5 chunks → .ready in 8 ms (< 1000) ; frames=43 ≤ frames_at_cancel+1 (44)`
+  - `PARITY stream concat == batch (seed 42)` au sens décidé par Vincent le 2026-10-01 : codes identiques bit à bit
+    (`[1, 2280, 37]`), audio max|Δ| = 1.2423843e-06 ≤ 1e-5 (4 377 600 échantillons ; bruit flottant du re-décodage
+    codec par chunk : l'identité bit à bit de l'audio relève de K-43).
+  - Suite `Executed 533 tests, with 24 tests skipped and 0 failures (0 unexpected)`. Catalogue : MLX-003 2 → 0.
+- Écarts : texte ≈ 350 mots = « Long EN » de `docs/tts_benchmark.md` × 2 (326 mots ; la référence est condensée,
+  K-33). Le test Debug borne le premier chunk à 2 × ttft (garde-fou) : la clause 1,5 × est mesurée en Release (un run
+  Debug a donné 579 ms contre 571 = 1,5 × 381). Streaming : 494,7 s pour 182,4 s d'audio (re-décodage O(n²), K-43).

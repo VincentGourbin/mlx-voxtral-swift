@@ -89,3 +89,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-01 — **K-13, complément** : les NUL de la sortie Realtime venaient de `decode`, qui ne sautait que BOS/EOS/PAD
   alors que le modèle émet `[STREAMING_PAD]` (32) / `[STREAMING_WORD]` (33) ; tout id < 1000 est désormais sauté.
   Écart restant avec mlx-audio : l'invite (pad 11 × 1 + délai côté Swift, 32 × 32 côté mlx-audio) → fiche à créer.
+- 2026-10-01 — **K-12 : streaming TTS annulable** : le flux est rendu en 0,2 ms (677 s avant : tout se générait dans la
+  closure de construction), l'annulation rend `.ready` en 8 ms à une frame près. Parité stream/batch : codes identiques,
+  audio à 1,2e-6 près (re-décodage codec par chunk ; Vincent : tolérance 1e-5, l'identité exacte relève de K-43).

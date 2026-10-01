@@ -85,11 +85,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// Opt-in MLX cache limit held while loaded (K-52)
     private let cachePolicy = MLXCachePolicy()
 
-    private var ttsModel: VoxtralTTSModel?
-    private var tokenizer: TekkenTokenizer?
+    private(set) var ttsModel: VoxtralTTSModel?
+    private(set) var tokenizer: TekkenTokenizer?
     private let voiceManager: VoxtralVoicePresetManager
     private var modelDirectory: URL?
-    private var voiceEmbeddings: [String: MLXArray] = [:]
+    private(set) var voiceEmbeddings: [String: MLXArray] = [:]
     /// Registry id of the loaded model (for the activity beacon manifests).
     private var loadedModelID: String?
 
@@ -598,128 +598,131 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
         let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, prefixCache: prefix?.cache, prefixLen: prefix?.len ?? 0, genText: genText, seed: seed, hasWarmUp: hasWarmUp, warmUpLeadInFrames: warmUpLeadInFrames)
 
-        return AsyncThrowingStream { continuation in
-            Task {
-                defer { beacon?.end() }
-                // Sample offset (into the full decoded waveform) where the real
-                // content starts. Without warm-up that's 0; with warm-up it's the
-                // carrier cut, located once from the accumulated audio and then
-                // held fixed so the carrier is dropped from every emitted chunk.
-                var contentStart: Int? = ctx.hasWarmUp ? nil : 0
-                let frameSize = capturedSampleRate * 2 / 25  // 80 ms acoustic frame
-                var previousContentSamples = 0
-                var isFirst = true
+        // K-12: the producing Task is cancelled when the consumer stops (MLX-003)
+        let (stream, continuation) = AsyncThrowingStream<TTSStreamingChunk, Error>.makeStream()
+        let task = Task {
+            defer { beacon?.end() }
+            // Sample offset (into the full decoded waveform) where the real
+            // content starts. Without warm-up that's 0; with warm-up it's the
+            // carrier cut, located once from the accumulated audio and then
+            // held fixed so the carrier is dropped from every emitted chunk.
+            var contentStart: Int? = ctx.hasWarmUp ? nil : 0
+            let frameSize = capturedSampleRate * 2 / 25  // 80 ms acoustic frame
+            var previousContentSamples = 0
+            var isFirst = true
 
-                do {
-                    // The MLX error handler is task-local: the boundary lives in this producing Task (K-1)
-                    try await withMLXErrors { errors in
-                        let codeStream = ctx.model.generateStreaming(
-                            text: ctx.genText,
-                            voiceEmbedding: ctx.voiceEmb,
-                            tokenizer: ctx.tokenizer,
-                            maxTokens: capturedMaxFrames,
-                            chunkSize: chunkSize,
-                            sanitize: capturedSanitize,
-                            seed: ctx.seed,
-                            prefixCache: ctx.prefixCache,
-                            prefixLen: ctx.prefixLen
-                        )
+            do {
+                // The MLX error handler is task-local: the boundary lives in this producing Task (K-1)
+                try await withMLXErrors { errors in
+                    let codeStream = ctx.model.generateStreaming(
+                        text: ctx.genText,
+                        voiceEmbedding: ctx.voiceEmb,
+                        tokenizer: ctx.tokenizer,
+                        maxTokens: capturedMaxFrames,
+                        chunkSize: chunkSize,
+                        sanitize: capturedSanitize,
+                        seed: ctx.seed,
+                        prefixCache: ctx.prefixCache,
+                        prefixLen: ctx.prefixLen
+                    )
 
-                        for try await chunk in codeStream {
-                            // Decode all accumulated codes to get full waveform
-                            let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
-                            MLX.eval(fullWaveform)
-                            try errors.check()
+                    for try await chunk in codeStream {
+                        try Task.checkCancellation()
+                        // Decode all accumulated codes to get full waveform
+                        let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
+                        MLX.eval(fullWaveform)
+                        try errors.check()
 
-                            let totalSamples = fullWaveform.dim(0)
+                        let totalSamples = fullWaveform.dim(0)
 
-                            // Locate the warm-up carrier's end once, then drop it.
-                            // Wait until the adaptive scan window (3 s) has actually
-                            // accumulated — deciding on a partial waveform can latch
-                            // onto a micro-pause inside the carrier and hold that
-                            // wrong cut for the rest of the stream. The batch path
-                            // never sees a partial waveform, so it needs no such
-                            // guard; this keeps both paths deciding on the same view.
-                            let scanWindowSamples = capturedSampleRate * 3
-                            if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
+                        // Locate the warm-up carrier's end once, then drop it.
+                        // Wait until the adaptive scan window (3 s) has actually
+                        // accumulated — deciding on a partial waveform can latch
+                        // onto a micro-pause inside the carrier and hold that
+                        // wrong cut for the rest of the stream. The batch path
+                        // never sees a partial waveform, so it needs no such
+                        // guard; this keeps both paths deciding on the same view.
+                        let scanWindowSamples = capturedSampleRate * 3
+                        if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            continue
+                        }
+                        if contentStart == nil {
+                            // Same adaptive cut as the batch path: no absolute
+                            // level is assumed. The carrier's terminal pause is
+                            // whatever the generation made it — measured −55 dB,
+                            // −65 dB and −126 dB across three seeds on one voice
+                            // — so a fixed floor finds it only sometimes, and a
+                            // peak-relative one rides up with the content and
+                            // swallows the carrier. Deriving the reference from
+                            // the carrier's own level sidesteps both.
+                            let (_, cutFrames) = trimLeadingCarrierAdaptive(
+                                fullWaveform, sampleRate: capturedSampleRate,
+                                leadInFrames: ctx.warmUpLeadInFrames)
+                            if cutFrames > 0 {
+                                contentStart = cutFrames * frameSize
+                            } else if chunk.isFinal {
+                                contentStart = 0  // pause never found — emit everything
+                            } else {
+                                // Still inside the carrier; nothing to emit yet.
                                 beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                                 continue
                             }
-                            if contentStart == nil {
-                                // Same adaptive cut as the batch path: no absolute
-                                // level is assumed. The carrier's terminal pause is
-                                // whatever the generation made it — measured −55 dB,
-                                // −65 dB and −126 dB across three seeds on one voice
-                                // — so a fixed floor finds it only sometimes, and a
-                                // peak-relative one rides up with the content and
-                                // swallows the carrier. Deriving the reference from
-                                // the carrier's own level sidesteps both.
-                                let (_, cutFrames) = trimLeadingCarrierAdaptive(
-                                    fullWaveform, sampleRate: capturedSampleRate,
-                                    leadInFrames: ctx.warmUpLeadInFrames)
-                                if cutFrames > 0 {
-                                    contentStart = cutFrames * frameSize
-                                } else if chunk.isFinal {
-                                    contentStart = 0  // pause never found — emit everything
-                                } else {
-                                    // Still inside the carrier; nothing to emit yet.
-                                    beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
-                                    continue
-                                }
-                            }
-                            let start = contentStart!
-                            guard totalSamples > start else {
-                                beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
-                                if !chunk.isFinal { continue }
-                                // Final chunk with no content past the cut: emit an
-                                // empty final marker so consumers see completion.
-                                continuation.yield(TTSStreamingChunk(
-                                    waveform: fullWaveform[(totalSamples)...],
-                                    frameIndex: chunk.totalFrames, frameCount: 0,
-                                    totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
-                                    isFirst: isFirst, isFinal: true,
-                                    elapsed: Date().timeIntervalSince(startTime)))
-                                break
-                            }
-
-                            // Content samples generated so far, and the new slice.
-                            let contentTotal = totalSamples - start
-                            let newWaveform: MLXArray
-                            if previousContentSamples > 0 && previousContentSamples < contentTotal {
-                                newWaveform = fullWaveform[(start + previousContentSamples)...]
-                            } else {
-                                newWaveform = fullWaveform[start...]
-                            }
-
-                            let elapsed = Date().timeIntervalSince(startTime)
-
-                            continuation.yield(TTSStreamingChunk(
-                                waveform: newWaveform,
-                                frameIndex: chunk.totalFrames - chunk.newFrameCount,
-                                frameCount: chunk.newFrameCount,
-                                totalFrames: chunk.totalFrames,
-                                sampleRate: capturedSampleRate,
-                                isFirst: isFirst,
-                                isFinal: chunk.isFinal,
-                                elapsed: elapsed
-                            ))
-
-                            previousContentSamples = contentTotal
-                            isFirst = false
+                        }
+                        let start = contentStart!
+                        guard totalSamples > start else {
                             beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            if !chunk.isFinal { continue }
+                            // Final chunk with no content past the cut: emit an
+                            // empty final marker so consumers see completion.
+                            continuation.yield(TTSStreamingChunk(
+                                waveform: fullWaveform[(totalSamples)...],
+                                frameIndex: chunk.totalFrames, frameCount: 0,
+                                totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
+                                isFirst: isFirst, isFinal: true,
+                                elapsed: Date().timeIntervalSince(startTime)))
+                            break
                         }
 
-                        continuation.finish()
-                    }
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+                        // Content samples generated so far, and the new slice.
+                        let contentTotal = totalSamples - start
+                        let newWaveform: MLXArray
+                        if previousContentSamples > 0 && previousContentSamples < contentTotal {
+                            newWaveform = fullWaveform[(start + previousContentSamples)...]
+                        } else {
+                            newWaveform = fullWaveform[start...]
+                        }
 
-                // Ignored when the pipeline was unloaded or reloaded meanwhile (stale Task)
-                ctx.pipeline.cachePolicy.endOfResponse()
-                ctx.pipeline.gate.end(generation, state: .ready)
+                        let elapsed = Date().timeIntervalSince(startTime)
+
+                        continuation.yield(TTSStreamingChunk(
+                            waveform: newWaveform,
+                            frameIndex: chunk.totalFrames - chunk.newFrameCount,
+                            frameCount: chunk.newFrameCount,
+                            totalFrames: chunk.totalFrames,
+                            sampleRate: capturedSampleRate,
+                            isFirst: isFirst,
+                            isFinal: chunk.isFinal,
+                            elapsed: elapsed
+                        ))
+
+                        previousContentSamples = contentTotal
+                        isFirst = false
+                        beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                    }
+
+                    continuation.finish()
+                }
+            } catch {
+                continuation.finish(throwing: error)
             }
+
+            // Ignored when the pipeline was unloaded or reloaded meanwhile (stale Task)
+            ctx.pipeline.cachePolicy.endOfResponse()
+            ctx.pipeline.gate.end(generation, state: .ready)
         }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
     }
 
     // MARK: - Resource Management

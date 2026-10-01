@@ -590,7 +590,52 @@ public class VoxtralTTSModel: Module {
         prefixCache: [any KVCache]? = nil,
         prefixLen: Int = 0
     ) -> AsyncThrowingStream<GenerationChunk, Error> {
-        AsyncThrowingStream { continuation in
+        // K-12: return the stream at once and produce in a Task tied to the consumer: when it stops
+        // (break, cancelled Task), `onTermination` cancels the producer, which checks at every frame.
+        // Before, the whole generation ran synchronously inside the stream's build closure.
+        final class Inputs: @unchecked Sendable {
+            let model: VoxtralTTSModel, voiceEmbedding: MLXArray, tokenizer: TekkenTokenizer
+            let prefixCache: [any KVCache]?
+            init(_ model: VoxtralTTSModel, _ voiceEmbedding: MLXArray, _ tokenizer: TekkenTokenizer,
+                 _ prefixCache: [any KVCache]?) {
+                self.model = model; self.voiceEmbedding = voiceEmbedding; self.tokenizer = tokenizer
+                self.prefixCache = prefixCache
+            }
+        }
+        let inputs = Inputs(self, voiceEmbedding, tokenizer, prefixCache)
+        let (stream, continuation) = AsyncThrowingStream<GenerationChunk, Error>.makeStream()
+        let task = Task {
+            do {
+                try inputs.model.produceStreaming(
+                    text: text, voiceEmbedding: inputs.voiceEmbedding, tokenizer: inputs.tokenizer,
+                    maxTokens: maxTokens, chunkSize: chunkSize, sanitize: sanitize, seed: seed,
+                    prefixCache: inputs.prefixCache, prefixLen: prefixLen, continuation: continuation)
+                continuation.finish()
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
+    }
+
+    /// Frames produced by the latest `generateStreaming` (tests: cancellation bound, K-12)
+    let streamingFramesProduced = Locked(0)
+
+    private func produceStreaming(
+        text: String,
+        voiceEmbedding: MLXArray,
+        tokenizer: TekkenTokenizer,
+        maxTokens: Int,
+        chunkSize: Int,
+        sanitize: Bool,
+        seed: UInt64?,
+        prefixCache: [any KVCache]?,
+        prefixLen: Int,
+        continuation: AsyncThrowingStream<GenerationChunk, Error>.Continuation
+    ) throws {
+        streamingFramesProduced.set(0)
+        do {
             // See generate(): seed for reproducible flow-matching sampling.
             if let seed { MLXRandom.seed(seed) }
             let voiceFrameCount = voiceEmbedding.dim(0)
@@ -631,11 +676,7 @@ public class VoxtralTTSModel: Module {
             var firstChunkYielded = false
 
             for i in 0..<maxTokens {
-                // Check for cancellation
-                if Task.isCancelled {
-                    continuation.finish()
-                    return
-                }
+                try Task.checkCancellation()
 
                 let h = hidden[0..., -1, 0...]
                 let codes = acousticTransformer.decodeOneFrame(h)
@@ -654,11 +695,11 @@ public class VoxtralTTSModel: Module {
                             isFinal: true
                         ))
                     }
-                    continuation.finish()
                     return
                 }
 
                 allCodes.append(codes)
+                streamingFramesProduced.set(allCodes.count)
                 chunkFrameCount += 1
 
                 // Yield a small first chunk early, then every chunkSize frames.
@@ -693,7 +734,6 @@ public class VoxtralTTSModel: Module {
                     isFinal: true
                 ))
             }
-            continuation.finish()
         }
     }
 }
