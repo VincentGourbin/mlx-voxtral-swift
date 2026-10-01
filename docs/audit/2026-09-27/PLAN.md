@@ -1102,3 +1102,27 @@ Gabarits :
     and 0 failures (0 unexpected)`.
 - Écarts : `clone_fr.wav` dure 8,6 s : `--duration 8` (le défaut 16 s refuse la référence) ; machine-check OK, balises :
   nos pids seulement.
+
+## K-32b — Instrument bench : phases sans double comptage, pad_fraction, --trace, blocage Core ML — 2026-10-01 — validée
+- Fait (commit `1a38ff86`) : `phases_ms` en temps exclusif (une phase qui en contient d'autres ne compte que son temps
+  propre : la phase pipeline STT « Generation » entourait le préfill et le décodage LLM, comptés deux fois) ;
+  `pad_fraction` dans `bench realtime` (part des pas de décodage dont le jeton ne porte pas de texte : jetons de
+  contrôle `[STREAMING_PAD]`, `[STREAMING_WORD]`… ; nouvelle propriété additive `lastPadFraction`), schéma mis à jour ;
+  `--trace` réel : une passe de diagnostic supplémentaire (pas de ligne BENCH) qui écrit une trace Chrome dans `--out`.
+- Blocage `.auto` : pas propre à C-long. Core ML en `.cpuAndGPU` (MPSGraph) se bloque dès la 1re fenêtre (aussi sur
+  C-moyen) dans `-[AGXG15XFamilyCommandQueue commandBuffer]` → `semaphore_wait_trap`, 0 % CPU, dans le même processus
+  que MLX (`sample`, `VoxtralCoreMLEncoder.swift:375`). Un `autoreleasepool` par prédiction n'y change rien. En
+  `.cpuAndNeuralEngine` tout passe : décision de Vincent (2026-10-01) : préréglages `default`/`mini`/`small` sur l'ANE
+  (`gpuOnly` reste GPU, documenté), CHANGELOG. `.auto` est le défaut de `VoxtralPipeline` : le blocage touchait tout
+  consommateur ayant l'encodeur Core ML (FluxForge à prévenir, #557).
+- Porte observée (machine-check sans KO recopié dans le rapport ; balises : nos pids seulement ; toutes les lignes
+  `dirty:false`, commit `1a38ff86a`) :
+  - stt (A/A K-32) : somme des phases 15 897,0 ≤ total 15 898,2 ms ; `AA dispersion total_ms=0.21% step_ms_p50=0.37%
+    out_sha256=identical → PASS` ; chat : 1 336,3 ≤ 1 337,3 ms, `AA q1 dispersion ttft_ms=0.64% tok_s=0.17% … PASS`.
+  - realtime : `pad_fraction` 0.7226 (C-moyen EN), `AA dispersion total_ms=0.15% step_ms_p50=0.00% … PASS`.
+  - `TRACE …/.local-runs/bench.noindex/k32b/trace-realtime-2026-10-01T111033Z.json`.
+  - `bench stt --backend auto` C-long : 98 352,8 ms contre `.mlx` 52 414,5 ms = 1,88 × (< 2 ×). Réserve : encode
+    identique au diagnostic (14,2 s) mais préfill et décodage doublés pendant cette passe (`top_process` :
+    managedappdistri 46 %) ; le diagnostic sur le même binaire avant commit donnait 59,1 s (1,14 ×). Textes C-long
+    `.auto` ≠ `.mlx` (5 549 / 5 160 car., C-long bilingue, K-33) ; C-moyen : `.auto` (ANE) = `.mlx` (même sha).
+  - Suite `Executed 540 tests, with 29 tests skipped and 0 failures (0 unexpected)`.

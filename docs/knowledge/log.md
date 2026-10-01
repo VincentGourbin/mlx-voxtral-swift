@@ -96,3 +96,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Piège : un `MLX.take` sur des indices qui se chevauchent (découpage STFT) a un gradient non déterministe sur GPU
   (scatter-add atomique) ; à graine égale les codes divergeaient dès l'époque 1. Découper par blocs (reshape + tranches)
   rend le gradient bit à bit stable sans changer les valeurs.
+- 2026-10-01 — **K-32b : Core ML sur GPU + MLX dans le même processus = interblocage** (1re prédiction bloquée dans
+  `MTLCommandQueue commandBuffer`, 0 % CPU) ; `.auto`, défaut du pipeline, était touché. Préréglages Core ML sur l'ANE
+  (Vincent). Instrument `bench` : phases en temps exclusif (le décodage STT était compté deux fois), `pad_fraction`
+  (0,72 sur C-moyen EN), `--trace`.

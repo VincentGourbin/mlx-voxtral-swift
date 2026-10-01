@@ -19,6 +19,8 @@ over these enums needs a `default:` or the new cases.
   `lastResultTruncated` (STT), `lastTranscriptionTruncated` (Realtime). The Realtime loop runs one step per audio frame.
 
 ### Added
+- **K-32b — `VoxtralRealtimePipeline.lastPadFraction`**: share of the last transcription's decode steps that carry
+  no text (control tokens such as `[STREAMING_PAD]`).
 - **K-1 — `VoxtralError.mlx(String)`**: an MLX error raised inside a public entry point (transcribe, chat,
   synthesis, Realtime) is thrown instead of terminating the host process.
 - **K-6 — `VoxtralError.unsupported(String)`** and a download manifest (`.voxtral-complete.json`, SHA-256 per file):
@@ -34,6 +36,10 @@ over these enums needs a `default:` or the new cases.
   and the host's value is restored at `unload()`.
 
 ### Fixed
+- **K-32b — backend `.auto` no longer hangs**: Core ML on the GPU (MPSGraph) deadlocked with MLX in the same
+  process (first prediction waiting forever for a Metal command buffer). The `default`, `mini` and `small`
+  `VoxtralCoreMLConfig` presets now use `.cpuAndNeuralEngine` (behaviour change; `gpuOnly` stays on the GPU and must
+  not share a process with MLX).
 - **K-13 — Realtime beyond 15 s**: the encoder attends within its 750-position sliding window (chunks with a rotating
   KV cache) and the decoder keeps its 8 192-step window; output no longer degenerates after about 30 s.
 - **K-13 — `TekkenTokenizer.decode(skipSpecialTokens: true)` skips every control token** (ids below the special-token
