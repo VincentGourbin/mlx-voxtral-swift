@@ -57,6 +57,13 @@ tasks:
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-2.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-10-01, décisions de Vincent) — prime sur la fiche :
+          - Les phrases de référence C-long (première EN « Fluxforge Studio turns your Mac into a complete AI creative
+            studio. », dernière FR « Aucune donnee envoyee dans le cloud. ») passent dans la porte de K-33 (#585), où les
+            références sont contrôlées. Porte C-long de K-2 : 0 arrêt à recommended(forRAMGB: 8) et (forRAMGB: 16) avec
+            maxTokens 4 096, préfixe EN « Flux Forge Studio turns your Mac into a complete » stable, pic consigné.
+          - ASK-7 = A : contexte complet ; le profil lean borne la durée d'audio acceptée (erreur typée au-delà) ; le seuil
+            de 12 Go se lit avec le plafond de cache MLX (10,99 Go avec K-52 ; 8,6 Go de mémoire MLX active).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : test `LongPromptKVCacheTests` (invite synthétique de 2 600 positions, préréglage `.ultra`) rouge → vert ; intégration `VOXTRAL_LONG_AUDIO=1` sur C-long (≈ 11 min 22 s) avec `recommended(forRAMGB: 8)` puis `(forRAMGB: 16)` et `maxTokens` 4 096 : 0 arrêt, première phrase EN « Fluxforge Studio turns your Mac into a complete AI creative studio. » et dernière phrase FR « Aucune donnee envoyee dans le cloud. » présentes (casse et accents ignorés) ; pic « peak memory footprint » consigné (ASK-7 au-delà de 12 Go).
@@ -89,6 +96,9 @@ tasks:
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-4.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-10-01, décision de Vincent) — prime sur la fiche :
+          - Clip « Capital » : la clause « One » présent est satisfaite par le numéral « 1 » (même mot après normalisation) ;
+            le reste de la porte est inchangé.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : test `StopTokenTests` : chaque jeton d'arrêt est un id spécial (< 1 000), rouge avec la liste actuelle ; clip de test synthétisé « Capital Gains and Capital One are two different things. The capital of France is Paris. » transcrit au-delà du premier « ␣Capital » (« One » et « Paris » présents, 1/1) ; greedy identique avant/après sur C-court EN, C-court FR et C-moyen EN (3/3).
@@ -108,6 +118,14 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-8, ASK-9 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Amendement du planificateur (2026-10-01, décision de Vincent) — prime sur la fiche :
+          - Porte de K-5 : test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; budget STT fonction
+            de la durée ; budget dépassé signalé (truncated ou erreur) ; dernière phrase de la référence présente sur
+            C-moyen EN et C-moyen FR.
+          - « Longueur ≤ 1,5 × la référence » (C-moyen, C-long) et « STT C-long : dernière phrase présente » passent dans
+            la porte de K-33 (#585), qui contrôle les références ; « Realtime : C-long transcrit en entier » passe dans la
+            porte de K-13 (#582), qui corrige P-62 (encodeur Realtime dégénéré au-delà d'environ 30 s). Le contrôle
+            anti-boucle rapporté n'est pas retenu comme preuve : ses taux viennent des mêmes transcriptions.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur).
@@ -246,6 +264,11 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-11, ASK-12 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Amendement du planificateur (2026-10-01, décisions de Vincent) — prime sur la fiche :
+          - Porte complétée (reçue de K-5) : Realtime C-long (≈ 11 min 22 s) transcrit en entier, dernière phrase de la
+            référence présente, truncated=false, 0 octet NUL dans la sortie.
+          - ASK-12 = A, à une condition : la référence mlx-audio est capturée une fois hors du dépôt (commit épinglé) et
+            figée en fichier texte versionné ; aucune dépendance Python dans le code, les tests ou le build.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min).
@@ -293,6 +316,9 @@ tasks:
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-16.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Amendement du planificateur (2026-10-01, décision de Vincent) — prime sur la fiche :
+          - « TSan propre » = 0 alerte dans le code du dépôt ; les 2 alertes restantes dans MLX (MetalAllocator,
+            allocator.h:28, code tiers) sont exclues de la porte.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : `grep -c 'nonisolated(unsafe)' Sources/VoxtralCore -r` : 8 → ≤ 2, chacune documentée ; test : deux pipelines de configurations mémoire différentes gardent chacune la leur ; TSan propre sur 4 extractions de features en parallèle ; synthèse hors MainActor consommée sur le MainActor 20/20 sans plantage, WAV identiques octet pour octet (fiche préventive : aucun plantage reproduit avant).
@@ -311,6 +337,9 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-28 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Amendement du planificateur (2026-10-01, dérogation de Vincent) — prime sur la fiche :
+          - La clause « FluxForge compile (si présent sur la machine) » est vérifiée à la fusion de la branche sur main
+            (FluxForge suit main) ; obligation consignée par #605.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : `xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine).
@@ -502,6 +531,14 @@ tasks:
         Amendement du planificateur (2026-09-28) — prime sur la fiche :
           - machine-check : --procs 'Voxtral.*|FluxForge.*' (FluxForge Studio, app MLX, n'est pas détectée sinon) ;
             il faut claude-skills ≥ 0.6.0 (--procs n'existe pas avant) : sinon report-task.py --status blocked.
+        Amendement du planificateur (2026-10-01, décisions de Vincent) — prime sur la fiche :
+          - Porte complétée (reçue de K-2 et K-5), une fois les références contrôlées : STT mini-3b-8bit .mlx sur C-moyen EN,
+            C-moyen FR et C-long (bilingue : par segment de langue, ou en auto-détection) : dernière phrase de la référence
+            présente et longueur ≤ 1,5 × la référence ; C-long : première phrase EN « Fluxforge Studio turns your Mac into a
+            complete AI creative studio. » et dernière phrase FR « Aucune donnee envoyee dans le cloud. » présentes (casse
+            et accents ignorés).
+          - Juge realtime-4b-4bit : tant que K-13 (#582) n'est pas verified, WER publié seulement sur les clips de 30 s au
+            plus (C-court, clip de 20 s) ; la ligne C-moyen est reportée à K-13 (P-62).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : texte de référence contrôlé contre l'audio (le texte « Full test texts » de `docs/tts_benchmark.md` fait 163 mots EN / 202 mots FR pour 167 / 174 s d'audio alors que « ~350 words » sont annoncés : s'il est abrégé, régénérer C-moyen depuis un texte exact avec `$CLI tts --seed` et versionner texte + SHA-256) ; deux exécutions à graine égale → scores identiques ; baseline WER `mini-3b-8bit` `.mlx` enregistrée sur C-court/C-moyen EN et FR ; WER du juge `realtime-4b-4bit` publié sur C-court, C-moyen et un clip de 20 s, version (pack + commit) figée dans `docs/zerovoice_benchmark.md` ; auto-détection : 3 langues (EN, FR, ES) × 3 clips (TTS `es_male`/`es_female`, graine fixée) : WER(`language: nil`) ≤ WER(langue explicite) + 2 pts.

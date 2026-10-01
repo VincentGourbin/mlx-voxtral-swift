@@ -83,3 +83,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   85 %) ; pic d'encodage indépendant de la durée (+5,5 % de 3 à 12 min) ; mémoire plate après 8 192 pas. Piège de mesure :
   sur ce Mac, une charge GPU continue de plus de ≈ 5 min ralentit les pas jusqu'à ×1,6 (thermique : un clip court lancé à
   chaud est aussi lent) — ne pas attribuer au code une dérive de fin de run long.
+- 2026-10-01 — **Vérification du planificateur** : 10 tâches `verified` (K-1, K-2, K-4, K-5, K-6, K-11, K-16, K-22,
+  K-25, #599) ; portes amendées par Vincent (K-2, K-4, K-5, K-16, K-22 ; critères à références → K-33, Realtime C-long →
+  K-13) ; ASK-7 = A ; `CHANGELOG.md` créé (2.3.0 à venir, ASK-9) ; à la fusion sur `main` : compiler FluxForge (K-22).

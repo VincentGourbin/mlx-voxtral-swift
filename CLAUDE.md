@@ -42,10 +42,10 @@ xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
   [`docs/Benchmarks.md`](docs/Benchmarks.md).
 - Toute valeur publiée avant le 2026-09-27 est « en session » : jamais une référence (PLAN.md §0).
 
-## Dépendances : `mlx-swift-lm` sur `main`
-- `Package.swift:52` suit `branch: "main"` (raison : `Package.swift:46-51`) et `Package.resolved` n'est pas suivi
-  (`.gitignore:27`) : noter la révision **résolue** de mlx-swift, mlx-swift-lm et swift-mlx-profiler dans chaque
-  mesure (piège 21). À l'audit : mlx-swift 0.31.6 (`0bb916c`), mlx-swift-lm `main@ee673d6` (PLAN.md §1).
+## Dépendances : `mlx-swift-lm` sur `main`, `Package.resolved` suivi
+- `Package.swift` suit `branch: "main"` de mlx-swift-lm (raison en commentaire) ; `Package.resolved` est suivi depuis
+  K-22 (`893b551`) : mlx-swift 0.31.6 (`0bb916c`), mlx-swift-lm `main@604fae7`, swift-mlx-profiler 1.5.1 (`bfe71d8`).
+  Construire avec `-onlyUsePackageVersionsFromResolvedFile` ; chaque mesure note les révisions résolues (piège 21).
 - Changer une exigence de version passe par ASK-28 (épinglage, synchronisé avec FluxForge).
 
 ## API publique
