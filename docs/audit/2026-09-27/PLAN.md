@@ -822,6 +822,11 @@ Gabarits :
   - `MISSING-SHARD → VoxtralError.missingWeights([…])` : 750 clés de couche nommées (ex. `audioTower.layers.0.fc1.bias`) ;
     rouge avant (aucune erreur levée)
   - `PARITY stt identique ; cmp tts : aucune différence` (SHA `66ef9ca0…` A = B, 4/4) ; ids Tekken identiques 20/20
+- Complément (vérification du 2026-10-01) : preuve rouge de « dossier privé d'un shard → erreur nommant ≥ 1 clé ».
+  `VerifiedLoadingTests` copié dans un worktree du parent `4a51497` (ressource non suivie `VoxtralEncoderFull.mlmodelc`
+  recopiée pour la cible app) : RED `Executed 1 test, with 1 failure (0 unexpected)` (`XCTAssertThrowsError failed: did
+  not throw an error`, code de sortie 65) ; GREEN sur la branche `Executed 1 test, with 0 failures (0 unexpected)`.
+  Packs Small (Voxtral-Small-24B-2507, voxtral-small-8bit, voxtral-small-4bit-mixed) : absents du Mac, LOAD non mesuré.
 - Mesure : aucune. Modèles sur `/Volumes/Lexar/models` via liens de dossier depuis `~/Library/Caches/models`.
 
 ## K-11 — Exclusion enrôlement / inférence et machine d'états atomique des pipelines — 2026-09-30 — validée
