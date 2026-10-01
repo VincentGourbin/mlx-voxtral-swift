@@ -974,3 +974,8 @@ Gabarits :
   - 8 lignes valides contre `docs/bench.schema.json` (jsonschema), recopiées dans `BENCHMARKS.md` ; `REFUSED debug build`
     (binaire Debug) ; suite `Executed 525 tests, with 20 tests skipped and 0 failures (0 unexpected)`
 - Révisions (sur chaque ligne) : mlx-swift 0.31.6@0bb916c67, mlx-swift-lm main@604fae710, swift-mlx-profiler 1.5.1@bfe71d834.
+
+## ASK-11 et ASK-12 répondues — 2026-10-01
+- Vincent : ASK-11 = A (WER +0,2 pt) ; ASK-12 = A **sous condition** : mlx-audio comme référence ponctuelle uniquement,
+  sortie figée en fichier, aucune dépendance Python dans le code, les tests ou le build. K-13 (#582) rouverte.
+  Vérification des tâches `applied` confiée à la session cloud (Vincent).
