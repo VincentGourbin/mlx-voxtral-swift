@@ -979,3 +979,38 @@ Gabarits :
 - Vincent : ASK-11 = A (WER +0,2 pt) ; ASK-12 = A **sous condition** : mlx-audio comme référence ponctuelle uniquement,
   sortie figée en fichier, aucune dépendance Python dans le code, les tests ou le build. K-13 (#582) rouverte.
   Vérification des tâches `applied` confiée à la session cloud (Vincent).
+
+## K-13 — Realtime : fenêtres glissantes appliquées (encodeur 750 par tranches, décodeur `RotatingKVCache(8192)`) — 2026-10-01 — validée
+- Fait (ASK-11 = A, ASK-12 = A sous condition) : `VoxtralRealtimeEncoder.encodeChunked` : tranches de 750 positions,
+  `RotatingKVCache(maxSize: 750)` par couche, RoPE à position absolue, masque `makeMask(n:windowSize:)` partagé par les
+  couches ; `callAsFunction` garde `encodeFull` (`.causal`) jusqu'à 750 positions. Attention de l'encodeur : paramètre
+  additif `maskMode:`. Décodeur : `createCache()` → `RotatingKVCache(maxSize: config.slidingWindow)` (8 192).
+- Référence mlx-audio (ASK-12, référence seulement) : mlx-audio 0.5.7 (PyPI) + mlx 0.32.3, venv temporaire hors dépôt,
+  modèle local `Voxtral-Mini-4B-Realtime-2602-4bit` ; sorties figées `.local-runs/k13_mlxaudio/{en,fr}.txt`
+  (SHA-256 `1a3692f948acb739…`, `7b8c4235046b77ff…`). Aucune dépendance Python dans le code, les tests ou le build.
+- Porte observée :
+  - `GREEN RealtimeSlidingWindowTests : Executed 3 tests, with 0 failures` — rouge avant correctif :
+    `[sliding-window] beyond window: L2 rel = 0.5829416` ; vert : `2.4595144e-07` (fenêtre 8, 40 positions)
+  - `EQUIV ≤15 s : L2 rel = 0.0 (< 1e-3)` (`encodeChunked` contre `encodeFull` dans la fenêtre)
+  - `WER C-moyen EN/FR : avant 66.47/64.79 · après 164.07/138.50 · mlx-audio 165.87/138.97` contre
+    `.local-runs/corpus/long_{en,fr}.txt`. Écart : ces références sont condensées (≈ 1 000 car. pour ≈ 2 800 dits,
+    constat K-5/K-33) ; « avant » paraît meilleur parce que la sortie dégénérait en octets NUL après ≈ 30 s (491 / 514
+    car. utiles). Swift ≤ mlx-audio + 0,2 pt (ASK-11) sur les deux langues. WER contre la sortie mlx-audio prise pour
+    référence : avant 82.67/84.52 · après 5.15/2.44 (écarts restants : espacements « flux 2 »/« flux2 », quelques mots).
+    Script (pour K-33) : `norm = NFKD → ASCII, minuscules, ponctuation → espace, NUL retirés ; jiwer.wer(ref, hyp)` (jiwer 3.0.4).
+  - Texte identique sur C-moyen avec la fenêtre décodeur : `KVCacheSimple` contre `RotatingKVCache(8192)`, EN et FR
+    identiques octet pour octet.
+  - `PEAK encode 3/6/12 min : 5272.9/5369.8/5563.4 Mo (±10 %)` → +5,5 % (`peak_mlx_mb_by_phase.encode`, 3 lignes `BENCH`).
+  - C-xlong (1 022 s, 12 787 pas, `profile run --per-step-memory`) : MLX actif max pas 8 100–8 300 = 6 392,7 Mo, après
+    8 300 = 6 392,7 Mo (0 %) ; ms/pas p50 7 800–8 000 = 33,71, 8 250–8 450 = 34,24 (+1,6 %).
+  - Suite `Executed 528 tests, with 20 tests skipped and 0 failures (0 unexpected)`.
+- Constat : au-delà de ≈ 9 000 pas, ms/pas monte jusqu'à 55 ms (GPU 59 → 65 %, cache constant). Cause **thermique** :
+  un clip de 3 min lancé à chaud juste après C-xlong démarre à 48,9 ms/pas (27,8 à froid) puis redescend en refroidissant.
+  Pas lié au code ; à garder en tête pour les baselines longues (K-36).
+- Écarts de mesure : premier passage invalidé (Time Machine en copie, `KO` du machine-check), série refaite machine
+  propre ; balises : seulement les pids de nos exécutions. Pic encodage : 1 passe + 1 amorçage (mémoire déterministe :
+  valeurs identiques entre les deux séries). Catalogue : `apply.py scan --pattern MLX-020` : 0 avant, 0 après (le
+  détecteur ne voit pas ce cas).
+- Hors périmètre, signalé : la sortie Realtime contient encore des octets NUL entre les mots (jetons de remplissage du
+  streaming décodés tels quels) ; défaut antérieur, à traiter dans une fiche dédiée.
+- Révisions : mlx-swift 0.31.6@0bb916c67, mlx-swift-lm main@604fae710, swift-mlx-profiler 1.5.1@bfe71d834.

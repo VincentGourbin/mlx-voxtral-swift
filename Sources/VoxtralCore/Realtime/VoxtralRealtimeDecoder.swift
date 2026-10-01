@@ -188,9 +188,10 @@ public class VoxtralRealtimeDecoder: Module {
         MLX.matmul(h, tokEmbeddings.weight.transposed())
     }
 
-    /// Create fresh KV caches for all layers.
+    /// Create fresh KV caches for all layers: a ring buffer sized to the decoder sliding window
+    /// (8192 steps = 11 min of audio), like the mlx-audio reference (K-13, P-63).
     public func createCache() -> [any KVCache] {
-        layers.map { _ in KVCacheSimple() }
+        layers.map { _ in RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
     }
 
     /// Forward pass through all layers.

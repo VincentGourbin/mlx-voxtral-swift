@@ -78,3 +78,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   identiques) : c'est désormais l'instrument de toutes les mesures (`BENCH {json}` → `BENCHMARKS.md`). Il refuse un
   binaire Debug et toute balise vivante d'un autre runtime. Piège trouvé en l'écrivant : lire la sortie d'un `Process`
   **avant** `waitUntilExit()` (sinon `ps` remplit le pipe et tout se bloque).
+- 2026-10-01 — **K-13 : Realtime à fenêtres glissantes** (encodeur 750 par tranches + `RotatingKVCache`, décodeur
+  `RotatingKVCache(8192)`) : la sortie ne dégénère plus après ≈ 30 s (C-moyen à 5 % / 2 % de mlx-audio, contre 83 % /
+  85 %) ; pic d'encodage indépendant de la durée (+5,5 % de 3 à 12 min) ; mémoire plate après 8 192 pas. Piège de mesure :
+  sur ce Mac, une charge GPU continue de plus de ≈ 5 min ralentit les pas jusqu'à ×1,6 (thermique : un clip court lancé à
+  chaud est aussi lent) — ne pas attribuer au code une dérive de fin de run long.

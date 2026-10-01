@@ -121,12 +121,14 @@ public class RealtimeEncoderAttention: Module {
     /// x: [seq, dim], ropeCos/ropeSin: precomputed [seq, head_dim/2]
     /// mask: precomputed additive mask [seq, kv_len] or nil
     /// cache: optional (keys, values) for streaming
+    /// maskMode: explicit mask (sliding-window chunks, K-13); takes precedence over `mask`
     public func callAsFunction(
         _ x: MLXArray,
         ropeCos: MLXArray,
         ropeSin: MLXArray,
         mask: MLXArray? = nil,
-        cache: (any KVCache)? = nil
+        cache: (any KVCache)? = nil,
+        maskMode explicitMask: MLXFast.ScaledDotProductAttentionMaskMode? = nil
     ) -> MLXArray {
         let seqLen = x.dim(0)
 
@@ -150,7 +152,9 @@ public class RealtimeEncoderAttention: Module {
 
         // Attention
         let maskMode: MLXFast.ScaledDotProductAttentionMaskMode
-        if let mask {
+        if let explicitMask {
+            maskMode = explicitMask
+        } else if let mask {
             maskMode = .array(mask.expandedDimensions(axes: [0, 1]))
         } else if seqLen > 1 && cache == nil {
             maskMode = .causal
@@ -220,11 +224,12 @@ public class RealtimeEncoderLayer: Module {
         ropeCos: MLXArray,
         ropeSin: MLXArray,
         mask: MLXArray? = nil,
-        cache: (any KVCache)? = nil
+        cache: (any KVCache)? = nil,
+        maskMode: MLXFast.ScaledDotProductAttentionMaskMode? = nil
     ) -> MLXArray {
         // Attention with pre-norm
         var h = attentionNorm(x)
-        h = attention(h, ropeCos: ropeCos, ropeSin: ropeSin, mask: mask, cache: cache)
+        h = attention(h, ropeCos: ropeCos, ropeSin: ropeSin, mask: mask, cache: cache, maskMode: maskMode)
         var out = x + h
 
         // SwiGLU FFN with pre-norm
@@ -318,10 +323,41 @@ public class VoxtralRealtimeEncoder: Module {
     }
 
     /// Full encode: conv stem → transformer → norm → downsample → project.
+    /// Beyond the sliding window the encoder attends within the window only (K-13, P-62): a full causal
+    /// pass would attend past 15 s, a context the model never saw, and degenerate.
     /// mel: [mel_bins, frames] → [seq/4, decoder_dim]
     public func callAsFunction(_ mel: MLXArray) -> MLXArray {
         let convOut = convStem(mel)
-        return encodeFull(convOut)
+        if convOut.dim(0) <= config.slidingWindow {
+            return encodeFull(convOut)
+        }
+        return downsampleAndProject(encodeChunked(convOut))
+    }
+
+    /// Encode window-sized chunks with a rotating KV cache per layer (mlx-audio `encode_chunks`):
+    /// query i attends to keys i-window+1 … i, at absolute RoPE positions. Memory is O(window) per chunk.
+    /// convOut: [seq, dim] → normed [seq, dim]
+    public func encodeChunked(_ convOut: MLXArray) -> MLXArray {
+        let seqLen = convOut.dim(0)
+        let window = config.slidingWindow
+        let caches = layers.map { _ in RotatingKVCache(maxSize: window, keep: 0) }
+        var chunks: [MLXArray] = []
+        for start in stride(from: 0, to: seqLen, by: window) {
+            let end = min(start + window, seqLen)
+            let (ropeCos, ropeSin) = computeRoPEFreqs(
+                positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta
+            )
+            // The mask depends only on the chunk length and the cache offset: shared by every layer
+            let maskMode = caches[0].makeMask(n: end - start, windowSize: window, returnArray: false)
+            var x = convOut[start ..< end]
+            for (layer, cache) in zip(layers, caches) {
+                x = layer(x, ropeCos: ropeCos, ropeSin: ropeSin, cache: cache, maskMode: maskMode)
+            }
+            x = transformerNorm(x)
+            MLX.eval(x)
+            chunks.append(x)
+        }
+        return MLX.concatenated(chunks, axis: 0)
     }
 
     /// Encode using full-sequence causal attention (for audio within sliding window).
