@@ -106,3 +106,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-01 — **K-15 : annulation < 200 ms, calcul hors pool coopératif** (file dédiée + drapeau d'annulation lu par
   les boucles). Piège : une annulation n'est visible qu'aux points où le calcul s'arrête — un encodeur évalué d'un seul
   graphe (STT 23 fenêtres, conv Realtime sur tout l'audio) retardait l'arrêt de 3 à 5 s ; évaluer par couche/tronçon.
+- 2026-10-01 — **K-24 : registres exacts et `consolidated` exclu** : `mini-3b` télécharge 9,37 Go au lieu de 18,7 Go
+  (Small 24B : 48,5 au lieu de 97 Go) ; tailles et précisions des 13 entrées alignées sur `docs/Weights.md`.

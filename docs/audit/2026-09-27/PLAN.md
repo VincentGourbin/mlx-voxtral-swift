@@ -1172,3 +1172,22 @@ Gabarits :
 - Écarts : VoxtralApp est un exécutable SwiftPM ; lancé seul il n'ouvre pas de fenêtre et, emballé dans un `.app`, ses
   bundles de ressources doivent être à la racine du bundle (sinon `Bundle.module` arrête l'app) : point pour K-28
   (empaquetage). Un premier enregistrement (5 min) s'est arrêté avant le clic : refait.
+
+## K-24 — Registres exacts (tailles, précisions), consolidated exclu en STT, variante Core ML par config — 2026-10-01 — validée
+- Fait : `ModelDownloader.downloadRepoDirect(…, excluding:)` (additif) et `selectFiles` ; STT (registre et repli par
+  id de dépôt) et Realtime excluent `consolidated*` (`unusedConsolidatedWeights`), le TTS le garde (seuls poids du pack
+  officiel) ; motifs de téléchargement en constantes (`sttDownloadGlobs`, `ttsDownloadGlobs`,
+  `realtimeDownloadGlobs`). Registres STT/TTS/Realtime : `approximateBytes` (additif) = octets Hub de
+  `docs/Weights.md` §1, tailles affichées exactes (« 9.36 GB »), `mini-3b`/`small-24b` en `bfloat16` ; descriptions
+  sans « ~25GB/~12GB/~48GB ». `VoxtralCoreMLVariant.variant(forConfigAt:)` (`text_config.hidden_size` 5120/3072) ;
+  `fromMLXModelRepoId` le consulte quand l'id est un dossier local. README : tailles déjà exactes (K-18).
+- Porte observée :
+  - `GREEN RegistrySizesTests + ConsolidatedExclusionTests + CoreMLVariantTests : 0 failures` (`Executed 8 tests, with
+    0 failures (0 unexpected)`) ; rouge sur l'ancien comportement (tailles et précisions d'origine, pas d'exclusion,
+    variante par le nom) : `Executed 8 tests, with 7 failures` (seul « le TTS garde consolidated » passe, voulu).
+  - `DOWNLOAD mini-3b : 9 371 440 127 octets (± 1 % de 9 356 474 312 + json)` → +0,16 %, sans
+    `consolidated.safetensors` (dossier vide via `CFFIXED_USER_HOME` sur le Lexar ; somme des tailles apparentes,
+    `du -b` n'existe pas sur macOS).
+- Écarts : aucune mesure GPU (Vincent occupait le GPU) ; suite complète non relancée pour la même raison : seules les
+  3 classes de la fiche (sans calcul MLX) ont tourné. `realtime-4b` : `approximateBytes` = `model.safetensors`
+  (8 859 446 848), le seul fichier de poids désormais téléchargé.

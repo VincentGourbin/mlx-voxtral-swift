@@ -42,6 +42,10 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-15 — work off Swift's cooperative pool**: model loading and generation run on a dedicated queue; a cancelled
   Task stops a transcription, a synthesis or a Realtime run within one step (< 200 ms measured on 11 min of audio)
   with `CancellationError`, the pipeline back to `.ready`.
+- **K-24 — STT and Realtime downloads skip `consolidated.safetensors`** (a second copy of the weights their
+  loaders never read: Mini 3B 9.36 GB instead of 18.7 GB, Small 24B 48.5 instead of 97 GB); registry `size` shows the
+  exact size and `quantization` the real precision (`bfloat16` for the Mistral STT packs); the Core ML encoder variant
+  follows the model's `config.json` when the id is a local folder.
 - **K-25 — Core ML encoder** downloaded under `ModelDownloader.customModelsDirectory`, reloadable offline, with
   explicit errors; the hybrid encoder no longer loads Core ML when `.mlx` is requested and refuses to encode with an
   unloaded MLX encoder.
@@ -76,6 +80,10 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-52 — opt-in MLX cache limit**: `cacheLimitBytes: Int?` in `MemoryOptimizationConfig` and in the TTS and Realtime
   configurations (`nil` by default: the host's MLX setting is untouched). When set, the limit applies after loading
   and the host's value is restored at `unload()`.
+
+- **K-24 — registries**: `approximateBytes` (exact bytes of the downloaded weights) on `VoxtralModelInfo`,
+  `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
+  `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
 
 ### Deprecated
 - **K-7 — `TekkenTokenizer(modelPath:)`**: falls back silently to a demo vocabulary; use `TekkenTokenizer.load(modelPath:)`.

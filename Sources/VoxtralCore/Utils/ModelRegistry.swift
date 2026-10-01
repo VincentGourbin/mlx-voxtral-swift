@@ -19,6 +19,8 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
     public let recommended: Bool
     /// Hub revision (commit or tag) to download; nil = `main`
     public let revision: String?
+    /// Exact bytes of the weight files downloaded (Hub, 2026-09-27; docs/Weights.md, K-24)
+    public let approximateBytes: Int64?
 
     public init(
         id: String,
@@ -29,7 +31,8 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
         quantization: String,
         parameters: String,
         recommended: Bool = false,
-        revision: String? = nil
+        revision: String? = nil,
+        approximateBytes: Int64? = nil
     ) {
         self.id = id
         self.repoId = repoId
@@ -40,6 +43,7 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
         self.parameters = parameters
         self.recommended = recommended
         self.revision = revision
+        self.approximateBytes = approximateBytes
     }
 }
 
@@ -54,18 +58,20 @@ public enum ModelRegistry {
             repoId: "mistralai/Voxtral-Mini-3B-2507",
             name: "Voxtral Mini 3B (Official)",
             description: "Official Mistral model - full precision",
-            size: "~6 GB",
-            quantization: "float16",
-            parameters: "3B"
+            size: "9.36 GB",
+            quantization: "bfloat16",
+            parameters: "3B",
+            approximateBytes: 9_356_474_312
         ),
         VoxtralModelInfo(
             id: "small-24b",
             repoId: "mistralai/Voxtral-Small-24B-2507",
             name: "Voxtral Small 24B (Official)",
-            description: "Official Mistral model - full precision, requires ~48GB memory",
-            size: "~48 GB",
-            quantization: "float16",
-            parameters: "24B"
+            description: "Official Mistral model - full precision (48.5 GB of weights)",
+            size: "48.5 GB",
+            quantization: "bfloat16",
+            parameters: "24B",
+            approximateBytes: 48_527_546_144
         ),
 
         // Mini 3B quantized models (recommended for most users)
@@ -74,19 +80,21 @@ public enum ModelRegistry {
             repoId: "mzbac/voxtral-mini-3b-8bit",
             name: "Voxtral Mini 3B (8-bit)",
             description: "Best quality/size balance for the mini model",
-            size: "~3.5 GB",
+            size: "5.40 GB",
             quantization: "8-bit",
             parameters: "3B",
-            recommended: true
+            recommended: true,
+            approximateBytes: 5_404_054_476
         ),
         VoxtralModelInfo(
             id: "mini-3b-4bit",
             repoId: "mzbac/voxtral-mini-3b-4bit-mixed",
             name: "Voxtral Mini 3B (4-bit mixed)",
             description: "Smaller footprint, slightly lower quality",
-            size: "~2 GB",
+            size: "3.20 GB",
             quantization: "4-bit mixed",
-            parameters: "3B"
+            parameters: "3B",
+            approximateBytes: 3_195_753_212
         ),
 
         // Small 24B quantized models (higher quality, more resources needed)
@@ -94,19 +102,21 @@ public enum ModelRegistry {
             id: "small-24b-8bit",
             repoId: "VincentGOURBIN/voxtral-small-8bit",
             name: "Voxtral Small 24B (8-bit)",
-            description: "Higher quality, requires more memory (~25GB)",
-            size: "~25 GB",
+            description: "Higher quality, requires more memory (26.5 GB of weights)",
+            size: "26.5 GB",
             quantization: "8-bit",
-            parameters: "24B"
+            parameters: "24B",
+            approximateBytes: 26_499_134_369
         ),
         VoxtralModelInfo(
             id: "small-4bit",
             repoId: "VincentGOURBIN/voxtral-small-4bit-mixed",
             name: "Voxtral Small (4-bit mixed)",
-            description: "Memory efficient large model (~12GB)",
-            size: "~12 GB",
+            description: "Memory efficient large model (14.9 GB of weights)",
+            size: "14.9 GB",
             quantization: "4-bit mixed",
-            parameters: "24B"
+            parameters: "24B",
+            approximateBytes: 14_857_318_962
         ),
     ]
 

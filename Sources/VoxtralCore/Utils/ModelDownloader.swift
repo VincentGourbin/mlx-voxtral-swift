@@ -91,6 +91,7 @@ public class ModelDownloader {
         repoId: String,
         revision: String = "main",
         matching globs: [String],
+        excluding exclusions: [String] = [],
         progress: DownloadProgressCallback? = nil
     ) async throws -> URL {
         struct LFS: Decodable { let oid: String; let size: Int? }
@@ -110,9 +111,9 @@ public class ModelDownloader {
             throw VoxtralError.loadingFailed("Cannot list files for \(repoId) (HTTP \((treeResp as? HTTPURLResponse)?.statusCode ?? -1))")
         }
         let entries = try JSONDecoder().decode([TreeEntry].self, from: treeData)
-        let files = entries.filter { entry in
-            entry.type == "file" && globs.contains { matchesGlob(entry.path, $0) }
-        }
+        let selected = Set(selectFiles(entries.filter { $0.type == "file" }.map(\.path),
+                                       matching: globs, excluding: exclusions))
+        let files = entries.filter { $0.type == "file" && selected.contains($0.path) }
         guard !files.isEmpty else {
             throw VoxtralError.loadingFailed("No matching files for \(repoId)")
         }
@@ -259,6 +260,23 @@ public class ModelDownloader {
     private enum TokenProvider { case none, fixed(String) }
 
     /// fnmatch-style glob match with FNM_PATHNAME semantics (`*` does not cross `/`).
+    /// Repo paths kept for a download: matching one of `globs` and none of `exclusions`
+    static func selectFiles(_ paths: [String], matching globs: [String], excluding exclusions: [String]) -> [String] {
+        paths.filter { path in
+            globs.contains { matchesGlob(path, $0) } && !exclusions.contains { matchesGlob(path, $0) }
+        }
+    }
+
+    /// Mistral repositories ship the weights twice: transformers shards and `consolidated.safetensors`. The STT and
+    /// Realtime loaders read the shards only, so the copy is not downloaded (K-24: 9.36 instead of 18.7 GB for Mini 3B,
+    /// 48.5 instead of 97 GB for Small 24B). The TTS official pack keeps it: it is its only weight file.
+    static let unusedConsolidatedWeights = ["consolidated*"]
+
+    /// Repo files each registry downloads (K-24: STT and Realtime exclude `unusedConsolidatedWeights`)
+    static let sttDownloadGlobs = ["*.json", "*.safetensors"]
+    static let ttsDownloadGlobs = ["*.json", "*.safetensors", "voice_embedding/*.pt", "voice_embedding/*.safetensors", "tekken.json"]
+    static let realtimeDownloadGlobs = ["*.json", "*.safetensors", "tekken.json"]
+
     static func matchesGlob(_ path: String, _ pattern: String) -> Bool {
         let escaped = NSRegularExpression.escapedPattern(for: pattern)
             .replacingOccurrences(of: "\\*", with: "[^/]*")
@@ -477,7 +495,8 @@ public class ModelDownloader {
         let modelUrl = try await downloadRepoDirect(
             repoId: model.repoId,
             revision: model.revision ?? "main",
-            matching: ["*.json", "*.safetensors"],
+            matching: sttDownloadGlobs,
+            excluding: unusedConsolidatedWeights,
             progress: progress
         )
         try requireComplete(modelUrl, repoId: model.repoId)
@@ -489,8 +508,10 @@ public class ModelDownloader {
     }
 
     /// Download a model by repo ID directly
+    /// `excluding`: repo globs not downloaded (the STT path passes `unusedConsolidatedWeights`, K-24)
     public static func downloadByRepoId(
         _ repoId: String,
+        excluding exclusions: [String] = [],
         progress: DownloadProgressCallback? = nil
     ) async throws -> URL {
         progress?(0.0, "Starting download...")
@@ -498,7 +519,8 @@ public class ModelDownloader {
 
         let modelUrl = try await downloadRepoDirect(
             repoId: repoId,
-            matching: ["*.json", "*.safetensors"],
+            matching: sttDownloadGlobs,
+            excluding: exclusions,
             progress: progress
         )
 
@@ -535,8 +557,8 @@ public class ModelDownloader {
             return localURL
         }
 
-        // Try as a direct HuggingFace repo ID
-        return try await downloadByRepoId(identifier, progress: progress)
+        // Try as a direct HuggingFace repo ID (STT: shards only, K-24)
+        return try await downloadByRepoId(identifier, excluding: unusedConsolidatedWeights, progress: progress)
     }
 
     /// Get the size of a downloaded model in bytes
@@ -718,7 +740,7 @@ public class ModelDownloader {
         let modelUrl = try await downloadRepoDirect(
             repoId: model.repoId,
             revision: model.revision ?? "main",
-            matching: ["*.json", "*.safetensors", "voice_embedding/*.pt", "voice_embedding/*.safetensors", "tekken.json"],
+            matching: ttsDownloadGlobs,
             progress: progress
         )
         try requireComplete(modelUrl, repoId: model.repoId, requiresVoices: true)
@@ -825,7 +847,8 @@ public class ModelDownloader {
         let modelUrl = try await downloadRepoDirect(
             repoId: model.repoId,
             revision: model.revision ?? "main",
-            matching: ["*.json", "*.safetensors", "tekken.json"],
+            matching: realtimeDownloadGlobs,
+            excluding: unusedConsolidatedWeights,
             progress: progress
         )
         try requireComplete(modelUrl, repoId: model.repoId)

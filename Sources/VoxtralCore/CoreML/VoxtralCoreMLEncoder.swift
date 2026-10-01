@@ -76,8 +76,25 @@ public enum VoxtralCoreMLVariant: String, Sendable {
         }
     }
 
-    /// Detect variant from MLX model repo ID
+    /// Variant from a model folder's `config.json`: `text_config.hidden_size` 5120 → Small, 3072 → Mini
+    /// (K-24: the name alone misreads a Small folder called e.g. `x/model`); nil without a readable config
+    public static func variant(forConfigAt folder: URL) -> VoxtralCoreMLVariant? {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("config.json")),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let text = json["text_config"] as? [String: Any],
+              let hidden = text["hidden_size"] as? Int else { return nil }
+        switch hidden {
+        case 5120: return .small
+        case 3072: return .mini
+        default: return nil
+        }
+    }
+
+    /// Detect variant from MLX model repo ID, or from its `config.json` when the id is a local folder (K-24)
     public static func fromMLXModelRepoId(_ repoId: String) -> VoxtralCoreMLVariant {
+        if let fromConfig = variant(forConfigAt: URL(fileURLWithPath: repoId)) {
+            return fromConfig
+        }
         // Small models (24B)
         if repoId.lowercased().contains("small") || repoId.lowercased().contains("24b") {
             return .small
