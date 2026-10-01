@@ -982,7 +982,7 @@ Gabarits :
   sortie figée en fichier, aucune dépendance Python dans le code, les tests ou le build. K-13 (#582) rouverte.
   Vérification des tâches `applied` confiée à la session cloud (Vincent).
 
-## K-13 — Realtime : fenêtres glissantes appliquées (encodeur 750 par tranches, décodeur `RotatingKVCache(8192)`) — 2026-10-01 — partielle (porte amendée le 2026-10-01 : C-long entier, 0 octet NUL, référence mlx-audio versionnée — à faire)
+## K-13 — Realtime : fenêtres glissantes appliquées (encodeur 750 par tranches, décodeur `RotatingKVCache(8192)`) — 2026-10-01 — validée (porte amendée complétée le même jour)
 - Fait (ASK-11 = A, ASK-12 = A sous condition) : `VoxtralRealtimeEncoder.encodeChunked` : tranches de 750 positions,
   `RotatingKVCache(maxSize: 750)` par couche, RoPE à position absolue, masque `makeMask(n:windowSize:)` partagé par les
   couches ; `callAsFunction` garde `encodeFull` (`.causal`) jusqu'à 750 positions. Attention de l'encodeur : paramètre
@@ -1013,8 +1013,19 @@ Gabarits :
   propre ; balises : seulement les pids de nos exécutions. Pic encodage : 1 passe + 1 amorçage (mémoire déterministe :
   valeurs identiques entre les deux séries). Catalogue : `apply.py scan --pattern MLX-020` : 0 avant, 0 après (le
   détecteur ne voit pas ce cas).
-- Hors périmètre, signalé : la sortie Realtime contient encore des octets NUL entre les mots (jetons de remplissage du
-  streaming décodés tels quels) ; défaut antérieur, à traiter dans une fiche dédiée.
+- Complément (amendement du planificateur du 2026-10-01, vu après le premier rapport) :
+  - 0 octet NUL : `TekkenTokenizer.decode(skipSpecialTokens: true)` saute tout id < `default_num_special_tokens`
+    (comme mistral-common et mlx-audio) ; seuls BOS/EOS/PAD l'étaient, et le Realtime émet `[STREAMING_PAD]` (32) et
+    `[STREAMING_WORD]` (33) entre les mots, décodés en rang 0 = octet 0x00. Test `SpecialTokenDecodeTests` : rouge
+    `[decode] "\0\0Hi\0\0 there"` → vert `"Hi there"`.
+  - Realtime C-long (681 s) : `truncated=false`, 8 527 pas, 11 707 car., `NUL 0`, dernière phrase FR de la référence
+    « Aucune donnee envoyee dans le cloud. » présente ; fin de sortie identique à mlx-audio (« … 16Go recommandé »).
+    C-moyen EN/FR : `NUL 0`, texte inchangé (2 755 / 3 086 car.).
+  - Référence mlx-audio versionnée : `docs/eval/realtime-reference/` (mlx-audio 0.5.7 = `94c7716`, SHA-256 par fichier).
+  - Suite `Executed 529 tests, with 20 tests skipped and 0 failures (0 unexpected)`.
+- Hors périmètre, signalé : l'invite Realtime Swift utilise `<pad>` (11) × (1 + délai) ; mlx-audio utilise
+  `[STREAMING_PAD]` (32) et 32 jetons de remplissage à gauche (`config.py:93-96`). À traiter dans une fiche dédiée
+  (parité de l'invite), mesurée contre la référence figée.
 - Révisions : mlx-swift 0.31.6@0bb916c67, mlx-swift-lm main@604fae710, swift-mlx-profiler 1.5.1@bfe71d834.
 
 ## Vérification du 2026-10-01 — fait

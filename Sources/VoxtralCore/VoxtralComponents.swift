@@ -571,7 +571,10 @@ public class TekkenTokenizer {
         var rawBytes = Data()
 
         for tokenId in tokens {
-            if skipSpecialTokens && (tokenId == bosTokenId || tokenId == eosTokenId || tokenId == padTokenId) {
+            // Every id below the special-token count is a control token (e.g. Realtime [STREAMING_PAD] 32 and
+            // [STREAMING_WORD] 33), not text: it would map to rank 0, the byte 0x00 (K-13)
+            if skipSpecialTokens
+                && (tokenId < numSpecialTokens || tokenId == bosTokenId || tokenId == eosTokenId || tokenId == padTokenId) {
                 continue
             }
 

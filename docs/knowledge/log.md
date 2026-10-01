@@ -86,3 +86,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-01 — **Vérification du planificateur** : 10 tâches `verified` (K-1, K-2, K-4, K-5, K-6, K-11, K-16, K-22,
   K-25, #599) ; portes amendées par Vincent (K-2, K-4, K-5, K-16, K-22 ; critères à références → K-33, Realtime C-long →
   K-13) ; ASK-7 = A ; `CHANGELOG.md` créé (2.3.0 à venir, ASK-9) ; à la fusion sur `main` : compiler FluxForge (K-22).
+- 2026-10-01 — **K-13, complément** : les NUL de la sortie Realtime venaient de `decode`, qui ne sautait que BOS/EOS/PAD
+  alors que le modèle émet `[STREAMING_PAD]` (32) / `[STREAMING_WORD]` (33) ; tout id < 1000 est désormais sauté.
+  Écart restant avec mlx-audio : l'invite (pad 11 × 1 + délai côté Swift, 32 × 32 côté mlx-audio) → fiche à créer.

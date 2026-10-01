@@ -36,3 +36,5 @@ over these enums needs a `default:` or the new cases.
 ### Fixed
 - **K-13 — Realtime beyond 15 s**: the encoder attends within its 750-position sliding window (chunks with a rotating
   KV cache) and the decoder keeps its 8 192-step window; output no longer degenerates after about 30 s.
+- **K-13 — `TekkenTokenizer.decode(skipSpecialTokens: true)` skips every control token** (ids below the special-token
+  count), not only BOS/EOS/PAD: Realtime output no longer contains NUL bytes between words.
