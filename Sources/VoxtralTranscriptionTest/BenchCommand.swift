@@ -34,7 +34,7 @@ struct BenchCommonOptions: ParsableArguments {
     @Option(name: .long, help: "Output directory for bench.jsonl") var out: String = ".local-runs/bench.noindex"
     @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); omit to leave it unset")
     var cacheLimitMb: Int?
-    @Flag(name: .long, help: "Afterwards, run one separate diagnostic pass with a fine-grained Chrome trace")
+    @Flag(name: .long, help: "Afterwards, run one separate diagnostic pass (not a BENCH line) and export its Chrome trace to --out")
     var trace: Bool = false
     @Flag(name: .long, help: "Advertise activity to external monitors (SiliconScope)") var beacon: Bool = false
 
@@ -81,10 +81,16 @@ struct PassMeasurement {
     var firstStepEndMs: Double?
     var events: [ProfilingEvent] = []
 
-    static func run(_ body: () async throws -> Void) async rethrows -> PassMeasurement {
-        let session = ProfilingSession(config: ProfilingConfig(
-            trackMemory: false, trackPerStepMemory: false, exportChromeTrace: false, printSummary: false,
-            enableSampling: false, trackSystemMemory: false, preventIdleSleep: true, recordPowerManagement: false))
+    /// Set for the `--trace` diagnostic pass: fine-grained session, Chrome trace written there (K-32b)
+    @TaskLocal static var traceURL: URL?
+
+    static func run(_ body: () async throws -> Void) async throws -> PassMeasurement {
+        let session = traceURL == nil
+            ? ProfilingSession(config: ProfilingConfig(
+                trackMemory: false, trackPerStepMemory: false, exportChromeTrace: false, printSummary: false,
+                enableSampling: false, trackSystemMemory: false, preventIdleSleep: true, recordPowerManagement: false))
+            : ProfilingSession(config: ProfilingConfig(
+                trackMemory: true, trackPerStepMemory: true, exportChromeTrace: true, printSummary: false))
         let profiler = MLXProfiler.shared
         profiler.enable()
         profiler.activeSession = session
@@ -102,9 +108,22 @@ struct PassMeasurement {
 
         m.peakMLXMB = Double(Memory.peakMemory) / 1_048_576
         m.peakFootprintMB = samples.map(\.footprintMB).max() ?? BenchSystem.footprintMB()
-        for phase in session.phaseSummaries() {
+        if let traceURL {
+            try ChromeTraceExporter.export(session: session).write(to: traceURL)
+        }
+        let phases = session.phaseSummaries()
+        let intervals = phases.map { (start: $0.startUs, end: $0.endUs) }
+        for (index, phase) in phases.enumerated() {
             let key = BenchJSON.phaseKey(phase.name)
-            m.phases[key, default: 0] += phase.durationMs
+            // Exclusive time: a phase that contains others (STT "Generation" around the LLM prefill and decode,
+            // Realtime "Realtime Generation" around encode and prefill) counts only its own time, so the
+            // phases add up to at most total_ms (K-32b; before, decode was counted twice)
+            let inner = intervals.enumerated().filter { other in
+                other.offset != index && other.element.start >= phase.startUs && other.element.end <= phase.endUs
+                    && (other.element.start, other.element.end) != (phase.startUs, phase.endUs)
+            }.map(\.element)
+            let exclusiveUs = Double(phase.endUs - phase.startUs) - BenchJSON.unionLength(inner)
+            m.phases[key, default: 0] += max(0, exclusiveUs) / 1000
             let inPhase = samples.filter { $0.us >= phase.startUs && $0.us <= phase.endUs }.map(\.activeMB)
             if let peak = inPhase.max() { m.phasePeakMLX[key] = max(m.phasePeakMLX[key] ?? 0, peak) }
         }
@@ -223,6 +242,22 @@ enum BenchSystem {
 }
 
 enum BenchJSON {
+    /// Total length of the union of [start, end] intervals, in the same unit
+    static func unionLength<T: BinaryInteger>(_ intervals: [(start: T, end: T)]) -> Double {
+        var total = 0.0
+        var current: (start: T, end: T)?
+        for interval in intervals.sorted(by: { $0.start < $1.start }) {
+            if let c = current, interval.start <= c.end {
+                current = (c.start, max(c.end, interval.end))
+            } else {
+                if let c = current { total += Double(c.end - c.start) }
+                current = interval
+            }
+        }
+        if let c = current { total += Double(c.end - c.start) }
+        return total
+    }
+
     static func phaseKey(_ name: String) -> String {
         let lower = name.lowercased()
         if lower.contains("mel") || lower.contains("feature") { return "audio" }
@@ -356,6 +391,15 @@ enum BenchRunner {
             records.append(record)
         }
         BenchJSON.printAA(records, metrics: metrics)
+        if common.trace {
+            let dir = URL(fileURLWithPath: common.out)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
+            let url = dir.appendingPathComponent("trace-\(base["pipeline"] ?? "bench")-\(stamp).json")
+            try prepare(pass: 0, cooldown: common.cooldown)
+            _ = try await PassMeasurement.$traceURL.withValue(url) { try await body(0, false) }
+            print("TRACE \(url.path) (diagnostic pass, not a BENCH line; open in https://ui.perfetto.dev/)")
+        }
     }
 
     /// Fields every pipeline derives from a PassMeasurement
@@ -480,6 +524,7 @@ struct BenchRealtime: AsyncParsableCommand {
             record["out_sha256"] = BenchJSON.sha256(Data(text.utf8))
             record["chars"] = text.count
             record["truncated"] = pipeline.lastTranscriptionTruncated
+            if let pad = pipeline.lastPadFraction { record["pad_fraction"] = BenchJSON.round(pad, 4) }
             if let encode = m.phases["encode"], let seconds, seconds > 0 {
                 record["encode_ms_per_audio_s"] = BenchJSON.round(encode / seconds, 2)
             }

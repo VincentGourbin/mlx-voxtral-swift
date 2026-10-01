@@ -164,6 +164,10 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                     delayMs: configuration.transcriptionDelayMs
                 )
                 session?.endPhase("Realtime Generation", category: .generation)
+                // Steps whose token carries no text: control tokens ([STREAMING_PAD], [STREAMING_WORD]…),
+                // which `decode` skips (K-13)
+                let silent = Set(Set(tokens).filter { tokenizer.decode([$0]).isEmpty })
+                lastPadFraction = tokens.isEmpty ? nil : Double(tokens.filter { silent.contains($0) }.count) / Double(tokens.count)
 
                 session?.beginPhase("Token Decoding", category: .decoding)
                 let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -217,6 +221,10 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     /// True when the last `transcribe` stopped on its text budget (`maxTokens`) before the audio ended (K-5)
     public var lastTranscriptionTruncated: Bool { model?.lastGenerationTruncated ?? false }
+
+    /// Share of the last transcription's decode steps whose token carries no text (control tokens such as
+    /// [STREAMING_PAD]): the padding K-73 would skip (bench, K-36)
+    public private(set) var lastPadFraction: Double?
 
     // MARK: - Audio Preparation
 

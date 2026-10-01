@@ -114,35 +114,37 @@ public struct VoxtralCoreMLConfig {
         [1, 375, variant.hiddenSize]
     }
 
-    /// Default configuration optimized for GPU with Mini variant
-    /// GPU provides more consistent performance (~280ms with VoxtralEncoderFull)
+    /// Default configuration: Mini variant on the Neural Engine. On the GPU (MPSGraph) Core ML deadlocks
+    /// with MLX in the same process: its first prediction waits forever for a Metal command buffer
+    /// (K-32b, decided by Vincent on 2026-10-01; ANE output identical to MLX on C-moyen)
     public static var `default`: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
-            computeUnits: .cpuAndGPU,
+            computeUnits: .cpuAndNeuralEngine,
             allowLowPrecisionAccumulationOnGPU: true
         )
     }
 
-    /// Default configuration for Mini variant
+    /// Default configuration for Mini variant (Neural Engine, see `default`)
     public static var mini: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
-            computeUnits: .cpuAndGPU,
+            computeUnits: .cpuAndNeuralEngine,
             allowLowPrecisionAccumulationOnGPU: true
         )
     }
 
-    /// Default configuration for Small variant
+    /// Default configuration for Small variant (Neural Engine, see `default`)
     public static var small: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .small,
-            computeUnits: .cpuAndGPU,
+            computeUnits: .cpuAndNeuralEngine,
             allowLowPrecisionAccumulationOnGPU: true
         )
     }
 
-    /// Configuration for GPU-only execution
+    /// Configuration for GPU-only execution. Deadlocks when MLX runs in the same process (the STT
+    /// pipeline does): use only in a process without MLX (K-32b)
     public static var gpuOnly: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
