@@ -13,7 +13,7 @@
  * magnitude spectrograms are computed once at construction and reused
  * every epoch — the loss methods only take the current prediction.
  *
- * Everything is built from basic differentiable ops (gather, matmul,
+ * Everything is built from basic differentiable ops (slices, matmul,
  * rfft) so gradients flow back to the learnable codes. Note that MLX on
  * Apple Silicon does not share the PyTorch MPS bug where torch.stft
  * backward silently corrupts gradients past ~2.5 s of signal — this was
@@ -29,8 +29,9 @@ struct STFTResolution {
     let nFFT: Int
     let hop: Int
     let window: MLXArray        // (nFFT)
-    let frameIndices: MLXArray  // (numFrames * nFFT) gather indices into the padded signal
     let numFrames: Int
+    /// Hop-sized blocks spanned by one frame (K-26 deterministic framing)
+    let blocksPerFrame: Int
 
     init(nFFT: Int, signalLength: Int) {
         self.nFFT = nFFT
@@ -47,15 +48,7 @@ struct STFTResolution {
         // frames start at k*hop in the padded signal.
         self.numFrames = 1 + signalLength / hop
 
-        var indices = [Int32]()
-        indices.reserveCapacity(numFrames * nFFT)
-        for f in 0..<numFrames {
-            let start = Int32(f * hop)
-            for n in 0..<nFFT {
-                indices.append(start + Int32(n))
-            }
-        }
-        self.frameIndices = MLXArray(indices)
+        self.blocksPerFrame = (nFFT + hop - 1) / hop
     }
 }
 
@@ -150,10 +143,25 @@ public final class EnrollmentLossComputer {
     /// (numFrames, nFFT/2+1) magnitude spectrogram of a (signalLength,) waveform.
     static func magnitudeSpectrogram(_ x: MLXArray, resolution: STFTResolution) -> MLXArray {
         let padded = reflectPad(x, pad: resolution.nFFT / 2)
-        let frames = MLX.take(padded, resolution.frameIndices, axis: 0)
-            .reshaped(resolution.numFrames, resolution.nFFT)
+        let frames = Self.frames(padded, resolution: resolution)
         let spec = MLXFFT.rfft(frames * resolution.window, axis: -1)
         return MLX.abs(spec)
+    }
+
+    /// (numFrames, nFFT) overlapping frames starting every `hop` samples, built from hop-sized blocks
+    /// (reshape, slices, concatenation): same values as a gather of the overlapping indices, but a
+    /// deterministic backward. The gather's backward is a GPU scatter-add whose atomic additions run in a
+    /// varying order, so two enrollments with the same seed drifted apart from epoch 1 (K-26).
+    static func frames(_ padded: MLXArray, resolution: STFTResolution) -> MLXArray {
+        let hop = resolution.hop, r = resolution.blocksPerFrame
+        let blocks = resolution.numFrames + r - 1
+        let needed = blocks * hop
+        let signal = padded.dim(0) >= needed
+            ? padded[0 ..< needed]
+            : MLX.concatenated([padded, MLX.zeros([needed - padded.dim(0)], dtype: padded.dtype)], axis: 0)
+        let grid = signal.reshaped(blocks, hop)                                   // (blocks, hop)
+        let shifted = (0 ..< r).map { grid[$0 ..< ($0 + resolution.numFrames)] }  // r × (numFrames, hop)
+        return MLX.concatenated(shifted, axis: 1)[0..., 0 ..< resolution.nFFT]    // (numFrames, nFFT)
     }
 
     /// Reflect padding on both sides (torch pad_mode="reflect").

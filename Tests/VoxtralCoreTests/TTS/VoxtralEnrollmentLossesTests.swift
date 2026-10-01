@@ -71,4 +71,35 @@ final class VoxtralEnrollmentLossesTests: XCTestCase {
         XCTAssertTrue(gradNorm.isFinite)
         XCTAssertGreaterThan(gradNorm, 0)
     }
+
+    // K-26: the block framing gives the gather framing's values, with a deterministic backward
+    func testBlockFramingEqualsGatherFraming() {
+        let signal = MLXRandom.normal([24_000], key: MLXRandom.key(3))
+        for nFFT in EnrollmentLossComputer.fftSizes + [2048] {
+            let resolution = STFTResolution(nFFT: nFFT, signalLength: signal.dim(0))
+            let padded = EnrollmentLossComputer.reflectPad(signal, pad: nFFT / 2)
+            let indices = (0 ..< resolution.numFrames).flatMap { f in (0 ..< nFFT).map { Int32(f * resolution.hop + $0) } }
+            let gathered = MLX.take(padded, MLXArray(indices), axis: 0).reshaped(resolution.numFrames, nFFT)
+            let blocks = EnrollmentLossComputer.frames(padded, resolution: resolution)
+            XCTAssertEqual(blocks.shape, gathered.shape, "nFFT \(nFFT)")
+            XCTAssertTrue(MLX.arrayEqual(blocks, gathered).item(Bool.self), "nFFT \(nFFT)")
+        }
+    }
+
+    func testLossGradientIsDeterministic() {
+        let reference = MLXRandom.normal([24_000], key: MLXRandom.key(4)) * 0.3
+        let prediction = MLXRandom.normal([24_000], key: MLXRandom.key(5)) * 0.3
+        let losses = EnrollmentLossComputer(reference: reference)
+        func gradient() -> MLXArray {
+            let grads = MLX.grad({ (p: [MLXArray]) -> [MLXArray] in
+                [losses.multiResolutionSTFTLoss(p[0]) + losses.melLoss(p[0])]
+            })([prediction])
+            MLX.eval(grads[0])
+            return grads[0]
+        }
+        let first = gradient()
+        for _ in 0 ..< 3 {
+            XCTAssertTrue(MLX.arrayEqual(gradient(), first).item(Bool.self), "two backward passes must agree bit for bit")
+        }
+    }
 }

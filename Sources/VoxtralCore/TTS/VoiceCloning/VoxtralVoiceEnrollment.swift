@@ -87,7 +87,21 @@ public final class VoxtralVoiceEnrollment {
         /// 0.98 full-scale. `nil` disables.
         public var referenceTargetRMSdB: Float? = -20
 
+        /// Seed of the run: initial parameters and every epoch's Gumbel noise derive from it, so two runs
+        /// with the same seed and reference give the same codes. `nil` draws one (K-26).
+        public var seed: UInt64? = nil
+        /// Checkpoint file (`.safetensors`): written every `checkpointEvery` epochs and on cancellation;
+        /// when present at start (same reference and configuration), the run resumes from it and ends
+        /// with the codes of an uninterrupted run. Removed once the run completes. `nil` disables.
+        public var checkpointURL: URL? = nil
+        public var checkpointEvery: Int = 500
+
         public init() {}
+    }
+
+    /// A checkpoint that does not match this run (configuration or seed), or cannot be read.
+    public struct EnrollmentCheckpointError: Error, CustomStringConvertible {
+        public let description: String
     }
 
     public struct Progress {
@@ -102,6 +116,11 @@ public final class VoxtralVoiceEnrollment {
     let model: VoxtralTTSModel
     let config: Config
     let numSamples: Int
+
+    /// Tests (K-26): replaces the loss value seen by the divergence guard, per epoch (not the gradients)
+    var lossOverride: ((Int, Float) -> Float)?
+    /// Tests (K-26): the parameters at the top of each epoch
+    var epochObserver: ((Int, MLXArray, MLXArray) -> Void)?
 
     // Codebook geometry read from the model config, not hardcoded, so variant
     // checkpoints produce correct offsets.
@@ -473,11 +492,13 @@ public final class VoxtralVoiceEnrollment {
     // MARK: - Optimization
 
     /// Run the enrollment loop and return the learned discrete codes (T, 37).
+    /// Ignores `checkpointURL`, cancellation and divergence: use the throwing overload.
+    @available(*, deprecated, message: "Use optimize(reference:progress:shouldContinue:), which reports divergence, cancellation and resumes from checkpoints")
     public func optimize(
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
         progress: ((Progress) -> Void)? = nil
     ) -> MLXArray {
-        optimizeCore(reference: reference, progress: progress, shouldContinue: nil).codes
+        optimizeCore(reference: reference, progress: progress, shouldContinue: nil, resume: nil, checkpoint: nil).codes
     }
 
     /// Thrown when the enrollment optimization diverges to a non-finite loss
@@ -492,34 +513,129 @@ public final class VoxtralVoiceEnrollment {
     /// throws `CancellationError`. Cancellation is decided by that single
     /// in-loop poll — the partial codes never escape, so a non-latching
     /// predicate cannot leak an under-trained result to the caller.
+    /// With `Config.checkpointURL`, the run resumes from an existing checkpoint and saves one every
+    /// `checkpointEvery` epochs and on cancellation (K-26).
     public func optimize(
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
         progress: ((Progress) -> Void)? = nil,
         shouldContinue: @escaping () -> Bool
     ) throws -> MLXArray {
+        let resume = try config.checkpointURL.flatMap { try loadCheckpoint(from: $0) }
         let (codes, cancelled, failed) = optimizeCore(
-            reference: reference, progress: progress, shouldContinue: shouldContinue)
+            reference: reference, progress: progress, shouldContinue: shouldContinue,
+            resume: resume, checkpoint: config.checkpointURL)
         if cancelled { throw CancellationError() }
         if failed { throw EnrollmentDivergedError() }
+        if let url = config.checkpointURL { try? FileManager.default.removeItem(at: url) }
         return codes
     }
 
-    /// Runs the loop in its own random state: the enrollment no longer draws from (nor advances)
-    /// the global RNG shared with synthesis (K-11); a fixed seed is K-26's.
+    /// Optimizer state, as saved in a checkpoint: everything the next epoch reads (K-26)
+    struct LoopState {
+        var nextEpoch: Int
+        var seed: UInt64
+        var semanticLogits, acousticValues: MLXArray
+        var mS, vS, mA, vA: MLXArray
+        var temperature: Float
+        var sawFinite: Bool
+        var bestLoss: Float
+        var bestS, bestA: MLXArray
+    }
+
+    /// Seed of one epoch's noise, derived from the run seed (SplitMix64): a resumed run draws the same
+    /// noise without restoring an RNG state
+    static func epochSeed(_ seed: UInt64, _ epoch: Int) -> UInt64 {
+        var z = seed &+ UInt64(epoch + 1) &* 0x9E37_79B9_7F4A_7C15
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+
+    /// The run's configuration fingerprint: a checkpoint resumes only the run it came from
+    private var checkpointFingerprint: [String: String] {
+        ["numFrames": "\(config.numFrames)", "epochs": "\(config.epochs)",
+         "learningRate": "\(config.learningRate.bitPattern)", "temperature": "\(config.temperature.bitPattern)",
+         "temperatureDecay": "\(config.temperatureDecay.bitPattern)", "minTemperature": "\(config.minTemperature.bitPattern)",
+         "gradClip": "\(config.gradClip.bitPattern)", "semanticVocab": "\(semanticVocab)", "nAcoustic": "\(nAcoustic)"]
+    }
+
+    func saveCheckpoint(_ state: LoopState, to url: URL) throws {
+        var metadata = checkpointFingerprint
+        metadata["format"] = "voxtral-enrollment-checkpoint-1"
+        metadata["nextEpoch"] = "\(state.nextEpoch)"
+        metadata["seed"] = "\(state.seed)"
+        metadata["temperatureState"] = "\(state.temperature.bitPattern)"
+        metadata["sawFinite"] = state.sawFinite ? "1" : "0"
+        metadata["bestLoss"] = "\(state.bestLoss.bitPattern)"
+        let arrays = ["semanticLogits": state.semanticLogits, "acousticValues": state.acousticValues,
+                      "mS": state.mS, "vS": state.vS, "mA": state.mA, "vA": state.vA,
+                      "bestS": state.bestS, "bestA": state.bestA]
+        // Written next to the target, then swapped in: an interrupted save never leaves a torn checkpoint
+        let partial = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).partial.safetensors")
+        try MLX.save(arrays: arrays, metadata: metadata, url: partial)
+        if FileManager.default.fileExists(atPath: url.path) {
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: partial)
+        } else {
+            try FileManager.default.moveItem(at: partial, to: url)
+        }
+    }
+
+    func loadCheckpoint(from url: URL) throws -> LoopState? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let (arrays, metadata) = try MLX.loadArraysAndMetadata(url: url)
+        guard metadata["format"] == "voxtral-enrollment-checkpoint-1" else {
+            throw EnrollmentCheckpointError(description: "\(url.path) is not an enrollment checkpoint")
+        }
+        for (key, value) in checkpointFingerprint where metadata[key] != value {
+            throw EnrollmentCheckpointError(description:
+                "\(url.path) comes from another run (\(key): \(metadata[key] ?? "missing") ≠ \(value))")
+        }
+        func array(_ key: String) throws -> MLXArray {
+            guard let a = arrays[key] else { throw EnrollmentCheckpointError(description: "\(url.path): no \(key)") }
+            return a
+        }
+        func number<T: FixedWidthInteger>(_ key: String) throws -> T {
+            guard let v = metadata[key].flatMap({ T($0) }) else {
+                throw EnrollmentCheckpointError(description: "\(url.path): no \(key)")
+            }
+            return v
+        }
+        let seed: UInt64 = try number("seed")
+        if let expected = config.seed, expected != seed {
+            throw EnrollmentCheckpointError(description: "\(url.path) was written with seed \(seed), not \(expected)")
+        }
+        return LoopState(
+            nextEpoch: try number("nextEpoch"), seed: seed,
+            semanticLogits: try array("semanticLogits"), acousticValues: try array("acousticValues"),
+            mS: try array("mS"), vS: try array("vS"), mA: try array("mA"), vA: try array("vA"),
+            temperature: Float(bitPattern: try number("temperatureState")),
+            sawFinite: metadata["sawFinite"] == "1", bestLoss: Float(bitPattern: try number("bestLoss")),
+            bestS: try array("bestS"), bestA: try array("bestA"))
+    }
+
+    /// Runs the loop in its own random state: the enrollment never draws from (nor advances) the global
+    /// RNG shared with synthesis (K-11); the run seed fixes every draw (K-26).
     private func optimizeCore(
         reference: MLXArray,
         progress: ((Progress) -> Void)?,
-        shouldContinue: (() -> Bool)?
+        shouldContinue: (() -> Bool)?,
+        resume: LoopState?,
+        checkpoint: URL?
     ) -> (codes: MLXArray, cancelled: Bool, failed: Bool) {
-        withRandomState(MLXRandom.RandomState()) {
-            optimizeLoop(reference: reference, progress: progress, shouldContinue: shouldContinue)
+        let seed = resume?.seed ?? config.seed ?? UInt64.random(in: 0 ... UInt64.max)
+        return withRandomState(MLXRandom.RandomState(seed: seed)) {
+            optimizeLoop(reference: reference, progress: progress, shouldContinue: shouldContinue,
+                         seed: seed, resume: resume, checkpoint: checkpoint)
         }
     }
 
     private func optimizeLoop(
         reference: MLXArray,
         progress: ((Progress) -> Void)?,
-        shouldContinue: (() -> Bool)?
+        shouldContinue: (() -> Bool)?,
+        seed: UInt64,
+        resume: LoopState?,
+        checkpoint: URL?
     ) -> (codes: MLXArray, cancelled: Bool, failed: Bool) {
         let T = config.numFrames
         precondition(reference.dim(0) >= numSamples,
@@ -536,17 +652,26 @@ public final class VoxtralVoiceEnrollment {
         let semCodebook = model.audioTokenizer.quantizer.semanticCodebook.codebook  // (semanticVocab, semanticDim)
         MLX.eval(semCodebook)
 
-        // Learnable parameters (match Python init).
-        var semanticLogits = MLXRandom.normal([T, semanticVocab])
-        var acousticValues = MLXRandom.normal([T, nAcoustic]) * 0.1
-
-        // Adam state.
-        var mS = MLX.zeros(like: semanticLogits), vS = MLX.zeros(like: semanticLogits)
-        var mA = MLX.zeros(like: acousticValues), vA = MLX.zeros(like: acousticValues)
+        // Learnable parameters (match Python init), Adam state and best-loss snapshot, or the checkpoint's.
+        let state: LoopState
+        if let resume {
+            state = resume
+        } else {
+            let semanticLogits = MLXRandom.normal([T, semanticVocab])
+            let acousticValues = MLXRandom.normal([T, nAcoustic]) * 0.1
+            state = LoopState(
+                nextEpoch: 0, seed: seed, semanticLogits: semanticLogits, acousticValues: acousticValues,
+                mS: MLX.zeros(like: semanticLogits), vS: MLX.zeros(like: semanticLogits),
+                mA: MLX.zeros(like: acousticValues), vA: MLX.zeros(like: acousticValues),
+                temperature: config.temperature, sawFinite: false, bestLoss: Float.greatestFiniteMagnitude,
+                bestS: semanticLogits, bestA: acousticValues)
+        }
+        var semanticLogits = state.semanticLogits, acousticValues = state.acousticValues
+        var mS = state.mS, vS = state.vS, mA = state.mA, vA = state.vA
         let beta1: Float = 0.9, beta2: Float = 0.999, eps: Float = 1e-8
         let minLR = config.learningRate * 0.01
 
-        var temperature = config.temperature
+        var temperature = state.temperature
 
         // Best-loss snapshot for divergence recovery. Optimization can diverge
         // to a non-finite loss (measured: NaN between epochs 4000→4500 on a
@@ -555,13 +680,27 @@ public final class VoxtralVoiceEnrollment {
         // non-finite loss we stop and fall back to the best finite params seen.
         var cancelled = false
         var diverged = false
-        var sawFinite = false
-        var bestLoss = Float.greatestFiniteMagnitude
-        var bestS = semanticLogits
-        var bestA = acousticValues
+        var sawFinite = state.sawFinite
+        var bestLoss = state.bestLoss
+        var bestS = state.bestS
+        var bestA = state.bestA
 
-        for epoch in 0 ..< config.epochs {
-            if let shouldContinue, !shouldContinue() { cancelled = true; break }
+        func current(nextEpoch: Int) -> LoopState {
+            LoopState(nextEpoch: nextEpoch, seed: seed, semanticLogits: semanticLogits, acousticValues: acousticValues,
+                      mS: mS, vS: vS, mA: mA, vA: vA, temperature: temperature, sawFinite: sawFinite,
+                      bestLoss: bestLoss, bestS: bestS, bestA: bestA)
+        }
+        // A failed save costs the resume point, not the run
+        func save(nextEpoch: Int) {
+            guard let checkpoint else { return }
+            do { try saveCheckpoint(current(nextEpoch: nextEpoch), to: checkpoint) } catch {
+                print("[enroll] checkpoint not saved: \(error)")
+            }
+        }
+
+        for epoch in state.nextEpoch ..< max(state.nextEpoch, config.epochs) {
+            if let shouldContinue, !shouldContinue() { cancelled = true; save(nextEpoch: epoch); break }
+            epochObserver?(epoch, semanticLogits, acousticValues)
             let temp = temperature
 
             func lossFn(_ p: [MLXArray]) -> [MLXArray] {
@@ -578,16 +717,18 @@ public final class VoxtralVoiceEnrollment {
                 return [total, recon]
             }
 
-            // Gradient w.r.t. BOTH free parameters (default is only arg 0).
-            let (values, grads) = MLX.valueAndGrad(lossFn, argumentNumbers: [0, 1])(
-                [semanticLogits, acousticValues]
-            )
+            // Gradient w.r.t. BOTH free parameters (default is only arg 0). The epoch's noise comes from
+            // its own seed, so a resumed run draws exactly what the uninterrupted run drew (K-26).
+            let (values, grads) = withRandomState(MLXRandom.RandomState(seed: Self.epochSeed(seed, epoch))) {
+                MLX.valueAndGrad(lossFn, argumentNumbers: [0, 1])([semanticLogits, acousticValues])
+            }
 
             // Divergence guard. `values` reflect the CURRENT (pre-update)
             // params, so a finite loss here means those params are a usable
             // fallback; snapshot them before Adam moves on. A non-finite loss
             // means this step blew up — stop and keep the last good snapshot.
-            let totalLoss = values[0].item(Float.self)
+            var totalLoss = values[0].item(Float.self)
+            if let lossOverride { totalLoss = lossOverride(epoch, totalLoss) }
             if !totalLoss.isFinite {
                 diverged = true
                 break
@@ -598,7 +739,6 @@ public final class VoxtralVoiceEnrollment {
                 bestS = semanticLogits
                 bestA = acousticValues
             }
-
             // Global-norm gradient clipping (matches the Python reference's
             // grad_clip=1.0). Without it the semantic logits diverge on long
             // runs and the codes collapse to a single repeated frame.
@@ -625,6 +765,10 @@ public final class VoxtralVoiceEnrollment {
             MLX.eval(semanticLogits, acousticValues, mS, vS, mA, vA)
 
             temperature = max(config.minTemperature, temperature * config.temperatureDecay)
+
+            if config.checkpointEvery > 0, (epoch + 1) % config.checkpointEvery == 0, epoch + 1 < config.epochs {
+                save(nextEpoch: epoch + 1)
+            }
 
             if (epoch + 1) % beaconEvery == 0 || epoch == 0 {
                 beacon?.update(phase: "optimizing", step: epoch + 1, totalSteps: config.epochs)
@@ -662,7 +806,7 @@ public final class VoxtralVoiceEnrollment {
     }
 
     /// Purely discrete codes (T, 37): [semantic | 36 acoustic], no offset.
-    private func discreteCodes(semanticLogits: MLXArray, acousticValues: MLXArray) -> MLXArray {
+    func discreteCodes(semanticLogits: MLXArray, acousticValues: MLXArray) -> MLXArray {
         let semantic = semanticLogits.argMax(axis: -1)               // (T)
         let (_, quantized) = acousticScaledQuantized(acousticValues)
         let acoustic = quantized.asType(.int32)                      // (T, nAcoustic)

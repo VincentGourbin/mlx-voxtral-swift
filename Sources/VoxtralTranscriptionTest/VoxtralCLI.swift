@@ -604,6 +604,18 @@ struct Enroll: AsyncParsableCommand {
     @Option(name: .long, help: "Target active-speech RMS for the reference in dBFS; 0 disables normalization (default -20)")
     var referenceTargetRmsDb: Float = -20
 
+    @Option(name: .long, help: "RNG seed: the same seed and reference give the same voice; omit for a random one")
+    var seed: UInt64?
+
+    @Option(name: .long, help: "Checkpoint .safetensors: saved periodically and on interruption, resumed when present")
+    var checkpoint: String?
+
+    @Option(name: .long, help: "Epochs between two checkpoints (default 500)")
+    var checkpointEvery: Int = 500
+
+    @Option(name: .long, help: "Stop after this many epochs of this run, keeping the checkpoint (resume test)")
+    var stopAfter: Int?
+
     @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
     var beacon = false
 
@@ -641,6 +653,9 @@ struct Enroll: AsyncParsableCommand {
         config.gateThresholdDB = gateThresholdDb
         config.referenceHighPassHz = highPassHz > 0 ? highPassHz : nil
         config.referenceTargetRMSdB = referenceTargetRmsDb < 0 ? referenceTargetRmsDb : nil
+        config.seed = seed
+        config.checkpointURL = checkpoint.map { URL(fileURLWithPath: $0) }
+        config.checkpointEvery = checkpointEvery
 
         let pipeline = VoxtralTTSPipeline()
         print("\n[1/2] Loading TTS model...")
@@ -650,15 +665,27 @@ struct Enroll: AsyncParsableCommand {
 
         print("\n[2/2] Optimizing codes (\(epochs) epochs)...")
         let start = Date()
-        try pipeline.enrollVoice(
-            referenceURL: URL(fileURLWithPath: reference),
-            outputURL: outputURL,
-            config: config
-        ) { progress in
-            let elapsed = Date().timeIntervalSince(start)
-            print(String(format: "  epoch %d/%d | loss %.4f | recon %.4f | %.0fs",
-                         progress.epoch, epochs, progress.totalLoss, progress.reconLoss, elapsed))
+        var epochsThisRun = 0
+        do {
+            try pipeline.enrollVoice(
+                referenceURL: URL(fileURLWithPath: reference),
+                outputURL: outputURL,
+                config: config,
+                progress: { progress in
+                    let elapsed = Date().timeIntervalSince(start)
+                    print(String(format: "  epoch %d/%d | loss %.4f | recon %.4f | %.0fs",
+                                 progress.epoch, epochs, progress.totalLoss, progress.reconLoss, elapsed))
+                },
+                shouldContinue: {
+                    defer { epochsThisRun += 1 }
+                    return stopAfter.map { epochsThisRun < $0 } ?? true
+                })
+        } catch is CancellationError {
+            print(String(format: "\nStopped after %d epochs (%.0fs); checkpoint kept: %@", epochsThisRun - 1,
+                         Date().timeIntervalSince(start), checkpoint ?? "none"))
+            return
         }
+        print(String(format: "  optimization: %.1fs", Date().timeIntervalSince(start)))
 
         print("\n" + String(repeating: "-", count: 60))
         print("Voice enrolled: \(output)")

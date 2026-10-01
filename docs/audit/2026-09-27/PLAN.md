@@ -1073,3 +1073,27 @@ Gabarits :
 - Écarts : texte ≈ 350 mots = « Long EN » de `docs/tts_benchmark.md` × 2 (326 mots ; la référence est condensée,
   K-33). Le test Debug borne le premier chunk à 2 × ttft (garde-fou) : la clause 1,5 × est mesurée en Release (un run
   Debug a donné 579 ms contre 571 = 1,5 × 381). Streaming : 494,7 s pour 182,4 s d'audio (re-décodage O(n²), K-43).
+
+## K-26 — Enrôlement reproductible : graine, point de contrôle et reprise, tests de la garde NaN — 2026-10-01 — validée
+- Fait : `VoxtralVoiceEnrollment.Config` : `seed`, `checkpointURL`, `checkpointEvery` (additif). Paramètres initiaux tirés
+  de la graine ; bruit de Gumbel de chaque époque tiré d'une graine dérivée (SplitMix64(graine, époque)) : la reprise
+  n'a pas à restaurer d'état RNG (privé dans mlx-swift). Point de contrôle `.safetensors` (paramètres, moments d'Adam,
+  température, époque, meilleur instantané, perte et graine ; empreinte de configuration vérifiée) écrit tous les
+  `checkpointEvery` pas et à l'annulation, par remplacement atomique, supprimé en fin de run. Surcharge non levante
+  `optimize(reference:progress:)` dépréciée. CLI `enroll` : `--seed`, `--checkpoint`, `--checkpoint-every`,
+  `--stop-after`. La démo avait déjà son bouton Annuler (K-11).
+- Cause trouvée (hors fichiers listés, nécessaire à la porte) : à graine égale, les codes divergeaient dès l'époque 1.
+  Le découpage STFT par `MLX.take` d'indices qui se chevauchent a pour gradient un scatter-add GPU aux additions
+  atomiques d'ordre variable. `VoxtralEnrollmentLosses` découpe maintenant en blocs du pas (reshape, tranches,
+  concaténation) : mêmes valeurs (test d'égalité sur les 9 tailles), gradient identique d'un appel à l'autre.
+- Porte observée :
+  - `GREEN EnrollmentReproTests : Executed 5 tests, with 0 failures` (gardé `VOXTRAL_ENROLL_REPRO=1`) ; rouge avant le
+    découpage en blocs : `seed 7 ×2 identical=false`, `RESUME … identical=false` ; garde et annulation neutralisées :
+    `Executed 3 tests, with 3 failures` (NaN époque 0 sans erreur, NaN époque 5 ≠ meilleur pas, annulation sans erreur).
+  - `SEED cmp a.safetensors b.safetensors : identiques ; graine ≠ : différents` (tts-4b-6bit, clone_fr 8 s, 200 époques).
+  - `RESUME 2500/5000 : identique bit à bit ; surcoût -1,3 % (≤ 5 %)` (5 000 époques : sans point de contrôle 460,6 s,
+    avec 454,4 s, sorties identiques ; arrêt à 2 500 puis reprise = run continu, `cmp`).
+  - `VoxtralEnrollmentLossesTests` 6/6 (valeurs PyTorch inchangées) ; suite `Executed 540 tests, with 29 tests skipped
+    and 0 failures (0 unexpected)`.
+- Écarts : `clone_fr.wav` dure 8,6 s : `--duration 8` (le défaut 16 s refuse la référence) ; machine-check OK, balises :
+  nos pids seulement.

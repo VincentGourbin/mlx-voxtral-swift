@@ -92,3 +92,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-01 — **K-12 : streaming TTS annulable** : le flux est rendu en 0,2 ms (677 s avant : tout se générait dans la
   closure de construction), l'annulation rend `.ready` en 8 ms à une frame près. Parité stream/batch : codes identiques,
   audio à 1,2e-6 près (re-décodage codec par chunk ; Vincent : tolérance 1e-5, l'identité exacte relève de K-43).
+- 2026-10-01 — **K-26 : enrôlement reproductible et reprenable** (graine, point de contrôle, `--seed/--checkpoint`).
+  Piège : un `MLX.take` sur des indices qui se chevauchent (découpage STFT) a un gradient non déterministe sur GPU
+  (scatter-add atomique) ; à graine égale les codes divergeaient dès l'époque 1. Découper par blocs (reshape + tranches)
+  rend le gradient bit à bit stable sans changer les valeurs.
