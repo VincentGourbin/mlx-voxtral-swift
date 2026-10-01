@@ -1166,6 +1166,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             let session = profiler.activeSession
 
             for tokenIndex in 0..<maxNewTokens {
+                try VoxtralCancellation.check()  // a cancelled caller stops within one step (K-15)
                 let stepStart = CFAbsoluteTimeGetCurrent()
                 var modelOutput: VoxtralModelOutput!
 
@@ -1180,6 +1181,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                     if totalSeqLen > prefillChunkSize {
                         for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                            try VoxtralCancellation.check()
                             let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
                             let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 
@@ -1361,6 +1363,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             let session = profiler.activeSession
 
             for tokenIndex in 0..<maxNewTokens {
+                try VoxtralCancellation.check()  // a cancelled caller stops within one step (K-15)
                 let stepStart = CFAbsoluteTimeGetCurrent()
                 var modelOutput: VoxtralModelOutput!
 
@@ -1372,6 +1375,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
                     if totalSeqLen > prefillChunkSize {
                         for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                            try VoxtralCancellation.check()
                             let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
                             let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 

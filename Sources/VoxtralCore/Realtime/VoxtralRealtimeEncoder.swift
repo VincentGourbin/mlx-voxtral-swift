@@ -331,6 +331,9 @@ public class VoxtralRealtimeEncoder: Module {
         if convOut.dim(0) <= config.slidingWindow {
             return encodeFull(convOut)
         }
+        // The conv stem over the whole audio, evaluated before the chunks: a cancelled caller then stops at the
+        // first chunk boundary (K-15)
+        MLX.eval(convOut)
         return downsampleAndProject(encodeChunked(convOut))
     }
 
@@ -343,6 +346,8 @@ public class VoxtralRealtimeEncoder: Module {
         let caches = layers.map { _ in RotatingKVCache(maxSize: window, keep: 0) }
         var chunks: [MLXArray] = []
         for start in stride(from: 0, to: seqLen, by: window) {
+            // A cancelled caller stops at a chunk boundary (≈ 0,4 s); the pipeline then throws (K-15)
+            if !chunks.isEmpty, VoxtralCancellation.isCancelled { break }
             let end = min(start + window, seqLen)
             let (ropeCos, ropeSin) = computeRoPEFreqs(
                 positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta

@@ -124,6 +124,7 @@ public class VoxtralRealtimeModel: Module {
             promptLen: promptLen, nAudioTotal: nAudioTotal, maxTextTokens: maxTokens, eosTokenId: config.eosTokenId,
             sample: { nextToken(logits: logits, temperature: temperature) },
             advance: { pos, token, count in
+                if VoxtralCancellation.isCancelled { return false }  // the pipeline throws CancellationError (K-15)
                 // Build next input: audio_embed[pos] + tok_embed[token]
                 let audioEmb = adapterOut[pos]
                 let tokEmb = decoder.embedToken(token)

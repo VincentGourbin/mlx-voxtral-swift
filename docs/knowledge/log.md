@@ -103,3 +103,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-01 — **K-3 : masques construits par le cache** (booléens, forme des clés) : bf16 possible (prérequis K-40),
   décodeur hérité sans arrêt au 2ᵉ tronçon de préfill ; logits STT identiques (L2 0,0), temps inchangé (+0,07 %).
   Le chargeur hérité `loadVoxtralModel(modelPath:…)` ne charge pas le dossier HF bf16 (`keyNotFound audio_tower.conv2`).
+- 2026-10-01 — **K-15 : annulation < 200 ms, calcul hors pool coopératif** (file dédiée + drapeau d'annulation lu par
+  les boucles). Piège : une annulation n'est visible qu'aux points où le calcul s'arrête — un encodeur évalué d'un seul
+  graphe (STT 23 fenêtres, conv Realtime sur tout l'audio) retardait l'arrêt de 3 à 5 s ; évaluer par couche/tronçon.

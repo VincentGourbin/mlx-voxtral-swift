@@ -167,8 +167,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                 progress?(0.40, "Loading TTS model...")
                 session?.beginPhase("2. Model Loading", category: .modelLoad)
-                let model = try loadVoxtralTTSModel(from: modelDir) { p, msg in
-                    progress?(0.40 + Double(p) * 0.40, msg)
+                // Weights load off the cooperative pool (K-15); MLX errors caught on that queue (K-1)
+                let model = try await runOffCooperativePool {
+                    try withMLXErrors { _ in
+                        try loadVoxtralTTSModel(from: modelDir) { p, msg in progress?(0.40 + Double(p) * 0.40, msg) }
+                    }
                 }
                 self.ttsModel = model
                 session?.endPhase("2. Model Loading", category: .modelLoad)
@@ -208,7 +211,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         seed: UInt64? = nil
     ) async throws -> TTSSynthesisResult {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralTTSError.busy, state: .synthesizing)
@@ -245,6 +249,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     prefixLen: prefix.len
                 )
                 profiler.endSemanticGen(frameCount: numFrames)
+                try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
@@ -275,6 +280,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             } catch {
                 throw error
             }
+        }
         }
     }
 
@@ -328,7 +334,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         warmUpLeadInFrames: Int = 0
     ) async throws -> TTSSynthesisResult {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "synthesis", accepts: { $0.isReady }, refusal: VoxtralTTSError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralTTSError.busy, state: .synthesizing)
@@ -368,6 +375,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     seed: seed
                 )
                 profiler.endSemanticGen(frameCount: numFrames)
+                try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
@@ -423,6 +431,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             } catch {
                 throw error
             }
+        }
         }
     }
 

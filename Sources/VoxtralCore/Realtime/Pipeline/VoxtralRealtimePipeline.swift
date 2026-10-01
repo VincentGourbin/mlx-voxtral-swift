@@ -112,8 +112,11 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
                 progress?(0.40, "Loading Realtime model...")
                 session?.beginPhase("2. Model Loading", category: .modelLoad)
-                let loadedModel = try loadVoxtralRealtimeModel(from: modelDir) { p, msg in
-                    progress?(0.40 + Double(p) * 0.40, msg)
+                // Weights load off the cooperative pool (K-15); MLX errors caught on that queue (K-1)
+                let loadedModel = try await runOffCooperativePool {
+                    try withMLXErrors { _ in
+                        try loadVoxtralRealtimeModel(from: modelDir) { p, msg in progress?(0.40 + Double(p) * 0.40, msg) }
+                    }
                 }
                 self.model = loadedModel
                 session?.endPhase("2. Model Loading", category: .modelLoad)
@@ -133,7 +136,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     public func transcribe(audio: URL) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "transcription", accepts: { $0.isReady }, refusal: VoxtralRealtimeError.invalidConfiguration("Model not loaded"),
                 busy: VoxtralRealtimeError.busy, state: .processing)
@@ -153,6 +157,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
                 let mel = try prepareMel(from: audio, config: model.config)
                 session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
+                try VoxtralCancellation.check()
 
                 // Generate transcription
                 session?.beginPhase("Realtime Generation", category: .generation)
@@ -164,6 +169,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                     delayMs: configuration.transcriptionDelayMs
                 )
                 session?.endPhase("Realtime Generation", category: .generation)
+                try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
                 // Steps whose token carries no text: control tokens ([STREAMING_PAD], [STREAMING_WORD]…),
                 // which `decode` skips (K-13)
                 let silent = Set(Set(tokens).filter { tokenizer.decode([$0]).isEmpty })
@@ -175,6 +181,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 return text
             }
         }
+        }
     }
 
     // MARK: - Audio Embedding Extraction
@@ -183,7 +190,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     /// Returns embeddings of shape [1, n_tokens, 3072].
     public func extractAudioEmbeddings(audio: URL) async throws -> MLXArray {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "embedding extraction", accepts: { $0.isReady },
                 refusal: VoxtralRealtimeError.invalidConfiguration("Model not loaded"), busy: VoxtralRealtimeError.busy)
@@ -204,6 +212,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
             session?.endPhase("Audio Encoding", category: .audioEncode)
 
             return embeddings
+        }
         }
     }
 

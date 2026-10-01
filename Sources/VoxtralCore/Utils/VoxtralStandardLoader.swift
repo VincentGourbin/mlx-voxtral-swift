@@ -810,9 +810,15 @@ public class VoxtralStandardEncoder: Module {
         let embedPos = embedPositions.weight[0..<seqLen]  // [seqLen, hiddenSize]
         hiddenStates = hiddenStates + embedPos  // Broadcasting: [batch, seqLen, hidden] + [seqLen, hidden]
 
-        // Pass through transformer layers
+        // Pass through transformer layers. With several 30 s windows (long audio) each layer is evaluated so a
+        // cancelled caller stops within one layer instead of after the whole encoder (K-15; same operations)
+        let interruptible = hiddenStates.dim(0) > 1
         for layer in layers {
             hiddenStates = layer(hiddenStates)
+            if interruptible {
+                MLX.eval(hiddenStates)
+                if VoxtralCancellation.isCancelled { break }
+            }
         }
 
         return layerNorm(hiddenStates)

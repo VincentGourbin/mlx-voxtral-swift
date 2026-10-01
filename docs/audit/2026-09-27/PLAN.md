@@ -1148,3 +1148,27 @@ Gabarits :
     `dirty:false` ; machine-check sans KO, balises : nos pids seulement).
   - Suite `Executed 545 tests, with 30 tests skipped and 0 failures (0 unexpected)` ; MLX-019 : 2 → 1 (reste
     `createCausalMask(N:…)` public, inchangé, K-30).
+
+## K-15 — Annulation coopérative (moins de 2 s) et calcul hors pool coopératif — 2026-10-01 — validée
+- Fait : `Utils/OffPoolExecution.swift` : `runOffCooperativePool` (file série dédiée + continuation, annulation de la
+  Task appelante relayée par un drapeau) et `VoxtralCancellation.check()/isCancelled` (Task ou drapeau du thread de la
+  file). Hors pool : `transcribe`/`chat` (STT), `synthesize` ×2 (TTS), `transcribe`/`extractAudioEmbeddings`
+  (Realtime) ; dans les trois `loadModel`, le chargement des poids (les `await` de téléchargement restent). Contrôles :
+  boucle STT (chaque pas et chaque tronçon de préfill), encodeur STT évalué couche par couche quand l'audio a plusieurs
+  fenêtres (mêmes opérations), boucle TTS batch (chaque frame, puis `CancellationError` au pipeline), Realtime (après le
+  mel, `convOut` évalué avant les tronçons, chaque tronçon d'encodeur, chaque pas de décodage). Frontière d'erreurs MLX
+  (K-1) rouverte sur la file pour le chargement.
+- Porte observée :
+  - `GREEN CancellationTests : STT 130 ms · TTS 63 ms · RT 163 ms (< 2000), état .ready` (C-long, texte long ×2,
+    annulation après 3 s ; gardé `VOXTRAL_CANCEL=1`). Rouge sans le correctif : `Executed 3 tests, with 6 failures` —
+    STT 133 350 ms, TTS 208 868 ms, RT 402 356 ms (chaque run allait au bout). Premier vert partiel : STT 4 955 ms et RT
+    2 868 ms (annulés pendant l'encodage audio) → encodeurs rendus interruptibles.
+  - `HANGS VoxtralApp loadModel : 0 hang > 250 ms` (Instruments Time Profiler + Hangs, attaché à VoxtralApp lancée depuis
+    un bundle `.app` de test, mini-3b-8bit déchargé puis rechargé par Vincent entre 19:11:59 et 19:12:28 :
+    `potential-hangs` 0 ligne, `hang-risks` 0 ligne ; le profil montre `loadVoxtralStandardModel`, `load_safetensors`
+    et `TekkenTokenizer` sous `runOffCooperativePool`).
+  - Parité STT (test K-3) : `PARITY greedy 3/3 identiques ; logits L2 rel max=0.0` ; temps C-moyen EN 16,04 s (1 passe,
+    K-3 B : 15,95 s ; sortie identique). Suite `Executed 548 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+- Écarts : VoxtralApp est un exécutable SwiftPM ; lancé seul il n'ouvre pas de fenêtre et, emballé dans un `.app`, ses
+  bundles de ressources doivent être à la racine du bundle (sinon `Bundle.module` arrête l'app) : point pour K-28
+  (empaquetage). Un premier enregistrement (5 min) s'est arrêté avant le clic : refait.

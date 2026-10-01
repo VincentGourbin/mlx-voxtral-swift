@@ -489,6 +489,8 @@ public class VoxtralTTSModel: Module {
         var eoaReached = false
 
         for i in 0..<maxTokens {
+            // A cancelled caller stops within one frame; the pipeline then throws CancellationError (K-15)
+            if VoxtralCancellation.isCancelled { break }
             let stepStart = CFAbsoluteTimeGetCurrent()
             let h = hidden[0..., -1, 0...]  // (1, dim) — last position
 

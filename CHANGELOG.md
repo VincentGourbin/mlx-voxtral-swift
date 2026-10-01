@@ -36,6 +36,9 @@ over these enums needs a `default:` or the new cases.
   and the host's value is restored at `unload()`.
 
 ### Fixed
+- **K-15 — cancellation and cooperative pool**: a cancelled Task stops a transcription, a synthesis or a Realtime run
+  within one step (measured < 200 ms on 11 min of audio) with `CancellationError`, the pipeline back to `.ready`;
+  model loading and generation run on a dedicated queue instead of holding a Swift cooperative thread for minutes.
 - **K-32b — backend `.auto` no longer hangs**: Core ML on the GPU (MPSGraph) deadlocked with MLX in the same
   process (first prediction waiting forever for a Metal command buffer). The `default`, `mini` and `small`
   `VoxtralCoreMLConfig` presets now use `.cpuAndNeuralEngine` (behaviour change; `gpuOnly` stays on the GPU and must

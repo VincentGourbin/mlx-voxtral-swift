@@ -271,10 +271,10 @@ public class VoxtralPipeline: @unchecked Sendable {
                 // Load model using the working loadVoxtralStandardModel approach
                 progress?(0.5, "Loading model...")
                 session?.beginPhase("2. Model Loading", category: .modelLoad)
-                let (standardModel, _) = try loadVoxtralStandardModel(
-                    modelPath: modelPath.path,
-                    dtype: .float16
-                )
+                // Weights load off the cooperative pool (K-15); MLX errors caught on that queue (K-1)
+                let (standardModel, _) = try await runOffCooperativePool {
+                    try withMLXErrors { _ in try loadVoxtralStandardModel(modelPath: modelPath.path, dtype: .float16) }
+                }
                 self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
                 session?.endPhase("2. Model Loading", category: .modelLoad)
 
@@ -361,7 +361,8 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// - Returns: Transcribed text
     public func transcribe(audio: URL, language: String? = nil) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "transcription", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
                 busy: VoxtralPipelineError.busy, state: .processing)
@@ -437,6 +438,7 @@ public class VoxtralPipeline: @unchecked Sendable {
 
             return transcription
         }
+        }
     }
 
     /// Chat with audio context
@@ -448,7 +450,8 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// - Returns: Model response
     public func chat(audio: URL, prompt: String, language: String? = nil) async throws -> String {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
-        return try withMLXErrors { _ in
+        // Off the cooperative pool, cancellable at every step (K-15)
+        return try await runOffCooperativePool { [self] in try withMLXErrors { _ in
             let generation = try gate.begin(
                 "chat", accepts: { $0.isReady }, refusal: VoxtralPipelineError.invalidState("Model not loaded"),
                 busy: VoxtralPipelineError.busy, state: .processing)
@@ -535,6 +538,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             session?.endPhase("Token Decoding", category: .decoding)
 
             return response
+        }
         }
     }
 
