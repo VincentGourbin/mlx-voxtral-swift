@@ -1355,3 +1355,25 @@ Gabarits :
   - Suite `Executed 576 tests, with 34 tests skipped and 0 failures (0 unexpected)`.
 - Note : K-24 excluait `consolidated*` des téléchargements Realtime (cette entrée récupérait alors `model.safetensors`
   transformers et son `config.json`, illisible) ; la liste propre à l'entrée prime désormais (même taille, 8,86 Go).
+
+## K-8 — Quantification lue comme l'amont, modes non affines en expérimental — 2026-10-02 — validée
+- Fait (ASK-21 = B) : `PackQuantization` (nouveau, interne) décode le bloc avec `MLXLMCommon.BaseConfiguration`
+  (`mode`, entrées par couche, `false`, clés de métadonnées) pour les trois chargeurs (STT, Realtime, TTS) ; le mode
+  atteint `quantize` (plus de `.affine` en dur). mxfp4/mxfp8/nvfp4 se chargent avec un avertissement
+  « experimental (no profile) » ; une clé `global_scale` (NVFP4, absente de mlx-swift 0.31.6) et un mode inconnu lèvent
+  `invalidConfiguration`. `VoxtralStandardConfiguration` ne casse plus sur `"mode"` ; `mode: String?` ajouté
+  (additif) aux deux structs publiques. TTS : `quantization_config` en repli, shards depuis l'index (déjà présent,
+  désormais testé). STT : l'alias Python `embed_tokens.*` (doublon de `language_model.embed_tokens.*`, présent aussi
+  dans les packs mzbac) est retiré au chargement.
+- Écart à la fiche : la ligne attendue `VoxtralError.unsupportedQuantization("mxfp4")` correspondait à ASK-21 = A ;
+  avec B, mxfp4 se charge (test : `QuantizedLinear.mode == .mxfp4`, g32) ; les refus utilisent les cas existants
+  (`invalidConfiguration`), sans nouveau cas d'enum public.
+- Porte observée :
+  - RED (ancien code) : `DecodingError.typeMismatch … Path: quantization.mode` pour aufklarer et Markus.
+  - `GREEN QuantizationConfigDecodingTests : Executed 8 tests, with 0 failures` (5 fixtures Hub épinglées +
+    mxfp4 synthétique + refus `global_scale`/mode inconnu + TTS `quantization_config` seule + TTS 3 shards + index).
+  - `LOAD MarkusKaemmerer/…-8bit-dense-encoder verify [.all] : 0 missing, 0 unused (1186 keys)` (pack
+    6 032 483 880 octets, révision `e3cfdd7`).
+  - `PARITY swift == mlx-voxtral(python) sur fluxforge_short_en_6bit.wav` : « LuxForge Studio turns your Mac into a
+    complete AI creative studio. » des deux côtés (mlx-voxtral 0.0.6, mlx 0.32.3, greedy, pénalité 1,2).
+  - Scan MLX-025 : 3 → 0. Suite : `Executed 586 tests, with 36 tests skipped and 0 failures`.

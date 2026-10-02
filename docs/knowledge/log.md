@@ -126,3 +126,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   sans requête réseau. Leçon : ne jamais écrire un fichier de test avec `cat >` sans vérifier qu'il n'existe pas.
 - 2026-10-02 — **K-9 : `realtime-4b` (Mistral original) chargeable** : 8,87 Go téléchargés (au lieu de 17,72), 0 clé
   manquante ou en trop, même texte que le pack fp16 ; un id Realtime inconnu lève.
+- 2026-10-02 — **K-8 : quantification décodée comme MLXLMCommon** : les packs 2026 à `"mode"` (aufklarer, Markus) se
+  chargent ; Markus Mini 8 b encodeur dense : 0 clé en écart, greedy identique à mlx-voxtral. Les packs mlx-voxtral
+  sauvegardent `embed_tokens` deux fois (alias Python) : la vérification `[.all]` exige de retirer l'alias.

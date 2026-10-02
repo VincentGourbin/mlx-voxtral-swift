@@ -11,6 +11,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXLMCommon
 
 // MARK: - Model Loading
 
@@ -27,23 +28,29 @@ public func loadVoxtralRealtimeModel(
     progressCallback?(0.2, "Creating model structure...")
     let model = VoxtralRealtimeModel(config: config)
 
-    // Step 3: Apply quantization if config specifies it
-    if let quantConfig = config.quantization {
-        progressCallback?(0.25, "Applying quantization (bits=\(quantConfig.bits))...")
+    // Step 3: Apply quantization if config specifies it: per layer and mode, decoded like MLXLMCommon (K-8)
+    let quantization = try loadRealtimeQuantization(from: modelDirectory, config: config)
+    if let quantization, let defaults = quantization.defaults {
+        progressCallback?(0.25, "Applying quantization (bits=\(defaults.bits), \(defaults.mode.rawValue))...")
         // Skip quantization on norms, embeddings, conv layers, and adapter projections
-        MLXNN.quantize(
-            model: model,
-            groupSize: quantConfig.groupSize,
-            bits: quantConfig.bits
-        ) { path, module in
-            let skipPatterns = ["norm", "ada_rms_norm", "tok_embeddings", "conv_layers", "audio_language_projection"]
-            return module is Linear && !skipPatterns.contains(where: { path.contains($0) })
+        let skipPatterns = ["norm", "ada_rms_norm", "tok_embeddings", "conv_layers", "audio_language_projection"]
+        MLXNN.quantize(model: model) { path, module -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
+            guard module is Linear, !skipPatterns.contains(where: { path.contains($0) }) else { return nil }
+            switch quantization.explicitOption(layer: path) {
+            case .skip: return nil
+            case .quantize(let layer): return layer.asTuple
+            case nil: return defaults.asTuple
+            }
         }
     }
 
     // Step 4: Load weights
     progressCallback?(0.3, "Loading weights...")
     let rawWeights = try loadAllRealtimeWeights(from: modelDirectory)
+    if quantization != nil {
+        try PackQuantization.checkSupported(
+            weightKeys: rawWeights.keys, source: modelDirectory.path, makeError: VoxtralRealtimeError.invalidConfiguration)
+    }
     progressCallback?(0.6, "Mapping weight names...")
 
     // Step 5: Sanitize
@@ -78,6 +85,17 @@ func loadRealtimeConfig(from directory: URL) throws -> VoxtralRealtimeConfigurat
     }
 
     throw VoxtralRealtimeError.fileNotFound("Neither config.json nor params.json found in \(directory.path)")
+}
+
+/// The quantization of an mlx-community config.json (the Mistral params.json has none); nil when unquantized
+func loadRealtimeQuantization(
+    from directory: URL, config: VoxtralRealtimeConfiguration
+) throws -> PackQuantization? {
+    guard config.quantization != nil else { return nil }
+    let configURL = directory.appendingPathComponent("config.json")
+    return try PackQuantization.decode(
+        configData: Data(contentsOf: configURL), source: configURL.path,
+        makeError: VoxtralRealtimeError.invalidConfiguration)
 }
 
 // MARK: - Weight Loading

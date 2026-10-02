@@ -36,6 +36,11 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-10 — `VoxtralPipeline.Model.repoId` comes from `ModelRegistry`**: `small-24b-8bit` is
   `VincentGOURBIN/voxtral-small-8bit` (was `mzbac/Voxtral-Small-24B-2507-8bit` in the enum, ASK-15), and `loadModel()`
   resolves by id, so a downloaded model loads offline without a Hub request.
+- **K-8 — quantization read like MLXLMCommon**: `"mode"`, per-layer entries and metadata keys no longer fail
+  `config.json` (2026 packs such as `MarkusKaemmerer/…-dense-encoder` and `aufklarer/…` load); the mode reaches
+  `quantize` in the STT, Realtime and TTS loaders. Non-affine modes (mxfp4, mxfp8, nvfp4) load as **experimental**
+  with a warning, outside the profiles; an NVFP4 `global_scale` or an unknown mode throws `invalidConfiguration`.
+  The TTS reads `quantization_config` when `quantization` is absent.
 - **K-9 — `realtime-4b` (original Mistral checkpoint) loads**: it downloads only `consolidated.safetensors`,
   `params.json` and `tekken.json` (8.87 GB instead of 17.72), the transformers `config.json` is skipped for
   `params.json`, and `VoxtralRealtimePipeline.loadModel(modelId:)` throws on an unknown id instead of loading the default.
@@ -101,6 +106,8 @@ public defaults change behaviour (ASK-9 = A: minor version).
   `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
   `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
 
+- **K-8 — `mode: String?`** on `VoxtralStandardConfiguration.QuantizationValue.QuantizationConfig` and
+  `RealtimeQuantizationConfig` (informational).
 - **K-9 — `VoxtralRealtimeModelInfo.files`**: the exact repository files an entry downloads.
 
 ### Deprecated

@@ -101,10 +101,14 @@ public struct RealtimeDecoderConfig: Codable, Sendable {
 public struct RealtimeQuantizationConfig: Codable, Sendable {
     public let groupSize: Int
     public let bits: Int
+    /// `affine`, `mxfp4`, … as written in config.json (nil = affine); informational: the loader reads the
+    /// quantization with `PackQuantization`, per layer and mode included (K-8)
+    public let mode: String?
 
     enum CodingKeys: String, CodingKey {
         case groupSize = "group_size"
         case bits
+        case mode
     }
 }
 

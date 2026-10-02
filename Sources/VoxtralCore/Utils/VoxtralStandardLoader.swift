@@ -92,10 +92,14 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
         public struct QuantizationConfig: Codable, Sendable {
             public let groupSize: Int
             public let bits: Int
+            /// `affine`, `mxfp4`, … as written in config.json (nil = affine); informational: the loader reads the
+            /// quantization with `PackQuantization` (K-8)
+            public let mode: String?
 
             enum CodingKeys: String, CodingKey {
                 case groupSize = "group_size"
                 case bits
+                case mode
             }
         }
 
@@ -134,6 +138,41 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
         case audioTokenId = "audio_token_id"
         case projectorHiddenAct = "projector_hidden_act"
         case quantization
+    }
+}
+
+extension VoxtralStandardConfiguration {
+    /// Decodes `quantization` leniently: the metadata strings of 2026 converters (`"mode": "affine"`,
+    /// `quant_method`, …) no longer fail the whole file. The loader reads the quantization itself with
+    /// `PackQuantization` (K-8)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelType = try container.decode(String.self, forKey: .modelType)
+        textConfig = try container.decode(TextConfiguration.self, forKey: .textConfig)
+        audioConfig = try container.decode(AudioConfiguration.self, forKey: .audioConfig)
+        audioTokenId = try container.decode(Int.self, forKey: .audioTokenId)
+        projectorHiddenAct = try container.decode(String.self, forKey: .projectorHiddenAct)
+        quantization = try container.decodeIfPresent(LenientLayerEntries.self, forKey: .quantization)?.values
+    }
+
+    private struct LenientLayerEntries: Decodable {
+        let values: [String: QuantizationValue]
+
+        struct Key: CodingKey {
+            let stringValue: String
+            let intValue: Int? = nil
+            init(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Key.self)
+            var values: [String: QuantizationValue] = [:]
+            for key in container.allKeys where (try? container.decode(String.self, forKey: key)) == nil {
+                values[key.stringValue] = try container.decode(QuantizationValue.self, forKey: key)
+            }
+            self.values = values
+        }
     }
 }
 
@@ -1067,174 +1106,73 @@ private func convertSnakeCaseToCamelCase(_ snakeCaseString: String) -> String {
 }
 
 /**
- * Analyze weights to detect quantized modules.
- * MLX Swift best practice: know quantization before model creation.
- *
- * Supports mixed-precision quantization where different layers can have different bits/group_size.
- * Config format:
- * - Global defaults: quantization["group_size"] = 64, quantization["bits"] = 4
- * - Per-layer (uniform): quantization["layer.name"] = true (uses global defaults)
- * - Per-layer (mixed): quantization["layer.name"] = {group_size: 64, bits: 6}
- * - Not quantized: quantization["layer.name"] = false
+ * Quantized modules of an STT pack: every weight with `.scales`, with the parameters the config gives it (decoded
+ * like MLXLMCommon by `PackQuantization`, mode included; K-8). A layer the config marks `false` stays unquantized;
+ * a layer it does not name takes the global parameters. Keys are Swift module paths.
  */
-private func detectQuantizedModules(weights: [String: MLXArray], config: VoxtralStandardConfiguration? = nil) -> [String: (groupSize: Int, bits: Int)] {
-    var quantizedModules: [String: (groupSize: Int, bits: Int)] = [:]
+func detectQuantizedModules(
+    weightKeys: some Sequence<String>, quantization: PackQuantization
+) -> [String: BaseConfiguration.Quantization] {
+    var quantizedModules: [String: BaseConfiguration.Quantization] = [:]
+    for key in weightKeys where key.hasSuffix(".scales") {
+        // "audio_tower.layers.0.fc1.scales" -> "audio_tower.layers.0.fc1"
+        let originalPythonPath = String(key.dropLast(".scales".count))
+        var pythonModulePath = originalPythonPath
 
-    // Step 1: Extract global defaults from config
-    var defaultGroupSize = 64
-    var defaultBits = 8
-
-    if let quantConfig = config?.quantization {
-        if case .int(let gs) = quantConfig["group_size"] {
-            defaultGroupSize = gs
+        // Weight keys and model paths differ in structure
+        if pythonModulePath.hasPrefix("language_model.") && !pythonModulePath.hasPrefix("language_model.model.") {
+            pythonModulePath = "language_model.model.\(pythonModulePath.dropFirst("language_model.".count))"
         }
-        if case .int(let b) = quantConfig["bits"] {
-            defaultBits = b
+        if pythonModulePath == "embed_tokens" {
+            pythonModulePath = "language_model.model.embed_tokens"
         }
-    }
+        if pythonModulePath == "lm_head" {
+            pythonModulePath = "language_model.lm_head"
+        }
 
-    VoxtralDebug.log("Quantization defaults: group_size=\(defaultGroupSize), bits=\(defaultBits)")
-
-    // Step 2: Build per-layer quantization map from config
-    // Store both the full path and just the layer suffix for flexible matching
-    var perLayerConfig: [String: (groupSize: Int, bits: Int)] = [:]
-    var notQuantizedLayers: Set<String> = []
-
-    if let quantConfig = config?.quantization {
-        for (layerName, value) in quantConfig {
-            // Skip global settings
-            if layerName == "group_size" || layerName == "bits" {
-                continue
-            }
-
-            switch value {
-            case .bool(true):
-                // Uses global defaults
-                perLayerConfig[layerName] = (groupSize: defaultGroupSize, bits: defaultBits)
-            case .config(let layerConfig):
-                // Per-layer specific config (mixed quantization)
-                perLayerConfig[layerName] = (groupSize: layerConfig.groupSize, bits: layerConfig.bits)
-            case .bool(false):
-                // Explicitly not quantized
-                notQuantizedLayers.insert(layerName)
-            case .int(_):
-                break
+        let option = quantization.explicitOption(layer: originalPythonPath)
+            ?? quantization.explicitOption(layer: pythonModulePath)
+        switch option {
+        case .skip:
+            continue
+        case .quantize(let layerQuantization):
+            quantizedModules[convertSnakeCaseToCamelCase(pythonModulePath)] = layerQuantization
+        case nil:
+            if let defaults = quantization.defaults {
+                quantizedModules[convertSnakeCaseToCamelCase(pythonModulePath)] = defaults
             }
         }
     }
 
-    // Debug: Log unique bit configurations found
-    var bitConfigs: [Int: Int] = [:]
-    for (_, cfg) in perLayerConfig {
-        bitConfigs[cfg.bits, default: 0] += 1
-    }
-    VoxtralDebug.log("Quantization config: \(perLayerConfig.count) layer configs, bits distribution: \(bitConfigs)")
-
-    // Step 3: Look for .scales keys in weights and match with config
-    for (key, _) in weights {
-        if key.hasSuffix(".scales") {
-            // Extract Python-style module path: "audio_tower.layers.0.fc1.scales" -> "audio_tower.layers.0.fc1"
-            var pythonModulePath = String(key.dropLast(".scales".count))
-            let originalPythonPath = pythonModulePath
-
-            // CRITICAL FIX: Handle the structural difference between weight keys and model paths
-            if pythonModulePath.hasPrefix("language_model.") && !pythonModulePath.hasPrefix("language_model.model.") {
-                let suffix = String(pythonModulePath.dropFirst("language_model.".count))
-                pythonModulePath = "language_model.model.\(suffix)"
-            }
-            if pythonModulePath == "embed_tokens" {
-                pythonModulePath = "language_model.model.embed_tokens"
-            }
-            if pythonModulePath == "lm_head" {
-                pythonModulePath = "language_model.lm_head"
-            }
-
-            // Convert to Swift camelCase for the quantizedModules dict
-            let swiftModulePath = convertSnakeCaseToCamelCase(pythonModulePath)
-
-            // Try multiple matching strategies for config lookup:
-            // 1. Exact match with original path from weights
-            // 2. Exact match with modified path
-            // 3. Suffix match (for paths that might have different prefixes)
-            var foundConfig: (groupSize: Int, bits: Int)? = nil
-
-            // Strategy 1: Direct lookup with original path
-            if let cfg = perLayerConfig[originalPythonPath] {
-                foundConfig = cfg
-            }
-            // Strategy 2: Direct lookup with modified path
-            else if let cfg = perLayerConfig[pythonModulePath] {
-                foundConfig = cfg
-            }
-            // Strategy 3: Find config entry that matches as suffix
-            else {
-                for (configPath, cfg) in perLayerConfig {
-                    if originalPythonPath.hasSuffix(configPath) || configPath.hasSuffix(originalPythonPath) {
-                        foundConfig = cfg
-                        break
-                    }
-                }
-            }
-
-            // Check if layer is explicitly not quantized
-            let isNotQuantized = notQuantizedLayers.contains(originalPythonPath) ||
-                                 notQuantizedLayers.contains { originalPythonPath.hasSuffix($0) }
-
-            if isNotQuantized {
-                // Skip - this layer should not be quantized
-                continue
-            }
-
-            if let layerConfig = foundConfig {
-                quantizedModules[swiftModulePath] = layerConfig
-            } else {
-                // Fallback to global defaults if no per-layer config found
-                quantizedModules[swiftModulePath] = (groupSize: defaultGroupSize, bits: defaultBits)
-            }
-        }
-    }
-
-    // Debug: Log final quantization summary
-    var finalBitDistribution: [Int: Int] = [:]
-    for (_, cfg) in quantizedModules {
-        finalBitDistribution[cfg.bits, default: 0] += 1
-    }
-    VoxtralDebug.log("Quantization applied: \(quantizedModules.count) modules, bits distribution: \(finalBitDistribution)")
-
+    let distribution = Dictionary(grouping: quantizedModules.values, by: { "\($0.mode.rawValue) \($0.bits)b" })
+        .mapValues(\.count)
+    VoxtralDebug.log("Quantization applied: \(quantizedModules.count) modules, distribution: \(distribution)")
     return quantizedModules
 }
 
+/// mlx-voxtral packs save the token embedding twice: `language_model.embed_tokens.*` and its Python alias
+/// `embed_tokens.*` (`self.embed_tokens = self.language_model.embed_tokens`). `VoxtralStandardModel` has only the
+/// former, so the root alias is dropped and every remaining key must match the model (`verify: [.all]`, K-8)
+func removingEmbeddingAlias(_ sanitized: [String: MLXArray]) -> [String: MLXArray] {
+    guard sanitized["languageModel.model.embedTokens.weight"] != nil else { return sanitized }
+    return sanitized.filter { !$0.key.hasPrefix("embedTokens.") }
+}
+
 /**
- * Apply quantization to model using MLX Swift recommended approach.
- * This follows MLXLMCommon pattern and MLX Swift documentation.
+ * Apply the pack's quantization (per layer, mode included) before the weights are loaded.
  */
 func loadQuantizedVoxtral(
     model: Module,
     weights: [String: MLXArray],
-    config: VoxtralStandardConfiguration
+    quantization: PackQuantization
 ) -> Module {
-    // Python: if "quantization" not in config: return model
-    guard config.quantization != nil else {
-        return model
-    }
-
-    // Step 1: Detect which modules are quantized based on weights AND config
-    let quantizedModules = detectQuantizedModules(weights: weights, config: config)
-
-    // Step 2: Apply quantization using MLX Swift standard function
-    // Use the filter that returns per-layer (groupSize, bits, mode) for mixed quantization support
+    let quantizedModules = detectQuantizedModules(weightKeys: weights.keys, quantization: quantization)
     MLXNN.quantize(
         model: model,
-        filter: { modulePath, module -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
-            // Get per-layer config from detected quantized modules
-            guard let layerConfig = quantizedModules[modulePath] else {
-                return nil  // Don't quantize this layer
-            }
-            return (groupSize: layerConfig.groupSize, bits: layerConfig.bits, mode: .affine)
+        filter: { modulePath, _ -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
+            quantizedModules[modulePath]?.asTuple
         }
     )
-    VoxtralDebug.log("Quantization applied to \(quantizedModules.count) modules with per-layer config")
-
     return model
 }
 
@@ -1262,6 +1200,8 @@ public func loadVoxtralStandardModel(
     let configPath = modelURL.appendingPathComponent("config.json")
     let configData = try Data(contentsOf: configPath)
     let configuration = try JSONDecoder().decode(VoxtralStandardConfiguration.self, from: configData)
+    let quantization = try PackQuantization.decode(
+        configData: configData, source: configPath.path, makeError: VoxtralError.invalidConfiguration)
 
     // Step 2: Create model
     let model = VoxtralStandardModel(configuration: configuration)
@@ -1272,22 +1212,24 @@ public func loadVoxtralStandardModel(
     // Step 1: Load weights from safetensors (same for both quantized and non-quantized)
     // Different loading approaches for quantized vs non-quantized models
     let finalModel: VoxtralStandardModel
-    if configuration.quantization != nil {
+    if let quantization {
 
         // Step 1: Load raw weights for quantized models
         let weightsData = try loadWeights(from: modelURL)
+        try PackQuantization.checkSupported(
+            weightKeys: weightsData.keys, source: modelPath, makeError: VoxtralError.invalidConfiguration)
 
         // Step 2: Apply quantization structure (transforms Linear -> QuantizedLinear, etc.)
         guard let quantizedModel = loadQuantizedVoxtral(
             model: model,
             weights: weightsData,
-            config: configuration
+            quantization: quantization
         ) as? VoxtralStandardModel else {
             throw VoxtralError.loadingFailed("quantization returned an unexpected model type")
         }
 
         // Step 3: Sanitize weights for quantized models
-        let sanitizedWeights = try quantizedModel.sanitize(weightsData)
+        let sanitizedWeights = removingEmbeddingAlias(try quantizedModel.sanitize(weightsData))
 
         // Step 4: Load using ModuleParameters approach that works for quantized
         let parameters = ModuleParameters.unflattened(sanitizedWeights)
@@ -1302,7 +1244,7 @@ public func loadVoxtralStandardModel(
         let weightsData = try loadWeights(from: modelURL)
 
         // Step 2: Sanitize weights using the EXACT sanitize() from commit 99504ee
-        let sanitizedWeights = try model.sanitize(weightsData)
+        let sanitizedWeights = removingEmbeddingAlias(try model.sanitize(weightsData))
 
         // Step 3: Load using ModuleParameters.unflattened() like in the original
         let parameters = ModuleParameters.unflattened(sanitizedWeights)

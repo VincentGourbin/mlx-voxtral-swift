@@ -205,6 +205,9 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// Loaded processor
     private var processor: VoxtralProcessor?
 
+    /// A local pack to load instead of `model`'s repository (tests of third-party packs, K-8)
+    var modelDirectoryOverride: URL?
+
     /// Hybrid encoder (for hybrid mode)
     private var hybridEncoder: VoxtralHybridEncoder?
 
@@ -256,8 +259,13 @@ public class VoxtralPipeline: @unchecked Sendable {
                 progress?(0.1, "Downloading model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
                 // By id: a local copy needs no network request (K-10)
-                let modelPath = try await ModelDownloader.resolveModel(model.rawValue) { downloadProgress, status in
-                    progress?(0.1 + downloadProgress * 0.4, status)
+                let modelPath: URL
+                if let modelDirectoryOverride {
+                    modelPath = modelDirectoryOverride
+                } else {
+                    modelPath = try await ModelDownloader.resolveModel(model.rawValue) { downloadProgress, status in
+                        progress?(0.1 + downloadProgress * 0.4, status)
+                    }
                 }
                 session?.endPhase("1. Model Download", category: .modelLoad)
 

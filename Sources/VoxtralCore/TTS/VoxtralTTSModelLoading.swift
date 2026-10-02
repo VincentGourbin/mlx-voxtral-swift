@@ -9,6 +9,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MLXLMCommon
 
 // MARK: - TTS Model Loading
 
@@ -46,21 +47,28 @@ private func loadWithConfig(
 
     // Step 3: Load weights (single or sharded)
     progressCallback?(0.3, "Loading weights...")
-    let rawWeights = try loadAllWeights(from: modelDirectory)
+    let rawWeights = try loadAllTTSWeights(from: modelDirectory)
     progressCallback?(0.6, "Mapping weight names...")
 
     // Step 4: Detect format and sanitize
     let sanitizedWeights = sanitizeTTSWeights(rawWeights)
 
-    // Step 4b: If quantized weights detected, quantize model layers that have scales
-    if let quantConfig = try loadQuantizationConfig(from: modelDirectory) {
-        progressCallback?(0.65, "Applying \(quantConfig.bits)-bit quantization...")
-        let mode: QuantizationMode = quantConfig.mode == "affine" ? .affine : .affine
+    // Step 4b: If quantized weights detected, quantize model layers that have scales; per layer and mode,
+    // `quantization`, else `quantization_config`, decoded like MLXLMCommon (K-8)
+    if let quantization = try loadQuantizationConfig(from: modelDirectory), let defaults = quantization.defaults {
+        progressCallback?(0.65, "Applying \(defaults.bits)-bit quantization (\(defaults.mode.rawValue))...")
+        try PackQuantization.checkSupported(
+            weightKeys: sanitizedWeights.keys, source: modelDirectory.path, makeError: VoxtralTTSError.invalidConfiguration)
         // Build set of quantized layer prefixes from weight keys
         let quantizedPrefixes = detectQuantizedLayers(in: sanitizedWeights)
-        quantize(model: model, groupSize: quantConfig.groupSize, bits: quantConfig.bits, mode: mode) { path, module in
+        quantize(model: model) { path, module -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
             // Only quantize layers that actually have scales in the weights
-            quantizedPrefixes.contains(where: { path.hasSuffix($0) || path.contains($0) })
+            guard quantizedPrefixes.contains(where: { path.hasSuffix($0) || path.contains($0) }) else { return nil }
+            switch quantization.explicitOption(layer: path) {
+            case .skip: return nil
+            case .quantize(let layer): return layer.asTuple
+            case nil: return defaults.asTuple
+            }
         }
     }
 
@@ -76,37 +84,21 @@ private func loadWithConfig(
 
 // MARK: - Quantization Config
 
-private struct QuantizationConfig: Codable {
-    let groupSize: Int
-    let bits: Int
-    let mode: String
-
-    enum CodingKeys: String, CodingKey {
-        case groupSize = "group_size"
-        case bits
-        case mode
-    }
-}
-
-/// The pack's quantization: nil without config.json or without a "quantization" block; an unreadable config or a
-/// malformed block throws instead of loading quantized weights into an unquantized model (K-27)
-private func loadQuantizationConfig(from modelDirectory: URL) throws -> QuantizationConfig? {
+/// The pack's quantization: `quantization`, else `quantization_config` (some converters write only the latter);
+/// nil without config.json or without either block. An unreadable config or block throws instead of loading
+/// quantized weights into an unquantized model (K-27, K-8)
+func loadQuantizationConfig(from modelDirectory: URL) throws -> PackQuantization? {
     let configURL = modelDirectory.appendingPathComponent("config.json")
     guard FileManager.default.fileExists(atPath: configURL.path) else { return nil }
-    let parsed: Any
+    let data: Data
     do {
-        parsed = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL))
+        data = try Data(contentsOf: configURL)
     } catch {
         throw VoxtralTTSError.invalidConfiguration("\(configURL.path): \(error.localizedDescription)")
     }
-    guard let json = parsed as? [String: Any], let quantDict = json["quantization"] as? [String: Any] else {
-        return nil
-    }
-    guard let groupSize = quantDict["group_size"] as? Int, let bits = quantDict["bits"] as? Int else {
-        throw VoxtralTTSError.invalidConfiguration("\(configURL.path): quantization without integer group_size/bits")
-    }
-    let mode = quantDict["mode"] as? String ?? "affine"
-    return QuantizationConfig(groupSize: groupSize, bits: bits, mode: mode)
+    return try PackQuantization.decode(
+        configData: data, source: configURL.path, keys: ["quantization", "quantization_config"],
+        makeError: VoxtralTTSError.invalidConfiguration)
 }
 
 /// Detect which layers have quantized weights by finding keys with `.scales` suffix.
@@ -123,7 +115,7 @@ private func detectQuantizedLayers(in weights: [String: MLXArray]) -> Set<String
 
 // MARK: - Load All Weights (single or sharded)
 
-private func loadAllWeights(from directory: URL) throws -> [String: MLXArray] {
+func loadAllTTSWeights(from directory: URL) throws -> [String: MLXArray] {
     // Sharded model with an index: every shard it names is required
     let indexURL = directory.appendingPathComponent("model.safetensors.index.json")
     if let data = try? Data(contentsOf: indexURL),
