@@ -124,3 +124,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   ligne à retirer à la fusion (`ModelDownloader.reconfigureHubApi()`, sans effet depuis K-6/K-25).
 - 2026-10-02 — **K-10 : une seule table de modèles STT** (registre) ; Small 8 bits = VincentGOURBIN, chargé hors ligne
   sans requête réseau. Leçon : ne jamais écrire un fichier de test avec `cat >` sans vérifier qu'il n'existe pas.
+- 2026-10-02 — **K-9 : `realtime-4b` (Mistral original) chargeable** : 8,87 Go téléchargés (au lieu de 17,72), 0 clé
+  manquante ou en trop, même texte que le pack fp16 ; un id Realtime inconnu lève.

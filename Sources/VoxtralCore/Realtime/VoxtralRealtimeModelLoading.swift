@@ -60,15 +60,19 @@ public func loadVoxtralRealtimeModel(
 
 // MARK: - Config Loading
 
-private func loadRealtimeConfig(from directory: URL) throws -> VoxtralRealtimeConfiguration {
-    // Try config.json first (mlx-community format)
+/// config.json when it has the mlx-community shape; otherwise params.json (Mistral format). The original Mistral
+/// repository also ships a transformers config.json, which this loader cannot read: it is skipped (K-9)
+func loadRealtimeConfig(from directory: URL) throws -> VoxtralRealtimeConfiguration {
     let configURL = directory.appendingPathComponent("config.json")
-    if FileManager.default.fileExists(atPath: configURL.path) {
-        return try VoxtralRealtimeConfiguration.load(from: configURL)
-    }
-
-    // Try params.json (Mistral format)
     let paramsURL = directory.appendingPathComponent("params.json")
+    if FileManager.default.fileExists(atPath: configURL.path) {
+        if let config = try? JSONDecoder().decode(VoxtralRealtimeConfiguration.self, from: Data(contentsOf: configURL)) {
+            return config
+        }
+        if !FileManager.default.fileExists(atPath: paramsURL.path) {
+            return try VoxtralRealtimeConfiguration.load(from: configURL)  // reports why config.json is unreadable
+        }
+    }
     if FileManager.default.fileExists(atPath: paramsURL.path) {
         return try VoxtralRealtimeConfiguration.load(from: paramsURL)
     }
@@ -78,7 +82,12 @@ private func loadRealtimeConfig(from directory: URL) throws -> VoxtralRealtimeCo
 
 // MARK: - Weight Loading
 
-private func loadAllRealtimeWeights(from directory: URL) throws -> [String: MLXArray] {
+func loadAllRealtimeWeights(from directory: URL) throws -> [String: MLXArray] {
+    // The original Mistral checkpoint first: its repository also has a transformers model.safetensors (K-9)
+    let mistralConsolidated = directory.appendingPathComponent("consolidated.safetensors")
+    if FileManager.default.fileExists(atPath: mistralConsolidated.path) {
+        return try MLX.loadArrays(url: mistralConsolidated)
+    }
     // Check for sharded model
     let indexFile = directory.appendingPathComponent("model.safetensors.index.json")
     if FileManager.default.fileExists(atPath: indexFile.path) {

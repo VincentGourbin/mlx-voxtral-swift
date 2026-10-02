@@ -1336,3 +1336,22 @@ Gabarits :
 - Écart : le contrôle hors ligne passe par le CLI (pas l'app), comme la fiche le permet ; « 0 octet réseau » est garanti
   par le sandbox plutôt que mesuré par `nettop`. Incident corrigé avant commit : l'écriture du test avait écrasé
   `Registry/ModelRegistryTests.swift` (22 tests) ; fichier restauré, les 2 tests ajoutés à la classe.
+
+## K-9 — Realtime : entrée Mistral originale chargeable, id strict — 2026-10-02 — validée
+- Fait (ASK-17 = A) : `VoxtralRealtimeModelInfo.files` (additif) : `realtime-4b` ne télécharge que
+  `consolidated.safetensors`, `params.json`, `tekken.json` (le dépôt a gagné un `config.json` et un `model.safetensors`
+  transformers, 17,72 Go avec les deux copies) ; `loadRealtimeConfig` lit `config.json` seulement s'il a la forme
+  mlx-community, sinon `params.json` ; `consolidated.safetensors` est préféré quand il existe ; `loadModel(modelId:)`
+  lève sur un id inconnu (nil → défaut) via `VoxtralRealtimePipeline.modelInfo(for:)`. Fixtures : les fichiers de
+  config des deux dépôts (`Tests/VoxtralCoreTests/Fixtures/realtime-{original,mlx}`).
+- Porte observée :
+  - `GREEN RealtimeOriginalRepoTests : Executed 4 tests, with 0 failures` (+ un 5ᵉ, réel, gardé
+    `VOXTRAL_RT_ORIGINAL_DIR`) ; rouge sur l'ancien comportement : `DecodingError.keyNotFound … 'dim'` (config.json
+    transformers lu) et id inconnu sans erreur.
+  - `DOWNLOAD realtime-4b : 8 874 374 934 octets (± 1 % de 8 870 000 000)` (dossier vide via `CFFIXED_USER_HOME`).
+  - `LOAD verify [.all] : 0 missing, 0 unused` (711 clés ; chargement vérifié K-7 + comparaison des ensembles de clés).
+  - `PARITY realtime-4b == realtime-4b-fp16 (C-court EN)` : « Luxforge Studio turns your Mac into a complete AI creative
+    studio. » des deux côtés.
+  - Suite `Executed 576 tests, with 34 tests skipped and 0 failures (0 unexpected)`.
+- Note : K-24 excluait `consolidated*` des téléchargements Realtime (cette entrée récupérait alors `model.safetensors`
+  transformers et son `config.json`, illisible) ; la liste propre à l'entrée prime désormais (même taille, 8,86 Go).

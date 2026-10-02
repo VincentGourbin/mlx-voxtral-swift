@@ -69,6 +69,17 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     // MARK: - Initialization
 
+    /// Registry entry of `modelId`: nil → the default model, an unknown id → an error instead of silently loading the
+    /// default (K-9)
+    static func modelInfo(for modelId: String?) throws -> VoxtralRealtimeModelInfo {
+        guard let modelId else { return VoxtralRealtimeRegistry.defaultModel }
+        guard let info = VoxtralRealtimeRegistry.model(withId: modelId) else {
+            throw VoxtralRealtimeError.invalidConfiguration(
+                "Unknown Realtime model id \(modelId); known: \(VoxtralRealtimeRegistry.models.map(\.id).joined(separator: ", "))")
+        }
+        return info
+    }
+
     public init(configuration: Configuration = .default) {
         self.configuration = configuration
     }
@@ -87,8 +98,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 refusal: VoxtralRealtimeError.invalidConfiguration("Model already loaded or loading"),
                 busy: VoxtralRealtimeError.busy, state: .loading, newGeneration: true)
 
-            let modelInfo = modelId.flatMap { VoxtralRealtimeRegistry.model(withId: $0) }
-                ?? VoxtralRealtimeRegistry.defaultModel
+            let modelInfo = try Self.modelInfo(for: modelId)
             let beacon = RuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
             defer { beacon?.end() }
 

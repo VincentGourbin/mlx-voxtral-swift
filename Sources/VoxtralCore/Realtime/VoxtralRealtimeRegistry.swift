@@ -17,15 +17,18 @@ public struct VoxtralRealtimeModelInfo: Identifiable, Sendable {
     public let revision: String?
     /// Exact bytes of the weight files downloaded (Hub, 2026-09-27; docs/Weights.md, K-24)
     public let approximateBytes: Int64?
+    /// Exact repository files to download when the repository holds more than this entry needs (K-9); nil = the
+    /// default Realtime globs
+    public let files: [String]?
 
     public init(
         id: String, repoId: String, name: String, description: String,
         size: String, quantization: String, parameters: String, recommended: Bool = false,
-        revision: String? = nil, approximateBytes: Int64? = nil
+        revision: String? = nil, approximateBytes: Int64? = nil, files: [String]? = nil
     ) {
         self.id = id; self.repoId = repoId; self.name = name; self.description = description
         self.size = size; self.quantization = quantization; self.parameters = parameters; self.recommended = recommended
-        self.revision = revision; self.approximateBytes = approximateBytes
+        self.revision = revision; self.approximateBytes = approximateBytes; self.files = files
     }
 }
 
@@ -57,11 +60,12 @@ public enum VoxtralRealtimeRegistry {
             id: "realtime-4b",
             repoId: "mistralai/Voxtral-Mini-4B-Realtime-2602",
             name: "Voxtral Realtime 4B (Original)",
-            description: "Original Mistral weights — requires sanitization",
+            description: "Original Mistral checkpoint (consolidated.safetensors, params.json)",
             size: "8.86 GB",
             quantization: "bfloat16",
             parameters: "4B",
-            approximateBytes: 8_859_446_848
+            approximateBytes: 8_859_462_744,
+            files: ["consolidated.safetensors", "params.json", "tekken.json"]
         ),
     ]
 

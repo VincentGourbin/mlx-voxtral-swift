@@ -844,8 +844,8 @@ public class ModelDownloader {
         let modelUrl = try await downloadRepoDirect(
             repoId: model.repoId,
             revision: model.revision ?? "main",
-            matching: realtimeDownloadGlobs,
-            excluding: unusedConsolidatedWeights,
+            matching: model.files ?? realtimeDownloadGlobs,
+            excluding: model.files == nil ? unusedConsolidatedWeights : [],  // K-9: the entry's own file list
             progress: progress
         )
         try requireComplete(modelUrl, repoId: model.repoId)

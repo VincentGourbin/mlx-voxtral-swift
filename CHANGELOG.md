@@ -36,6 +36,9 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-10 — `VoxtralPipeline.Model.repoId` comes from `ModelRegistry`**: `small-24b-8bit` is
   `VincentGOURBIN/voxtral-small-8bit` (was `mzbac/Voxtral-Small-24B-2507-8bit` in the enum, ASK-15), and `loadModel()`
   resolves by id, so a downloaded model loads offline without a Hub request.
+- **K-9 — `realtime-4b` (original Mistral checkpoint) loads**: it downloads only `consolidated.safetensors`,
+  `params.json` and `tekken.json` (8.87 GB instead of 17.72), the transformers `config.json` is skipped for
+  `params.json`, and `VoxtralRealtimePipeline.loadModel(modelId:)` throws on an unknown id instead of loading the default.
 - **K-11 — one operation at a time per pipeline**: a second call while a transcription, a synthesis or a voice
   enrollment runs is refused with `busy` instead of racing (the enrollment's gradient with an inference could
   deadlock the process). Voice enrollment no longer draws from the global RNG shared with synthesis.
@@ -97,6 +100,8 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-24 — registries**: `approximateBytes` (exact bytes of the downloaded weights) on `VoxtralModelInfo`,
   `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
   `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
+
+- **K-9 — `VoxtralRealtimeModelInfo.files`**: the exact repository files an entry downloads.
 
 ### Deprecated
 - **K-30 — legacy Python-port family and dead public code** (ASK-23: deprecated in 2.3, removed in 3.0; each message
