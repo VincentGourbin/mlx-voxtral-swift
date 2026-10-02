@@ -1272,3 +1272,26 @@ Gabarits :
   - `BUILD 0 avertissement nouveau hors @available(*, deprecated)` (4 avertissements préexistants dans des fichiers non
     touchés : variables inutilisées Realtime/codec).
   - Suite `Executed 568 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+
+## K-29 — Tests non tautologiques + CI macOS — 2026-10-02 — validée
+- Fait (commit `babe79c0`) : `PerformanceOptimizationTests` : les algorithmes recopiés dans le test (top-p, découpage
+  du préfill, contrôle EOA par lots) sont remplacés par des appels à des fonctions de production désormais partagées
+  par les générateurs : `VoxtralForConditionalGeneration.prefillChunkRanges`, `nucleusMask`,
+  `VoxtralTTSModel.shouldCheckEOA`, `firstEOA`. `TekkenTokenizerTests` sur `Tests/VoxtralCoreTests/Fixtures/tekken-mini.json`
+  (tekken.json réel réduit aux 2 000 premiers rangs, 110 Ko), copié dans un dossier temporaire ; la validation croisée
+  Python garde le vrai vocabulaire et se met en `XCTSkip` sans lui. `ModelLoadingSymlinkedDirectoryTests` couvre
+  `loadWeights(from:)` du chargeur vivant (dossier symlinké, `consolidated` ignoré). `.github/workflows/ci.yml` :
+  `xcodebuild test` sans modèle, `macos-26`, Xcode 26, `-parallel-testing-enabled NO`, journal en artefact.
+- Constat (non corrigé, hors périmètre) : le filtre « top-p » de `sample` garde les 1 000 jetons les plus probables dès
+  que leur masse atteint `topP` et ne filtre rien sous 1 000 jetons : c'est un top-k(1000), pas un noyau exact
+  (comportement figé par un test ; actif seulement si `temperature > 0`, le chat). À traiter par une fiche.
+- Porte observée :
+  - `CI https://github.com/VincentGourbin/mlx-voxtral-swift/actions/runs/36982544507 : success` (`Executed 569 tests,
+    with 39 tests skipped and 0 failures (0 unexpected)`, `** TEST SUCCEEDED **`, Xcode 26.6 ; les tests MLX tournent sur
+    le runner).
+  - Rouge sur code cassé exprès : `prefillChunkRanges` décalé d'un, `nucleusMask` sans plafond de candidats, `firstEOA`
+    sur `< 1` → `Executed 17 tests, with 6 failures` ; `shouldCheckEOA` sans la frame 0 → rouge après renforcement du
+    test (calendrier exact `[0, 3, 7, 11, 15]`) ; chargeur vivant via l'API `contentsOfDirectory(at:)` → rouge.
+  - Suite locale `Executed 569 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+- Écarts : la cible VoxtralApp embarque `VoxtralEncoderFull.mlmodelc` (1,3 Go, hors git) : la CI crée un dossier vide à
+  sa place (point de K-28) ; `LegacyNoDumpTests` passe en `XCTSkip` sans modèle.
