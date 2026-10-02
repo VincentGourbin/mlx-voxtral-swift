@@ -39,6 +39,10 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-12 — `synthesizeStreaming` is really progressive**: the stream is returned at once and produced in a Task;
   stopping the consumer (break, cancelled Task) stops the generation within one frame and the pipeline returns to
   `.ready`. Before, the whole generation ran before the first chunk.
+- **K-14 — TTS frame cap proportional to the text**: `Configuration.framesPerTextToken` (10.4) and `framesCapBase`
+  (70) make the effective cap `min(maxFrames, 70 + ⌈10.4 × text tokens⌉)` (batch and streaming), so a missed end of
+  audio stops at about 3 × the expected duration instead of 2 500 frames (200 s); `framesPerTextToken = nil` restores
+  the fixed cap. `lastSynthesisTruncated` tells when the cap was reached.
 - **K-15 — work off Swift's cooperative pool**: model loading and generation run on a dedicated queue; a cancelled
   Task stops a transcription, a synthesis or a Realtime run within one step (< 200 ms measured on 11 min of audio)
   with `CancellationError`, the pipeline back to `.ready`.
@@ -68,6 +72,7 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-7 — `VoxtralError.missingWeights([String])`** (weights checked against the model's keys and shapes),
   **`VoxtralError.invalidTokenizer(String)`** and **`TekkenTokenizer.load(modelPath:) throws`**.
 - **K-11 — `busy(String)`** in `VoxtralPipelineError`, `VoxtralTTSError` and `VoxtralRealtimeError`.
+- **K-14 — `VoxtralTTSPipeline.frameCap(forText:)`, `textTokenCount(_:)`, `lastSynthesisTruncated`.**
 - **K-16 — `VoxtralMemoryManager.optimizeIfNeeded(tokenIndex:config:)`**: the pipeline passes its own memory
   configuration instead of writing the shared one.
 - **K-26 — `VoxtralVoiceEnrollment.Config.seed`, `checkpointURL`, `checkpointEvery`** and

@@ -40,13 +40,28 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// MLX buffer-cache limit set after loading and restored at `unload()`; nil leaves the host's
         /// process-wide setting alone (K-52)
         public var cacheLimitBytes: Int?
+        /// Frames allowed per text token on top of `framesCapBase`: the effective cap is
+        /// min(maxFrames, framesCapBase + ⌈framesPerTextToken × text tokens⌉), so a missed end of audio costs about
+        /// 3 × the expected duration instead of `maxFrames` (K-14). nil keeps the fixed `maxFrames`.
+        public var framesPerTextToken: Float?
+        public var framesCapBase: Int
+
+        /// 3 × the fit frames = 23.5 + 3.477 × text tokens over 12 texts × 3 seeds × 3 packs (4 / 6 / bf16, K-14),
+        /// rounded down: every normal synthesis stays under the cap, the one missed end of audio (517 frames for
+        /// 7 tokens) stops at 143
+        public static let defaultFramesPerTextToken: Float = 10.4
+        public static let defaultFramesCapBase = 70
 
         public static var `default`: Configuration {
             Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true, trimTail: false)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false, cacheLimitBytes: Int? = nil) {
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false, cacheLimitBytes: Int? = nil,
+                    framesPerTextToken: Float? = Self.defaultFramesPerTextToken,
+                    framesCapBase: Int = Self.defaultFramesCapBase) {
             self.cacheLimitBytes = cacheLimitBytes
+            self.framesPerTextToken = framesPerTextToken
+            self.framesCapBase = framesCapBase
             self.maxFrames = maxFrames
             self.temperature = temperature
             self.cfgAlpha = cfgAlpha
@@ -77,6 +92,27 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     public var configuration: Configuration
     /// Read-only view of the gate: every transition happens under its lock (K-11)
     public var state: State { gate.state }
+
+    /// True when the last synthesis reached its frame cap without an end of audio (K-14)
+    public private(set) var lastSynthesisTruncated = false
+
+    /// Text tokens the model reads for `text` (after sanitization when enabled)
+    public func textTokenCount(_ text: String) -> Int? {
+        guard let tokenizer else { return nil }
+        let processed = configuration.sanitizeText ? VoxtralTTSModel.sanitizeTextForTTS(text) : text
+        return tokenizer.encode(processed).count
+    }
+
+    /// Frame cap applied to `text`: min(maxFrames, framesCapBase + ⌈framesPerTextToken × text tokens⌉) (K-14)
+    public func frameCap(forText text: String) -> Int {
+        guard let tokens = textTokenCount(text) else { return configuration.maxFrames }
+        return Self.frameCap(textTokens: tokens, configuration: configuration)
+    }
+
+    static func frameCap(textTokens: Int, configuration: Configuration) -> Int {
+        guard let perToken = configuration.framesPerTextToken else { return configuration.maxFrames }
+        return min(configuration.maxFrames, configuration.framesCapBase + Int((perToken * Float(textTokens)).rounded(.up)))
+    }
     public let sampleRate: Int = 24000
 
     /// State, running operation and generation token, changed atomically
@@ -238,11 +274,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             do {
                 // Generate audio codes (semantic code generation + flow matching inside)
                 profiler.startSemanticGen()
+                let cap = frameCap(forText: text)
                 let (codes, numFrames, ttft) = model.generate(
                     text: text,
                     voiceEmbedding: voiceEmb,
                     tokenizer: tokenizer,
-                    maxTokens: configuration.maxFrames,
+                    maxTokens: cap,
                     sanitize: configuration.sanitizeText,
                     seed: seed,
                     prefixCache: prefix.cache,
@@ -250,6 +287,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 )
                 profiler.endSemanticGen(frameCount: numFrames)
                 try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
+                lastSynthesisTruncated = numFrames >= cap
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
@@ -366,16 +404,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
             do {
                 profiler.startSemanticGen()
+                let cap = frameCap(forText: genText)
                 let (codes, numFrames, ttft) = model.generate(
                     text: genText,
                     voiceEmbedding: voiceEmbedding,
                     tokenizer: tokenizer,
-                    maxTokens: configuration.maxFrames,
+                    maxTokens: cap,
                     sanitize: configuration.sanitizeText,
                     seed: seed
                 )
                 profiler.endSemanticGen(frameCount: numFrames)
                 try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
+                lastSynthesisTruncated = numFrames >= cap
                 profiler.setTTFT(ttft)
 
                 guard numFrames > 0 else {
@@ -571,7 +611,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let startTime = Date()
         let beacon = RuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
 
-        let capturedMaxFrames = configuration.maxFrames
         let capturedSampleRate = sampleRate
         let capturedSanitize = configuration.sanitizeText
 
@@ -586,6 +625,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         } else {
             genText = text
         }
+        // Same text-proportional frame cap as the batch path (K-14)
+        let capturedMaxFrames = frameCap(forText: genText)
 
         // Box non-Sendable captures for Swift 6 strict concurrency
         final class StreamContext: @unchecked Sendable {

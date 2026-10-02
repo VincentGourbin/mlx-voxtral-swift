@@ -1191,3 +1191,27 @@ Gabarits :
 - Écarts : aucune mesure GPU (Vincent occupait le GPU) ; suite complète non relancée pour la même raison : seules les
   3 classes de la fiche (sans calcul MLX) ont tourné. `realtime-4b` : `approximateBytes` = `model.safetensors`
   (8 859 446 848), le seul fichier de poids désormais téléchargé.
+
+## K-14 — Plafond de frames TTS proportionnel au texte — 2026-10-02 — validée
+- Fait (ASK-9 = A : défaut public changé, CHANGELOG) : `Configuration.framesPerTextToken` (10,4) et `framesCapBase`
+  (70) ; plafond effectif `min(maxFrames, 70 + ⌈10,4 × jetons de texte⌉)` en batch (deux surcharges) et en streaming
+  (texte de génération, vocalise comprise) ; `nil` garde `maxFrames`. Additifs publics : `frameCap(forText:)`,
+  `textTokenCount(_:)`, `lastSynthesisTruncated`. `bench tts` : `text_tokens`, `frame_cap`, `truncated` (schéma).
+  Corpus `Scripts/tts-frame-cap-texts/` (12 textes EN/FR, 4 à 202 mots) et `Scripts/tts-frame-cap-campaign.sh`.
+- Distribution (108 synthèses, plafond 2 500, 0 troncature) : ajustement `frames = 23,5 + 3,477 × jetons` ; frames/jeton
+  médiane 3,76, min 1,83, max 5,78 hors un emballement : `tts-4b-6bit` `fr01` (« Bonjour, comment ça va ? », 7 jetons)
+  graine 2 = 517 frames (41 s). a = 70, b = 10,4 = 3 × l'ajustement arrondi vers le bas (plafond / attendu entre 2,98
+  et 2,99 pour 1 à 400 jetons).
+- Porte observée :
+  - 0 troncature d'une parole sur 12 textes × 3 graines × 3 packs : campagne après = 107/108 sorties identiques octet
+    pour octet à la campagne avant ; seul `tts-4b-6bit` `fr01` graine 2 est coupé, 517 → 143 frames (11,2 s au lieu de
+    41 s) ; rejouée (`--voice-embedding fr_female --seed 2`), cette sortie se transcrit « Je ne comprends pas ce que vous
+    dites. » : génération dégénérée qui ne prononçait jamais le texte, pas une phrase tronquée.
+  - Reproducteur #45 (bf16, `--no-sanitize`, « bonjour je suis très content », 5 runs) : 2,00 / 1,84 / 4,64 / 2,96 /
+    2,72 s, sous 3 × la longueur attendue (≈ 10,6 s ; plafond 133 frames = 10,6 s) ; aucun emballement observé : la
+    borne est prouvée par le cas `fr01` ci-dessus (143 frames = 2,99 × l'attendu).
+  - `TTSFrameCapTests` 3/3 ; rouge avec l'ancien défaut : `Executed 3 tests, with 3 failures` ; suite `Executed 559
+    tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+- Écarts : la CLI `tts` ignore `--seed` avec `-v` (voix prédéfinie, défaut connu) : le reproducteur a tourné avec ce
+  défaut (graines non appliquées) et le cas emballé a été rejoué par `--voice-embedding`. Lignes `BENCH` (216) recopiées
+  dans `docs/eval/tts-frame-cap/` plutôt que dans `BENCHMARKS.md` (renvoi depuis `BENCHMARKS.md`).

@@ -52,6 +52,8 @@
     "frames": {"type": "integer"},
     "audio_s": {"type": "number"},
     "ttfa_ms": {"type": "number"},
+    "text_tokens": {"type": "integer", "description": "tts: text tokens read by the model (after sanitization)"},
+    "frame_cap": {"type": "integer", "description": "tts: frame cap applied to the text (K-14)"},
     "streaming": {"type": "boolean"},
     "warm_up": {"type": "boolean"},
     "voice": {"type": "string"},

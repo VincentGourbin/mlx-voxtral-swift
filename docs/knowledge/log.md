@@ -108,3 +108,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   graphe (STT 23 fenêtres, conv Realtime sur tout l'audio) retardait l'arrêt de 3 à 5 s ; évaluer par couche/tronçon.
 - 2026-10-01 — **K-24 : registres exacts et `consolidated` exclu** : `mini-3b` télécharge 9,37 Go au lieu de 18,7 Go
   (Small 24B : 48,5 au lieu de 97 Go) ; tailles et précisions des 13 entrées alignées sur `docs/Weights.md`.
+- 2026-10-02 — **K-14 : plafond TTS = 70 + 10,4 × jetons** (3 × l'ajustement 23,5 + 3,48 × jetons sur 108 synthèses) :
+  un emballement (517 frames pour « Bonjour, comment ça va ? », 6 bits, graine 2) s'arrête à 143 ; 107/108 sorties
+  identiques. Rappel : la CLI `tts` ignore `--seed` avec `-v` (passer par `--voice-embedding`).
