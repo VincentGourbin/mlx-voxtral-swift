@@ -30,32 +30,32 @@ final class VoxtralEnrollmentLossesTests: XCTestCase {
         return (MLXArray(pred), MLXArray(targ))
     }
 
-    func testL1MatchesPyTorch() {
+    func testL1MatchesPyTorch() throws {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let computer = try EnrollmentLossComputer(validating: targ, sampleRate: sr)
         let value = computer.l1Loss(pred).item(Float.self)
         XCTAssertEqual(value, 0.092424, accuracy: 1e-4)
     }
 
-    func testMultiResSTFTMatchesPyTorch() {
+    func testMultiResSTFTMatchesPyTorch() throws {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let computer = try EnrollmentLossComputer(validating: targ, sampleRate: sr)
         let value = computer.multiResolutionSTFTLoss(pred).item(Float.self)
         // Tolerance covers FFT/window float32 differences across backends.
         XCTAssertEqual(value, 0.986005, accuracy: 0.03)
     }
 
-    func testMelMatchesPyTorch() {
+    func testMelMatchesPyTorch() throws {
         let (pred, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let computer = try EnrollmentLossComputer(validating: targ, sampleRate: sr)
         let value = computer.melLoss(pred).item(Float.self)
         XCTAssertEqual(value, 0.625629, accuracy: 0.03)
     }
 
     /// The whole loss chain must remain differentiable end to end.
-    func testLossesAreDifferentiable() {
+    func testLossesAreDifferentiable() throws {
         let (_, targ) = makeSignals()
-        let computer = EnrollmentLossComputer(reference: targ, sampleRate: sr)
+        let computer = try EnrollmentLossComputer(validating: targ, sampleRate: sr)
 
         func loss(_ inputs: [MLXArray]) -> [MLXArray] {
             let p = inputs[0]
@@ -86,10 +86,10 @@ final class VoxtralEnrollmentLossesTests: XCTestCase {
         }
     }
 
-    func testLossGradientIsDeterministic() {
+    func testLossGradientIsDeterministic() throws {
         let reference = MLXRandom.normal([24_000], key: MLXRandom.key(4)) * 0.3
         let prediction = MLXRandom.normal([24_000], key: MLXRandom.key(5)) * 0.3
-        let losses = EnrollmentLossComputer(reference: reference)
+        let losses = try EnrollmentLossComputer(validating: reference)
         func gradient() -> MLXArray {
             let grads = MLX.grad({ (p: [MLXArray]) -> [MLXArray] in
                 [losses.multiResolutionSTFTLoss(p[0]) + losses.melLoss(p[0])]

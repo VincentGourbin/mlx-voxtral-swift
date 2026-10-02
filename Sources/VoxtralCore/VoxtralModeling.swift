@@ -438,6 +438,17 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /// from its tokenizer (`generation_config.json`).
     public var stopTokenIds: [Int] = [2, 4]
 
+    /// The decoder and head types the forward passes support: the throwing entry points check them up front and
+    /// throw instead of reaching an unsupported-type stop (K-27)
+    func validateModuleTypes() throws {
+        guard language_model is LlamaModel || language_model is LlamaModelWrapper || language_model is LlamaStandardModel else {
+            throw VoxtralError.invalidConfiguration("Unsupported language_model type: \(type(of: language_model))")
+        }
+        guard lm_head is QuantizedLinear || lm_head is Linear else {
+            throw VoxtralError.invalidConfiguration("Unsupported lm_head type: \(type(of: lm_head))")
+        }
+    }
+
     /// Tests (K-3): receives the last-position logits of the prefill (first generation step)
     var prefillLogitsObserver: ((MLXArray) -> Void)?
 
@@ -512,7 +523,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             return llamaStandardModel.callAsFunction(inputs: inputs, mask: mask, cache: cache, inputsEmbeds: inputsEmbeds)
         } else {
-            fatalError("Unsupported language_model type: \(type(of: language_model))")
+            return unsupportedConfiguration("Unsupported language_model type: \(type(of: language_model))")
         }
     }
 
@@ -585,6 +596,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Constructor for official MLXLLM.LlamaModel (BEST - 100% Python compatibility)
      */
+    @available(*, deprecated, message: "Takes the legacy decoder (LlamaModel, not MLXLLM's) and leaves lm_head with random weights; use init(standardModel:).")
     public init(officialLlama: LlamaModel, config: VoxtralStandardConfiguration) {
         VoxtralDebug.log("🔧 Creating VoxtralForConditionalGeneration with official Llama")
 
@@ -641,7 +653,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             return llamaStandardModel.layers.count
         } else {
-            fatalError("Unsupported language_model type: \(type(of: language_model))")
+            _ = unsupportedConfiguration("Unsupported language_model type: \(type(of: language_model))")
+            return 0
         }
     }
     
@@ -718,7 +731,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             embeddings = embeds
         } else {
             guard let ids = inputIds else {
-                fatalError("Either input_ids or inputs_embeds must be provided")
+                return unsupportedConfiguration("Either input_ids or inputs_embeds must be provided")
             }
             // Python: inputs_embeds = self.embed_tokens(input_ids)
             if let llamaModel = language_model as? LlamaModel {
@@ -732,7 +745,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             } else if let llamaStandardModel = language_model as? LlamaStandardModel {
                 embeddings = llamaStandardModel.embedTokens(ids)
             } else {
-                fatalError("Unsupported language_model type: \(type(of: language_model))")
+                embeddings = unsupportedConfiguration("Unsupported language_model type: \(type(of: language_model))")
             }
         }
 
@@ -804,6 +817,11 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             inputFeatures: inputFeatures,
             inputsEmbeds: inputsEmbeds
         )
+        // A configuration error recorded in the boundary (missing input, unsupported module) leaves an empty result:
+        // return it before any shape is read (K-27)
+        if MLXErrorScope.hasError {
+            return VoxtralModelOutput(logits: inputsEmbeds, pastKeyValues: pastKeyValues)
+        }
 
         // Python: hidden_states = self.language_model(inputs_embeds=inputs_embeds, mask=attention_mask, cache=past_key_values)
         let hiddenStates = callLanguageModel(
@@ -812,6 +830,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             cache: pastKeyValues,
             inputsEmbeds: inputsEmbeds
         )
+        if MLXErrorScope.hasError {
+            return VoxtralModelOutput(logits: hiddenStates, pastKeyValues: pastKeyValues)
+        }
         
         // Apply lm_head to get logits
         let logits: MLXArray
@@ -820,7 +841,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let linear = lm_head as? Linear {
             logits = linear(hiddenStates)
         } else {
-            fatalError("Unsupported lm_head type: \(type(of: lm_head))")
+            logits = unsupportedConfiguration("Unsupported lm_head type: \(type(of: lm_head))")
         }
         
         // Python: return VoxtralModelOutput(logits=logits, past_key_values=past_key_values, hidden_states=None, attentions=None)
@@ -915,6 +936,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     ) throws -> [Int] {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         try withMLXErrors { errors in
+            try validateModuleTypes()  // unsupported module types throw here (K-27)
 
             var tokenIds: [Int] = []
 
@@ -1112,6 +1134,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     ) throws -> [Int] {
         // MLX errors become VoxtralError.mlx instead of terminating the host (K-1)
         try withMLXErrors { errors in
+            try validateModuleTypes()  // unsupported module types throw here (K-27)
 
             var tokenIds: [Int] = []
 
@@ -1298,7 +1321,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             embeddings = llamaStandardModel.embedTokens(inputIds)
         } else {
-            fatalError("Unsupported language_model type: \(type(of: language_model))")
+            embeddings = unsupportedConfiguration("Unsupported language_model type: \(type(of: language_model))")
         }
 
         // Create audio token mask
@@ -1444,7 +1467,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             } else if let llamaStandardModel = language_model as? LlamaStandardModel {
                 mergedEmbeddings = llamaStandardModel.embedTokens(input.text.tokens)
             } else {
-                fatalError("Unsupported language_model type: \(type(of: language_model))")
+                mergedEmbeddings = unsupportedConfiguration("Unsupported language_model type: \(type(of: language_model))")
             }
         }
         
@@ -1459,7 +1482,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let linear = lm_head as? Linear {
             logits = linear(outputs)
         } else {
-            fatalError("Unsupported lm_head type: \(type(of: lm_head))")
+            logits = unsupportedConfiguration("Unsupported lm_head type: \(type(of: lm_head))")
         }
 
         // Single-forward prefill (no chunking): report the whole prompt done at once.
@@ -1483,7 +1506,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         } else if let linear = lm_head as? Linear {
             logits = linear(outputs)
         } else {
-            fatalError("Unsupported lm_head type: \(type(of: lm_head))")
+            logits = unsupportedConfiguration("Unsupported lm_head type: \(type(of: lm_head))")
         }
         return logits
     }

@@ -169,7 +169,7 @@ public class TekkenTokenizer {
 
         // Try to load from binary cache first (10-100x faster)
         if loadFromCache(cachePath: cachePath, progress: progress) {
-            loadSpecialTokens(modelPath: modelPath)
+            try loadSpecialTokens(modelPath: modelPath)
             progress?(1.0, "Tokenizer loaded from cache")
             return
         }
@@ -194,7 +194,11 @@ public class TekkenTokenizer {
 
             // 1. Charger la regex pattern (équivalent pat_str dans tiktoken)
             regexPattern = tekkenVocab.config.pattern
-            compiledRegex = try? NSRegularExpression(pattern: regexPattern, options: [])
+            do {
+                compiledRegex = try NSRegularExpression(pattern: regexPattern, options: [])
+            } catch {
+                throw VoxtralError.invalidTokenizer("\(tekkenPath): pattern does not compile (\(error.localizedDescription))")
+            }
 
             // 2. LOGIQUE PYTHON EXACTE : Tronquer le vocabulaire
             numSpecialTokens = tekkenVocab.config.default_num_special_tokens
@@ -233,7 +237,7 @@ public class TekkenTokenizer {
             }
 
             // Load special token IDs from config files
-            loadSpecialTokens(modelPath: modelPath)
+            try loadSpecialTokens(modelPath: modelPath)
 
             progress?(0.95, "Saving tokenizer cache...")
 
@@ -387,23 +391,25 @@ public class TekkenTokenizer {
         VoxtralDebug.log("Tokenizer cache saved: \(cachePath) (\(cacheData.count) bytes)")
     }
     
-    private func loadSpecialTokens(modelPath: String) {
-        // Load generation_config.json for BOS/EOS/PAD token IDs
-        let generationConfigPath = "\(modelPath)/generation_config.json"
-        if let generationData = try? Data(contentsOf: URL(fileURLWithPath: generationConfigPath)) {
-            if let generationConfig = try? JSONDecoder().decode(GenerationConfig.self, from: generationData) {
-                if let bos = generationConfig.bos_token_id { bosTokenId = bos }
-                if let eos = generationConfig.eos_token_id { eosTokenId = eos }
-                if let pad = generationConfig.pad_token_id { padTokenId = pad }
+    /// Special token ids from generation_config.json and config.json when present: an absent file keeps the
+    /// defaults, an unreadable one throws instead of silently keeping wrong end tokens (K-27)
+    private func loadSpecialTokens(modelPath: String) throws {
+        func decode<T: Decodable>(_ type: T.Type, _ name: String) throws -> T? {
+            let url = URL(fileURLWithPath: "\(modelPath)/\(name)")
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            do {
+                return try JSONDecoder().decode(type, from: Data(contentsOf: url))
+            } catch {
+                throw VoxtralError.invalidTokenizer("\(url.path): \(error.localizedDescription)")
             }
         }
-
-        // Load config.json for audio_token_id
-        let configPath = "\(modelPath)/config.json"
-        if let configData = try? Data(contentsOf: URL(fileURLWithPath: configPath)) {
-            if let modelConfig = try? JSONDecoder().decode(ModelConfig.self, from: configData) {
-                if let audio = modelConfig.audio_token_id { audioTokenIdInternal = audio }
-            }
+        if let generationConfig = try decode(GenerationConfig.self, "generation_config.json") {
+            if let bos = generationConfig.bos_token_id { bosTokenId = bos }
+            if let eos = generationConfig.eos_token_id { eosTokenId = eos }
+            if let pad = generationConfig.pad_token_id { padTokenId = pad }
+        }
+        if let modelConfig = try decode(ModelConfig.self, "config.json"), let audio = modelConfig.audio_token_id {
+            audioTokenIdInternal = audio
         }
     }
     

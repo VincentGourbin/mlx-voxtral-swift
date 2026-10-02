@@ -53,7 +53,7 @@ private func loadWithConfig(
     let sanitizedWeights = sanitizeTTSWeights(rawWeights)
 
     // Step 4b: If quantized weights detected, quantize model layers that have scales
-    if let quantConfig = loadQuantizationConfig(from: modelDirectory) {
+    if let quantConfig = try loadQuantizationConfig(from: modelDirectory) {
         progressCallback?(0.65, "Applying \(quantConfig.bits)-bit quantization...")
         let mode: QuantizationMode = quantConfig.mode == "affine" ? .affine : .affine
         // Build set of quantized layer prefixes from weight keys
@@ -88,14 +88,22 @@ private struct QuantizationConfig: Codable {
     }
 }
 
-private func loadQuantizationConfig(from modelDirectory: URL) -> QuantizationConfig? {
+/// The pack's quantization: nil without config.json or without a "quantization" block; an unreadable config or a
+/// malformed block throws instead of loading quantized weights into an unquantized model (K-27)
+private func loadQuantizationConfig(from modelDirectory: URL) throws -> QuantizationConfig? {
     let configURL = modelDirectory.appendingPathComponent("config.json")
-    guard let data = try? Data(contentsOf: configURL),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let quantDict = json["quantization"] as? [String: Any],
-          let groupSize = quantDict["group_size"] as? Int,
-          let bits = quantDict["bits"] as? Int else {
+    guard FileManager.default.fileExists(atPath: configURL.path) else { return nil }
+    let parsed: Any
+    do {
+        parsed = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL))
+    } catch {
+        throw VoxtralTTSError.invalidConfiguration("\(configURL.path): \(error.localizedDescription)")
+    }
+    guard let json = parsed as? [String: Any], let quantDict = json["quantization"] as? [String: Any] else {
         return nil
+    }
+    guard let groupSize = quantDict["group_size"] as? Int, let bits = quantDict["bits"] as? Int else {
+        throw VoxtralTTSError.invalidConfiguration("\(configURL.path): quantization without integer group_size/bits")
     }
     let mode = quantDict["mode"] as? String ?? "affine"
     return QuantizationConfig(groupSize: groupSize, bits: bits, mode: mode)

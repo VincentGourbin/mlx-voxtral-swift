@@ -114,3 +114,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-23 : −915 lignes mortes, bibliothèque muette hors debug** (`print` → `VoxtralDebug`/`os.Logger`,
   plus d'écriture dans `/tmp`, plus de CWD ni de `/Users/…`). Le point d'entrée legacy `VoxtralGenerator` est cassé
   (arrêt `needModuleInfo` au chargement) : à déprécier par K-30.
+- 2026-10-02 — **K-27 : API publique honnête** : `tokenCount` réel, 0 `as!`, souches dépréciées avec message exact ;
+  les arrêts sur type de module non supporté passent par la boîte d'erreurs MLX (K-1) et les entrées qui lèvent
+  valident les types d'emblée (décision de Vincent).

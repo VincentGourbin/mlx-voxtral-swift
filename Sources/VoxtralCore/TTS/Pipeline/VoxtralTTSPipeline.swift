@@ -259,6 +259,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
+            try model.validateModuleTypes()  // unsupported module types throw here (K-27)
 
             guard let voiceEmb = voiceEmbeddings[voice.rawValue] else {
                 throw VoxtralTTSError.voiceNotFound("Voice '\(voice.rawValue)' not loaded")
@@ -384,6 +385,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             guard let model = ttsModel, let tokenizer else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
+            try model.validateModuleTypes()  // unsupported module types throw here (K-27)
 
             let startTime = Date()
             let profiler = MLXProfiler.shared
@@ -600,6 +602,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         guard let model = ttsModel, let tokenizer else {
             gate.end(generation, state: .ready)
             return AsyncThrowingStream { $0.finish(throwing: VoxtralTTSError.invalidConfiguration("Model not loaded")) }
+        }
+        do {
+            try model.validateModuleTypes()  // unsupported module types end the stream with an error (K-27)
+        } catch {
+            gate.end(generation, state: .ready)
+            return AsyncThrowingStream { $0.finish(throwing: error) }
         }
         let voiceEmb = voiceEmbedding
 

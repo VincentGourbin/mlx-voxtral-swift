@@ -19,7 +19,7 @@ public func loadVoxtralModel(
 ) throws -> (VoxtralForConditionalGeneration, VoxtralStandardConfiguration) {
 
     // Use our validated standard loader (does the Python sequence 1-4)
-    let (standardModel, config) = try loadVoxtralStandardModel(modelPath: modelPath, dtype: dtype)
+    let (standardModel, config) = try loadVoxtralStandardModel(modelPath: modelPath)  // dtype is not applied (K-27)
 
     // Wrap in VoxtralForConditionalGeneration to get generate() methods
     let conditionalModel = VoxtralForConditionalGeneration(standardModel: standardModel)

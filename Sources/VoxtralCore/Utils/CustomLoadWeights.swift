@@ -40,21 +40,20 @@ extension VoxtralForConditionalGeneration {
             let extras = Set(newWeights.keys).subtracting(Set(currentWeights.keys))
             if !extras.isEmpty {
                 let extrasList = extras.sorted().joined(separator: ",\n")
-                fatalError("Received \(extras.count) parameters not in model: \n\(extrasList)")
+                throw VoxtralError.loadingFailed("Received \(extras.count) parameters not in model: \n\(extrasList)")
             }
             
             // Check for missing weights
             let missing = Set(currentWeights.keys).subtracting(Set(newWeights.keys))
             if !missing.isEmpty {
-                let missingList = missing.sorted().joined(separator: ",\n")
-                fatalError("Missing \(missing.count) parameters: \n\(missingList)")
+                throw VoxtralError.missingWeights(missing.sorted())
             }
             
             // Validate shapes match
             for (key, currentValue) in currentWeights {
                 guard let newValue = newWeights[key] else { continue }
                 if newValue.shape != currentValue.shape {
-                    fatalError("Expected shape \(currentValue.shape) but received shape \(newValue.shape) for parameter \(key)")
+                    throw VoxtralError.loadingFailed("Expected shape \(currentValue.shape) but received shape \(newValue.shape) for parameter \(key)")
                 }
             }
         }

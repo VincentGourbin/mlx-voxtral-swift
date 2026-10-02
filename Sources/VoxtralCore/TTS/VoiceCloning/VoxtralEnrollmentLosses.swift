@@ -74,10 +74,24 @@ public final class EnrollmentLossComputer {
 
     /// - Parameter reference: the target waveform (signalLength,), constant
     ///   for the whole optimization.
-    public init(reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) {
+    /// Throws instead of stopping on a reference shorter than the smallest FFT (K-27)
+    public convenience init(validating reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) throws {
+        guard reference.dim(0) >= Self.fftSizes.last! else {
+            throw VoxtralTTSError.invalidConfiguration(
+                "reference too short for spectral losses (\(reference.dim(0)) samples, at least \(Self.fftSizes.last!))")
+        }
+        self.init(checkedReference: reference, sampleRate: sampleRate, nMels: nMels)
+    }
+
+    @available(*, deprecated, message: "Stops the process on a reference shorter than 76 samples; use init(validating:sampleRate:nMels:), which throws.")
+    public convenience init(reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) {
+        precondition(reference.dim(0) >= Self.fftSizes.last!,
+                     "reference too short for spectral losses (\(reference.dim(0)) samples)")
+        self.init(checkedReference: reference, sampleRate: sampleRate, nMels: nMels)
+    }
+
+    init(checkedReference reference: MLXArray, sampleRate: Int, nMels: Int) {
         let signalLength = reference.dim(0)
-        precondition(signalLength >= Self.fftSizes.last!,
-                     "reference too short for spectral losses (\(signalLength) samples)")
         self.signalLength = signalLength
         self.sampleRate = sampleRate
 

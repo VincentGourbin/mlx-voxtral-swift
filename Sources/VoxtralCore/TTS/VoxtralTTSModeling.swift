@@ -51,7 +51,7 @@ public class MMAudioEmbeddings: Module {
         } else if let emb = tokEmbeddings as? Embedding {
             return emb(indices)
         }
-        fatalError("Unsupported tok_embeddings type: \(type(of: tokEmbeddings))")
+        return unsupportedConfiguration("Unsupported tok_embeddings type: \(type(of: tokEmbeddings))")
     }
 }
 
@@ -70,7 +70,7 @@ public class AudioCodebookEmbeddingsContainer: Module {
         } else if let emb = embeddings as? Embedding {
             return emb(indices)
         }
-        fatalError("Unsupported embeddings type: \(type(of: embeddings))")
+        return unsupportedConfiguration("Unsupported embeddings type: \(type(of: embeddings))")
     }
 
     /// Gather specific rows of the embedding table, dequantizing only those
@@ -266,6 +266,17 @@ public class VoxtralTTSModel: Module {
     // Pre-computed codebook offset array (avoids rebuilding per frame)
     // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
     let _codebookOffsets: MLXArray
+
+    /// The embedding types the forward passes support: the pipeline checks them before synthesis and throws instead
+    /// of reaching an unsupported-type stop (K-27)
+    func validateModuleTypes() throws {
+        for (name, module) in [("tok_embeddings", mmAudioEmbeddings.tokEmbeddings),
+                               ("audio_codebook_embeddings", mmAudioEmbeddings.audioCodebookEmbeddings.embeddings)] {
+            guard module is Embedding || module is QuantizedEmbedding else {
+                throw VoxtralTTSError.invalidConfiguration("Unsupported \(name) type: \(type(of: module))")
+            }
+        }
+    }
 
     public init(config: VoxtralTTSConfiguration) {
         self.config = config

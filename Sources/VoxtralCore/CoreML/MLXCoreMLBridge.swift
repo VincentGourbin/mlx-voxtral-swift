@@ -212,6 +212,7 @@ public struct MLXCoreMLBridge {
     /// - Warning: The returned MLMultiArray shares memory with the input
     /// - Parameter mlxArray: Source MLXArray (must outlive the returned MLMultiArray)
     /// - Returns: MLMultiArray sharing memory with input
+    @available(*, deprecated, message: "Copies the data like toMLMultiArray(); there is no zero-copy path.")
     public static func toMLMultiArrayNoCopy(_ mlxArray: MLXArray) throws -> MLMultiArray {
         // Evaluate to ensure data is materialized
         eval(mlxArray)

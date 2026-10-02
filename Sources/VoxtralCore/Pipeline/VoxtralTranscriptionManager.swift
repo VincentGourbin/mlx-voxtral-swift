@@ -122,7 +122,7 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
 
         return TranscriptionResult(
             text: text,
-            tokenCount: 0, // Pipeline doesn't expose this directly
+            tokenCount: pipeline.lastTokenCount,
             duration: duration
         )
     }
@@ -145,10 +145,12 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
     }
 
     /// Chat with system prompt (text-only, for post-processing transcriptions)
+    /// Not implemented: always throws `audioRequired` (K-27).
     /// - Parameters:
     ///   - systemPrompt: System instructions
     ///   - userMessage: User's message (e.g., a transcription to summarize)
     /// - Returns: Model's response
+    @available(*, deprecated, message: "Not implemented: always throws VoxtralTranscriptionError.audioRequired. Use chat(audioURL:prompt:language:) or a text LLM.")
     public func chat(systemPrompt: String, userMessage: String) async throws -> String {
         // For text-only chat, we need the full model
         // This is a simplified version - for full text chat, use a dedicated LLM

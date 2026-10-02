@@ -90,11 +90,18 @@ public defaults change behaviour (ASK-9 = A: minor version).
   and the host's value is restored at `unload()`.
 
 - **K-23 — `VoxtralDebug.console(_:)`** for output a caller asked for (model listings).
+- **K-27 — `VoxtralPipeline.lastTokenCount`**, `loadVoxtralStandardModel(modelPath:)`, `EnrollmentLossComputer(validating:)`.
 - **K-24 — registries**: `approximateBytes` (exact bytes of the downloaded weights) on `VoxtralModelInfo`,
   `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
   `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
 
 ### Deprecated
+- **K-27** — `VoxtralTranscriptionManager.chat(systemPrompt:userMessage:)` (always throws `audioRequired`),
+  `saveQuantizedModel` (writes only `config.json`), `MLXCoreMLBridge.toMLMultiArrayNoCopy` (copies),
+  `VoxtralForConditionalGeneration.init(officialLlama:config:)` (legacy decoder, random `lm_head`),
+  `ModelDownloader.hubApi` / `reconfigureHubApi()` (downloads no longer use HubApi),
+  `loadVoxtralStandardModel(modelPath:dtype:)` (`dtype` ignored; use `loadVoxtralStandardModel(modelPath:)`),
+  `EnrollmentLossComputer(reference:)` (stops on a short reference; use `init(validating:)`).
 - **K-7 — `TekkenTokenizer(modelPath:)`**: falls back silently to a demo vocabulary; use `TekkenTokenizer.load(modelPath:)`.
 - **K-26 — `VoxtralVoiceEnrollment.optimize(reference:progress:)`** (non-throwing): ignores divergence, cancellation
   and checkpoints; use `optimize(reference:progress:shouldContinue:)`.
@@ -103,6 +110,10 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-32 — the `VoxtralBenchmark` executable** (ASK-26 = B), replaced by `VoxtralCLI bench`.
 
 ### Fixed
+- **K-27 — no crash from the public API**: `TranscriptionResult.tokenCount` counts the generated tokens (was 0); no
+  forced casts; an unsupported module type, a missing input or a too short reference throws
+  `invalidConfiguration` at the entry points instead of stopping the process; unreadable tokenizer or quantization
+  configs throw instead of being ignored.
 - **K-3 — attention masks built by the cache** (boolean, shaped like the keys): a bf16 STT model no longer fails
   with "Mask type must promote to output type", and the legacy decoder no longer stops beyond its first 512-position
   prefill chunk. Outputs unchanged (logits identical).

@@ -34,3 +34,13 @@ func withMLXErrors<R>(_ body: (ErrorBox) async throws -> R) async throws -> R {
         throw VoxtralError.mlx(message)
     }
 }
+
+/// A configuration error on a non-throwing path (unsupported module type, missing input): recorded in the enclosing
+/// MLX error boundary, which throws it as `VoxtralError.invalidConfiguration` at the entry point's next check, with an
+/// empty result. Outside any boundary (a direct call to the model) the process stops as before (K-27). The throwing
+/// entry points validate the module types up front, so they never reach this.
+func unsupportedConfiguration(_ message: String) -> MLXArray {
+    guard let box = MLXErrorScope.box else { fatalError(message) }
+    box.firstError = VoxtralError.invalidConfiguration(message)
+    return MLXArray.zeros([0])
+}

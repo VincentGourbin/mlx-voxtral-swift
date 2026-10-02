@@ -168,7 +168,7 @@ public class VoxtralProcessor {
                 returnTensors: "mlx"
             )
             // Python: encoding["input_features"] = audio_features["input_features"]
-            encoding["input_features"] = (audioFeatures["input_features"] as! MLXArray)
+            encoding["input_features"] = try requiredArray(audioFeatures["input_features"], "input_features")
         }
         
         // Python: if text is not None and self.tokenizer is not None:
@@ -381,7 +381,7 @@ public class VoxtralProcessor {
             inputFeatures = featuresDict["input_features"]!
         } else {
             // Handle case where audioFeatures has input_features property
-            inputFeatures = audioFeatures["input_features"] as! MLXArray
+            inputFeatures = try requiredArray(audioFeatures["input_features"], "input_features")
         }
         
         // Python: num_chunks = input_features.shape[0]
@@ -628,7 +628,7 @@ public class VoxtralProcessor {
                             if let featuresDict = audioFeatures as? [String: MLXArray] {
                                 features = featuresDict["input_features"]!
                             } else {
-                                features = audioFeatures["input_features"] as! MLXArray
+                                features = try requiredArray(audioFeatures["input_features"], "input_features")
                             }
                             
                             allAudioFeatures.append(features)
@@ -719,7 +719,7 @@ public class VoxtralProcessor {
             }
             
             // Python: output["attention_mask"] = mx.ones_like(output["input_ids"])
-            output["attention_mask"] = ones(like: output["input_ids"] as! MLXArray)
+            output["attention_mask"] = ones(like: try requiredArray(output["input_ids"], "input_ids"))
         } else {
             // Python: else:
             //         output["input_ids"] = [all_tokens]
@@ -736,5 +736,13 @@ public class VoxtralProcessor {
         }
         
         return output
+    }
+
+    /// The array stored under `name`, or a typed error instead of a crash on a malformed result (K-27)
+    private func requiredArray(_ value: Any?, _ name: String) throws -> MLXArray {
+        guard let array = value as? MLXArray else {
+            throw VoxtralError.audioProcessingFailed("missing or non-array \(name)")
+        }
+        return array
     }
 }

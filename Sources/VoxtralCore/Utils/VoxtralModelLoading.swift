@@ -160,7 +160,7 @@ public func loadVoxtralModel(
             model = quantizedModel
         } else {
             writeDebugToDump("❌ Failed to cast quantized model back to VoxtralForConditionalGeneration\n")
-            fatalError("Failed to cast quantized model back to VoxtralForConditionalGeneration")
+            throw VoxtralError.loadingFailed("quantization returned an unexpected model type")
         }
         writeDebugToDump("✅ Quantization structure applied to model using MLXNN.quantize()\n")
     } else {

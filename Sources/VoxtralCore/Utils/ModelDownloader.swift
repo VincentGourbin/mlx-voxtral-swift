@@ -35,6 +35,7 @@ public class ModelDownloader {
     /// Hub API instance (lazily created once, under a lock)
     private static let _hubApi = Locked<HubApi?>(nil)
 
+    @available(*, deprecated, message: "Downloads no longer go through HubApi (K-6, K-25): setting customModelsDirectory is enough.")
     public static var hubApi: HubApi {
         _hubApi.withLock { api in
             if let existing = api { return existing }
@@ -69,6 +70,7 @@ public class ModelDownloader {
 
     /// Recreate the HubApi to pick up a new customModelsDirectory.
     /// Call after setting customModelsDirectory.
+    @available(*, deprecated, message: "Downloads no longer go through HubApi (K-6, K-25): setting customModelsDirectory is enough.")
     public static func reconfigureHubApi() {
         _hubApi.set(createHubApi())
     }

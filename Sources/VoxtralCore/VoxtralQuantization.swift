@@ -500,6 +500,7 @@ public func loadQuantizedVoxtral(
 /**
  * Direct Python equivalent: def save_quantized_model(model: nn.Module, save_path: str, config: Optional[VoxtralConfig] = None)
  */
+@available(*, deprecated, message: "Does not save the weights: only config.json is written (no MLX serialization on this legacy path).")
 public func saveQuantizedModel<T: Module>(
     _ model: T,
     savePath: String,

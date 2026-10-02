@@ -498,7 +498,9 @@ public final class VoxtralVoiceEnrollment {
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
         progress: ((Progress) -> Void)? = nil
     ) -> MLXArray {
-        optimizeCore(reference: reference, progress: progress, shouldContinue: nil, resume: nil, checkpoint: nil).codes
+        // Too short a reference: no codes (the throwing overload reports it) instead of a precondition failure (K-27)
+        guard reference.dim(0) >= numSamples else { return MLXArray.zeros([0, 1 + nAcoustic], type: Int32.self) }
+        return optimizeCore(reference: reference, progress: progress, shouldContinue: nil, resume: nil, checkpoint: nil).codes
     }
 
     /// Thrown when the enrollment optimization diverges to a non-finite loss
@@ -520,6 +522,10 @@ public final class VoxtralVoiceEnrollment {
         progress: ((Progress) -> Void)? = nil,
         shouldContinue: @escaping () -> Bool
     ) throws -> MLXArray {
+        guard reference.dim(0) >= numSamples else {
+            throw VoxtralTTSError.invalidConfiguration(
+                "reference must have at least \(numSamples) samples (\(config.numFrames) frames), got \(reference.dim(0))")
+        }
         let resume = try config.checkpointURL.flatMap { try loadCheckpoint(from: $0) }
         let (codes, cancelled, failed) = optimizeCore(
             reference: reference, progress: progress, shouldContinue: shouldContinue,
@@ -641,7 +647,7 @@ public final class VoxtralVoiceEnrollment {
         precondition(reference.dim(0) >= numSamples,
                      "reference must have at least \(numSamples) samples, got \(reference.dim(0))")
         let ref = reference[0 ..< numSamples]
-        let losses = EnrollmentLossComputer(reference: ref)
+        let losses = EnrollmentLossComputer(checkedReference: ref, sampleRate: 24_000, nMels: 128)  // length checked above
 
         let beacon = RuntimeBeacon.begin(task: "enroll-voice")
         defer { beacon?.end() }

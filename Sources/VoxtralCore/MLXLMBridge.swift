@@ -606,8 +606,12 @@ public func loadQuantizedVoxtral(
     }
     
     // Python: nn.quantize(model, group_size=..., bits=..., class_predicate=...)
-    let globalGroupSize = quantization["group_size"] as! Int
-    let globalBits = quantization["bits"] as! Int
+    // A malformed quantization block leaves the model unquantized: the verified weight load then reports the
+    // shape mismatches as an error instead of a crash here (K-27)
+    guard let globalGroupSize = quantization["group_size"] as? Int, let globalBits = quantization["bits"] as? Int else {
+        VoxtralDebug.always("quantization config without integer group_size/bits: model left unquantized")
+        return model
+    }
 
     // Use the filter that returns per-layer (groupSize, bits, mode) for mixed quantization support
     MLXNN.quantize(

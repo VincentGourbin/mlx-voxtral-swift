@@ -1243,9 +1243,17 @@ func loadQuantizedVoxtral(
  * Standard MLX Swift Model Loading Function
  * Follows exact pattern from all MLX Swift projects
  */
+@available(*, deprecated, message: "dtype is ignored: weights keep the dtype stored in the checkpoint. Use loadVoxtralStandardModel(modelPath:).")
 public func loadVoxtralStandardModel(
     modelPath: String,
-    dtype: MLX.DType = .float16
+    dtype: MLX.DType
+) throws -> (VoxtralStandardModel, VoxtralStandardConfiguration) {
+    try loadVoxtralStandardModel(modelPath: modelPath)
+}
+
+/// Loads a Voxtral STT checkpoint; weights keep the dtype stored in the checkpoint (K-27)
+public func loadVoxtralStandardModel(
+    modelPath: String
 ) throws -> (VoxtralStandardModel, VoxtralStandardConfiguration) {
     VoxtralDebug.log("Loading Voxtral from \(modelPath)")
 
@@ -1270,11 +1278,13 @@ public func loadVoxtralStandardModel(
         let weightsData = try loadWeights(from: modelURL)
 
         // Step 2: Apply quantization structure (transforms Linear -> QuantizedLinear, etc.)
-        let quantizedModel = loadQuantizedVoxtral(
+        guard let quantizedModel = loadQuantizedVoxtral(
             model: model,
             weights: weightsData,
             config: configuration
-        ) as! VoxtralStandardModel
+        ) as? VoxtralStandardModel else {
+            throw VoxtralError.loadingFailed("quantization returned an unexpected model type")
+        }
 
         // Step 3: Sanitize weights for quantized models
         let sanitizedWeights = try quantizedModel.sanitize(weightsData)

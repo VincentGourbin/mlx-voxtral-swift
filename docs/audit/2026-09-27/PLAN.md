@@ -1244,3 +1244,31 @@ Gabarits :
   (`Fatal error … UpdateError.needModuleInfo … VoxtralForConditionalGeneration.standardModel`, défaut préexistant) :
   le test NODUMP passe par le chargeur legacy `loadVoxtralModel(modelPath:dtype:lazy:)`, qui émet les messages
   `writeDebugToDump` (puis échoue sur le dossier bf16, `keyNotFound`, constat de K-3). Famille à déprécier (K-30).
+
+## K-27 — API publique honnête (souches dépréciées, `tokenCount`, plus de `as!`/`precondition` publics) — 2026-10-02 — validée
+- Fait : `TranscriptionResult.tokenCount` = jetons générés (`VoxtralPipeline.lastTokenCount`, additif). Souches
+  dépréciées avec un message exact : `chat(systemPrompt:userMessage:)` (lève toujours `audioRequired`),
+  `saveQuantizedModel` (n'écrit que `config.json`), `toMLMultiArrayNoCopy` (copie), `init(officialLlama:)` (décodeur
+  legacy, `lm_head` aléatoire), `ModelDownloader.hubApi`/`reconfigureHubApi` (téléchargements hors HubApi depuis K-6/K-25),
+  `loadVoxtralStandardModel(modelPath:dtype:)` (dtype ignoré ; nouvelle surcharge sans `dtype`, utilisée par le pipeline),
+  `EnrollmentLossComputer(reference:)` (nouveau `init(validating:) throws`). `as!` (7) → contrôles qui lèvent
+  (`requiredArray`, chargeurs) ; config de quantification malformée → modèle non quantifié, l'erreur de forme remonte
+  au chargement vérifié (K-7). `fatalError` des chargeurs qui lèvent → erreurs ; enrôlement : référence trop courte
+  rejetée à l'entrée (`invalidConfiguration`). Décision de Vincent (2026-10-02) : arrêts sur type de module non supporté
+  ou entrée absente → boîte d'erreurs MLX (`unsupportedConfiguration`, K-1) ; les entrées qui lèvent
+  (`generateStream*`, synthèse TTS batch et streaming) valident les types d'emblée (`validateModuleTypes`) ; seul un
+  appel direct au modèle hors de toute frontière garde l'arrêt. `try?` qui avalaient : regex Tekken, `generation_config`
+  et `config.json` du tokenizer, `config.json` de quantification TTS → erreurs typées.
+- Liste relue des arrêts atteignables depuis l'API publique (un test par cas dans `PublicAPIHonestyTests`) :
+  `language_model` non supporté, `lm_head` non supporté, passe avant sans entrée, nombre de couches d'un décodeur non
+  supporté, embeddings de codebook TTS non supportés, embeddings de jetons TTS non supportés, référence de pertes trop
+  courte ; la `precondition` interne de l'enrôlement n'est plus atteignable (entrées gardées).
+- Porte observée :
+  - `GREEN PublicAPIHonestyTests : 0 failures ; tokenCount=16 (> 0)` (`Executed 8 tests, with 0 failures`) ; rouge sur
+    l'ancien comportement, test par test : `tokenCount` 0, puis arrêt du processus pour les 7 autres cas
+    (« Unsupported language_model type: Linear », « … lm_head type: RMSNorm », « Either input_ids or inputs_embeds… »,
+    « Unsupported embeddings type: Linear », « Unsupported tok_embeddings type: Linear », `precondition`).
+  - `GREP as! : 0`.
+  - `BUILD 0 avertissement nouveau hors @available(*, deprecated)` (4 avertissements préexistants dans des fichiers non
+    touchés : variables inutilisées Realtime/codec).
+  - Suite `Executed 568 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
