@@ -518,19 +518,19 @@ réponse datée ici.
 | ASK-12 | A, sous condition | 2026-10-01 | Donnée par Vincent dans la session Mac : mlx-audio accepté **comme référence seulement** — sortie capturée une fois (environnement Python temporaire hors du dépôt, commit épinglé) et figée en fichier texte ; **aucune dépendance** du code, des tests ou du build à un backend Python. |
 | ASK-13 | | | |
 | ASK-14 | | | |
-| ASK-15 | | | |
+| ASK-15 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `small-24b-8bit` = `VincentGOURBIN/voxtral-small-8bit` (registre et README) ; l'enum `VoxtralPipeline.Model.small24b8bit` s'aligne dessus (K-10). |
 | ASK-16 | | | |
-| ASK-17 | | | |
+| ASK-17 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : corriger `realtime-4b` (liste de fichiers fixée, config lue depuis `params.json`, id strict) (K-9). |
 | ASK-18 | | | (vérification juridique) |
 | ASK-19 | | | |
 | ASK-20 | | | |
-| ASK-21 | | | |
+| ASK-21 | B | 2026-10-02 | Donnée par Vincent dans la session Mac : les modes non affines (mxfp4, mxfp8, nvfp4) sont acceptés au chargement en **expérimental**, sans profil ni garantie de qualité (K-8 : décodage correct du mode, avertissement, hors profils). |
 | ASK-22 | | | |
-| ASK-23 | | | |
+| ASK-23 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : dépréciation annotée en 2.3 (additif, K-30), suppression en 3.0. |
 | ASK-24 | | | |
-| ASK-25 | | | |
+| ASK-25 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : revue 3.0 sur une liste proposée par K-31, relue et amendée par Vincent avant application. |
 | ASK-26 | B | 2026-09-30 | Donnée par Vincent dans la session Mac : `VoxtralBenchmark` retiré du `Package.swift`, remplacé par `VoxtralCLI bench` (K-32). |
-| ASK-27 | | | |
+| ASK-27 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `VoxtralEncoderFull.mlmodelc` n'est plus embarqué ; VoxtralApp le télécharge à l'exécution (ligne `.copy` retirée, K-28). |
 | ASK-28 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : rester sur `main` de mlx-swift-lm, `Package.resolved` suivi dans git (K-22) ; premier tag ensuite (plan `upstream-blocker`). |
 | ASK-29 | | | |
 | ASK-30 | | | |
