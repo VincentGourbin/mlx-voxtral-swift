@@ -5,21 +5,24 @@ import Foundation
 final class TekkenTokenizerTests: XCTestCase {
     
     var tokenizer: TekkenTokenizer!
-    /// The mini-3b-4bit folder resolved by the registry when downloaded (no developer-specific path, K-23)
-    let modelPath = ModelRegistry.model(withId: "mini-3b-4bit").flatMap { ModelDownloader.findModelPath(for: $0)?.path } ?? ""
-    
+    private var fixtureDir: URL!
+
+    /// A reduced real tekken.json (first 2 000 ranks, special tokens, same pattern), versioned with the tests: the
+    /// suite no longer depends on a developer's model folder (K-29). Copied to a temporary folder because loading
+    /// writes a tekken.cache next to it.
     override func setUpWithError() throws {
-        tokenizer = TekkenTokenizer()
-        // Check if model path exists, otherwise use demo tokenizer
-        let tekkenPath = "\(modelPath)/tekken.json"
-        if FileManager.default.fileExists(atPath: tekkenPath) {
-            tokenizer.loadTekkenTokenizerFromFile(modelPath: modelPath)
-        } else {
-            // Use demo tokenizer for testing if model files not available
-            print("⚠️ Model files not found, using demo tokenizer for tests")
-        }
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/tekken-mini.json")
+        fixtureDir = FileManager.default.temporaryDirectory.appendingPathComponent("tekken-mini-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: fixtureDir, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: fixture, to: fixtureDir.appendingPathComponent("tekken.json"))
+        tokenizer = try TekkenTokenizer.load(modelPath: fixtureDir.path)
     }
-    
+
+    override func tearDownWithError() throws {
+        if let fixtureDir { try? FileManager.default.removeItem(at: fixtureDir) }
+    }
+
     // MARK: - Core Functionality Tests
     
     func testBasicTokenization() throws {
@@ -156,13 +159,13 @@ extension TekkenTokenizerTests {
     /// This test validates that our Swift tokenizer produces exactly the same results
     /// as Python mistral-common implementation. This is crucial for model compatibility.
     func testPythonCrossValidation() throws {
-        // Only run cross-validation tests if we have the real model loaded
-        let tekkenPath = "\(modelPath)/tekken.json"
-        guard FileManager.default.fileExists(atPath: tekkenPath) else {
-            print("⚠️ Skipping Python cross-validation - model files not available")
-            return
+        // The full vocabulary is needed: the reference ids come from the real tekken.json (Mini 3B 4-bit pack)
+        let modelPath = ModelRegistry.model(withId: "mini-3b-4bit").flatMap { ModelDownloader.findModelPath(for: $0)?.path }
+        guard let modelPath, FileManager.default.fileExists(atPath: "\(modelPath)/tekken.json") else {
+            throw XCTSkip("mini-3b-4bit is not downloaded: Python cross-validation needs the full vocabulary")
         }
-        
+        let tokenizer = try TekkenTokenizer.load(modelPath: modelPath)
+
         // Test cases that have been validated against Python
         let testCases = [
             ("Hello world", [22177, 4304]),

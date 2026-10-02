@@ -998,9 +998,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                     let totalSeqLen = inputsEmbeds.shape[1]
 
                     if totalSeqLen > prefillChunkSize {
-                        for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                        for chunk in Self.prefillChunkRanges(totalLength: totalSeqLen, chunkSize: prefillChunkSize) {
                             try VoxtralCancellation.check()
-                            let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                            let (chunkStart, chunkEnd) = (chunk.lowerBound, chunk.upperBound)
                             let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 
                             let chunkOutput = self.callAsFunction(
@@ -1192,9 +1192,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
                     let totalSeqLen = inputsEmbeds.shape[1]
 
                     if totalSeqLen > prefillChunkSize {
-                        for chunkStart in stride(from: 0, to: totalSeqLen, by: prefillChunkSize) {
+                        for chunk in Self.prefillChunkRanges(totalLength: totalSeqLen, chunkSize: prefillChunkSize) {
                             try VoxtralCancellation.check()
-                            let chunkEnd = min(chunkStart + prefillChunkSize, totalSeqLen)
+                            let (chunkStart, chunkEnd) = (chunk.lowerBound, chunk.upperBound)
                             let embedsChunk = inputsEmbeds[0..., chunkStart..<chunkEnd, 0...]
 
                             let chunkOutput = self.callAsFunction(
@@ -1367,24 +1367,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Optimized top-p: threshold-based masking without full sort
             // Instead of sorting the full 130K vocab, compute softmax and mask
             // tokens below a probability threshold, then sample from the masked distribution.
-            let probs = softmax(processedLogits, axis: -1)
-
-            // Find the min probability that would be in the top-p nucleus:
-            // top(probs, k) returns the k largest values (unsorted).
-            // We use a conservative k to find the probability cutoff.
-            let vocabSize = processedLogits.shape.last!
-            let k = min(1000, vocabSize)
-            let topKProbs = top(probs, k: k, axis: -1)  // [batch, K] — O(n) partial sort
-            let topKSum = topKProbs.sum(axis: -1, keepDims: true)  // [batch, 1]
-
-            // If top-K already exceeds top-p mass, use the K-th value as cutoff
-            // Otherwise fall back to a small cutoff to include more tokens
-            let kthProb = topKProbs.min(axis: -1, keepDims: true)  // smallest in top-K
-            let cutoff = which(topKSum .>= topP, kthProb, MLXArray(Float(1e-9)))
-
-            // Mask tokens below cutoff
-            let maskedLogits = which(probs .>= cutoff, processedLogits, -Float.infinity)
-
+            let maskedLogits = Self.nucleusMask(processedLogits, topP: topP)
             let sample = categorical(maskedLogits, axis: -1)
             return expandedDimensions(sample, axes: [-1])
         }
@@ -1393,6 +1376,35 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         let logprobs = processedLogits - logSumExp(processedLogits, axes: [-1], keepDims: true)
         let sample = categorical(logprobs, axis: -1)
         return expandedDimensions(sample, axes: [-1])
+    }
+
+    /// Prefill windows of `chunkSize` positions over `totalLength` (the last one shorter) (K-29: tested directly)
+    static func prefillChunkRanges(totalLength: Int, chunkSize: Int) -> [Range<Int>] {
+        stride(from: 0, to: totalLength, by: chunkSize).map { $0 ..< min($0 + chunkSize, totalLength) }
+    }
+
+    /// Logits outside the sampling candidates set to -inf. Candidates: the `candidates` most probable tokens when
+    /// their mass reaches `topP`, otherwise every token above 1e-9 — a top-k(1000) filter rather than an exact
+    /// nucleus (K-29: behaviour pinned by a test, not changed)
+    static func nucleusMask(_ logits: MLXArray, topP: Float, candidates: Int = 1000) -> MLXArray {
+        let processedLogits = logits
+        let probs = softmax(processedLogits, axis: -1)
+
+        // Find the min probability that would be in the top-p nucleus:
+        // top(probs, k) returns the k largest values (unsorted).
+        // We use a conservative k to find the probability cutoff.
+        let vocabSize = processedLogits.shape.last!
+        let k = min(candidates, vocabSize)
+        let topKProbs = top(probs, k: k, axis: -1)  // [batch, K] — O(n) partial sort
+        let topKSum = topKProbs.sum(axis: -1, keepDims: true)  // [batch, 1]
+
+        // If top-K already exceeds top-p mass, use the K-th value as cutoff
+        // Otherwise fall back to a small cutoff to include more tokens
+        let kthProb = topKProbs.min(axis: -1, keepDims: true)  // smallest in top-K
+        let cutoff = which(topKSum .>= topP, kthProb, MLXArray(Float(1e-9)))
+
+        // Mask tokens below cutoff
+        return which(probs .>= cutoff, processedLogits, -Float.infinity)
     }
     
     // Python repetition penalty - exact conversion from modeling_voxtral.py lines 496-509

@@ -19,7 +19,7 @@ final class LegacyNoDumpTests: XCTestCase {
 
     func testLegacyLoaderWritesNoDumpFile() throws {
         let info = try XCTUnwrap(ModelRegistry.model(withId: "mini-3b"))
-        let folder = try XCTUnwrap(ModelDownloader.findModelPath(for: info), "mini-3b is not downloaded")
+        guard let folder = ModelDownloader.findModelPath(for: info) else { throw XCTSkip("mini-3b is not downloaded") }
         try? FileManager.default.removeItem(atPath: dumpPath)
         let wasEnabled = VoxtralDebug.enabled
         VoxtralDebug.enabled = false

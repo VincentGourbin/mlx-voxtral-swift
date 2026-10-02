@@ -267,6 +267,16 @@ public class VoxtralTTSModel: Module {
     // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
     let _codebookOffsets: MLXArray
 
+    /// Frames after which the batched end-of-audio check runs: the first, then every `interval` (K-29: tested directly)
+    static func shouldCheckEOA(frame: Int, interval: Int) -> Bool {
+        (frame + 1) % interval == 0 || frame == 0
+    }
+
+    /// Index of the first end-of-audio frame (semantic code 0 or 1) in `semanticCodes`, or nil
+    static func firstEOA(in semanticCodes: [Int32]) -> Int? {
+        semanticCodes.firstIndex { $0 <= 1 }
+    }
+
     /// The embedding types the forward passes support: the pipeline checks them before synthesis and throws instead
     /// of reaching an unsupported-type stop (K-27)
     func validateModuleTypes() throws {
@@ -520,20 +530,17 @@ public class VoxtralTTSModel: Module {
             session?.recordStep(index: i + 1, total: maxTokens, durationUs: stepDurationUs, category: .semanticCodeGen)
 
             // Periodic EOA check — sync GPU only every N frames
-            if (i + 1) % eoaCheckInterval == 0 || i == 0 {
-                // Check the last eoaCheckInterval frames for EOA
+            if Self.shouldCheckEOA(frame: i, interval: eoaCheckInterval) {
+                // Check the last eoaCheckInterval frames for EOA; trim up to (not including) the EOA frame
                 let checkStart = max(0, allCodes.count - eoaCheckInterval)
-                for j in checkStart..<allCodes.count {
-                    let semanticCode = allCodes[j][0, 0].item(Int32.self)
-                    if semanticCode <= 1 {
-                        // Trim codes up to (but not including) the EOA frame
-                        allCodes = Array(allCodes.prefix(j))
-                        VoxtralDebug.log("  [GEN] EOA at frame \(j)")
-                        eoaReached = true
-                        break
-                    }
+                let semantic = allCodes[checkStart...].map { $0[0, 0].item(Int32.self) }
+                if let offset = Self.firstEOA(in: semantic) {
+                    let j = checkStart + offset
+                    allCodes = Array(allCodes.prefix(j))
+                    VoxtralDebug.log("  [GEN] EOA at frame \(j)")
+                    eoaReached = true
+                    break
                 }
-                if eoaReached { break }
             }
 
             // Embed codes back as LLM input for next step

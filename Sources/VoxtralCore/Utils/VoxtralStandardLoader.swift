@@ -971,7 +971,7 @@ public class VoxtralStandardProjector: Module {
  * Load weights from safetensors files - EXACT 1:1 Python translation
  * Direct Python equivalent: mlx_voxtral/utils/model_loading.py:load_weights (lines 40-60)
  */
-private func loadWeights(from modelURL: URL) throws -> [String: MLXArray] {
+func loadWeights(from modelURL: URL) throws -> [String: MLXArray] {
     VoxtralDebug.log("Loading weights from safetensors")
     var weights: [String: MLXArray] = [:]
 
