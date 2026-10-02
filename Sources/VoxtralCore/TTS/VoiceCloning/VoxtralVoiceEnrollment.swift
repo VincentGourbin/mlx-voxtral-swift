@@ -694,7 +694,7 @@ public final class VoxtralVoiceEnrollment {
         func save(nextEpoch: Int) {
             guard let checkpoint else { return }
             do { try saveCheckpoint(current(nextEpoch: nextEpoch), to: checkpoint) } catch {
-                print("[enroll] checkpoint not saved: \(error)")
+                VoxtralDebug.always("[enroll] checkpoint not saved: \(error)")
             }
         }
 

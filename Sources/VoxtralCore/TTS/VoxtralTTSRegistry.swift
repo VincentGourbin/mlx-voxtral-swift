@@ -84,14 +84,14 @@ public enum VoxtralTTSRegistry {
     }
 
     public static func printAvailableModels() {
-        print("Available Voxtral TTS models:")
+        VoxtralDebug.console("Available Voxtral TTS models:")
         for model in models {
             let marker = model.recommended ? " [recommended]" : ""
-            print("  \(model.id)\(marker) - \(model.name) (\(model.size))")
+            VoxtralDebug.console("  \(model.id)\(marker) - \(model.name) (\(model.size))")
         }
-        print("\nAvailable voices:")
+        VoxtralDebug.console("\nAvailable voices:")
         for v in VoxtralVoice.allCases {
-            print("  \(v.rawValue)")
+            VoxtralDebug.console("  \(v.rawValue)")
         }
     }
 }

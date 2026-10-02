@@ -1215,3 +1215,32 @@ Gabarits :
 - Écarts : la CLI `tts` ignore `--seed` avec `-v` (voix prédéfinie, défaut connu) : le reproducteur a tourné avec ce
   défaut (graines non appliquées) et le cas emballé a été rejoué par `--voice-embedding`. Lignes `BENCH` (216) recopiées
   dans `docs/eval/tts-frame-cap/` plutôt que dans `BENCHMARKS.md` (renvoi depuis `BENCHMARKS.md`).
+
+## K-23 — Code mort sans risque retiré, famille legacy muette, logs `os.Logger` — 2026-10-02 — validée
+- Fait (lot 1 de S-13, aucun retrait public) : supprimés `Scripts/VoxtralGenerate.swift` (+ son `exclude` de
+  `Package.swift`), les fichiers-commentaires `Scripts/Scripts.swift`, `Utils/Utils.swift`, `Models/Models.swift`, les
+  privés morts `debugModelWeights`, `dumpSwiftAudioFeatures`, `loadPythonAudioFeatures` (chemins `/Users/vincent/…`),
+  `debugSwiftWeightLoadingChain`, `VoxtralGenerator.loadModel/loadProcessor/processAudio/generateStreaming/
+  generateBatch`, `convertSnakeCaseToCamelCase` (copie privée inutilisée), le bloc commenté
+  `loadVoxtralWithOfficialLlama` et `aggressiveMemoryCleanup` (app ; `_mergeCallCount` déjà retiré par K-16).
+  `Module.sanitize`/`loadWeights` → `Utils/VoxtralSanitize.swift`, `VoxtralError` → `Errors/VoxtralError.swift`.
+  `writeDebugToDump` : par défaut une ligne `VoxtralDebug.log` (rien hors debug) au lieu d'un ajout à
+  `/tmp/swift_debug_generation.txt`. `VoxtralDebug` : `os.Logger` (sous-système `com.vincentgourbin.voxtral`), stdout
+  seulement si `enabled` ; `always` → journal unifié ; nouveau `console` pour une sortie demandée (listes de modèles,
+  `VOXTRAL_DTYPE_AUDIT`, `predictSemantic(debug: true)`). 151 `print(` de VoxtralCore remplacés. Plus de recherche dans
+  le répertoire courant (encodeur Core ML, `ModelDownloader.candidateFolders`) ni de chemin de développeur.
+  `TekkenTokenizerTests` : dossier `mini-3b-4bit` résolu par le registre (12 tests verts avec le vrai tokenizer).
+  14 commentaires « TODO / For now / would integrate » reformulés en description de l'existant.
+- Porte observée :
+  - `** BUILD SUCCEEDED **` × 3 (VoxtralCLI, VoxtralApp, VoxtralTTSStreamingDemo ; le 4ᵉ schéma, VoxtralBenchmark,
+    a été retiré par K-32) + build du paquet de tests · `Executed 560 tests, with 33 tests skipped and 0 failures`.
+  - `DIFF −915 lignes (≈ 900)` (`33 files changed, 507 insertions(+), 1422 deletions(-)`).
+  - `GREP /Users/ : 0 · print( hors VoxtralDebug : 0 · TODO|For now|would integrate : 0`.
+  - `NODUMP /tmp/swift_debug_generation.txt absent` (`LegacyNoDumpTests` ; rouge avec l'ancien défaut : fichier créé,
+    786 octets).
+  - CLI `tts` sans débogage : la sortie ne contient que les lignes du CLI (progression, statistiques) ; la ligne
+    `[GEN] EOA at frame …` de la bibliothèque a disparu.
+- Écarts : la génération complète par `VoxtralGenerator` (chemin legacy) arrête le processus au chargement
+  (`Fatal error … UpdateError.needModuleInfo … VoxtralForConditionalGeneration.standardModel`, défaut préexistant) :
+  le test NODUMP passe par le chargeur legacy `loadVoxtralModel(modelPath:dtype:lazy:)`, qui émet les messages
+  `writeDebugToDump` (puis échoue sur le dossier bf16, `keyNotFound`, constat de K-3). Famille à déprécier (K-30).

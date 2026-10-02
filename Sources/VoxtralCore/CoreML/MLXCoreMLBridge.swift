@@ -217,7 +217,7 @@ public struct MLXCoreMLBridge {
         eval(mlxArray)
 
         // Note: True zero-copy requires MLX to expose raw pointers
-        // For now, fall back to regular conversion
+        // Copies: same conversion as the regular path
         // In future, with MLX updates, we could use:
         // return try MLMultiArray(dataPointer: mlxArray.rawPointer, ...)
 

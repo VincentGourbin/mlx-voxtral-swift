@@ -365,8 +365,7 @@ public class ModelDownloader {
     }
 
     /// Folders with a `config.json`, in lookup order: custom models directory (HubApi
-    /// downloads to customDir/{org}/{repo}), Hub cache, ~/Library/Caches/models, then the
-    /// project's voxtral_models directory.
+    /// downloads to customDir/{org}/{repo}), Hub cache, then ~/Library/Caches/models.
     private static func candidateFolders(for model: VoxtralModelInfo) -> [URL] {
         var folders: [URL] = []
         if let customDir = customModelsDirectory {
@@ -376,9 +375,7 @@ public class ModelDownloader {
             folders.append(hubPath)
         }
         folders.append(localPath(for: model))
-        folders.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("voxtral_models")
-            .appendingPathComponent(model.repoId.split(separator: "/").last.map(String.init) ?? model.id))
+        // No lookup in the current directory: the result depended on where the host was launched (K-23)
         return folders.filter {
             FileManager.default.fileExists(atPath: $0.appendingPathComponent("config.json").path)
         }
@@ -486,9 +483,8 @@ public class ModelDownloader {
         }
 
         progress?(0.0, "Starting download of \(model.name)...")
-        print("\nDownloading \(model.name) from HuggingFace...")
-        print("Repository: \(model.repoId)")
-        print()
+        VoxtralDebug.log("\nDownloading \(model.name) from HuggingFace...")
+        VoxtralDebug.log("Repository: \(model.repoId)")
 
         progress?(0.1, "Downloading model files...")
 
@@ -502,7 +498,7 @@ public class ModelDownloader {
         try requireComplete(modelUrl, repoId: model.repoId)
 
         progress?(1.0, "Download complete!")
-        print("\nDownload complete: \(modelUrl.path)")
+        VoxtralDebug.log("\nDownload complete: \(modelUrl.path)")
 
         return modelUrl
     }
@@ -515,7 +511,7 @@ public class ModelDownloader {
         progress: DownloadProgressCallback? = nil
     ) async throws -> URL {
         progress?(0.0, "Starting download...")
-        print("\nDownloading from HuggingFace: \(repoId)")
+        VoxtralDebug.log("\nDownloading from HuggingFace: \(repoId)")
 
         let modelUrl = try await downloadRepoDirect(
             repoId: repoId,
@@ -525,7 +521,7 @@ public class ModelDownloader {
         )
 
         progress?(1.0, "Download complete!")
-        print("Model available at: \(modelUrl.path)")
+        VoxtralDebug.log("Model available at: \(modelUrl.path)")
 
         return modelUrl
     }
@@ -730,9 +726,8 @@ public class ModelDownloader {
         }
 
         progress?(0.0, "Starting download of \(model.name)...")
-        print("\nDownloading \(model.name) from HuggingFace...")
-        print("Repository: \(model.repoId)")
-        print()
+        VoxtralDebug.log("\nDownloading \(model.name) from HuggingFace...")
+        VoxtralDebug.log("Repository: \(model.repoId)")
 
         progress?(0.1, "Downloading model files...")
 
@@ -746,7 +741,7 @@ public class ModelDownloader {
         try requireComplete(modelUrl, repoId: model.repoId, requiresVoices: true)
 
         progress?(1.0, "Download complete!")
-        print("TTS model available at: \(modelUrl.path)")
+        VoxtralDebug.log("TTS model available at: \(modelUrl.path)")
 
         return modelUrl
     }

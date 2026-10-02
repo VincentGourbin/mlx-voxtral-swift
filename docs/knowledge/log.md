@@ -111,3 +111,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-14 : plafond TTS = 70 + 10,4 × jetons** (3 × l'ajustement 23,5 + 3,48 × jetons sur 108 synthèses) :
   un emballement (517 frames pour « Bonjour, comment ça va ? », 6 bits, graine 2) s'arrête à 143 ; 107/108 sorties
   identiques. Rappel : la CLI `tts` ignore `--seed` avec `-v` (passer par `--voice-embedding`).
+- 2026-10-02 — **K-23 : −915 lignes mortes, bibliothèque muette hors debug** (`print` → `VoxtralDebug`/`os.Logger`,
+  plus d'écriture dans `/tmp`, plus de CWD ni de `/Users/…`). Le point d'entrée legacy `VoxtralGenerator` est cassé
+  (arrêt `needModuleInfo` au chargement) : à déprécier par K-30.

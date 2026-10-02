@@ -251,13 +251,13 @@ public class FlowMatchingAudioTransformer: Module {
             let raw = logits[0]
             let topK = MLX.argSort(raw, axis: -1)
             let top5 = topK[(-5)...]
-            print("  [DEBUG] Top-5 semantic logits: ", terminator: "")
+            var line = "  [DEBUG] Top-5 semantic logits: "
             for i in 0..<5 {
                 let idx = top5[4 - i].item(Int32.self)
                 let val = raw[Int(idx)].item(Float.self)
-                print("\(idx)(\(String(format: "%.2f", val))) ", terminator: "")
+                line += "\(idx)(\(String(format: "%.2f", val))) "
             }
-            print()
+            VoxtralDebug.console(line)  // `debug: true` asked for it
         }
         // Mask padding and empty_audio in a single pass to reduce GPU allocations
         let totalDim = logits.dim(-1)

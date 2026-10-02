@@ -13,26 +13,15 @@ import MLXLMCommon  // For LanguageModel protocol and KVCacheSimple
 import MLXRandom
 import MLXProfiler
 
-// Global debug dump function - can be set by VoxtralTest2 (read and replaced under a lock)
+// Global debug dump function of the legacy loaders (read and replaced under a lock). Default: a debug log line when
+// VoxtralDebug is enabled, nothing otherwise; it used to append every message to /tmp/swift_debug_generation.txt (K-23)
 public var writeDebugToDump: (String) -> Void {
     get { _writeDebugToDump.get() }
     set { _writeDebugToDump.set(newValue) }
 }
 
 private let _writeDebugToDump = Locked<(String) -> Void>({ message in
-    // Default: write to a temporary file
-    let debugFile = "/tmp/swift_debug_generation.txt"
-    let fileManager = FileManager.default
-    if !fileManager.fileExists(atPath: debugFile) {
-        fileManager.createFile(atPath: debugFile, contents: nil, attributes: nil)
-    }
-    if let fileHandle = FileHandle(forWritingAtPath: debugFile) {
-        fileHandle.seekToEndOfFile()
-        if let data = message.data(using: .utf8) {
-            fileHandle.write(data)
-        }
-        fileHandle.closeFile()
-    }
+    VoxtralDebug.log(message.trimmingCharacters(in: .newlines))
 })
 
 /**
@@ -656,71 +645,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         }
     }
     
-    /**
-     * Debug model weights to compare with Python
-     */
-    private func debugModelWeights() {
-        var weightsDebug = "\n🔍 MODEL WEIGHTS DEBUG:\n"
-        
-        // Check audio tower weights
-        weightsDebug += "Audio tower layers count: \(audioTower.layers.count)\n"
-        
-        // Check multi-modal projector weights - handle both Linear and QuantizedLinear
-        let proj1 = multiModalProjector.linear1
-        if let qLinear1 = proj1 as? QuantizedLinear {
-            weightsDebug += "Projector linear_1 is QuantizedLinear:\n"
-            weightsDebug += "  - weight shape: \(qLinear1.weight.shape), dtype: \(qLinear1.weight.dtype)\n"
-            weightsDebug += "  - scales shape: \(qLinear1.scales.shape)\n"
-            if let biases1 = qLinear1.biases {
-                weightsDebug += "  - biases shape: \(biases1.shape)\n"
-            }
-            weightsDebug += "  - groupSize: \(qLinear1.groupSize), bits: \(qLinear1.bits)\n"
-        } else {
-            let proj1Weight = proj1.weight
-            let proj1Stats = "min=\(proj1Weight.min().item(Float.self)), max=\(proj1Weight.max().item(Float.self)), mean=\(proj1Weight.mean().item(Float.self))"
-            weightsDebug += "Projector linear_1 (Linear) weight shape: \(proj1Weight.shape), stats: \(proj1Stats)\n"
-        }
-        
-        // Check projector linear_2
-        let proj2 = multiModalProjector.linear2
-        if let qLinear2 = proj2 as? QuantizedLinear {
-            weightsDebug += "Projector linear_2 is QuantizedLinear:\n"
-            weightsDebug += "  - weight shape: \(qLinear2.weight.shape), dtype: \(qLinear2.weight.dtype)\n"
-            weightsDebug += "  - scales shape: \(qLinear2.scales.shape)\n"
-            if let biases2 = qLinear2.biases {
-                weightsDebug += "  - biases shape: \(biases2.shape)\n"
-            }
-            weightsDebug += "  - groupSize: \(qLinear2.groupSize), bits: \(qLinear2.bits)\n"
-        } else {
-            let proj2Weight = proj2.weight
-            let proj2Stats = "min=\(proj2Weight.min().item(Float.self)), max=\(proj2Weight.max().item(Float.self)), mean=\(proj2Weight.mean().item(Float.self))"
-            weightsDebug += "Projector linear_2 (Linear) weight shape: \(proj2Weight.shape), stats: \(proj2Stats)\n"
-        }
-        
-        // Check language model weights (first layer) - handle both types
-        if let llamaModel = language_model as? LlamaModel, !llamaModel.layers.isEmpty {
-            let firstLayer = llamaModel.layers[0]
-            let attnQWeight = firstLayer.selfAttn.qProj.weight
-            let attnQStats = "min=\(attnQWeight.min().item(Float.self)), max=\(attnQWeight.max().item(Float.self)), mean=\(attnQWeight.mean().item(Float.self))"
-            weightsDebug += "Language model layer 0 q_proj weight shape: \(attnQWeight.shape), stats: \(attnQStats)\n"
-        }
-        
-        // Check lm_head weights - handle both Linear and QuantizedLinear types
-        // CRITICAL: Check QuantizedLinear FIRST since it inherits from Linear!
-        if let quantizedLinear = lm_head as? QuantizedLinear {
-            let lmHeadWeight = quantizedLinear.weight
-            let lmHeadStats = "min=\(lmHeadWeight.min().item(Float.self)), max=\(lmHeadWeight.max().item(Float.self)), mean=\(lmHeadWeight.mean().item(Float.self))"
-            weightsDebug += "LM head weight shape: \(lmHeadWeight.shape), stats: \(lmHeadStats)\n"
-            weightsDebug += "LM head quantization: groupSize=\(quantizedLinear.groupSize), bits=\(quantizedLinear.bits)\n"
-        } else if let linear = lm_head as? Linear {
-            let lmHeadWeight = linear.weight
-            let lmHeadStats = "min=\(lmHeadWeight.min().item(Float.self)), max=\(lmHeadWeight.max().item(Float.self)), mean=\(lmHeadWeight.mean().item(Float.self))"
-            weightsDebug += "LM head weight shape: \(lmHeadWeight.shape), stats: \(lmHeadStats)\n"
-        }
-        
-        weightsDebug += "🔍 END MODEL WEIGHTS DEBUG\n\n"
-        
-    }
     
     /**
      * Direct Python equivalent: def get_audio_embeds(self, input_features: mx.array) -> mx.array
@@ -774,134 +698,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         return finalEmbeds
     }
     
-    /**
-     * Dump Swift audio features to file for cross-language comparison
-     */
-    private func dumpSwiftAudioFeatures(_ inputFeatures: MLXArray) {
-        let dumpFile = "/Users/vincent/Developpements/convertvoxtral/swift_audio_features_dump.txt"
-        
-        var fileHandle: FileHandle?
-        if !FileManager.default.fileExists(atPath: dumpFile) {
-            FileManager.default.createFile(atPath: dumpFile, contents: nil)
-        }
-        fileHandle = FileHandle(forWritingAtPath: dumpFile)
-
-        defer { fileHandle?.closeFile() }
-        fileHandle?.seekToEndOfFile()
-
-        let inputFlat = inputFeatures.flattened()
-        MLX.eval(inputFlat)
-
-        let inputMin = inputFlat.min().item(Float.self)
-        let inputMax = inputFlat.max().item(Float.self)
-        let inputMean = inputFlat.mean().item(Float.self)
-
-        var dumpContent = ""
-        dumpContent += "# SWIFT AUDIO FEATURES DUMP\n"
-        dumpContent += "# Shape: \(inputFeatures.shape)\n"
-        dumpContent += "# Dtype: \(inputFeatures.dtype)\n"
-        dumpContent += "# Range: [\(String(format: "%.8f", inputMin)), \(String(format: "%.8f", inputMax))]\n"
-        dumpContent += "# Mean: \(String(format: "%.8f", inputMean))\n"
-        dumpContent += "# Format: batch_idx,mel_idx,frame_idx,value\n"
-
-        // Dump all values with indices
-        for b in 0..<inputFeatures.shape[0] {
-            for m in 0..<inputFeatures.shape[1] {
-                for t in 0..<inputFeatures.shape[2] {
-                    let value = inputFeatures[b, m, t].item(Float.self)
-                    dumpContent += "\(b),\(m),\(t),\(String(format: "%.8f", value))\n"
-                }
-            }
-        }
-
-        if let data = dumpContent.data(using: .utf8) {
-            fileHandle?.write(data)
-        }
-
-        
-        // Also create simple format for easy loading
-        let simpleFile = "/Users/vincent/Developpements/convertvoxtral/swift_audio_features_simple.txt"
-        
-        var simpleFileHandle: FileHandle?
-        if !FileManager.default.fileExists(atPath: simpleFile) {
-            FileManager.default.createFile(atPath: simpleFile, contents: nil)
-        }
-        simpleFileHandle = FileHandle(forWritingAtPath: simpleFile)
-
-        defer { simpleFileHandle?.closeFile() }
-
-        let simpleInputFlat = inputFeatures.flattened()
-        MLX.eval(simpleInputFlat)
-
-        var simpleContent = ""
-        simpleContent += "# SWIFT AUDIO FEATURES - SIMPLE FORMAT\n"
-        simpleContent += "# Shape: \(inputFeatures.shape[0]) \(inputFeatures.shape[1]) \(inputFeatures.shape[2])\n"
-
-        for i in 0..<simpleInputFlat.count {
-            let value = simpleInputFlat[i].item(Float.self)
-            simpleContent += "\(String(format: "%.8f", value))\n"
-        }
-
-        if let data = simpleContent.data(using: .utf8) {
-            simpleFileHandle?.write(data)
-        }
-
-    }
     
-    /**
-     * Load Python audio features from dump file for workaround testing
-     */
-    private func loadPythonAudioFeatures() -> MLXArray? {
-        let pythonAudioFile = "/Users/vincent/Developpements/convertvoxtral/python_audio_features_simple.txt"
-        
-        guard FileManager.default.fileExists(atPath: pythonAudioFile) else {
-            return nil
-        }
-        
-        do {
-            let content = try String(contentsOfFile: pythonAudioFile, encoding: .utf8)
-            let lines = content.components(separatedBy: .newlines)
-            
-            // Parse shape from header
-            var shape: [Int] = []
-            for line in lines {
-                if line.hasPrefix("# Shape:") {
-                    let shapePart = line.replacingOccurrences(of: "# Shape:", with: "").trimmingCharacters(in: .whitespaces)
-                    shape = shapePart.components(separatedBy: " ").compactMap { Int($0) }
-                    break
-                }
-            }
-            
-            guard shape.count == 3 else {
-                return nil
-            }
-            
-            // Load values
-            var values: [Float] = []
-            for line in lines {
-                if !line.hasPrefix("#") && !line.trimmingCharacters(in: .whitespaces).isEmpty {
-                    if let value = Float(line.trimmingCharacters(in: .whitespaces)) {
-                        values.append(value)
-                    }
-                }
-            }
-            
-            let expectedValues = shape[0] * shape[1] * shape[2]
-            guard values.count == expectedValues else {
-                return nil
-            }
-            
-            // Convert to MLXArray
-            let pythonAudio = MLXArray(values).reshaped([shape[0], shape[1], shape[2]]).asType(.float32)
-            
-            
-            
-            return pythonAudio
-            
-        } catch {
-            return nil
-        }
-    }
     
     /**
      * Direct Python equivalent: def _merge_input_embeddings(self, input_ids: Optional[mx.array] = None, input_features: Optional[mx.array] = None, inputs_embeds: Optional[mx.array] = None) -> mx.array
@@ -1043,7 +840,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         // Python: model = cls(config)
         // Python: model.load_weights(model_path)
         
-        // For now, create with default config - should be implemented with actual loading
+        // Built from the default configuration, without loading weights (legacy entry point)
         let _ = VoxtralConfig()
         // Python: model = VoxtralForConditionalGeneration(config)
         // Python: model.load_state_dict(weights)
@@ -1130,7 +927,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
-
 
             // Voxtral's LM has no sliding window: a rotating cache would drop the start of the audio or
 
@@ -1328,7 +1124,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             // Override contextSize if memory optimization specifies maxKVCacheSize
             let effectiveContextSize = contextSize ?? memConfig.maxKVCacheSize
-
 
             // Voxtral's LM has no sliding window: a rotating cache would drop the start of the audio or
 

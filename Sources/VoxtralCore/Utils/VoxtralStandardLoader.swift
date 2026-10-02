@@ -401,7 +401,7 @@ public class LlamaStandardModel: Module {
         // Python: if mask is None:
         if attentionMask == nil {
             // Python: mask = create_attention_mask(h, cache)
-            // For now, MLX Swift handles this internally, but we could implement createAttentionMask
+            // The mask is built by the cache (K-3)
             // createAttentionMask creates a causal mask based on sequence length
             attentionMask = createCausalAttentionMask(hiddenStates: hiddenStates, cache: cache)
         }
@@ -1243,33 +1243,6 @@ func loadQuantizedVoxtral(
  * Standard MLX Swift Model Loading Function
  * Follows exact pattern from all MLX Swift projects
  */
-/*
-/**
- * EXPERIMENTAL: Load with official MLXLMCommon.Llama for 100% Python compatibility
- * DEPRECATED: Removed due to API complications with MLXLLM wrapper
- */
-public func loadVoxtralWithOfficialLlama(
-    modelPath: String,
-    dtype: MLX.DType = .float16
-) throws -> (VoxtralForConditionalGeneration, VoxtralStandardConfiguration) {
-    // Load the official Llama and configuration
-    let (officialLlama, configuration) = try loadMLXLLMModel(modelPath: modelPath, dtype: dtype)
-
-    // Create VoxtralForConditionalGeneration with official Llama
-    let model = VoxtralForConditionalGeneration(officialLlama: officialLlama, config: configuration)
-
-    // Load lm_head weights separately
-    let modelWeights = try loadModelWeights(from: modelPath)
-    if let lmHeadWeight = modelWeights["lm_head.weight"] {
-        model.lm_head.weight = lmHeadWeight
-    } else if let embedWeight = modelWeights["language_model.embed_tokens.weight"] {
-        model.lm_head.weight = embedWeight
-    }
-
-    return (model, configuration)
-}
-*/
-
 public func loadVoxtralStandardModel(
     modelPath: String,
     dtype: MLX.DType = .float16

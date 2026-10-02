@@ -74,10 +74,10 @@ public enum VoxtralRealtimeRegistry {
     }
 
     public static func printAvailableModels() {
-        print("Available Voxtral Realtime models:")
+        VoxtralDebug.console("Available Voxtral Realtime models:")
         for model in models {
             let marker = model.recommended ? " [recommended]" : ""
-            print("  \(model.id)\(marker) - \(model.name) (\(model.size))")
+            VoxtralDebug.console("  \(model.id)\(marker) - \(model.name) (\(model.size))")
         }
     }
 }

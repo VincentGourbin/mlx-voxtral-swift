@@ -285,7 +285,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
             let ext = URL(fileURLWithPath: name).pathExtension
             if let url = Bundle.main.url(forResource: baseName, withExtension: ext) {
                 foundURL = url
-                print("[CoreML] Found in main bundle: \(url.path)")
+                VoxtralDebug.log("[CoreML] Found in main bundle: \(url.path)")
                 break
             }
         }
@@ -297,7 +297,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
                 let ext = URL(fileURLWithPath: name).pathExtension
                 if let url = appBundle.url(forResource: baseName, withExtension: ext) {
                     foundURL = url
-                    print("[CoreML] Found in app resource bundle: \(url.path)")
+                    VoxtralDebug.log("[CoreML] Found in app resource bundle: \(url.path)")
                     break
                 }
             }
@@ -317,40 +317,21 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
         // Search in Resources directory (relative to executable for CLI)
         if foundURL == nil {
-            // Get executable directory and look for Resources
+            // Executable-relative Resources (CLI and SwiftPM builds) and VOXTRAL_RESOURCES_PATH; no lookup in the
+            // current directory nor in a developer's home (K-23)
             let executableURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
-            let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-
-            var possiblePaths = [
-                // Current working directory Resources (most common for development)
-                cwd.appendingPathComponent("Resources"),
-                // Build directory structure (.build/debug/VoxtralApp -> project root)
-                executableURL.deletingLastPathComponent().appendingPathComponent("Resources"),
-                executableURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources"),
-                executableURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources"),
-                // Go up more levels for nested build paths
-                executableURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources"),
-            ]
-
-            // Add default development path (convertvoxtral project)
-            #if DEBUG
-            let devProjectPaths = [
-                URL(fileURLWithPath: "/Users/vincent/Developpements/convertvoxtral/Resources"),
-                URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Developpements/convertvoxtral/Resources"),
-            ]
-            possiblePaths.append(contentsOf: devProjectPaths)
-            #endif
-
-            // Support VOXTRAL_RESOURCES_PATH environment variable
+            let executableDir = executableURL.deletingLastPathComponent()
+            var possiblePaths = (0 ..< 4).map { level in
+                (0 ..< level).reduce(executableDir) { url, _ in url.deletingLastPathComponent() }
+                    .appendingPathComponent("Resources")
+            }
             if let envPath = ProcessInfo.processInfo.environment["VOXTRAL_RESOURCES_PATH"] {
                 possiblePaths.insert(URL(fileURLWithPath: envPath), at: 0)
             }
 
-            print("[CoreML] Searching for Core ML model in \(possiblePaths.count) paths...")
-            print("[CoreML] CWD: \(cwd.path)")
-            print("[CoreML] Executable: \(executableURL.path)")
+            VoxtralDebug.log("[CoreML] Searching for Core ML model in \(possiblePaths.count) paths (executable: \(executableURL.path))")
             for basePath in possiblePaths {
-                print("[CoreML]   Checking: \(basePath.path)")
+                VoxtralDebug.log("[CoreML]   Checking: \(basePath.path)")
                 for name in modelNames {
                     let url = basePath.appendingPathComponent(name)
                     if FileManager.default.fileExists(atPath: url.path) {

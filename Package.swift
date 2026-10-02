@@ -60,9 +60,7 @@ let package = Package(
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "MLXProfiler", package: "swift-mlx-profiler")
-            ],
-            // Dead ArgumentParser script (0 callers): kept out of the library until K-23 removes it
-            exclude: ["Scripts/VoxtralGenerate.swift"]
+            ]
         ),
         // SwiftUI macOS application
         .executableTarget(

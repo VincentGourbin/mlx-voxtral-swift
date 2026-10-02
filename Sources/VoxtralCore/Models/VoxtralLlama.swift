@@ -430,13 +430,12 @@ public struct MLXLMRope {
     let rope: RoPE
     
     public func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
-        // This would integrate with MLX-LM's rope implementation
-        // For now, use standard RoPE
+        // Standard RoPE (no MLX-LM rope scaling on this legacy path)
         return rope(x, offset: offset)
     }
     
     public func callAsFunction(_ queries: MLXArray, _ keys: MLXArray, offset: Int = 0) -> (MLXArray, MLXArray) {
-        // This would integrate with MLX-LM's rope implementation
+        // Standard RoPE
         return (rope(queries, offset: offset), rope(keys, offset: offset))
     }
 }

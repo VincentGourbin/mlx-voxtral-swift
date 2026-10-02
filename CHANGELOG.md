@@ -50,6 +50,9 @@ public defaults change behaviour (ASK-9 = A: minor version).
   loaders never read: Mini 3B 9.36 GB instead of 18.7 GB, Small 24B 48.5 instead of 97 GB); registry `size` shows the
   exact size and `quantization` the real precision (`bfloat16` for the Mistral STT packs); the Core ML encoder variant
   follows the model's `config.json` when the id is a local folder.
+- **K-23 — the library is quiet**: nothing on stdout unless `VoxtralDebug.enabled` (messages also go to the unified
+  log, subsystem `com.vincentgourbin.voxtral`); `writeDebugToDump` no longer appends to
+  `/tmp/swift_debug_generation.txt`; no model or Core ML lookup in the current directory anymore.
 - **K-25 — Core ML encoder** downloaded under `ModelDownloader.customModelsDirectory`, reloadable offline, with
   explicit errors; the hybrid encoder no longer loads Core ML when `.mlx` is requested and refuses to encode with an
   unloaded MLX encoder.
@@ -86,6 +89,7 @@ public defaults change behaviour (ASK-9 = A: minor version).
   configurations (`nil` by default: the host's MLX setting is untouched). When set, the limit applies after loading
   and the host's value is restored at `unload()`.
 
+- **K-23 — `VoxtralDebug.console(_:)`** for output a caller asked for (model listings).
 - **K-24 — registries**: `approximateBytes` (exact bytes of the downloaded weights) on `VoxtralModelInfo`,
   `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
   `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.

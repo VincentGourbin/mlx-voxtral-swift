@@ -18,8 +18,8 @@ extension VoxtralGenerator {
     func loadModelFromPath() throws {
         let modelPath = parameters.model
         
-        print("🔄 Loading VoxtralModel from: \(modelPath)")
-        print("   Using dtype: \(dtypeString(parameters.dtype))")
+        VoxtralDebug.log("🔄 Loading VoxtralModel from: \(modelPath)")
+        VoxtralDebug.log("   Using dtype: \(dtypeString(parameters.dtype))")
         
         // Real integration with existing infrastructure
         // Based on demo usage in main.swift and the VoxtralModel class
@@ -38,10 +38,10 @@ extension VoxtralGenerator {
             // Store the model
             self.model = voxtralModel
             
-            print("✅ VoxtralModel loaded successfully")
+            VoxtralDebug.log("✅ VoxtralModel loaded successfully")
             
         } catch {
-            print("❌ Failed to load VoxtralModel: \(error)")
+            VoxtralDebug.log("❌ Failed to load VoxtralModel: \(error)")
             throw VoxtralError.modelNotLoaded
         }
     }
@@ -53,14 +53,14 @@ extension VoxtralGenerator {
     func loadProcessorFromPath() throws {
         let modelPath = parameters.model
         
-        print("🔄 Loading VoxtralProcessor from: \(modelPath)")
+        VoxtralDebug.log("🔄 Loading VoxtralProcessor from: \(modelPath)")
         
         // Real integration with existing VoxtralProcessor
         // Uses the factory method from your existing code
         self.processor = try VoxtralProcessor.fromPretrained(modelPath)
-        print("✅ VoxtralProcessor loaded successfully")
-        print("   ✅ Modèle chargé")
-        print("   ✅ Processeur prêt")
+        VoxtralDebug.log("✅ VoxtralProcessor loaded successfully")
+        VoxtralDebug.log("   ✅ Modèle chargé")
+        VoxtralDebug.log("   ✅ Processeur prêt")
     }
     
     /**
@@ -72,13 +72,13 @@ extension VoxtralGenerator {
             throw VoxtralError.processorNotLoaded
         }
         
-        print("🎵 Processing audio: \(parameters.audioPath)")
-        print("   Language: \(parameters.language)")
+        VoxtralDebug.log("🎵 Processing audio: \(parameters.audioPath)")
+        VoxtralDebug.log("   Language: \(parameters.language)")
         
         // Real integration with existing audio pipeline using VoxtralProcessor
         // Python: inputs = processor.apply_transcrition_request(audio=args.audio, language=args.language)
-        print("🔍 Processing audio with VoxtralProcessor.applyTranscritionRequest")
-        print("   Audio path: \(parameters.audioPath)")
+        VoxtralDebug.log("🔍 Processing audio with VoxtralProcessor.applyTranscritionRequest")
+        VoxtralDebug.log("   Audio path: \(parameters.audioPath)")
         
         // Use the real VoxtralProcessor method instead of placeholder
         let processorInputs = try processor!.applyTranscritionRequest(
@@ -87,8 +87,8 @@ extension VoxtralGenerator {
             samplingRate: nil
         )
         
-        print("   Input shape: \(processorInputs.inputIds.shape)")
-        print("   Audio features: \(processorInputs.inputFeatures.shape)")
+        VoxtralDebug.log("   Input shape: \(processorInputs.inputIds.shape)")
+        VoxtralDebug.log("   Audio features: \(processorInputs.inputFeatures.shape)")
         
         return processorInputs
     }
@@ -103,9 +103,9 @@ extension VoxtralGenerator {
         }
         
         if parameters.verbose {
-            print("\n" + String(repeating: "=", count: 50))
-            print("STREAMING TRANSCRIPTION:")
-            print(String(repeating: "=", count: 50))
+            VoxtralDebug.log("\n" + String(repeating: "=", count: 50))
+            VoxtralDebug.log("STREAMING TRANSCRIPTION:")
+            VoxtralDebug.log(String(repeating: "=", count: 50))
         }
         
         var generatedTokens: [Int] = []
@@ -140,7 +140,7 @@ extension VoxtralGenerator {
             // Decode token immédiatement pour streaming
             if let processor = processor {
                 let tokenText = processor.decode([tokenId], skipSpecialTokens: true)
-                print(tokenText, terminator: "")
+                VoxtralDebug.log(tokenText)
                 fflush(stdout)
                 transcriptionBuilder += tokenText
             }
@@ -159,8 +159,8 @@ extension VoxtralGenerator {
         if parameters.verbose {
             let generationTime = Date().timeIntervalSince(startTime)
             let tokensPerSecond = Float(generatedTokens.count) / Float(generationTime)
-            print("\n" + String(repeating: "=", count: 50))
-            print("Generated \(generatedTokens.count) tokens in \(String(format: "%.2f", generationTime)) seconds (\(String(format: "%.2f", tokensPerSecond)) tokens/s)")
+            VoxtralDebug.log("\n" + String(repeating: "=", count: 50))
+            VoxtralDebug.log("Generated \(generatedTokens.count) tokens in \(String(format: "%.2f", generationTime)) seconds (\(String(format: "%.2f", tokensPerSecond)) tokens/s)")
         }
         
         return transcriptionBuilder
@@ -180,7 +180,7 @@ extension VoxtralGenerator {
         }
         
         // Real integration with existing VoxtralModel.generate method
-        print("🔄 Generating transcription with Python-like params (\(parameters.maxTokens) tokens max)...")
+        VoxtralDebug.log("🔄 Generating transcription with Python-like params (\(parameters.maxTokens) tokens max)...")
         
         do {
             // Call the existing generate method with Python-equivalent parameters
@@ -204,23 +204,23 @@ extension VoxtralGenerator {
                 let generationTime = Date().timeIntervalSince(startTime)
                 let numTokens = generatedTokens.shape[0]
                 let tokensPerSecond = Float(numTokens) / Float(generationTime)
-                print("Generated \(numTokens) tokens in \(String(format: "%.2f", generationTime)) seconds (\(String(format: "%.2f", tokensPerSecond)) tokens/s)")
+                VoxtralDebug.log("Generated \(numTokens) tokens in \(String(format: "%.2f", generationTime)) seconds (\(String(format: "%.2f", tokensPerSecond)) tokens/s)")
                 
-                print("\n" + String(repeating: "=", count: 50))
-                print("TRANSCRIPTION:")
-                print(String(repeating: "=", count: 50))
+                VoxtralDebug.log("\n" + String(repeating: "=", count: 50))
+                VoxtralDebug.log("TRANSCRIPTION:")
+                VoxtralDebug.log(String(repeating: "=", count: 50))
             }
             
-            print(transcription)
+            VoxtralDebug.log(transcription)
             
             if parameters.verbose {
-                print(String(repeating: "=", count: 50))
+                VoxtralDebug.log(String(repeating: "=", count: 50))
             }
             
             return transcription
             
         } catch {
-            print("❌ Generation failed: \(error)")
+            VoxtralDebug.log("❌ Generation failed: \(error)")
             throw VoxtralError.generationFailed("Batch generation failed: \(error)")
         }
     }

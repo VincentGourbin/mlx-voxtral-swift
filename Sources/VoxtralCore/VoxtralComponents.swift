@@ -25,7 +25,6 @@ import Foundation
 import MLX
 import MLXNN
 import MLXRandom
-//import Transformers  // TODO: Integrate later when swift-transformers is stable
 
 // MARK: - 1. TEKKEN TOKENIZER (VALIDÉ)
 
@@ -608,7 +607,7 @@ public class TekkenTokenizer {
      */
     public func encodeTranscription(text: String, audioData: Data? = nil) -> [Int] {
         // Pour l'instant, utiliser la même logique que encode standard
-        // TODO: implémenter la logique spécifique transcription si nécessaire
+        // Same encoding as a chat request: no transcription-specific logic
         return encode(text, addSpecialTokens: true)
     }
     

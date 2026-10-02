@@ -9,7 +9,7 @@
  * let manager = VoxtralTTSSynthesisManager()
  * try await manager.loadModel()
  * let result = try await manager.synthesize(text: "Hello!")
- * print("Generated \(result.duration)s of audio in \(result.generationTime)s")
+ * let seconds = result.duration  // generated in result.generationTime
  * ```
  */
 

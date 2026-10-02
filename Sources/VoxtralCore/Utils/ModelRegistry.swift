@@ -152,38 +152,38 @@ public enum ModelRegistry {
 
     /// Print formatted list of available models
     public static func printAvailableModels() {
-        print("\n" + String(repeating: "=", count: 70))
-        print("AVAILABLE VOXTRAL MODELS")
-        print(String(repeating: "=", count: 70))
+        VoxtralDebug.console("\n" + String(repeating: "=", count: 70))
+        VoxtralDebug.console("AVAILABLE VOXTRAL MODELS")
+        VoxtralDebug.console(String(repeating: "=", count: 70))
 
-        print("\n--- Official Mistral Models (full precision) ---")
+        VoxtralDebug.console("\n--- Official Mistral Models (full precision) ---")
         for model in officialModels {
-            print("  \(model.id): \(model.name)")
-            print("    Repo: \(model.repoId)")
-            print("    Size: \(model.size) | Precision: \(model.quantization)")
-            print("    \(model.description)")
-            print()
+            VoxtralDebug.console("  \(model.id): \(model.name)")
+            VoxtralDebug.console("    Repo: \(model.repoId)")
+            VoxtralDebug.console("    Size: \(model.size) | Precision: \(model.quantization)")
+            VoxtralDebug.console("    \(model.description)")
+            VoxtralDebug.console()
         }
 
-        print("--- Mini Models (3B parameters, quantized) ---")
+        VoxtralDebug.console("--- Mini Models (3B parameters, quantized) ---")
         for model in miniModels {
             let recommended = model.recommended ? " [RECOMMENDED]" : ""
-            print("  \(model.id): \(model.name)\(recommended)")
-            print("    Repo: \(model.repoId)")
-            print("    Size: \(model.size) | Quantization: \(model.quantization)")
-            print("    \(model.description)")
-            print()
+            VoxtralDebug.console("  \(model.id): \(model.name)\(recommended)")
+            VoxtralDebug.console("    Repo: \(model.repoId)")
+            VoxtralDebug.console("    Size: \(model.size) | Quantization: \(model.quantization)")
+            VoxtralDebug.console("    \(model.description)")
+            VoxtralDebug.console()
         }
 
-        print("--- Small Models (24B parameters, quantized) ---")
+        VoxtralDebug.console("--- Small Models (24B parameters, quantized) ---")
         for model in smallModels {
-            print("  \(model.id): \(model.name)")
-            print("    Repo: \(model.repoId)")
-            print("    Size: \(model.size) | Quantization: \(model.quantization)")
-            print("    \(model.description)")
-            print()
+            VoxtralDebug.console("  \(model.id): \(model.name)")
+            VoxtralDebug.console("    Repo: \(model.repoId)")
+            VoxtralDebug.console("    Size: \(model.size) | Quantization: \(model.quantization)")
+            VoxtralDebug.console("    \(model.description)")
+            VoxtralDebug.console()
         }
 
-        print(String(repeating: "=", count: 70))
+        VoxtralDebug.console(String(repeating: "=", count: 70))
     }
 }

@@ -5,7 +5,8 @@ import Foundation
 final class TekkenTokenizerTests: XCTestCase {
     
     var tokenizer: TekkenTokenizer!
-    let modelPath = "/Users/vincent/Developpements/convertvoxtral/voxtral_models/voxtral-mini-3b-4bit-mixed"
+    /// The mini-3b-4bit folder resolved by the registry when downloaded (no developer-specific path, K-23)
+    let modelPath = ModelRegistry.model(withId: "mini-3b-4bit").flatMap { ModelDownloader.findModelPath(for: $0)?.path } ?? ""
     
     override func setUpWithError() throws {
         tokenizer = TekkenTokenizer()

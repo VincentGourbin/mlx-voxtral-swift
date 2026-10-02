@@ -283,23 +283,6 @@ class TranscriptionManager: ObservableObject {
         Memory.clearCache()
     }
 
-    /// Aggressive memory cleanup - clears cache and resets peak tracking
-    func aggressiveMemoryCleanup() {
-        // Clear the recyclable cache
-        Memory.clearCache()
-        // Reset peak memory tracking
-        GPU.resetPeakMemory()
-        // Try setting a temporary low cache limit to force cleanup
-        let currentCache = Memory.cacheMemory
-        if currentCache > 0 {
-            // Int.max is not MLX's default (block_limit): restore the value read before (K-52, MLX-010)
-            let previous = Memory.cacheLimit
-            Memory.cacheLimit = 0  // Temporarily disable caching
-            Memory.clearCache()
-            Memory.cacheLimit = previous
-        }
-    }
-
     /// Get current MLX memory stats
     var memoryStats: (active: Int, cache: Int, peak: Int) {
         (Memory.activeMemory, Memory.cacheMemory, Memory.peakMemory)

@@ -9,7 +9,7 @@
  * let manager = VoxtralTranscriptionManager()
  * try await manager.loadModel()
  * let result = try await manager.transcribe(audioURL: audioFile)
- * print(result.text)
+ * let text = result.text
  * manager.unloadModel()
  * ```
  */

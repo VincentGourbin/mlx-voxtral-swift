@@ -517,7 +517,7 @@ public class VoxtralTTSModel: Module {
                     if semanticCode <= 1 {
                         // Trim codes up to (but not including) the EOA frame
                         allCodes = Array(allCodes.prefix(j))
-                        print("  [GEN] EOA at frame \(j)")
+                        VoxtralDebug.log("  [GEN] EOA at frame \(j)")
                         eoaReached = true
                         break
                     }
@@ -686,7 +686,7 @@ public class VoxtralTTSModel: Module {
                 // EOA check
                 let semanticCode = codes[0, 0].item(Int32.self)
                 if semanticCode <= 1 {
-                    print("  [GEN] EOA at frame \(i)")
+                    VoxtralDebug.log("  [GEN] EOA at frame \(i)")
                     // Yield final chunk if there are pending frames
                     if !allCodes.isEmpty {
                         let audioCodes = MLX.stacked(allCodes, axis: 1)

@@ -70,6 +70,5 @@ public let VoxtralCoreVersion = "0.1.0"
  * - Quantization functions (mixed precision, etc.)
  *
  * CLI Scripts:
- * - VoxtralGenerate (generation script)
  * - VoxtralQuantize (quantization script)
  */

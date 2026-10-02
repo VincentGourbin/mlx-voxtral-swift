@@ -12,7 +12,7 @@ enum DTypeAudit {
 
     static func report(_ pipeline: String, _ label: String, _ array: MLXArray?) {
         guard isEnabled, let array else { return }
-        print("DTYPE \(pipeline) \(label)=\(array.dtype) shape=\(array.shape)")
+        VoxtralDebug.console("DTYPE \(pipeline) \(label)=\(array.dtype) shape=\(array.shape)")
     }
 
     static func report(_ pipeline: String, cache: [any KVCache]?) {

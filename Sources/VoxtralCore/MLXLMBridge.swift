@@ -76,7 +76,7 @@ public func mlxLMCreateAttentionMask(_ x: MLXArray, cache: [any KVCache]? = nil)
         //     else:
         //         return "causal"
         
-        // For now, always return array (Python would return "causal" for optimization)
+        // Always an array (Python returns "causal" here)
         // Create causal mask with offset
         return createCausalMask(N: T, offset: offset, windowSize: windowSize)
         
@@ -179,7 +179,7 @@ public func mlxLMGetModelPath(_ modelName: String) -> String {
     // Python: def get_model_path(model_name: str) -> str
     // This function resolves model names to local paths or downloads them
     
-    // For now, assume local path - in real implementation this would:
+    // Treats the argument as a local path; the Python version would:
     // 1. Check if it's a local path
     // 2. Check HuggingFace cache
     // 3. Download if needed
@@ -383,124 +383,6 @@ public extension VoxtralForConditionalGeneration {
         return (min: minVal, max: maxVal, mean: meanVal)
     }
     
-    /**
-     * TRACE COMPLET DE LA CHAÎNE DE CHARGEMENT DES POIDS SWIFT
-     * Remonter de la valeur finale jusqu'à l'appel initial pour identifier chaque étape
-     */
-    private func debugSwiftWeightLoadingChain() {
-        writeDebugToDump("🔍 TRACE COMPLET CHAÎNE CHARGEMENT POIDS SWIFT\n")
-        writeDebugToDump(String(repeating: "=", count: 70) + "\n")
-        
-        let modelPath = "/Users/vincent/Developpements/convertvoxtral/voxtral_models/voxtral-mini-3b-4bit-mixed"
-        
-        writeDebugToDump("📂 POINT DE DÉPART: Valeurs finales dans le modèle Swift\n")
-        writeDebugToDump("Model path: \(modelPath)\n")
-        
-        writeDebugToDump("\n🔍 ÉTAPE-PAR-ÉTAPE REMONTÉE DE LA CHAÎNE:\n")
-        writeDebugToDump(String(repeating: "=", count: 70) + "\n")
-        
-        // ÉTAPE 1: VoxtralForConditionalGeneration.init(path:) - Point d'entrée
-        writeDebugToDump("\n📋 ÉTAPE 1: VoxtralForConditionalGeneration.init(path:) - POINT D'ENTRÉE\n")
-        writeDebugToDump("  Fonction: VoxtralForConditionalGeneration.init(path:)\n")
-        writeDebugToDump("  Input: path='\(modelPath)'\n")
-        writeDebugToDump("  Rôle: Point d'entrée principal, orchestrateur du chargement\n")
-        writeDebugToDump("  Location: MLXLMBridge.swift:253\n")
-        
-        // ÉTAPE 2: loadVoxtralModel() - Appel interne
-        writeDebugToDump("\n📋 ÉTAPE 2: loadVoxtralModel() - Appel interne Swift\n")
-        writeDebugToDump("  Fonction: loadVoxtralModel(modelPath:, dtype:)\n")
-        writeDebugToDump("  Input: modelPath='\(modelPath)', dtype=.float16\n")
-        writeDebugToDump("  Location: VoxtralModelLoading.swift\n")
-        writeDebugToDump("  Rôle: Orchestrateur principal du chargement Swift\n")
-        
-        // ÉTAPE 3: loadConfig() - Configuration
-        writeDebugToDump("\n📋 ÉTAPE 3: loadConfig() - Chargement configuration\n")
-        writeDebugToDump("  Fonction: VoxtralCore.loadConfig(from:)\n")
-        writeDebugToDump("  Input: URL('\(modelPath)')\n")
-        writeDebugToDump("  Output: VoxtralConfig object\n")
-        // Check quantization dynamically from loaded config
-        let hasQuantization: Bool = {
-            do {
-                let configURL = URL(fileURLWithPath: modelPath).appendingPathComponent("config.json")
-                let configData = try Data(contentsOf: configURL)
-                if let json = try JSONSerialization.jsonObject(with: configData) as? [String: Any] {
-                    return json["quantization"] != nil
-                }
-            } catch {}
-            return false
-        }()
-        writeDebugToDump("  Has quantization: \(hasQuantization)\n")
-        
-        // ÉTAPE 4: VoxtralForConditionalGeneration(config) - Création structure
-        writeDebugToDump("\n📋 ÉTAPE 4: VoxtralForConditionalGeneration(config) - Création structure\n")
-        writeDebugToDump("  Fonction: VoxtralForConditionalGeneration(config:)\n")
-        writeDebugToDump("  Rôle: Crée la structure du modèle avec poids aléatoires\n")
-        writeDebugToDump("  Fresh model proj1 type: Linear (avant quantization)\n")
-        
-        // ÉTAPE 5: loadWeights() - Chargement safetensors
-        writeDebugToDump("\n📋 ÉTAPE 5: loadWeights() - Chargement depuis safetensors\n")
-        writeDebugToDump("  Fonction: VoxtralCore.loadWeights(modelPath:)\n")
-        writeDebugToDump("  Input: URL('\(modelPath)')\n")
-        writeDebugToDump("  Rôle: Charge les tenseurs bruts depuis les safetensors\n")
-        
-        // Essayer de charger les poids bruts pour comparaison
-        do {
-            let modelURL = URL(fileURLWithPath: modelPath)
-            let rawWeights = try VoxtralCore.loadWeights(modelPath: modelURL)
-            writeDebugToDump("  Output: \(rawWeights.count) raw weight tensors\n")
-            
-            // Inspecter les valeurs brutes
-            let key1 = "multiModalProjector.linear1.weight"
-            if let rawTensor = rawWeights[key1] {
-                let rawFirst3 = extractFirst3Values(from: rawTensor)
-                writeDebugToDump("  Raw tensor '\(key1)':\n")
-                writeDebugToDump("    Shape: \(rawTensor.shape), dtype: \(rawTensor.dtype)\n")
-                writeDebugToDump("    First 3 values: \(rawFirst3)\n")
-            }
-            
-            let key2 = "multiModalProjector.linear1.scales"
-            if let rawTensor = rawWeights[key2] {
-                let rawFirst3 = extractFirst3Values(from: rawTensor)
-                writeDebugToDump("  Raw tensor '\(key2)':\n")
-                writeDebugToDump("    Shape: \(rawTensor.shape), dtype: \(rawTensor.dtype)\n")
-                writeDebugToDump("    First 3 values: \(rawFirst3)\n")
-            }
-            
-        } catch {
-            writeDebugToDump("  ❌ Erreur lors du chargement des poids bruts: \(error)\n")
-        }
-        
-        // ÉTAPE 6: Quantization
-        writeDebugToDump("\n📋 ÉTAPE 6: quantizeModel() - Transformation quantization\n")
-        writeDebugToDump("  Fonction: quantizeModel()\n")
-        writeDebugToDump("  Location: VoxtralQuantization.swift\n")
-        writeDebugToDump("  Rôle: Transforme Linear → QuantizedLinear selon config\n")
-        writeDebugToDump("  GroupSize: 64, Bits: 4/6 (mixed)\n")
-        
-        // ÉTAPE 7: loadWeights/update - Application des poids
-        writeDebugToDump("\n📋 ÉTAPE 7: loadWeights/update - Application des poids\n")
-        writeDebugToDump("  Fonction: model.loadWeights() ou model.update()\n")
-        writeDebugToDump("  Location: VoxtralModelLoading.swift lignes 245-250\n")
-        writeDebugToDump("  Rôle: Applique les poids chargés au modèle quantifié\n")
-        
-        // ÉTAPE 8: update(modules:) - dans MLXLMBridge
-        writeDebugToDump("\n📋 ÉTAPE 8: update(modules:) - Copie module\n")
-        writeDebugToDump("  Fonction: self.update(modules:)\n")
-        writeDebugToDump("  Location: MLXLMBridge.swift ligne 286\n")
-        writeDebugToDump("  Rôle: Copie les modules du modèle chargé vers self\n")
-        
-        writeDebugToDump("\n🎯 RÉSUMÉ CHAÎNE SWIFT:\n")
-        writeDebugToDump("1. VoxtralForConditionalGeneration.init(path:) → Entry point\n")
-        writeDebugToDump("2. loadVoxtralModel() → Swift orchestrateur\n")
-        writeDebugToDump("3. loadConfig() → VoxtralConfig from JSON\n")
-        writeDebugToDump("4. VoxtralForConditionalGeneration(config:) → Fresh model structure\n")
-        writeDebugToDump("5. loadWeights() → Raw tensors from safetensors\n")
-        writeDebugToDump("6. quantizeModel() → Apply quantization structure\n")
-        writeDebugToDump("7. model.loadWeights() → Apply weights to quantized model\n")
-        writeDebugToDump("8. self.update(modules:) → Copy loaded model to self\n")
-        
-        writeDebugToDump("\n✅ TRACE CHAÎNE SWIFT TERMINÉ\n\n")
-    }
     
     // Helper pour extraire 3 première valeurs d'un tensor
     private func extractFirst3Values(from array: MLXArray) -> [String] {
@@ -543,7 +425,7 @@ public extension VoxtralForConditionalGeneration {
         let modelURL = URL(fileURLWithPath: path)
         let weights = try VoxtralCore.loadWeights(modelPath: modelURL)
         
-        print("Loading \(weights.count) weight tensors from: \(path)")
+        VoxtralDebug.log("Loading \(weights.count) weight tensors from: \(path)")
         
         // Python: weights = model.sanitize(weights)
         let sanitizedWeights = try self.sanitize(weights)
@@ -552,7 +434,7 @@ public extension VoxtralForConditionalGeneration {
         let weightItems = sanitizedWeights.map { (key: $0.key, value: $0.value) }
         try self.loadWeights(weightItems, strict: true)
         
-        print("✅ Successfully loaded \(sanitizedWeights.count) weight tensors")
+        VoxtralDebug.log("✅ Successfully loaded \(sanitizedWeights.count) weight tensors")
     }
 }
 

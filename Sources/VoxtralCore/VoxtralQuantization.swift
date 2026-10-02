@@ -29,7 +29,7 @@ private func hasQuantizationScales(_ param: MLXArray) -> Bool {
     if shape.count > 1 {
         // If the shape suggests grouped quantization (e.g., weights are packed)
         // This is a heuristic based on common quantization patterns
-        return false  // For now, rely mainly on dtype check
+        return false  // the dtype check decides
     }
     
     return false
@@ -49,7 +49,7 @@ private func hasQuantizationScales(_ param: MLXArray) -> Bool {
 public func quantizeModel<T: Module>(_ model: T, groupSize: Int = 64, bits: Int = 4, classPredicate: ((String, Module) -> Bool)? = nil) throws {
     // Python: mlx_lm.utils.quantize_model() equivalent
     // Swift MLX: quantize(model:groupSize:bits:filter:apply:) from MLXNN
-    print("Quantizing model with group_size=\(groupSize), bits=\(bits)")
+    VoxtralDebug.log("Quantizing model with group_size=\(groupSize), bits=\(bits)")
 
     // Use MLX Swift's built-in quantize function with the new 4-argument API
     quantize(
@@ -84,7 +84,7 @@ public func saveConfig(_ config: [String: Any], to path: String) throws {
  */
 public func saveModel<T: Module>(_ model: T, to path: String) throws {
     // Python: mlx_lm.utils.save_model(model, path)
-    print("Saving model to: \(path)")
+    VoxtralDebug.log("Saving model to: \(path)")
     
     // Create directory if it doesn't exist
     let pathURL = URL(fileURLWithPath: path)
@@ -103,7 +103,7 @@ public func saveModel<T: Module>(_ model: T, to path: String) throws {
     let modelURL = pathURL.appendingPathComponent("model.safetensors")
     try save(arrays: parameterDict, metadata: [:], url: modelURL)
     
-    print("✅ Model saved successfully to \(modelURL.path)")
+    VoxtralDebug.log("✅ Model saved successfully to \(modelURL.path)")
 }
 
 /**
@@ -459,7 +459,7 @@ public func loadQuantizedVoxtral(
             
             // We need to manually replace Linear layers with QuantizedLinear
             // This requires accessing and modifying the model structure
-            // For now, just log that this is needed
+            // Only logged: this legacy path does not save weights
             writeDebugToDump("  ❌ Manual conversion needed - quantize() doesn't replace layers in Swift\n")
             writeDebugToDump("  📝 Need to implement manual Linear -> QuantizedLinear conversion\n")
         }
@@ -507,11 +507,11 @@ public func saveQuantizedModel<T: Module>(
 ) throws {
     // Python: save_model(model, save_path) - uses mlx_lm.utils.save_model (external dependency)
     // In Swift MLX, this would require implementing model serialization or using external library
-    print("Saving quantized model to: \(savePath)")
+    VoxtralDebug.log("Saving quantized model to: \(savePath)")
     
-    // For now, we note that model weights saving requires external implementation
+    // Saving the model weights is not implemented on this legacy path
     // Real implementation would serialize model parameters to .safetensors or similar format
-    print("⚠️ Model saving requires external implementation - Python uses mlx_lm.utils.save_model")
+    VoxtralDebug.log("⚠️ Model saving requires external implementation - Python uses mlx_lm.utils.save_model")
     
     // Python: if config is not None:
     if let config = config {
