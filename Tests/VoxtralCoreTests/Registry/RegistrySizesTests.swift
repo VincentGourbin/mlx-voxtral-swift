@@ -36,7 +36,7 @@ final class RegistrySizesTests: XCTestCase {
         let hub = try hubBytes()
         XCTAssertEqual(hub.count, 13, "13 registry ids in docs/Weights.md §1")
         let entries: [(String, String, Int64?)] =
-            ModelRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
+            VoxtralModelRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
             + VoxtralTTSRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
             + VoxtralRealtimeRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
         for (id, size, bytes) in entries {
@@ -51,7 +51,7 @@ final class RegistrySizesTests: XCTestCase {
 
     func testMistralSTTPacksAreBF16() throws {
         for id in ["mini-3b", "small-24b"] {
-            XCTAssertEqual(try XCTUnwrap(ModelRegistry.model(withId: id)).quantization, "bfloat16", id)
+            XCTAssertEqual(try XCTUnwrap(VoxtralModelRegistry.model(withId: id)).quantization, "bfloat16", id)
         }
     }
 }

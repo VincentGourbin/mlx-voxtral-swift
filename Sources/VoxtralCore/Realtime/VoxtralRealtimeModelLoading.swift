@@ -15,7 +15,7 @@ import MLXLMCommon
 
 // MARK: - Model Loading
 
-public func loadVoxtralRealtimeModel(
+func loadVoxtralRealtimeModel(
     from modelDirectory: URL,
     progressCallback: ((Float, String) -> Void)? = nil
 ) throws -> VoxtralRealtimeModel {

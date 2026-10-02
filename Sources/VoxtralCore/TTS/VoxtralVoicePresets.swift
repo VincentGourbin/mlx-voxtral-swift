@@ -44,12 +44,12 @@ public enum VoxtralVoice: String, CaseIterable, Sendable {
     }
 
     /// Embedding file name on HuggingFace
-    public var embeddingFileName: String {
+    var embeddingFileName: String {
         "voice_embedding/\(rawValue).pt"
     }
 
     /// Safetensors file name (after conversion)
-    public var safetensorsFileName: String {
+    var safetensorsFileName: String {
         "voice_embedding/\(rawValue).safetensors"
     }
 
@@ -73,15 +73,15 @@ public enum VoxtralVoice: String, CaseIterable, Sendable {
 // MARK: - Voice Preset Manager
 
 /// Manages downloading and caching voice embeddings.
-public class VoxtralVoicePresetManager: @unchecked Sendable {
+class VoxtralVoicePresetManager: @unchecked Sendable {
 
     /// Directory where voice embeddings are cached
-    public let cacheDirectory: URL
+    let cacheDirectory: URL
 
     /// The model repo for downloading voice embeddings
-    public let modelRepoId: String
+    let modelRepoId: String
 
-    public init(
+    init(
         cacheDirectory: URL? = nil,
         modelRepoId: String = "mistralai/Voxtral-4B-TTS-2603"
     ) {
@@ -105,7 +105,7 @@ public class VoxtralVoicePresetManager: @unchecked Sendable {
     ///   - voice: The voice preset to load
     ///   - modelDirectory: Directory containing the model files
     /// - Returns: Voice embedding tensor
-    public func loadVoiceEmbedding(
+    func loadVoiceEmbedding(
         voice: VoxtralVoice,
         from modelDirectory: URL
     ) throws -> MLXArray {
@@ -137,7 +137,7 @@ public class VoxtralVoicePresetManager: @unchecked Sendable {
     }
 
     /// Check if a voice embedding is available locally.
-    public func isVoiceAvailable(_ voice: VoxtralVoice, in modelDirectory: URL) -> Bool {
+    func isVoiceAvailable(_ voice: VoxtralVoice, in modelDirectory: URL) -> Bool {
         let safetensorsPath = modelDirectory.appendingPathComponent(voice.safetensorsFileName)
         let ptPath = modelDirectory.appendingPathComponent(voice.embeddingFileName)
         return FileManager.default.fileExists(atPath: safetensorsPath.path)
@@ -145,7 +145,7 @@ public class VoxtralVoicePresetManager: @unchecked Sendable {
     }
 
     /// List all voices available in a model directory.
-    public func availableVoices(in modelDirectory: URL) -> [VoxtralVoice] {
+    func availableVoices(in modelDirectory: URL) -> [VoxtralVoice] {
         VoxtralVoice.allCases.filter { isVoiceAvailable($0, in: modelDirectory) }
     }
 }

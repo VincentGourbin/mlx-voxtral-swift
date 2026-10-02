@@ -1,6 +1,6 @@
 /**
- * ModelLoadingSymlinkedDirectoryTests - Regression test for loadWeights(modelPath:) (legacy) and
- * loadWeights(from:) (the live STT loader, K-29)
+ * ModelLoadingSymlinkedDirectoryTests - Regression test for loadWeights(from:) (the live STT loader, K-29; the
+ * legacy loadWeights(modelPath:) was removed in 3.0, K-31)
  *
  * `contentsOfDirectory(at:)` (the `URL`-based API) silently returns nothing for
  * files one level inside a *symlinked* directory; `contentsOfDirectory(atPath:)`
@@ -14,27 +14,6 @@ import MLX
 @testable import VoxtralCore
 
 final class ModelLoadingSymlinkedDirectoryTests: XCTestCase {
-
-    func testLoadWeightsFollowsSymlinkedModelDirectory() throws {
-        let fm = FileManager.default
-        let root = fm.temporaryDirectory.appendingPathComponent("voxtral-symlinkdir-\(UUID().uuidString)")
-        let realModelDir = root.appendingPathComponent("real-model")
-        let parentDir = root.appendingPathComponent("parent")
-        try fm.createDirectory(at: realModelDir, withIntermediateDirectories: true)
-        try fm.createDirectory(at: parentDir, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: root) }
-
-        let expected = MLXArray([Float(1), 2, 3])
-        try MLX.save(arrays: ["test.weight": expected], url: realModelDir.appendingPathComponent("weights.safetensors"))
-
-        // The model directory itself is a symlink (simulates a v2 whole-directory relocation).
-        let symlinkedModelDir = parentDir.appendingPathComponent("model")
-        try fm.createSymbolicLink(at: symlinkedModelDir, withDestinationURL: realModelDir)
-
-        let weights = try loadWeights(modelPath: symlinkedModelDir)
-
-        XCTAssertEqual(weights["test.weight"]?.asArray(Float.self), expected.asArray(Float.self))
-    }
 
     /// The live STT loader (`loadVoxtralStandardModel` → `loadWeights(from:)`) follows a symlinked model directory
     /// and skips `consolidated.safetensors` (K-29)

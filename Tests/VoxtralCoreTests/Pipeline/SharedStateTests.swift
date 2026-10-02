@@ -59,11 +59,11 @@ final class SharedStateTests: XCTestCase {
     func testConcurrentSharedSettings() {
         let manager = VoxtralMemoryManager.shared
         let savedConfig = manager.config
-        let savedDir = ModelDownloader.customModelsDirectory
+        let savedDir = VoxtralModelDownloader.customModelsDirectory
         let savedDebug = VoxtralDebug.enabled
         defer {
             manager.config = savedConfig
-            ModelDownloader.customModelsDirectory = savedDir
+            VoxtralModelDownloader.customModelsDirectory = savedDir
             VoxtralDebug.enabled = savedDebug
         }
         let presets: [MemoryOptimizationConfig] = [.disabled, .light, .moderate, .ultra]
@@ -74,9 +74,8 @@ final class SharedStateTests: XCTestCase {
             _ = manager.config.evalFrequency
             manager.optimizeIfNeeded(tokenIndex: i)
             manager.resetOptimizationCycle()
-            ModelDownloader.customModelsDirectory = i.isMultiple(of: 2) ? dir : savedDir
-            _ = ModelDownloader.customModelsDirectory
-            _ = ModelDownloader.hubApi
+            VoxtralModelDownloader.customModelsDirectory = i.isMultiple(of: 2) ? dir : savedDir
+            _ = VoxtralModelDownloader.customModelsDirectory
             VoxtralDebug.enabled = false
             VoxtralDebug.log("concurrent \(i)")
         }

@@ -11,17 +11,17 @@ import MLX
 /// Centralized memory manager for Voxtral GPU operations
 /// Singleton for managing MLX GPU memory; `config` and the eval counter are guarded by `lock`.
 /// Pipelines pass their own configuration and never write `config` (S-11).
-public final class VoxtralMemoryManager: @unchecked Sendable {
+final class VoxtralMemoryManager: @unchecked Sendable {
 
     // MARK: - Singleton
 
     /// Shared instance for global memory management
-    public static let shared = VoxtralMemoryManager()
+    static let shared = VoxtralMemoryManager()
 
     // MARK: - Properties
 
     /// Default memory optimization configuration, used only when a caller passes none
-    public var config: MemoryOptimizationConfig {
+    var config: MemoryOptimizationConfig {
         get { lock.lock(); defer { lock.unlock() }; return _config }
         set { lock.lock(); _config = newValue; lock.unlock() }
     }
@@ -41,7 +41,7 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
 
     /// Clear the GPU cache to free unused memory
     /// Call this after large operations or when memory pressure is detected
-    public func clearCache() {
+    func clearCache() {
         Memory.clearCache()
         VoxtralDebug.log("🧹 GPU cache cleared")
     }
@@ -49,7 +49,7 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     /// Full cleanup: clear cache and reset the eval counter. The peak-memory counter is left alone:
     /// resetting it belongs to the measuring tool, not to the library (K-32, P-77)
     /// Use this between transcription sessions for maximum memory recovery
-    public func fullCleanup() {
+    func fullCleanup() {
         Memory.clearCache()
         lock.lock()
         evalCounter = 0
@@ -59,18 +59,18 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
 
     /// Get current memory statistics
     /// - Returns: Tuple of (active memory bytes, cache memory bytes, peak memory bytes)
-    public func memorySummary() -> (active: Int, cache: Int, peak: Int) {
+    func memorySummary() -> (active: Int, cache: Int, peak: Int) {
         return (Memory.activeMemory, Memory.cacheMemory, Memory.peakMemory)
     }
 
     /// Get formatted memory summary string
-    public func formattedMemorySummary() -> String {
+    func formattedMemorySummary() -> String {
         let (active, cache, peak) = memorySummary()
         return "GPU Memory: Active=\(formatBytes(active)), Cache=\(formatBytes(cache)), Peak=\(formatBytes(peak))"
     }
 
     /// Log current memory status
-    public func logMemoryStatus() {
+    func logMemoryStatus() {
         VoxtralDebug.log(formattedMemorySummary())
     }
 
@@ -78,12 +78,12 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
 
     /// Called during generation to apply memory optimization based on config
     /// - Parameter tokenIndex: Current token index in generation
-    public func optimizeIfNeeded(tokenIndex: Int) {
+    func optimizeIfNeeded(tokenIndex: Int) {
         optimizeIfNeeded(tokenIndex: tokenIndex, config: config)
     }
 
     /// Same, with the caller's configuration (a pipeline passes its own)
-    public func optimizeIfNeeded(tokenIndex: Int, config: MemoryOptimizationConfig) {
+    func optimizeIfNeeded(tokenIndex: Int, config: MemoryOptimizationConfig) {
         guard config.evalFrequency > 0 else { return }
 
         lock.lock()
@@ -102,7 +102,7 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     }
 
     /// Reset the eval counter (call at start of new generation)
-    public func resetOptimizationCycle() {
+    func resetOptimizationCycle() {
         lock.lock()
         evalCounter = 0
         lock.unlock()
@@ -113,7 +113,7 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     /// Check if memory usage is approaching critical levels
     /// - Parameter threshold: Percentage threshold (0.0-1.0) for warning
     /// - Returns: True if memory usage exceeds threshold
-    public func isMemoryPressureHigh(threshold: Double = 0.8) -> Bool {
+    func isMemoryPressureHigh(threshold: Double = 0.8) -> Bool {
         let (active, cache, _) = memorySummary()
         let totalUsed = active + cache
 
@@ -127,7 +127,7 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
     /// Perform emergency cleanup if memory pressure is high
     /// - Returns: True if cleanup was performed
     @discardableResult
-    public func emergencyCleanupIfNeeded() -> Bool {
+    func emergencyCleanupIfNeeded() -> Bool {
         if isMemoryPressureHigh(threshold: 0.9) {
             VoxtralDebug.always("⚠️ High memory pressure detected, performing emergency cleanup")
             fullCleanup()
@@ -152,14 +152,14 @@ public final class VoxtralMemoryManager: @unchecked Sendable {
 extension VoxtralMemoryManager {
 
     /// Configure memory optimization based on available RAM
-    public func autoConfigureForSystem() {
+    func autoConfigureForSystem() {
         config = .recommended()
         VoxtralDebug.log("Memory optimization auto-configured: \(config.description)")
     }
 
     /// Set memory optimization preset
     /// - Parameter preset: One of .disabled, .moderate, .aggressive, .ultra
-    public func setPreset(_ preset: MemoryOptimizationConfig) {
+    func setPreset(_ preset: MemoryOptimizationConfig) {
         config = preset
         VoxtralDebug.log("Memory optimization set to: \(config.description)")
     }

@@ -20,28 +20,28 @@ import MLXLMCommon
  * Follows Codable pattern used by all MLX Swift projects
  * Swift 6: Sendable because all properties are immutable Codable values
  */
-public struct VoxtralStandardConfiguration: Codable, Sendable {
-    public let modelType: String
-    public let textConfig: TextConfiguration
-    public let audioConfig: AudioConfiguration
-    public let audioTokenId: Int
-    public let projectorHiddenAct: String
-    public let quantization: [String: QuantizationValue]?
+struct VoxtralStandardConfiguration: Codable, Sendable {
+    let modelType: String
+    let textConfig: TextConfiguration
+    let audioConfig: AudioConfiguration
+    let audioTokenId: Int
+    let projectorHiddenAct: String
+    let quantization: [String: QuantizationValue]?
     
-    public struct TextConfiguration: Codable, Sendable {
-        public let vocabularySize: Int
-        public let hiddenSize: Int
-        public let intermediateSize: Int
-        public let hiddenLayers: Int
-        public let attentionHeads: Int
-        public let kvHeads: Int
-        public let headDim: Int?
-        public let maxPositionEmbeddings: Int
-        public let rmsNormEps: Float
-        public let ropeTheta: Float
-        public let hiddenAct: String
-        public let attentionBias: Bool
-        public let mlpBias: Bool
+    struct TextConfiguration: Codable, Sendable {
+        let vocabularySize: Int
+        let hiddenSize: Int
+        let intermediateSize: Int
+        let hiddenLayers: Int
+        let attentionHeads: Int
+        let kvHeads: Int
+        let headDim: Int?
+        let maxPositionEmbeddings: Int
+        let rmsNormEps: Float
+        let ropeTheta: Float
+        let hiddenAct: String
+        let attentionBias: Bool
+        let mlpBias: Bool
         
         enum CodingKeys: String, CodingKey {
             case vocabularySize = "vocab_size"
@@ -60,16 +60,16 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
         }
     }
     
-    public struct AudioConfiguration: Codable, Sendable {
-        public let hiddenSize: Int
-        public let intermediateSize: Int
-        public let hiddenLayers: Int
-        public let attentionHeads: Int
-        public let kvHeads: Int
-        public let headDim: Int
-        public let maxSourcePositions: Int
-        public let numMelBins: Int
-        public let vocabularySize: Int
+    struct AudioConfiguration: Codable, Sendable {
+        let hiddenSize: Int
+        let intermediateSize: Int
+        let hiddenLayers: Int
+        let attentionHeads: Int
+        let kvHeads: Int
+        let headDim: Int
+        let maxSourcePositions: Int
+        let numMelBins: Int
+        let vocabularySize: Int
         
         enum CodingKeys: String, CodingKey {
             case hiddenSize = "hidden_size"
@@ -84,17 +84,17 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
         }
     }
     
-    public enum QuantizationValue: Codable, Sendable {
+    enum QuantizationValue: Codable, Sendable {
         case bool(Bool)
         case int(Int)
         case config(QuantizationConfig)
 
-        public struct QuantizationConfig: Codable, Sendable {
-            public let groupSize: Int
-            public let bits: Int
+        struct QuantizationConfig: Codable, Sendable {
+            let groupSize: Int
+            let bits: Int
             /// `affine`, `mxfp4`, … as written in config.json (nil = affine); informational: the loader reads the
             /// quantization with `PackQuantization` (K-8)
-            public let mode: String?
+            let mode: String?
 
             enum CodingKeys: String, CodingKey {
                 case groupSize = "group_size"
@@ -103,7 +103,7 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
             }
         }
 
-        public init(from decoder: Decoder) throws {
+        init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
 
             if let boolValue = try? container.decode(Bool.self) {
@@ -117,7 +117,7 @@ public struct VoxtralStandardConfiguration: Codable, Sendable {
             }
         }
 
-        public func encode(to encoder: Encoder) throws {
+        func encode(to encoder: Encoder) throws {
             var container = encoder.singleValueContainer()
 
             switch self {
@@ -145,7 +145,7 @@ extension VoxtralStandardConfiguration {
     /// Decodes `quantization` leniently: the metadata strings of 2026 converters (`"mode": "affine"`,
     /// `quant_method`, …) no longer fail the whole file. The loader reads the quantization itself with
     /// `PackQuantization` (K-8)
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         modelType = try container.decode(String.self, forKey: .modelType)
         textConfig = try container.decode(TextConfiguration.self, forKey: .textConfig)
@@ -180,21 +180,21 @@ extension VoxtralStandardConfiguration {
  * LlamaStandardConfig - Configuration for migrated Llama components
  * Compatible with both new config structure and legacy parameters
  */
-public struct LlamaStandardConfig {
-    public let vocabSize: Int  // ✅ AJOUTÉ: vocab_size manquant !
-    public let hiddenSize: Int
-    public let intermediateSize: Int
-    public let numHiddenLayers: Int
-    public let numAttentionHeads: Int
-    public let numKeyValueHeads: Int
-    public let headDim: Int
-    public let maxPositionEmbeddings: Int
-    public let rmsNormEps: Float
-    public let ropeTheta: Float
-    public let attentionBias: Bool
-    public let mlpBias: Bool
+struct LlamaStandardConfig {
+    let vocabSize: Int  // ✅ AJOUTÉ: vocab_size manquant !
+    let hiddenSize: Int
+    let intermediateSize: Int
+    let numHiddenLayers: Int
+    let numAttentionHeads: Int
+    let numKeyValueHeads: Int
+    let headDim: Int
+    let maxPositionEmbeddings: Int
+    let rmsNormEps: Float
+    let ropeTheta: Float
+    let attentionBias: Bool
+    let mlpBias: Bool
 
-    public init(
+    init(
         vocabSize: Int = 131072,  // ✅ AJOUTÉ avec default Voxtral
         hiddenSize: Int,
         intermediateSize: Int = 11008,
@@ -223,7 +223,7 @@ public struct LlamaStandardConfig {
     }
 
     // Convenience initializer from VoxtralStandardConfiguration
-    public init(from config: VoxtralStandardConfiguration) {
+    init(from config: VoxtralStandardConfiguration) {
         self.vocabSize = config.textConfig.vocabularySize  // ✅ CORRIGÉ: utilise la vraie vocab_size !
         self.hiddenSize = config.textConfig.hiddenSize
         self.intermediateSize = config.textConfig.intermediateSize
@@ -244,11 +244,11 @@ public struct LlamaStandardConfig {
  * NO @ModuleInfo wrappers, NO dimension detection - just like all other MLX Swift projects
  */
 // Container to match language_model.* parameter names
-public class LanguageModelContainer: Module {
+class LanguageModelContainer: Module {
     @ModuleInfo var lmHead: Linear
     @ModuleInfo var model: LlamaStandardModel
     
-    public init(configuration: VoxtralStandardConfiguration) {
+    init(configuration: VoxtralStandardConfiguration) {
         self.lmHead = Linear(
             configuration.textConfig.hiddenSize,
             configuration.textConfig.vocabularySize,
@@ -278,17 +278,17 @@ public class LanguageModelContainer: Module {
 }
 
 /// Swift 6: @unchecked Sendable for ML models - caller ensures single-threaded access
-public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvider, @unchecked Sendable {
+class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvider, @unchecked Sendable {
     // Structure matching real parameter names in safetensors
-    public let languageModel: LanguageModelContainer
-    public let audioTower: VoxtralStandardEncoder
-    public let multiModalProjector: VoxtralStandardProjector
+    let languageModel: LanguageModelContainer
+    let audioTower: VoxtralStandardEncoder
+    let multiModalProjector: VoxtralStandardProjector
 
     let configuration: VoxtralStandardConfiguration
     // MARK: - LanguageModel Protocol Implementation
-    public var vocabularySize: Int { configuration.textConfig.vocabularySize }
+    var vocabularySize: Int { configuration.textConfig.vocabularySize }
 
-    public func prepare(
+    func prepare(
         _ input: LMInput, cache: [any KVCache], state: LMOutput.State?, prefill: PrefillParameters
     ) throws -> PrepareResult {
         // Simple implementation for testing - just return tokens to evaluate
@@ -296,15 +296,15 @@ public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvid
     }
 
     // KVCacheDimensionProvider protocol for automatic newCache implementation
-    public var kvHeads: [Int] {
+    var kvHeads: [Int] {
         // Return number of kv heads for each layer
         return Array(repeating: configuration.textConfig.kvHeads, count: configuration.textConfig.hiddenLayers)
     }
 
-    public var headDim: Int {
+    var headDim: Int {
         return configuration.textConfig.headDim ?? 128
     }
-    public init(configuration: VoxtralStandardConfiguration) {
+    init(configuration: VoxtralStandardConfiguration) {
         self.configuration = configuration
         
         VoxtralDebug.log("Creating VoxtralStandardModel")
@@ -336,7 +336,7 @@ public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvid
     }
     
     // LLMModel protocol: callAsFunction for generation
-    public func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
+    func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
         // Standard MLX Swift pattern: forward pass through language model then lm_head
         let hiddenStates = languageModel.model(inputs, cache: cache)
         return languageModel.lmHead(hiddenStates)
@@ -347,7 +347,7 @@ public class VoxtralStandardModel: Module, LanguageModel, KVCacheDimensionProvid
 /**
  * Simplified Llama Model - Standard MLX Swift Pattern
  */
-public class LlamaStandardModel: Module {
+class LlamaStandardModel: Module {
     let config: LlamaStandardConfig
     let paddingIdx: Int?
     let vocabSize: Int
@@ -358,7 +358,7 @@ public class LlamaStandardModel: Module {
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaStandardConfig) {
+    init(config: LlamaStandardConfig) {
         // Python: self.config = config
         self.config = config
         // Python: self.padding_idx = getattr(config, "pad_token_id", None)
@@ -381,7 +381,7 @@ public class LlamaStandardModel: Module {
     }
 
     // Legacy constructor for backward compatibility
-    public init(vocabularySize: Int, hiddenSize: Int, intermediateSize: Int,
+    init(vocabularySize: Int, hiddenSize: Int, intermediateSize: Int,
                 hiddenLayers: Int, attentionHeads: Int, kvHeads: Int, headDim: Int,
                 maxPositionEmbeddings: Int, rmsNormEps: Float, ropeTheta: Float,
                 hiddenAct: String, attentionBias: Bool, mlpBias: Bool) {
@@ -419,7 +419,7 @@ public class LlamaStandardModel: Module {
     /**
      * Direct Python equivalent: def __call__(self, inputs: Optional[mx.array] = None, mask: Optional[mx.array] = None, cache: Optional[List[KVCache]] = None, inputs_embeds: Optional[mx.array] = None) -> mx.array:
      */
-    public func callAsFunction(
+    func callAsFunction(
         inputs: MLXArray? = nil,
         mask: MLXArray? = nil,
         cache: [any KVCache]? = nil,
@@ -467,7 +467,7 @@ public class LlamaStandardModel: Module {
     }
 
     // Legacy backward compatibility callAsFunction
-    public func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
+    func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
         return callAsFunction(inputs: inputs, mask: nil, cache: cache, inputsEmbeds: nil)
     }
 
@@ -507,7 +507,7 @@ public class LlamaStandardModel: Module {
  * Llama decoder layer - exact migration from VoxtralLlama.swift
  * Uses @ModuleInfo for quantization support
  */
-public class LlamaStandardBlock: Module {
+class LlamaStandardBlock: Module {
     let hiddenSize: Int
     @ModuleInfo var selfAttn: LlamaStandardAttention
     @ModuleInfo var mlp: LlamaStandardMLP
@@ -517,7 +517,7 @@ public class LlamaStandardBlock: Module {
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaStandardConfig) {
+    init(config: LlamaStandardConfig) {
         // Python: self.hidden_size = config.hidden_size
         self.hiddenSize = config.hiddenSize
 
@@ -534,7 +534,7 @@ public class LlamaStandardBlock: Module {
     }
 
     // Legacy constructor for backward compatibility
-    public init(hiddenSize: Int, intermediateSize: Int, attentionHeads: Int,
+    init(hiddenSize: Int, intermediateSize: Int, attentionHeads: Int,
                 kvHeads: Int, headDim: Int, maxPositionEmbeddings: Int, rmsNormEps: Float, ropeTheta: Float,
                 attentionBias: Bool, mlpBias: Bool) {
         let config = LlamaStandardConfig(
@@ -562,7 +562,7 @@ public class LlamaStandardBlock: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, cache: Optional[KVCache] = None) -> mx.array:
      */
-    public func callAsFunction(
+    func callAsFunction(
         _ hiddenStates: MLXArray,
         attentionMask: MLXArray? = nil,
         cache: (any KVCache)? = nil
@@ -580,7 +580,7 @@ public class LlamaStandardBlock: Module {
     }
 
     // Overload for backward compatibility (cache only)
-    public func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
         return callAsFunction(hiddenStates, attentionMask: nil, cache: cache)
     }
 }
@@ -590,7 +590,7 @@ public class LlamaStandardBlock: Module {
  * Direct Python equivalent: class LlamaAttention(nn.Module)
  * Uses @ModuleInfo for quantization support
  */
-public class LlamaStandardAttention: Module {
+class LlamaStandardAttention: Module {
     @ModuleInfo var qProj: Linear
     @ModuleInfo var kProj: Linear
     @ModuleInfo var vProj: Linear
@@ -608,7 +608,7 @@ public class LlamaStandardAttention: Module {
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaStandardConfig) {
+    init(config: LlamaStandardConfig) {
         // Python: self.head_dim = config.head_dim if hasattr(config, "head_dim") else (self.hidden_size // self.num_heads)
         self.headDim = config.headDim
         // Python: self.num_heads = config.num_attention_heads
@@ -644,7 +644,7 @@ public class LlamaStandardAttention: Module {
     }
 
     // Legacy constructor for backward compatibility
-    public init(hiddenSize: Int, attentionHeads: Int, kvHeads: Int, headDim: Int,
+    init(hiddenSize: Int, attentionHeads: Int, kvHeads: Int, headDim: Int,
                 maxPositionEmbeddings: Int, ropeTheta: Float, bias: Bool) {
         self.headDim = headDim
         self.numHeads = attentionHeads
@@ -666,7 +666,7 @@ public class LlamaStandardAttention: Module {
         super.init()
     }
 
-    public func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, cache: (any KVCache)?) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, cache: (any KVCache)?) -> MLXArray {
         // Python: bsz, q_len, _ = hidden_states.shape
         let bsz = hiddenStates.shape[0]
         let qLen = hiddenStates.shape[1]
@@ -727,7 +727,7 @@ public class LlamaStandardAttention: Module {
     }
 
     // Legacy constructor for backward compatibility
-    public func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
         return callAsFunction(hiddenStates, attentionMask: nil, cache: cache)
     }
 }
@@ -740,7 +740,7 @@ public class LlamaStandardAttention: Module {
  * Llama MLP with SiLU activation - exact migration from VoxtralLlama.swift
  * Uses @ModuleInfo for quantization support
  */
-public class LlamaStandardMLP: Module {
+class LlamaStandardMLP: Module {
     let config: LlamaStandardConfig
     let hiddenSize: Int
     let intermediateSize: Int
@@ -752,7 +752,7 @@ public class LlamaStandardMLP: Module {
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaStandardConfig) {
+    init(config: LlamaStandardConfig) {
         // Python: self.config = config
         self.config = config
         // Python: self.hidden_size = config.hidden_size
@@ -774,7 +774,7 @@ public class LlamaStandardMLP: Module {
     }
 
     // Legacy constructor for backward compatibility
-    public init(hiddenSize: Int, intermediateSize: Int, bias: Bool) {
+    init(hiddenSize: Int, intermediateSize: Int, bias: Bool) {
         let config = LlamaStandardConfig(
             hiddenSize: hiddenSize,
             intermediateSize: intermediateSize,
@@ -795,7 +795,7 @@ public class LlamaStandardMLP: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array) -> mx.array:
      */
-    public func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
         // Python: return self.down_proj(self.act_fn(self.gate_proj(hidden_states)) * self.up_proj(hidden_states))
         return downProj(actFn(gateProj(hiddenStates)) * upProj(hiddenStates))
     }
@@ -805,14 +805,14 @@ public class LlamaStandardMLP: Module {
  * Standard Audio Encoder - VOXTRAL SPECIFIC
  * Uses @ModuleInfo for quantization support
  */
-public class VoxtralStandardEncoder: Module {
+class VoxtralStandardEncoder: Module {
     @ModuleInfo var conv1: Conv1d
     @ModuleInfo var conv2: Conv1d
     @ModuleInfo var embedPositions: Embedding
     @ModuleInfo var layers: [VoxtralStandardEncoderLayer]
     @ModuleInfo var layerNorm: LayerNorm
 
-    public init(hiddenSize: Int, intermediateSize: Int, hiddenLayers: Int,
+    init(hiddenSize: Int, intermediateSize: Int, hiddenLayers: Int,
                 attentionHeads: Int, kvHeads: Int, headDim: Int,
                 maxSourcePositions: Int, numMelBins: Int) {
 
@@ -835,7 +835,7 @@ public class VoxtralStandardEncoder: Module {
         super.init()
     }
 
-    public func callAsFunction(_ inputs: MLXArray) -> MLXArray {
+    func callAsFunction(_ inputs: MLXArray) -> MLXArray {
         // Input shape: [batch, n_mels, seq_len] (matches Python)
         // Transpose to [batch, seq_len, n_mels] for Conv1d
         var hiddenStates = inputs.transposed(0, 2, 1)
@@ -869,7 +869,7 @@ public class VoxtralStandardEncoder: Module {
  * Uses @ModuleInfo for quantization support
  * Implements full multi-head attention matching Python reference
  */
-public class AudioAttention: Module {
+class AudioAttention: Module {
     @ModuleInfo var qProj: Linear
     @ModuleInfo var kProj: Linear
     @ModuleInfo var vProj: Linear
@@ -880,7 +880,7 @@ public class AudioAttention: Module {
     let embedDim: Int
     let scale: Float
 
-    public init(hiddenSize: Int, attentionHeads: Int, headDim: Int, bias: Bool) {
+    init(hiddenSize: Int, attentionHeads: Int, headDim: Int, bias: Bool) {
         self._qProj.wrappedValue = Linear(hiddenSize, attentionHeads * headDim, bias: bias)
         self._kProj.wrappedValue = Linear(hiddenSize, attentionHeads * headDim, bias: false)
         self._vProj.wrappedValue = Linear(hiddenSize, attentionHeads * headDim, bias: bias)
@@ -894,7 +894,7 @@ public class AudioAttention: Module {
         super.init()
     }
 
-    public func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray, cache: (any KVCache)?) -> MLXArray {
         // Get dimensions
         let batchSize = hiddenStates.shape[0]
         let seqLen = hiddenStates.shape[1]
@@ -930,14 +930,14 @@ public class AudioAttention: Module {
  * Standard Encoder Layer
  * Uses @ModuleInfo for quantization support
  */
-public class VoxtralStandardEncoderLayer: Module {
+class VoxtralStandardEncoderLayer: Module {
     @ModuleInfo var selfAttn: AudioAttention  // Use AudioAttention for audio_tower
     @ModuleInfo var selfAttnLayerNorm: LayerNorm
     @ModuleInfo var fc1: Linear
     @ModuleInfo var fc2: Linear
     @ModuleInfo var finalLayerNorm: LayerNorm
 
-    public init(hiddenSize: Int, intermediateSize: Int, attentionHeads: Int, headDim: Int) {
+    init(hiddenSize: Int, intermediateSize: Int, attentionHeads: Int, headDim: Int) {
         self._selfAttn.wrappedValue = AudioAttention(
             hiddenSize: hiddenSize,
             attentionHeads: attentionHeads,
@@ -952,7 +952,7 @@ public class VoxtralStandardEncoderLayer: Module {
         super.init()
     }
     
-    public func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
         var hiddenStates = hiddenStates
         var residual = hiddenStates
         hiddenStates = selfAttnLayerNorm(hiddenStates)
@@ -975,12 +975,12 @@ public class VoxtralStandardEncoderLayer: Module {
  * Projects from audio intermediate_size (5120) to text hidden_size (3072)
  * Uses @ModuleInfo for quantization support
  */
-public class VoxtralStandardProjector: Module {
+class VoxtralStandardProjector: Module {
     @ModuleInfo(key: "linear_1") var linear1: Linear  // Match underscore naming from safetensors
     @ModuleInfo(key: "linear_2") var linear2: Linear  // Match underscore naming from safetensors
     let act: (MLXArray) -> MLXArray
 
-    public init(inputSize: Int, hiddenSize: Int, hiddenAct: String) {
+    init(inputSize: Int, hiddenSize: Int, hiddenAct: String) {
         // VOXTRAL SPECIFIC: Two linear layers with specific dimensions
         // linear_1: audio_intermediate_size (5120) → text_hidden_size (3072)
         // linear_2: text_hidden_size (3072) → text_hidden_size (3072)
@@ -998,7 +998,7 @@ public class VoxtralStandardProjector: Module {
         super.init()
     }
     
-    public func callAsFunction(_ inputs: MLXArray) -> MLXArray {
+    func callAsFunction(_ inputs: MLXArray) -> MLXArray {
         var hiddenStates = linear1(inputs)
         hiddenStates = act(hiddenStates)
         hiddenStates = linear2(hiddenStates)
@@ -1181,16 +1181,9 @@ func loadQuantizedVoxtral(
  * Standard MLX Swift Model Loading Function
  * Follows exact pattern from all MLX Swift projects
  */
-@available(*, deprecated, message: "dtype is ignored: weights keep the dtype stored in the checkpoint. Use loadVoxtralStandardModel(modelPath:).")
-public func loadVoxtralStandardModel(
-    modelPath: String,
-    dtype: MLX.DType
-) throws -> (VoxtralStandardModel, VoxtralStandardConfiguration) {
-    try loadVoxtralStandardModel(modelPath: modelPath)
-}
 
 /// Loads a Voxtral STT checkpoint; weights keep the dtype stored in the checkpoint (K-27)
-public func loadVoxtralStandardModel(
+func loadVoxtralStandardModel(
     modelPath: String
 ) throws -> (VoxtralStandardModel, VoxtralStandardConfiguration) {
     VoxtralDebug.log("Loading Voxtral from \(modelPath)")

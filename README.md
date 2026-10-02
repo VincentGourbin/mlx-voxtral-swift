@@ -298,10 +298,10 @@ tokens ÷ total time; GPU Peak = MLX peak GPU memory from `--profile`. **Revisio
 
 ¹ Exact bytes of the weight files on the Hub on 2026-09-27, 1 GB = 10⁹ bytes — [docs/Weights.md](docs/Weights.md).
 The `*.safetensors` download pattern also fetches `consolidated.safetensors` for `mini-3b` and `small-24b`
-(`ModelDownloader.swift:361-365`, audit S-07; fixed by fiche K-24). Backends `.auto` and `.hybrid` also download the
+(`ModelDownloader.swift:361-365` at the audit, audit S-07; fixed by fiche K-24). Backends `.auto` and `.hybrid` also download the
 Core ML encoder: 1.32 GB (Mini), 1.38 GB (Small).
 
-`VoxtralPipeline.Model` reads its repositories from `ModelRegistry` (one table for the pipeline, the CLI and the app,
+`VoxtralPipeline.Model` reads its repositories from `VoxtralModelRegistry` (one table for the pipeline, the CLI and the app,
 fiche K-10): `small-24b-8bit` is `VincentGOURBIN/voxtral-small-8bit` (ASK-15); before 2.3 the pipeline enum pointed to
 `mzbac/Voxtral-Small-24B-2507-8bit` (a second 28 GB download).
 
@@ -396,7 +396,7 @@ Heavy operations (model loading, transcription, chat, TTS synthesis, voice enrol
 
 ```swift
 // Library integration
-RuntimeBeacon.isEnabled = true
+VoxtralRuntimeBeacon.isEnabled = true
 ```
 
 ```bash

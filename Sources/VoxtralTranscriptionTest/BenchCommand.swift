@@ -281,7 +281,7 @@ enum BenchJSON {
     /// Weights identity: the K-6 completeness manifest (sizes + SHA-256 of every file)
     static func packSHA(folder: URL?) -> String? {
         guard let folder, let data = FileManager.default.contents(
-            atPath: folder.appendingPathComponent(ModelDownloader.manifestFileName).path) else { return nil }
+            atPath: folder.appendingPathComponent(VoxtralModelDownloader.manifestFileName).path) else { return nil }
         return String(sha256(data).prefix(16))
     }
 
@@ -373,7 +373,7 @@ enum BenchRunner {
         pass body: (_ pass: Int, _ warm: Bool) async throws -> [String: Any]
     ) async throws {
         try guardBuild()
-        if common.beacon { RuntimeBeacon.isEnabled = true }
+        if common.beacon { VoxtralRuntimeBeacon.isEnabled = true }
         for w in 0 ..< common.warmup {
             try prepare(pass: -(w + 1), cooldown: 0)
             _ = try await body(-(w + 1), true)
@@ -563,7 +563,7 @@ struct BenchTTS: AsyncParsableCommand {
         if let voiceEmbedding {
             embeddingURL = URL(fileURLWithPath: voiceEmbedding)
         } else {
-            guard let folder = ModelDownloader.findTTSModelPath(for: info) else { throw ValidationError("TTS model folder not found") }
+            guard let folder = VoxtralModelDownloader.findTTSModelPath(for: info) else { throw ValidationError("TTS model folder not found") }
             embeddingURL = folder.appendingPathComponent("voice_embedding/\(voice!).safetensors")
         }
         let arrays = try MLX.loadArrays(url: embeddingURL)
@@ -573,7 +573,7 @@ struct BenchTTS: AsyncParsableCommand {
         let base: [String: Any] = [
             "pipeline": "tts", "model": model, "input": textFile, "voice": voice ?? voiceEmbedding ?? "",
             "seed": Int(seed), "streaming": streaming, "warm_up": warmUp,
-            "pack_sha256": BenchJSON.packSHA(folder: ModelDownloader.findTTSModelPath(for: info)) ?? "",
+            "pack_sha256": BenchJSON.packSHA(folder: VoxtralModelDownloader.findTTSModelPath(for: info)) ?? "",
             "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default", "load_ms": BenchJSON.round(loadMs) ?? 0,
         ]
         try await BenchRunner.run(common, base: base, metrics: ["total_ms", "step_ms_p50"]) { _, _ in
@@ -698,7 +698,7 @@ struct BenchChat: AsyncParsableCommand {
         try await pipeline.loadModel()
         let url = URL(fileURLWithPath: input)
         try BenchRunner.guardBuild()
-        if common.beacon { RuntimeBeacon.isEnabled = true }
+        if common.beacon { VoxtralRuntimeBeacon.isEnabled = true }
         for (index, question) in list.enumerated() {
             for w in 0 ..< common.warmup {
                 try BenchRunner.prepare(pass: -(w + 1), cooldown: 0)

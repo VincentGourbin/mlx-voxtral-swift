@@ -12,7 +12,7 @@ import MLXNN
 /**
  * Direct Python equivalent: class VoxtralProcessor:
  */
-public class VoxtralProcessor {
+class VoxtralProcessor {
     
     // Python: self.feature_extractor = feature_extractor or VoxtralFeatureExtractor()
     let featureExtractor: VoxtralFeatureExtractor
@@ -21,12 +21,12 @@ public class VoxtralProcessor {
     let tokenizer: TekkenTokenizer?
     
     // Python: self._special_token_ids = self._get_special_token_ids()
-    public let specialTokenIds: [String: Int]?
+    let specialTokenIds: [String: Int]?
     
     /**
      * Direct Python equivalent: def __init__(self, feature_extractor=None, tokenizer=None):
      */
-    public init(
+    init(
         featureExtractor: VoxtralFeatureExtractor? = nil,
         tokenizer: TekkenTokenizer? = nil
     ) {
@@ -150,7 +150,7 @@ public class VoxtralProcessor {
     /**
      * Direct Python equivalent: def __call__(self, text: Optional[str] = None, audio: Optional[Union[np.ndarray, List[float], str]] = None, ...):
      */
-    public func callAsFunction(
+    func callAsFunction(
         text: String? = nil,
         audio: Any? = nil, // Union[MLXArray, [Float], String]
         samplingRate: Int = 16000,
@@ -298,7 +298,7 @@ public class VoxtralProcessor {
     /**
      * Direct Python equivalent: def batch_decode(self, token_ids, **kwargs):
      */
-    public func batchDecode(_ tokenIds: Any, skipSpecialTokens: Bool = true) throws -> [String] {
+    func batchDecode(_ tokenIds: Any, skipSpecialTokens: Bool = true) throws -> [String] {
         guard let tokenizer = self.tokenizer else {
             throw VoxtralError.tokenizerNotAvailable
         }
@@ -323,7 +323,7 @@ public class VoxtralProcessor {
     /**
      * Direct Python equivalent: def decode(self, token_ids, **kwargs):
      */
-    public func decode(_ tokenIds: Any, skipSpecialTokens: Bool = true) throws -> String {
+    func decode(_ tokenIds: Any, skipSpecialTokens: Bool = true) throws -> String {
         guard let tokenizer = self.tokenizer else {
             throw VoxtralError.tokenizerNotAvailable
         }
@@ -349,7 +349,7 @@ public class VoxtralProcessor {
     /**
      * Direct Python equivalent: def apply_transcrition_request(self, audio: Union[str, np.ndarray, List[float]], language: Optional[str] = None, sampling_rate: Optional[int] = None):
      */
-    public func applyTranscritionRequest(
+    func applyTranscriptionRequest(
         audio: Any, // Union[String, MLXArray, [Float]]
         language: String? = nil,
         samplingRate: Int? = nil
@@ -363,7 +363,7 @@ public class VoxtralProcessor {
         
         // Python: if self._special_token_ids is None:
         guard let specialTokenIds = self.specialTokenIds else {
-            throw VoxtralError.tokenizerRequired("Tokenizer is required for applyTranscritionRequest")
+            throw VoxtralError.tokenizerRequired("Tokenizer is required for applyTranscriptionRequest")
         }
         
         // Python: tokens = [self._special_token_ids['bos']]
@@ -431,12 +431,12 @@ public class VoxtralProcessor {
     }
     
     /// Progress callback type for processor loading
-    public typealias ProcessorProgressCallback = @Sendable (Double, String) -> Void
+    typealias ProcessorProgressCallback = @Sendable (Double, String) -> Void
 
     /**
      * Direct Python equivalent: @classmethod def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
      */
-    public static func fromPretrained(
+    static func fromPretrained(
         _ pretrainedModelNameOrPath: String,
         progress: ProcessorProgressCallback? = nil
     ) throws -> VoxtralProcessor {
@@ -518,7 +518,7 @@ public class VoxtralProcessor {
     /**
      * Direct Python equivalent: def apply_chat_template(self, conversation: Union[List[Dict[str, Any]], Dict[str, Any]], tokenize: bool = True, add_generation_prompt: bool = False, return_tensors: Optional[str] = None, **kwargs) -> Union[str, Dict[str, mx.array]]
      */
-    public func applyChatTemplate(
+    func applyChatTemplate(
         conversation: Any,
         tokenize: Bool = true,
         addGenerationPrompt: Bool = false,
@@ -745,4 +745,9 @@ public class VoxtralProcessor {
         }
         return array
     }
+}
+/// Token ids and audio features of one request (moved from the removed `VoxtralGenerator.swift`, K-31)
+struct ProcessedInputs {
+    let inputIds: MLXArray
+    let inputFeatures: MLXArray
 }

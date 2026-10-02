@@ -50,7 +50,7 @@ final class TTSFundamentalDeficitProbeTests: XCTestCase {
         guard let info = VoxtralTTSRegistry.model(withId: "tts-4b-mlx") else {
             throw XCTSkip("tts-4b-mlx not in registry")
         }
-        let modelDir = try await ModelDownloader.downloadTTSModel(info)
+        let modelDir = try await VoxtralModelDownloader.downloadTTSModel(info)
         let model = try loadVoxtralTTSModel(from: modelDir)
 
         var config = VoxtralVoiceEnrollment.Config()
@@ -67,11 +67,11 @@ final class TTSFundamentalDeficitProbeTests: XCTestCase {
         // 2. Optimize, then decode the learned codes back to audio. This is the
         //    optimization's own target reproduction — what the loss actually
         //    achieved, with no generation involved.
-        let codes = enroller.optimize(reference: reference) { p in
+        let codes = try enroller.optimize(reference: reference, progress: { p in
             if p.epoch % 500 == 0 || p.epoch == 1 {
                 print("[deficit] epoch \(p.epoch)/\(epochs) loss \(String(format: "%.4f", p.totalLoss))")
             }
-        }
+        }, shouldContinue: { true })
         // `optimize` returns (T, 37); the decoder expects the batched (1, T, 37)
         // that `generate` produces.
         let batched = codes.ndim == 2 ? MLX.expandedDimensions(codes, axis: 0) : codes

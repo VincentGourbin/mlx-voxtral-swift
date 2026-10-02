@@ -11,12 +11,12 @@ import Foundation
  * Direct Python equivalent: class VoxtralEncoderConfig
  * Python reference: lines 5-96 in configuration_voxtral.py
  */
-public struct VoxtralEncoderConfig: Codable {
+struct VoxtralEncoderConfig: Codable {
     // Python: model_type = "voxtral_encoder" (line 12)
-    public static let modelType = "voxtral_encoder"
+    static let modelType = "voxtral_encoder"
     
     // Python: attribute_map (lines 14-20) - compatibility mapping
-    public static let attributeMap: [String: String] = [
+    static let attributeMap: [String: String] = [
         "d_model": "hidden_size",
         "encoder_layers": "num_hidden_layers", 
         "encoder_attention_heads": "num_attention_heads",
@@ -25,26 +25,26 @@ public struct VoxtralEncoderConfig: Codable {
     ]
     
     // Python: def __init__ parameters with exact defaults (lines 22-42)
-    public let vocab_size: Int          // Python: vocab_size: int = 51866
-    public let hidden_size: Int         // Python: hidden_size: int = 1280
-    public let intermediate_size: Int   // Python: intermediate_size: int = 5120
-    public let num_hidden_layers: Int   // Python: num_hidden_layers: int = 32
-    public let num_attention_heads: Int // Python: num_attention_heads: int = 20
-    public let scale_embedding: Bool    // Python: scale_embedding: bool = False
-    public let activation_function: String // Python: activation_function: str = "gelu"
-    public let num_mel_bins: Int        // Python: num_mel_bins: int = 128
-    public let max_source_positions: Int // Python: max_source_positions: int = 1500
-    public let initializer_range: Double // Python: initializer_range: float = 0.02
-    public let attention_dropout: Double // Python: attention_dropout: float = 0.0
-    public let dropout: Double          // Python: dropout: float = 0.0
-    public let layerdrop: Double        // Python: layerdrop: float = 0.0
-    public let activation_dropout: Double // Python: activation_dropout: float = 0.0
-    public let pad_token_id: Int        // Python: pad_token_id: int = 0
-    public let head_dim: Int            // Python: head_dim: int = 64
-    public let num_key_value_heads: Int // Python: num_key_value_heads: int = 20
+    let vocab_size: Int          // Python: vocab_size: int = 51866
+    let hidden_size: Int         // Python: hidden_size: int = 1280
+    let intermediate_size: Int   // Python: intermediate_size: int = 5120
+    let num_hidden_layers: Int   // Python: num_hidden_layers: int = 32
+    let num_attention_heads: Int // Python: num_attention_heads: int = 20
+    let scale_embedding: Bool    // Python: scale_embedding: bool = False
+    let activation_function: String // Python: activation_function: str = "gelu"
+    let num_mel_bins: Int        // Python: num_mel_bins: int = 128
+    let max_source_positions: Int // Python: max_source_positions: int = 1500
+    let initializer_range: Double // Python: initializer_range: float = 0.02
+    let attention_dropout: Double // Python: attention_dropout: float = 0.0
+    let dropout: Double          // Python: dropout: float = 0.0
+    let layerdrop: Double        // Python: layerdrop: float = 0.0
+    let activation_dropout: Double // Python: activation_dropout: float = 0.0
+    let pad_token_id: Int        // Python: pad_token_id: int = 0
+    let head_dim: Int            // Python: head_dim: int = 64
+    let num_key_value_heads: Int // Python: num_key_value_heads: int = 20
     
     // Python: def __init__ with exact default values (lines 22-62)
-    public init(
+    init(
         vocab_size: Int = 51866,
         hidden_size: Int = 1280,
         intermediate_size: Int = 5120,
@@ -87,17 +87,17 @@ public struct VoxtralEncoderConfig: Codable {
     }
     
     // Python: @property methods (lines 64-82) - computed properties for compatibility
-    public var d_model: Int { return hidden_size }
-    public var encoder_layers: Int { return num_hidden_layers }
-    public var encoder_attention_heads: Int { return num_attention_heads }
-    public var encoder_ffn_dim: Int { return intermediate_size }
-    public var encoder_layerdrop: Double { return layerdrop }
+    var d_model: Int { return hidden_size }
+    var encoder_layers: Int { return num_hidden_layers }
+    var encoder_attention_heads: Int { return num_attention_heads }
+    var encoder_ffn_dim: Int { return intermediate_size }
+    var encoder_layerdrop: Double { return layerdrop }
     
     /**
      * Direct Python equivalent: def to_dict(self) -> Dict (lines 84-90)
      * Python: Convert config to dictionary
      */
-    public func to_dict() -> [String: Any] {
+    func to_dict() -> [String: Any] {
         // Python: output = {}
         var output: [String: Any] = [:]
         
@@ -128,7 +128,7 @@ public struct VoxtralEncoderConfig: Codable {
      * Direct Python equivalent: @classmethod def from_dict(cls, config_dict: Dict) (lines 92-95)
      * Python: Create config from dictionary
      */
-    public static func from_dict(_ config_dict: [String: Any]) -> VoxtralEncoderConfig {
+    static func from_dict(_ config_dict: [String: Any]) -> VoxtralEncoderConfig {
         // Python: return cls(**config_dict)
         return VoxtralEncoderConfig(
             vocab_size: config_dict["vocab_size"] as? Int ?? 51866,
@@ -152,7 +152,7 @@ public struct VoxtralEncoderConfig: Codable {
     }
     
     // Compatibility method for existing code
-    public static func fromDictionary(_ config_dict: [String: Any]) -> VoxtralEncoderConfig {
+    static func fromDictionary(_ config_dict: [String: Any]) -> VoxtralEncoderConfig {
         return from_dict(config_dict)
     }
 }
@@ -161,31 +161,31 @@ public struct VoxtralEncoderConfig: Codable {
  * Direct Python equivalent: @dataclass class VoxtralTextConfig (lines 98-159)
  * Python reference: Configuration for Mistral/Llama text decoder
  */
-public struct VoxtralTextConfig: Codable {
+struct VoxtralTextConfig: Codable {
     // Python: @dataclass fields with exact default values (lines 102-122)
-    public let vocab_size: Int                    // Python: vocab_size: int = 131072
-    public let hidden_size: Int                   // Python: hidden_size: int = 3072  
-    public let intermediate_size: Int             // Python: intermediate_size: int = 8192
-    public let num_hidden_layers: Int             // Python: num_hidden_layers: int = 30
-    public let num_attention_heads: Int           // Python: num_attention_heads: int = 32
-    public let num_key_value_heads: Int           // Python: num_key_value_heads: int = 8
-    public let max_position_embeddings: Int       // Python: max_position_embeddings: int = 131072
-    public let rms_norm_eps: Double               // Python: rms_norm_eps: float = 1e-05
-    public let rope_theta: Double                 // Python: rope_theta: float = 100000000.0
-    public let rope_scaling: [String: Double]?    // Python: rope_scaling: Optional[Dict] = None
-    public let tie_word_embeddings: Bool          // Python: tie_word_embeddings: bool = False
-    public let use_cache: Bool                    // Python: use_cache: bool = True
-    public let hidden_act: String                 // Python: hidden_act: str = "silu"
-    public let initializer_range: Double          // Python: initializer_range: float = 0.02
-    public let attention_bias: Bool               // Python: attention_bias: bool = False
-    public let attention_dropout: Double          // Python: attention_dropout: float = 0.0
-    public let mlp_bias: Bool                     // Python: mlp_bias: bool = False
-    public let head_dim: Int                      // Python: head_dim: int = 128
-    public let model_type: String                 // Python: model_type: str = "llama"
-    public let pretraining_tp: Int                // Python: pretraining_tp: int = 1
-    public let sliding_window: Int?               // Python: sliding_window: Optional[int] = None
+    let vocab_size: Int                    // Python: vocab_size: int = 131072
+    let hidden_size: Int                   // Python: hidden_size: int = 3072  
+    let intermediate_size: Int             // Python: intermediate_size: int = 8192
+    let num_hidden_layers: Int             // Python: num_hidden_layers: int = 30
+    let num_attention_heads: Int           // Python: num_attention_heads: int = 32
+    let num_key_value_heads: Int           // Python: num_key_value_heads: int = 8
+    let max_position_embeddings: Int       // Python: max_position_embeddings: int = 131072
+    let rms_norm_eps: Double               // Python: rms_norm_eps: float = 1e-05
+    let rope_theta: Double                 // Python: rope_theta: float = 100000000.0
+    let rope_scaling: [String: Double]?    // Python: rope_scaling: Optional[Dict] = None
+    let tie_word_embeddings: Bool          // Python: tie_word_embeddings: bool = False
+    let use_cache: Bool                    // Python: use_cache: bool = True
+    let hidden_act: String                 // Python: hidden_act: str = "silu"
+    let initializer_range: Double          // Python: initializer_range: float = 0.02
+    let attention_bias: Bool               // Python: attention_bias: bool = False
+    let attention_dropout: Double          // Python: attention_dropout: float = 0.0
+    let mlp_bias: Bool                     // Python: mlp_bias: bool = False
+    let head_dim: Int                      // Python: head_dim: int = 128
+    let model_type: String                 // Python: model_type: str = "llama"
+    let pretraining_tp: Int                // Python: pretraining_tp: int = 1
+    let sliding_window: Int?               // Python: sliding_window: Optional[int] = None
     
-    public init(
+    init(
         vocab_size: Int = 131072,
         hidden_size: Int = 3072,
         intermediate_size: Int = 8192,
@@ -235,7 +235,7 @@ public struct VoxtralTextConfig: Codable {
      * Direct Python equivalent: def to_dict(self) -> Dict (lines 124-130)
      * Python: Convert config to dictionary
      */
-    public func to_dict() -> [String: Any] {
+    func to_dict() -> [String: Any] {
         // Python: output = {}
         var output: [String: Any] = [:]
         
@@ -277,7 +277,7 @@ public struct VoxtralTextConfig: Codable {
      * Direct Python equivalent: @classmethod def from_dict(cls, config_dict: Dict) (lines 132-159)
      * Python: Create config from dictionary
      */
-    public static func from_dict(_ config_dict: [String: Any]) -> VoxtralTextConfig {
+    static func from_dict(_ config_dict: [String: Any]) -> VoxtralTextConfig {
         // Python: known_fields = {...} (lines 135-157)
         // Python: filtered_dict = {k: v for k, v in config_dict.items() if k in known_fields}
         // Python: return cls(**filtered_dict)
@@ -308,7 +308,7 @@ public struct VoxtralTextConfig: Codable {
     }
     
     // Compatibility method for existing code
-    public static func fromDictionary(_ config_dict: [String: Any]) -> VoxtralTextConfig {
+    static func fromDictionary(_ config_dict: [String: Any]) -> VoxtralTextConfig {
         return from_dict(config_dict)
     }
 }
@@ -319,24 +319,24 @@ public struct VoxtralTextConfig: Codable {
  * 
  * This is the exact Python-compatible configuration class. For Swift MLX usage, see VoxtralConfig struct below.
  */
-public class PythonVoxtralConfig: Codable {
+class PythonVoxtralConfig: Codable {
     // Python: model_type = "voxtral" (line 169)
-    public static let model_type = "voxtral"
+    static let model_type = "voxtral"
     
     // Python: def __init__ parameters (lines 171-180)
-    public let audio_config: VoxtralEncoderConfig     // Python: audio_config: Optional[Union[VoxtralEncoderConfig, Dict]] = None
-    public let text_config: VoxtralTextConfig         // Python: text_config: Optional[Union[VoxtralTextConfig, Dict]] = None  
-    public let audio_token_id: Int                    // Python: audio_token_id: Optional[int] = 24
-    public let projector_hidden_act: String          // Python: projector_hidden_act: str = "gelu"
-    public let pad_token_id: Int                      // Python: pad_token_id: int = 11
-    public let bos_token_id: Int                      // Python: bos_token_id: int = 1
-    public let eos_token_id: Int                      // Python: eos_token_id: int = 2
+    let audio_config: VoxtralEncoderConfig     // Python: audio_config: Optional[Union[VoxtralEncoderConfig, Dict]] = None
+    let text_config: VoxtralTextConfig         // Python: text_config: Optional[Union[VoxtralTextConfig, Dict]] = None  
+    let audio_token_id: Int                    // Python: audio_token_id: Optional[int] = 24
+    let projector_hidden_act: String          // Python: projector_hidden_act: str = "gelu"
+    let pad_token_id: Int                      // Python: pad_token_id: int = 11
+    let bos_token_id: Int                      // Python: bos_token_id: int = 1
+    let eos_token_id: Int                      // Python: eos_token_id: int = 2
     
     // Python: computed properties (lines 202-203)
-    public let vocab_size: Int                        // Python: self.vocab_size = self.text_config.vocab_size
-    public let hidden_size: Int                       // Python: self.hidden_size = self.text_config.hidden_size
+    let vocab_size: Int                        // Python: self.vocab_size = self.text_config.vocab_size
+    let hidden_size: Int                       // Python: self.hidden_size = self.text_config.hidden_size
     
-    public init(
+    init(
         audio_config: VoxtralEncoderConfig? = nil,
         text_config: VoxtralTextConfig? = nil,
         audio_token_id: Int = 24,
@@ -375,7 +375,7 @@ public class PythonVoxtralConfig: Codable {
      * Direct Python equivalent: def to_dict(self) -> Dict (lines 208-226)
      * Python: Convert config to dictionary
      */
-    public func to_dict() -> [String: Any] {
+    func to_dict() -> [String: Any] {
         // Python: output = { "model_type": self.model_type, ... } (lines 210-220)
         var output: [String: Any] = [
             "model_type": Self.model_type,
@@ -397,7 +397,7 @@ public class PythonVoxtralConfig: Codable {
     }
     
     // Compatibility method for existing code
-    public func toDictionary() -> [String: Any] {
+    func toDictionary() -> [String: Any] {
         return to_dict()
     }
     
@@ -405,7 +405,7 @@ public class PythonVoxtralConfig: Codable {
      * Direct Python equivalent: @classmethod def from_dict(cls, config_dict: Dict) (lines 228-231)
      * Python: Create config from dictionary
      */
-    public static func from_dict(_ config_dict: [String: Any]) -> PythonVoxtralConfig {
+    static func from_dict(_ config_dict: [String: Any]) -> PythonVoxtralConfig {
         // Python: return cls(**config_dict)
         
         // Handle nested audio_config (similar to Python isinstance checks in __init__)
@@ -438,7 +438,7 @@ public class PythonVoxtralConfig: Codable {
     /**
      * Swift-compatible alias for from_dict
      */
-    public static func fromDictionary(_ configDict: [String: Any]) throws -> PythonVoxtralConfig {
+    static func fromDictionary(_ configDict: [String: Any]) throws -> PythonVoxtralConfig {
         return from_dict(configDict)
     }
 }
@@ -452,18 +452,18 @@ public class PythonVoxtralConfig: Codable {
  * This addresses the type mismatch between VoxtralEncoderConfig and VoxtralConfig.AudioConfig
  * expected by the existing Swift codebase.
  */
-public struct VoxtralConfig: Codable {
+struct VoxtralConfig: Codable {
     
     /**
      * Nested AudioConfig type expected by VoxtralAudioEncoder
      */
-    public struct AudioConfig: Codable {
-        public let hiddenSize: Int
-        public let numAttentionHeads: Int
-        public let numLayers: Int
-        public let intermediate_size: Int
+    struct AudioConfig: Codable {
+        let hiddenSize: Int
+        let numAttentionHeads: Int
+        let numLayers: Int
+        let intermediate_size: Int
         
-        public init(hiddenSize: Int = 1024, numAttentionHeads: Int = 16, numLayers: Int = 24, intermediate_size: Int = 4096) {
+        init(hiddenSize: Int = 1024, numAttentionHeads: Int = 16, numLayers: Int = 24, intermediate_size: Int = 4096) {
             self.hiddenSize = hiddenSize
             self.numAttentionHeads = numAttentionHeads
             self.numLayers = numLayers
@@ -474,19 +474,19 @@ public struct VoxtralConfig: Codable {
     /**
      * Nested TextConfig type expected by the codebase
      */
-    public struct TextConfig: Codable {
-        public let vocabularySize: Int
-        public let hiddenSize: Int
-        public let intermediateSize: Int
-        public let numberOfHiddenLayers: Int
-        public let numberOfAttentionHeads: Int
-        public let numberOfKeyValueHeads: Int
-        public let headDimension: Int
-        public let maxPositionEmbeddings: Int
-        public let ropeTheta: Double
-        public let rmsNormEpsilon: Double
+    struct TextConfig: Codable {
+        let vocabularySize: Int
+        let hiddenSize: Int
+        let intermediateSize: Int
+        let numberOfHiddenLayers: Int
+        let numberOfAttentionHeads: Int
+        let numberOfKeyValueHeads: Int
+        let headDimension: Int
+        let maxPositionEmbeddings: Int
+        let ropeTheta: Double
+        let rmsNormEpsilon: Double
         
-        public init(
+        init(
             vocabularySize: Int = 32000,
             hiddenSize: Int = 4096,
             intermediateSize: Int = 11008,
@@ -511,14 +511,14 @@ public struct VoxtralConfig: Codable {
         }
     }
     
-    public let audioConfig: AudioConfig
-    public let audio_config: AudioConfig  // Python property name for compatibility
-    public let textConfig: TextConfig
-    public let text_config: TextConfig    // Python property name for compatibility
-    public let audioTokenId: Int
-    public let audio_token_id: Int       // Python property name for compatibility
+    let audioConfig: AudioConfig
+    let audio_config: AudioConfig  // Python property name for compatibility
+    let textConfig: TextConfig
+    let text_config: TextConfig    // Python property name for compatibility
+    let audioTokenId: Int
+    let audio_token_id: Int       // Python property name for compatibility
     
-    public init(
+    init(
         audioConfig: AudioConfig? = nil,
         textConfig: TextConfig? = nil,
         audioTokenId: Int = 24,
@@ -535,7 +535,7 @@ public struct VoxtralConfig: Codable {
      * Convenience initializer from Python-compatible configuration
      * Converts PythonVoxtralConfig to Swift VoxtralConfig
      */
-    public init(from pythonConfig: PythonVoxtralConfig) {
+    init(from pythonConfig: PythonVoxtralConfig) {
         self.audioConfig = AudioConfig(
             hiddenSize: pythonConfig.audio_config.hidden_size,
             numAttentionHeads: pythonConfig.audio_config.num_attention_heads,
@@ -566,7 +566,7 @@ public struct VoxtralConfig: Codable {
      * Convert to Python-compatible configuration
      * Creates PythonVoxtralConfig from Swift VoxtralConfig
      */
-    public func toPythonConfig() -> PythonVoxtralConfig {
+    func toPythonConfig() -> PythonVoxtralConfig {
         let audioConfig = VoxtralEncoderConfig(
             vocab_size: 51866,  // Default from Python
             hidden_size: self.audioConfig.hiddenSize,

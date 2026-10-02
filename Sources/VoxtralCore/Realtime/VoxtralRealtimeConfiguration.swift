@@ -10,14 +10,14 @@ import Foundation
 
 // MARK: - Audio Encoding Configuration
 
-public struct RealtimeAudioEncodingConfig: Codable, Sendable {
-    public let samplingRate: Int
-    public let frameRate: Float
-    public let numMelBins: Int
-    public let hopLength: Int
-    public let windowSize: Int
-    public let globalLogMelMax: Float
-    public let transcriptionFormat: String
+struct RealtimeAudioEncodingConfig: Codable, Sendable {
+    let samplingRate: Int
+    let frameRate: Float
+    let numMelBins: Int
+    let hopLength: Int
+    let windowSize: Int
+    let globalLogMelMax: Float
+    let transcriptionFormat: String
 
     enum CodingKeys: String, CodingKey {
         case samplingRate = "sampling_rate"
@@ -32,19 +32,19 @@ public struct RealtimeAudioEncodingConfig: Codable, Sendable {
 
 // MARK: - Encoder Configuration
 
-public struct RealtimeEncoderConfig: Codable, Sendable {
-    public let dim: Int
-    public let nLayers: Int
-    public let headDim: Int
-    public let hiddenDim: Int
-    public let nHeads: Int
-    public let nKVHeads: Int
-    public let useBiases: Bool
-    public let ropeTheta: Float
-    public let normEps: Float
-    public let slidingWindow: Int
-    public let downsampleFactor: Int
-    public let audioEncodingArgs: RealtimeAudioEncodingConfig
+struct RealtimeEncoderConfig: Codable, Sendable {
+    let dim: Int
+    let nLayers: Int
+    let headDim: Int
+    let hiddenDim: Int
+    let nHeads: Int
+    let nKVHeads: Int
+    let useBiases: Bool
+    let ropeTheta: Float
+    let normEps: Float
+    let slidingWindow: Int
+    let downsampleFactor: Int
+    let audioEncodingArgs: RealtimeAudioEncodingConfig
 
     enum CodingKeys: String, CodingKey {
         case dim
@@ -64,20 +64,20 @@ public struct RealtimeEncoderConfig: Codable, Sendable {
 
 // MARK: - Decoder Configuration
 
-public struct RealtimeDecoderConfig: Codable, Sendable {
-    public let dim: Int
-    public let nLayers: Int
-    public let headDim: Int
-    public let hiddenDim: Int
-    public let nHeads: Int
-    public let nKVHeads: Int
-    public let vocabSize: Int
-    public let normEps: Float
-    public let ropeTheta: Float
-    public let slidingWindow: Int
-    public let tiedEmbeddings: Bool
-    public let adaRmsNormTCond: Bool
-    public let adaRmsNormTCondDim: Int
+struct RealtimeDecoderConfig: Codable, Sendable {
+    let dim: Int
+    let nLayers: Int
+    let headDim: Int
+    let hiddenDim: Int
+    let nHeads: Int
+    let nKVHeads: Int
+    let vocabSize: Int
+    let normEps: Float
+    let ropeTheta: Float
+    let slidingWindow: Int
+    let tiedEmbeddings: Bool
+    let adaRmsNormTCond: Bool
+    let adaRmsNormTCondDim: Int
 
     enum CodingKeys: String, CodingKey {
         case dim
@@ -98,12 +98,12 @@ public struct RealtimeDecoderConfig: Codable, Sendable {
 
 // MARK: - Top-Level Configuration (mlx-community format)
 
-public struct RealtimeQuantizationConfig: Codable, Sendable {
-    public let groupSize: Int
-    public let bits: Int
+struct RealtimeQuantizationConfig: Codable, Sendable {
+    let groupSize: Int
+    let bits: Int
     /// `affine`, `mxfp4`, … as written in config.json (nil = affine); informational: the loader reads the
     /// quantization with `PackQuantization`, per layer and mode included (K-8)
-    public let mode: String?
+    let mode: String?
 
     enum CodingKeys: String, CodingKey {
         case groupSize = "group_size"
@@ -112,11 +112,11 @@ public struct RealtimeQuantizationConfig: Codable, Sendable {
     }
 }
 
-public struct VoxtralRealtimeConfiguration: Codable, Sendable {
-    public let decoder: RealtimeDecoderConfig
-    public let encoderArgs: RealtimeEncoderConfig
-    public let modelType: String
-    public let quantization: RealtimeQuantizationConfig?
+struct VoxtralRealtimeConfiguration: Codable, Sendable {
+    let decoder: RealtimeDecoderConfig
+    let encoderArgs: RealtimeEncoderConfig
+    let modelType: String
+    let quantization: RealtimeQuantizationConfig?
 
     enum CodingKeys: String, CodingKey {
         case decoder
@@ -128,7 +128,7 @@ public struct VoxtralRealtimeConfiguration: Codable, Sendable {
 
 // MARK: - Convenience Accessors
 
-public extension VoxtralRealtimeConfiguration {
+extension VoxtralRealtimeConfiguration {
 
     /// Audio encoding config shortcut
     var audioEncoding: RealtimeAudioEncodingConfig {
@@ -193,7 +193,7 @@ public extension VoxtralRealtimeConfiguration {
 
 // MARK: - Loading
 
-public extension VoxtralRealtimeConfiguration {
+extension VoxtralRealtimeConfiguration {
 
     /// Load from a config.json or params.json file
     static func load(from url: URL) throws -> VoxtralRealtimeConfiguration {

@@ -33,10 +33,10 @@ public class VoxtralPipeline: @unchecked Sendable {
         case small24b8bit = "small-24b-8bit"
         case small4bit = "small-4bit"
 
-        /// HuggingFace repository of this model, read from `ModelRegistry`: one table for the pipeline, the app and
+        /// HuggingFace repository of this model, read from `VoxtralModelRegistry`: one table for the pipeline, the app and
         /// the downloader (K-10, ASK-15)
         public var repoId: String {
-            ModelRegistry.model(withId: rawValue)?.repoId ?? rawValue
+            VoxtralModelRegistry.model(withId: rawValue)?.repoId ?? rawValue
         }
 
         /// Human-readable display name
@@ -123,7 +123,7 @@ public class VoxtralPipeline: @unchecked Sendable {
 
     /// Speech rate the automatic budget allows: 1.5 × the densest measured rate (C-moyen FR:
     /// 693 tokens for 173.8 s ≈ 4.0 tokens/s; EN: 520 for 167 s ≈ 3.1), so a runaway loop still stops.
-    public static let automaticTokensPerSecond = 6.0
+    static let automaticTokensPerSecond = 6.0
 
     /// Budget used when `maxTokens` is nil: ⌈duration × 6⌉ + 64, never below the former default 500.
     public static func automaticMaxTokens(forDuration seconds: Double) -> Int {
@@ -248,7 +248,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 busy: VoxtralPipelineError.busy, state: .loading, newGeneration: true)
             progress?(0.0, "Starting model download...")
 
-            let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "load-models", model: model.rawValue)
             defer { beacon?.end() }
 
             do {
@@ -263,7 +263,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 if let modelDirectoryOverride {
                     modelPath = modelDirectoryOverride
                 } else {
-                    modelPath = try await ModelDownloader.resolveModel(model.rawValue) { downloadProgress, status in
+                    modelPath = try await VoxtralModelDownloader.resolveModel(model.rawValue) { downloadProgress, status in
                         progress?(0.1 + downloadProgress * 0.4, status)
                     }
                 }
@@ -356,7 +356,7 @@ public class VoxtralPipeline: @unchecked Sendable {
     ///   - language: Optional language code (e.g. `"fr"`, `"en"`). Pass `nil`
     ///     to let the model auto-detect the spoken language (the processor
     ///     omits the `lang:xx` prompt token in that case — cf.
-    ///     `VoxtralProcessor.applyTranscritionRequest`). Defaults to `nil`
+    ///     `VoxtralProcessor.applyTranscriptionRequest`). Defaults to `nil`
     ///     so dubbing / multilingual workflows can rely on auto-detection
     ///     without hardcoding a source language.
     /// - Returns: Transcribed text
@@ -377,7 +377,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             }
 
             let session = MLXProfiler.shared.activeSession
-            let beacon = RuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
             defer {
                 beacon?.end()
                 // Apply memory optimization
@@ -386,7 +386,7 @@ public class VoxtralPipeline: @unchecked Sendable {
 
             // Create transcription request (note: method name has typo in original)
             session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
-            let inputs = try processor.applyTranscritionRequest(
+            let inputs = try processor.applyTranscriptionRequest(
                 audio: audio.path,
                 language: language
             )
@@ -466,7 +466,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             }
 
             let session = MLXProfiler.shared.activeSession
-            let beacon = RuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
             defer {
                 beacon?.end()
                 VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
@@ -622,7 +622,7 @@ extension VoxtralPipeline {
     }
 
     /// List available models
-    public static var availableModels: [Model] {
+    static var availableModels: [Model] {
         Model.allCases
     }
 

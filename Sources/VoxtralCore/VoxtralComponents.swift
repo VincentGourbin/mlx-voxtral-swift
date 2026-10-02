@@ -32,7 +32,7 @@ import MLXRandom
  * TekkenTokenizer - Implementation BPE exacte basée sur tiktoken (comme Python mistral-common)
  * Équivalent exact de mistral_common.tokens.tokenizers.tekken.Tekkenizer
  */
-public class TekkenTokenizer {
+class TekkenTokenizer {
     
     // Vocabulaire principal (mergeable_ranks dans tiktoken)
     private var mergeableRanks: [Data: Int] = [:]  // byte sequences -> rank
@@ -56,7 +56,7 @@ public class TekkenTokenizer {
     private var audioTokenIdInternal = 24  // Default, will be loaded from config
     
     // Public access to vocabulary for compatibility
-    public var vocab: [String: Int] { 
+    var vocab: [String: Int] { 
         var result: [String: Int] = [:]
         for (bytes, rank) in mergeableRanks {
             if let string = String(data: bytes, encoding: .utf8) {
@@ -104,12 +104,12 @@ public class TekkenTokenizer {
     }
     
     /// Progress callback type for tokenizer loading
-    public typealias TokenizerProgressCallback = (Double, String) -> Void
+    typealias TokenizerProgressCallback = (Double, String) -> Void
 
     /// Loads `tekken.json` from the model directory or throws: a missing or unreadable file, an
     /// empty vocabulary or a split pattern that does not compile is an error, never a silent
     /// byte-level demo tokenizer (S-05).
-    public static func load(modelPath: String, progress: TokenizerProgressCallback? = nil) throws -> TekkenTokenizer {
+    static func load(modelPath: String, progress: TokenizerProgressCallback? = nil) throws -> TekkenTokenizer {
         let tekkenPath = "\(modelPath)/tekken.json"
         guard FileManager.default.fileExists(atPath: tekkenPath) else {
             throw VoxtralError.fileNotFound(tekkenPath)
@@ -133,12 +133,6 @@ public class TekkenTokenizer {
         self.modelPath = modelPath
     }
 
-    @available(*, deprecated, message: "Use TekkenTokenizer.load(modelPath:), which throws instead of falling back to a demo tokenizer")
-    public init(modelPath: String? = nil, progress: TokenizerProgressCallback? = nil) {
-        self.modelPath = modelPath
-        loadTokenizerData(progress: progress)
-    }
-
     private func loadTokenizerData(progress: TokenizerProgressCallback? = nil) {
         if let modelPath = modelPath {
             loadTekkenTokenizerFromFile(modelPath: modelPath, progress: progress)
@@ -148,7 +142,7 @@ public class TekkenTokenizer {
     }
 
     /// Non-throwing load kept for the deprecated `init`: on failure it falls back to the demo tokenizer.
-    public func loadTekkenTokenizerFromFile(modelPath: String, progress: TokenizerProgressCallback? = nil) {
+    func loadTekkenTokenizerFromFile(modelPath: String, progress: TokenizerProgressCallback? = nil) {
         do {
             try loadTekkenStrict(modelPath: modelPath, progress: progress)
         } catch {
@@ -443,7 +437,7 @@ public class TekkenTokenizer {
      * Encode text using BPE (équivalent tiktoken.Encoding.encode + Tekkenizer offset)
      * Python: tokens = self._model.encode(s); tokens = [t + self.num_special_tokens for t in tokens]
      */
-    public func encode(_ text: String, addSpecialTokens: Bool = false) -> [Int] {
+    func encode(_ text: String, addSpecialTokens: Bool = false) -> [Int] {
         guard !text.isEmpty else { return [] }
         
         // 1. Découper le texte selon regex pattern (comme tiktoken)
@@ -572,7 +566,7 @@ public class TekkenTokenizer {
      * UTF-8 at the end. This correctly handles multi-byte UTF-8 sequences (accented
      * characters, CJK, emoji) that span multiple BPE tokens.
      */
-    public func decode(_ tokens: [Int], skipSpecialTokens: Bool = true) -> String {
+    func decode(_ tokens: [Int], skipSpecialTokens: Bool = true) -> String {
         var rawBytes = Data()
 
         for tokenId in tokens {
@@ -611,19 +605,13 @@ public class TekkenTokenizer {
      * Encode transcription request (équivalent encode_transcription dans Python)
      * Cette méthode sera utilisée pour les requêtes audio/transcription
      */
-    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines.")
-    public func encodeTranscription(text: String, audioData: Data? = nil) -> [Int] {
-        // Pour l'instant, utiliser la même logique que encode standard
-        // Same encoding as a chat request: no transcription-specific logic
-        return encode(text, addSpecialTokens: true)
-    }
     
-    public var vocabSize: Int { mergeableRanks.count + numSpecialTokens }
-    public var bosToken: Int { bosTokenId }
-    public var eosToken: Int { eosTokenId }
+    var vocabSize: Int { mergeableRanks.count + numSpecialTokens }
+    var bosToken: Int { bosTokenId }
+    var eosToken: Int { eosTokenId }
     
     // Compatibility methods for VoxtralProcessor interface
-    public func getControlToken(_ token: String) -> Int {
+    func getControlToken(_ token: String) -> Int {
         // LOGIC PYTHON EXACTE : retourner les mêmes valeurs que Python Tekkenizer.get_control_token()
         switch token {
         case "<s>":
@@ -646,20 +634,20 @@ public class TekkenTokenizer {
         }
     }
     
-    public var audioTokenId: Int { return audioTokenIdInternal }
-    public var padTokenIdValue: Int { return padTokenId }
-    public var eosTokenIdValue: Int { return eosTokenId }
-    public var bosTokenIdValue: Int { return bosTokenId }
-    public var hasGetControlToken: Bool = true  // getControlToken corrigé, retourne les bonnes valeurs
-    public var hasAudioTokenId: Bool = true
-    public var hasVocab: Bool { return !mergeableRanks.isEmpty }
-    public var hasPadTokenId: Bool = true
-    public var hasDecodeMethod: Bool = true
-    public var hasEncodeMethod: Bool = true
-    public var hasCallMethod: Bool = true
+    var audioTokenId: Int { return audioTokenIdInternal }
+    var padTokenIdValue: Int { return padTokenId }
+    var eosTokenIdValue: Int { return eosTokenId }
+    var bosTokenIdValue: Int { return bosTokenId }
+    var hasGetControlToken: Bool = true  // getControlToken corrigé, retourne les bonnes valeurs
+    var hasAudioTokenId: Bool = true
+    var hasVocab: Bool { return !mergeableRanks.isEmpty }
+    var hasPadTokenId: Bool = true
+    var hasDecodeMethod: Bool = true
+    var hasEncodeMethod: Bool = true
+    var hasCallMethod: Bool = true
     
     // For compatibility with VoxtralProcessor that expects callAsFunction
-    public func callAsFunction(
+    func callAsFunction(
         text: String,
         returnTensors: String = "mlx",
         padding: Bool = true
@@ -676,14 +664,14 @@ public class TekkenTokenizer {
         return result
     }
     
-    public static func fromPretrained(
+    static func fromPretrained(
         _ modelPath: String,
         progress: TokenizerProgressCallback? = nil
     ) throws -> TekkenTokenizer {
         return try load(modelPath: modelPath, progress: progress)
     }
     
-    public func batchDecode(_ tokenIdsList: [[Int]], skipSpecialTokens: Bool = true) -> [String] {
+    func batchDecode(_ tokenIdsList: [[Int]], skipSpecialTokens: Bool = true) -> [String] {
         return tokenIdsList.map { decode($0, skipSpecialTokens: skipSpecialTokens) }
     }
 }
@@ -693,143 +681,9 @@ public class TekkenTokenizer {
 /**
  * AudioEncoder - Audio tokenisation 75fps exacte
  */
-@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines.")
-public class AudioEncoder {
-    
-    private let sampleRate = 16000
-    private let targetFPS = 75.0
-    private let segmentDuration = 5.0
-    private let audioTokenId = 24
-    
-    public init() {}
-
-    public func encode(audioData: Data) -> [Int] {
-        guard validateAudioFormat(audioData) else {
-            VoxtralDebug.log("Invalid audio format")
-            return []
-        }
-
-        let waveform = extractWaveform(from: audioData)
-        let durationSeconds = Double(waveform.count) / Double(sampleRate)
-        let expectedTokens = Int(durationSeconds * targetFPS)
-
-        var audioTokens: [Int] = []
-        for _ in 0..<expectedTokens {
-            audioTokens.append(audioTokenId)
-        }
-
-        return audioTokens
-    }
-    
-    private func validateAudioFormat(_ audioData: Data) -> Bool {
-        guard audioData.count > 44 else { return false }
-        return true // Validation simplifiée
-    }
-    
-    private func extractWaveform(from audioData: Data) -> [Float] {
-        let headerSize = 44
-        let audioBytes = audioData.dropFirst(headerSize)
-        
-        var waveform: [Float] = []
-        
-        for i in stride(from: 0, to: audioBytes.count - 1, by: 2) {
-            let sample16 = audioBytes.withUnsafeBytes { bytes in
-                bytes.loadUnaligned(fromByteOffset: i, as: Int16.self)
-            }
-            
-            let sampleFloat = Float(sample16) / 32768.0
-            waveform.append(sampleFloat)
-        }
-        
-        return waveform
-    }
-    
-    public var fps: Double { targetFPS }
-    public var tokenId: Int { audioTokenId }
-}
 
 // MARK: - 3. CHAT TEMPLATE PROCESSOR (VALIDÉ)
 
 /**
  * ChatTemplateProcessor - Application template Voxtral exacte
  */
-@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines; it reads URLs synchronously.")
-public class ChatTemplateProcessor {
-    
-    private let audioTokenId = 24
-    private let bosToken = 1
-    private let eosToken = 2
-    
-    public init() {}
-    
-    public struct ConversationContent {
-        public let type: String
-        public let text: String?
-        public let audioUrl: String?
-        
-        public init(type: String, text: String? = nil, audioUrl: String? = nil) {
-            self.type = type
-            self.text = text
-            self.audioUrl = audioUrl
-        }
-    }
-    
-    public struct ConversationMessage {
-        public let role: String
-        public let content: [ConversationContent]
-        
-        public init(role: String, content: [ConversationContent]) {
-            self.role = role
-            self.content = content
-        }
-    }
-    
-    public func apply(
-        conversation: [ConversationMessage],
-        tokenizer: TekkenTokenizer,
-        audioEncoder: AudioEncoder
-    ) -> [Int] {
-        
-        var finalTokens: [Int] = [bosToken]
-        
-        for message in conversation {
-            if message.role == "user" {
-                // Ajouter préfixe utilisateur
-                let userPrefix = "user"
-                let userTokens = tokenizer.encode(userPrefix)
-                finalTokens.append(contentsOf: userTokens.dropFirst().dropLast())
-                
-                // Traiter chaque contenu
-                for content in message.content {
-                    if content.type == "text", let text = content.text {
-                        let textWithColon = text + ":"
-                        let textTokens = tokenizer.encode(textWithColon)
-                        finalTokens.append(contentsOf: textTokens.dropFirst().dropLast())
-                        
-                    } else if content.type == "audio", let audioUrl = content.audioUrl {
-                        if let audioData = loadAudioFromUrl(audioUrl) {
-                            let audioTokens = audioEncoder.encode(audioData: audioData)
-                            finalTokens.append(contentsOf: audioTokens)
-                        }
-                    }
-                }
-            }
-        }
-        
-        finalTokens.append(eosToken)
-        return finalTokens
-    }
-
-    private func loadAudioFromUrl(_ url: String) -> Data? {
-        let audioURL: URL
-        if url.hasPrefix("http://") || url.hasPrefix("https://") {
-            guard let webURL = URL(string: url) else { return nil }
-            audioURL = webURL
-        } else {
-            audioURL = URL(fileURLWithPath: url)
-            if !FileManager.default.fileExists(atPath: audioURL.path) { return nil }
-        }
-
-        return try? Data(contentsOf: audioURL)
-    }
-}

@@ -834,7 +834,7 @@ struct ModelRowView: View {
                     Text(model.parameters)
                     if let size = size {
                         Text("•")
-                        Text(ModelDownloader.formatSize(size))
+                        Text(VoxtralModelDownloader.formatSize(size))
                             .foregroundStyle(.blue)
                     }
                 }

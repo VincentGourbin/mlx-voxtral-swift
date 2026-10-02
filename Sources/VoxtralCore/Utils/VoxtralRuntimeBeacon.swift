@@ -1,4 +1,4 @@
-// RuntimeBeacon.swift - Opt-in presence beacon for external activity monitors
+// VoxtralRuntimeBeacon.swift - Opt-in presence beacon for external activity monitors
 // Copyright 2026
 
 import Foundation
@@ -16,7 +16,7 @@ import os
 ///
 /// ## Enabling
 /// ```swift
-/// RuntimeBeacon.isEnabled = true   // from code
+/// VoxtralRuntimeBeacon.isEnabled = true   // from code
 /// ```
 /// or set the environment variable `VOXTRAL_RUNTIME_BEACON=1` (used by the
 /// CLI's `--beacon` flag as well).
@@ -48,7 +48,7 @@ import os
 /// - Note: Sandboxed apps write inside their container, where external
 ///   monitors cannot see the manifest. The beacon is a no-op in practice
 ///   there; it targets CLI tools and non-sandboxed apps.
-public enum RuntimeBeacon {
+public enum VoxtralRuntimeBeacon {
     /// Manifest schema version.
     public static let schemaVersion = 1
 
@@ -87,7 +87,7 @@ public enum RuntimeBeacon {
     /// Start a beacon session for one heavy operation. Returns `nil` when the
     /// beacon is disabled (the default), so call sites stay one-liners:
     /// ```swift
-    /// let beacon = RuntimeBeacon.begin(task: "transcribe", model: model.id)
+    /// let beacon = VoxtralRuntimeBeacon.begin(task: "transcribe", model: model.id)
     /// defer { beacon?.end() }
     /// ```
     /// Never throws and never blocks the operation: every filesystem failure
@@ -117,7 +117,7 @@ public enum RuntimeBeacon {
 
     // MARK: - Session
 
-    /// One live manifest: created by ``RuntimeBeacon/begin(task:model:)``,
+    /// One live manifest: created by ``VoxtralRuntimeBeacon/begin(task:model:)``,
     /// refreshed by ``update(phase:step:totalSteps:)``, deleted by ``end()``.
     /// `deinit` also ends the session as a safety net, but call sites must
     /// still `defer { beacon?.end() }` — long-lived owners can keep references
@@ -162,10 +162,10 @@ public enum RuntimeBeacon {
             let now = Date()
             self.state = OSAllocatedUnfairLock(initialState: State(
                 manifest: Manifest(
-                    version: RuntimeBeacon.schemaVersion,
+                    version: VoxtralRuntimeBeacon.schemaVersion,
                     pid: pid,
-                    runtime: RuntimeBeacon.runtimeID,
-                    displayName: RuntimeBeacon.runtimeDisplayName,
+                    runtime: VoxtralRuntimeBeacon.runtimeID,
+                    displayName: VoxtralRuntimeBeacon.runtimeDisplayName,
                     task: task,
                     model: model,
                     phase: nil,

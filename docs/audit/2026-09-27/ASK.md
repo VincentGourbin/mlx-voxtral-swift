@@ -538,5 +538,9 @@ réponse datée ici.
 
 ### Dérogations
 
+- **K-31, 2026-10-02** (Vincent, session Mac) : liste validée telle quelle, appliquée sur la branche d'audit (3.0
+  directe) ; 338 lignes `public` acceptées au lieu de ≤ 300 ; la clause FluxForge est vérifiée par Vincent à la
+  transmission (`docs/audit/2026-09-27/K-31-liste-api.md` §E).
+
 - **K-22, 2026-10-01** (Vincent, au planificateur) : la clause « FluxForge compile (si présent sur la machine) » est
   vérifiée à la fusion de la branche sur `main` (FluxForge suit `main`), pas sur la branche d'audit.

@@ -144,18 +144,6 @@ public class VoxtralTranscriptionManager: @unchecked Sendable {
         return try await pipeline.chat(audio: audioURL, prompt: prompt, language: language)
     }
 
-    /// Chat with system prompt (text-only, for post-processing transcriptions)
-    /// Not implemented: always throws `audioRequired` (K-27).
-    /// - Parameters:
-    ///   - systemPrompt: System instructions
-    ///   - userMessage: User's message (e.g., a transcription to summarize)
-    /// - Returns: Model's response
-    @available(*, deprecated, message: "Not implemented: always throws VoxtralTranscriptionError.audioRequired. Use chat(audioURL:prompt:language:) or a text LLM.")
-    public func chat(systemPrompt: String, userMessage: String) async throws -> String {
-        // For text-only chat, we need the full model
-        // This is a simplified version - for full text chat, use a dedicated LLM
-        throw VoxtralTranscriptionError.audioRequired
-    }
 }
 
 // MARK: - Static Convenience Methods
@@ -164,15 +152,15 @@ extension VoxtralTranscriptionManager {
 
     /// Check if the default model is downloaded
     public static func isDefaultModelDownloaded() -> Bool {
-        return ModelDownloader.findModelPath(for: ModelRegistry.defaultModel) != nil
+        return VoxtralModelDownloader.findModelPath(for: VoxtralModelRegistry.defaultModel) != nil
     }
 
     /// Check if a specific model variant is downloaded
     public static func isModelDownloaded(_ model: VoxtralPipeline.Model) -> Bool {
-        guard let info = ModelRegistry.model(withId: model.rawValue) else {
+        guard let info = VoxtralModelRegistry.model(withId: model.rawValue) else {
             return false
         }
-        return ModelDownloader.findModelPath(for: info) != nil
+        return VoxtralModelDownloader.findModelPath(for: info) != nil
     }
 
     /// Download the default model
@@ -180,24 +168,24 @@ extension VoxtralTranscriptionManager {
     /// - Returns: Path to the downloaded model
     @discardableResult
     public static func downloadDefaultModel(
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
-        return try await ModelDownloader.download(ModelRegistry.defaultModel, progress: progress)
+        return try await VoxtralModelDownloader.download(VoxtralModelRegistry.defaultModel, progress: progress)
     }
 
     /// Delete the default model
     public static func deleteDefaultModel() throws {
-        try ModelDownloader.deleteModel(ModelRegistry.defaultModel)
+        try VoxtralModelDownloader.deleteModel(VoxtralModelRegistry.defaultModel)
     }
 
     /// Get info about the default model
     public static var defaultModelInfo: VoxtralModelInfo {
-        ModelRegistry.defaultModel
+        VoxtralModelRegistry.defaultModel
     }
 
     /// Get all available models
     public static var availableModels: [VoxtralModelInfo] {
-        ModelRegistry.models
+        VoxtralModelRegistry.models
     }
 
     /// Recommended model for the current system

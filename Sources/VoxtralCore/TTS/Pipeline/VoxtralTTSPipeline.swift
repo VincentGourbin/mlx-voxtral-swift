@@ -179,7 +179,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
 
             let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
-            let beacon = RuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
             defer { beacon?.end() }
 
             do {
@@ -188,7 +188,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 progress?(0.05, "Resolving TTS model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
                 let modelInfo = resolvedInfo
-                let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo) { p, msg in
+                let modelDir = try await VoxtralModelDownloader.downloadTTSModel(modelInfo) { p, msg in
                     progress?(0.05 + p * 0.35, msg)
                 }
                 self.modelDirectory = modelDir
@@ -268,7 +268,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let startTime = Date()
             let profiler = MLXProfiler.shared
             let session = profiler.activeSession
-            let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "tts", model: loadedModelID)
             defer { beacon?.end() }
 
             let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
@@ -390,7 +390,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let startTime = Date()
             let profiler = MLXProfiler.shared
             let session = profiler.activeSession
-            let beacon = RuntimeBeacon.begin(task: "tts", model: loadedModelID)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "tts", model: loadedModelID)
             defer { beacon?.end() }
 
             // Prepend the warm-up carrier as its own sentence so the model puts a
@@ -617,7 +617,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
 
         let startTime = Date()
-        let beacon = RuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
+        let beacon = VoxtralRuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
 
         let capturedSampleRate = sampleRate
         let capturedSanitize = configuration.sanitizeText

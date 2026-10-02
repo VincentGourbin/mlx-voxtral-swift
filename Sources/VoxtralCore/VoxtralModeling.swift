@@ -15,7 +15,7 @@ import MLXProfiler
 
 // Global debug dump function of the legacy loaders (read and replaced under a lock). Default: a debug log line when
 // VoxtralDebug is enabled, nothing otherwise; it used to append every message to /tmp/swift_debug_generation.txt (K-23)
-public var writeDebugToDump: (String) -> Void {
+var writeDebugToDump: (String) -> Void {
     get { _writeDebugToDump.get() }
     set { _writeDebugToDump.set(newValue) }
 }
@@ -27,13 +27,13 @@ private let _writeDebugToDump = Locked<(String) -> Void>({ message in
 /**
  * Direct Python equivalent: @dataclass class VoxtralModelOutput
  */
-public struct VoxtralModelOutput {
-    public let logits: MLXArray
-    public let pastKeyValues: [KVCache]?  // Correct type to match function parameter
-    public let hiddenStates: MLXArray?
-    public let attentions: [MLXArray]?
+struct VoxtralModelOutput {
+    let logits: MLXArray
+    let pastKeyValues: [KVCache]?  // Correct type to match function parameter
+    let hiddenStates: MLXArray?
+    let attentions: [MLXArray]?
     
-    public init(
+    init(
         logits: MLXArray,
         pastKeyValues: [KVCache]? = nil,
         hiddenStates: MLXArray? = nil,
@@ -49,7 +49,7 @@ public struct VoxtralModelOutput {
 /**
  * Direct Python equivalent: class VoxtralAttention(nn.Module)
  */
-public class VoxtralAttention: Module {
+class VoxtralAttention: Module {
     
     // Python: def __init__(self, embed_dim: int, num_heads: int, bias: bool = False)
     let embedDim: Int
@@ -59,12 +59,12 @@ public class VoxtralAttention: Module {
     let scaling: Float
     
     // @ModuleInfo required for quantization support
-    @ModuleInfo(key: "q_proj") public var qProj: Linear
-    @ModuleInfo(key: "k_proj") public var kProj: Linear
-    @ModuleInfo(key: "v_proj") public var vProj: Linear
-    @ModuleInfo(key: "out_proj") public var outProj: Linear
+    @ModuleInfo(key: "q_proj") var qProj: Linear
+    @ModuleInfo(key: "k_proj") var kProj: Linear
+    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "out_proj") var outProj: Linear
 
-    public init(embedDim: Int, numHeads: Int, bias: Bool = false) {
+    init(embedDim: Int, numHeads: Int, bias: Bool = false) {
         // Python: self.embed_dim = embed_dim
         self.embedDim = embedDim
         // Python: self.num_heads = num_heads
@@ -92,7 +92,7 @@ public class VoxtralAttention: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, output_attentions: bool = False, **kwargs) -> Tuple[mx.array, Optional[mx.array]]
      */
-    public func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, outputAttentions: Bool = false) -> (MLXArray, MLXArray?) {
+    func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, outputAttentions: Bool = false) -> (MLXArray, MLXArray?) {
         // Python: batch_size, seq_len, _ = hidden_states.shape
         let batchSize = hiddenStates.shape[0]
         let seqLen = hiddenStates.shape[1]
@@ -140,19 +140,19 @@ public class VoxtralAttention: Module {
 /**
  * Direct Python equivalent: class VoxtralEncoderLayer(nn.Module)
  */
-public class VoxtralEncoderLayer: Module {
+class VoxtralEncoderLayer: Module {
 
     // Python: def __init__(self, config: VoxtralEncoderConfig)
     let embedDim: Int
     // @ModuleInfo required for quantization support
-    @ModuleInfo(key: "self_attn") public var selfAttn: VoxtralAttention
+    @ModuleInfo(key: "self_attn") var selfAttn: VoxtralAttention
     let self_attn_layer_norm: LayerNorm
-    @ModuleInfo public var fc1: Linear
-    @ModuleInfo public var fc2: Linear
+    @ModuleInfo var fc1: Linear
+    @ModuleInfo var fc2: Linear
     let final_layer_norm: LayerNorm
     let activation: (MLXArray) -> MLXArray
 
-    public init(config: VoxtralEncoderConfig) {
+    init(config: VoxtralEncoderConfig) {
         // Python: self.embed_dim = config.hidden_size
         self.embedDim = config.hidden_size
 
@@ -194,7 +194,7 @@ public class VoxtralEncoderLayer: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, output_attentions: bool = False, **kwargs) -> Tuple[mx.array, Optional[mx.array]]
      */
-    public func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, outputAttentions: Bool = false) -> (MLXArray, MLXArray?) {
+    func callAsFunction(_ hiddenStates: MLXArray, attentionMask: MLXArray? = nil, outputAttentions: Bool = false) -> (MLXArray, MLXArray?) {
         // Python: residual = hidden_states
         let residual = hiddenStates
         
@@ -231,7 +231,7 @@ public class VoxtralEncoderLayer: Module {
 /**
  * Direct Python equivalent: class VoxtralEncoder(nn.Module)
  */
-public class VoxtralEncoder: Module {
+class VoxtralEncoder: Module {
     
     // Python: embed_dim = config.hidden_size
     let embedDim: Int
@@ -245,13 +245,13 @@ public class VoxtralEncoder: Module {
     let embedScale: Float
     
     // @ModuleInfo required for weight loading
-    @ModuleInfo public var conv1: Conv1d
-    @ModuleInfo public var conv2: Conv1d
-    @ModuleInfo(key: "embed_positions") public var embedPositions: Embedding
-    @ModuleInfo public var layers: [VoxtralEncoderLayer]
-    @ModuleInfo(key: "layer_norm") public var layerNorm: LayerNorm
+    @ModuleInfo var conv1: Conv1d
+    @ModuleInfo var conv2: Conv1d
+    @ModuleInfo(key: "embed_positions") var embedPositions: Embedding
+    @ModuleInfo var layers: [VoxtralEncoderLayer]
+    @ModuleInfo(key: "layer_norm") var layerNorm: LayerNorm
     
-    public init(config: VoxtralEncoderConfig) {
+    init(config: VoxtralEncoderConfig) {
         // Python: embed_dim = config.hidden_size
         self.embedDim = config.hidden_size
         // Python: self.num_mel_bins = config.num_mel_bins
@@ -316,7 +316,7 @@ public class VoxtralEncoder: Module {
     /**
      * Direct Python equivalent: def __call__(self, input_features: mx.array, attention_mask: Optional[mx.array] = None, output_attentions: bool = False, output_hidden_states: bool = False) -> Tuple[mx.array, Optional[Tuple[mx.array]], Optional[Tuple[mx.array]]]
      */
-    public func callAsFunction(
+    func callAsFunction(
         _ inputFeatures: MLXArray,
         attentionMask: MLXArray? = nil,
         outputAttentions: Bool = false,
@@ -385,15 +385,15 @@ public class VoxtralEncoder: Module {
 /**
  * Direct Python equivalent: class VoxtralMultiModalProjector(nn.Module)
  */
-public class VoxtralMultiModalProjector: Module {
+class VoxtralMultiModalProjector: Module {
 
     // @ModuleInfo required for quantization support
-    @ModuleInfo(key: "linear_1") public var linear1: Linear
+    @ModuleInfo(key: "linear_1") var linear1: Linear
     // Python: self.act = nn.GELU()
     let act: (MLXArray) -> MLXArray
-    @ModuleInfo(key: "linear_2") public var linear2: Linear
+    @ModuleInfo(key: "linear_2") var linear2: Linear
 
-    public init(config: VoxtralConfig) {
+    init(config: VoxtralConfig) {
         // Python: self.act = nn.GELU()
         self.act = gelu
 
@@ -410,7 +410,7 @@ public class VoxtralMultiModalProjector: Module {
     /**
      * Direct Python equivalent: def __call__(self, audio_features: mx.array) -> mx.array
      */
-    public func callAsFunction(_ audioFeatures: MLXArray) -> MLXArray {
+    func callAsFunction(_ audioFeatures: MLXArray) -> MLXArray {
         // Python: hidden_states = self.linear1(audio_features)
         let hiddenStates = linear1(audioFeatures)
         // Python: hidden_states = self.act(hidden_states)
@@ -423,20 +423,20 @@ public class VoxtralMultiModalProjector: Module {
 /**
  * Direct Python equivalent: class VoxtralForConditionalGeneration(nn.Module)
  */
-public class VoxtralForConditionalGeneration: Module, LanguageModel {
+class VoxtralForConditionalGeneration: Module, LanguageModel {
 
-    public let config: VoxtralConfig
-    public let textConfig: VoxtralConfig.TextConfig
+    let config: VoxtralConfig
+    let textConfig: VoxtralConfig.TextConfig
 
     // @ModuleInfo required for quantization support
-    @ModuleInfo(key: "audio_tower") public var audioTower: VoxtralEncoder
-    @ModuleInfo(key: "multi_modal_projector") public var multiModalProjector: VoxtralMultiModalProjector
+    @ModuleInfo(key: "audio_tower") var audioTower: VoxtralEncoder
+    @ModuleInfo(key: "multi_modal_projector") var multiModalProjector: VoxtralMultiModalProjector
 
     /// Token ids that end STT generation, shared by both generation loops. Tekken defaults:
     /// `</s>` (2) and `[/INST]` (4). Special ids are < 1 000 (text id = rank + 1 000): the former
     /// 32000 was "␣Capital" and cut transcriptions at that word (S-01). `VoxtralPipeline` sets them
     /// from its tokenizer (`generation_config.json`).
-    public var stopTokenIds: [Int] = [2, 4]
+    var stopTokenIds: [Int] = [2, 4]
 
     /// The decoder and head types the forward passes support: the throwing entry points check them up front and
     /// throw instead of reaching an unsupported-type stop (K-27)
@@ -457,15 +457,15 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     var standardModel: VoxtralStandardModel?
     // Python: self.language_model = LlamaModel(text_config)  
     // Swift: LlamaStandardModel (pipelines) or LlamaModel (legacy decoder)
-    @ModuleInfo public var language_model: Module  // LlamaStandardModel or the legacy LlamaModel
+    @ModuleInfo var language_model: Module  // LlamaStandardModel or the legacy LlamaModel
     
     // Python: self.embed_tokens = self.language_model.embed_tokens
     // Swift: Real property that shares the same instance (can be Embedding or QuantizedEmbedding)
-    @ModuleInfo public var embed_tokens: Module
+    @ModuleInfo var embed_tokens: Module
     // Python: self.lm_head = nn.Linear(text_config.hidden_size, text_config.vocab_size, bias=False)
-    @ModuleInfo public var lm_head: Module  // Can be Linear or QuantizedLinear
+    @ModuleInfo var lm_head: Module  // Can be Linear or QuantizedLinear
     
-    public init(config: VoxtralConfig) {
+    init(config: VoxtralConfig) {
         self.config = config
         
         // Python: if isinstance(config.text_config, dict): text_config = VoxtralTextConfig(**config.text_config)
@@ -532,7 +532,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * WARNING: This creates new empty components but with loaded language_model/lm_head
      * The audio_tower and multi_modal_projector will need weight copying after creation
      */
-    public init(standardModel: VoxtralStandardModel) {
+    init(standardModel: VoxtralStandardModel) {
         // Convert to simple config - CRITICAL: Use actual model values, not defaults!
         let audioConfig = VoxtralConfig.AudioConfig(
             hiddenSize: standardModel.configuration.audioConfig.hiddenSize,
@@ -594,56 +594,9 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Constructor for official MLXLLM.LlamaModel (BEST - 100% Python compatibility)
      */
-    @available(*, deprecated, message: "Takes the legacy decoder (LlamaModel, not MLXLLM's) and leaves lm_head with random weights; use init(standardModel:).")
-    public init(officialLlama: LlamaModel, config: VoxtralStandardConfiguration) {
-        VoxtralDebug.log("🔧 Creating VoxtralForConditionalGeneration with official Llama")
-
-        // Convert to simple config - CRITICAL: Use actual model values, not defaults!
-        let audioConfig = VoxtralConfig.AudioConfig(
-            hiddenSize: config.audioConfig.hiddenSize,
-            numAttentionHeads: config.audioConfig.attentionHeads,
-            numLayers: config.audioConfig.hiddenLayers,
-            intermediate_size: config.audioConfig.intermediateSize  // 5120, not 4096!
-        )
-        let textConfig = VoxtralConfig.TextConfig()
-
-        self.config = VoxtralConfig(
-            audioConfig: audioConfig,
-            textConfig: textConfig,
-            audioTokenId: config.audioTokenId
-        )
-
-        self.textConfig = textConfig
-
-        // Use the official Llama directly (no wrapper layer!)
-        self.language_model = officialLlama
-
-        // For lm_head, we need to extract it from the official Llama
-        // The official Llama has an output projection that we can use
-        self.lm_head = Linear(config.textConfig.hiddenSize, config.textConfig.vocabularySize, bias: false)
-
-        // Create audio components (need weight loading separately)
-        let encoderConfig = VoxtralEncoderConfig(
-            vocab_size: config.audioConfig.vocabularySize,
-            hidden_size: config.audioConfig.hiddenSize,
-            intermediate_size: config.audioConfig.intermediateSize,
-            num_hidden_layers: config.audioConfig.hiddenLayers,
-            num_attention_heads: config.audioConfig.attentionHeads,
-            num_mel_bins: config.audioConfig.numMelBins,
-            max_source_positions: config.audioConfig.maxSourcePositions,
-            head_dim: config.audioConfig.headDim,
-            num_key_value_heads: config.audioConfig.kvHeads
-        )
-
-        self._audioTower.wrappedValue = VoxtralEncoder(config: encoderConfig)
-        self._multiModalProjector.wrappedValue = VoxtralMultiModalProjector(config: self.config)
-
-        super.init()
-        VoxtralDebug.log("✅ VoxtralForConditionalGeneration created with official Llama")
-    }
 
     // Helper function to get layers count for cache initialization
-    public func getLanguageModelLayerCount() -> Int {
+    func getLanguageModelLayerCount() -> Int {
         if let llamaModel = language_model as? LlamaModel {
             return llamaModel.layers.count
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
@@ -665,7 +618,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Input shape: [numChunks, 128, 3000]
      * Output shape: [1, numChunks * 375, hidden_size]
      */
-    public func getAudioEmbeds(_ inputFeatures: MLXArray) -> MLXArray {
+    func getAudioEmbeds(_ inputFeatures: MLXArray) -> MLXArray {
 
         // Process ALL chunks through audio tower at once (batched)
         // [numChunks, 128, 3000] -> [numChunks, 1500, 1280]
@@ -792,7 +745,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Direct Python equivalent: def __call__(self, input_ids: Optional[mx.array] = None, attention_mask: Optional[mx.array] = None, input_features: Optional[mx.array] = None, inputs_embeds: Optional[mx.array] = None, labels: Optional[mx.array] = None, past_key_values: Optional[List[KVCache]] = None, return_dict: bool = True) -> VoxtralModelOutput
      */
-    public func callAsFunction(
+    func callAsFunction(
         inputIds: MLXArray? = nil,
         attentionMask: MLXArray? = nil,
         inputFeatures: MLXArray? = nil,
@@ -846,27 +799,11 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Direct Python equivalent: @classmethod def from_pretrained(cls, model_path: str) -> VoxtralForConditionalGeneration
      */
-    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Builds an unloaded model; use VoxtralPipeline.loadModel().")
-    public static func fromPretrained(_ modelPath: String) throws -> VoxtralForConditionalGeneration {
-        // Python: config = VoxtralConfig.from_pretrained(model_path)
-        // Python: model = cls(config)
-        // Python: model.load_weights(model_path)
-        
-        // Built from the default configuration, without loading weights (legacy entry point)
-        let _ = VoxtralConfig()
-        // Python: model = VoxtralForConditionalGeneration(config)
-        // Python: model.load_state_dict(weights)
-        let model = try VoxtralForConditionalGeneration(path: modelPath)
-        
-        VoxtralDebug.log("Model loaded from \(modelPath)")
-        
-        return model
-    }
     
     /**
      * Direct Python equivalent: def generate(self, **kwargs) -> MLXArray
      */
-    public func generate(
+    func generate(
         inputIds: MLXArray,
         inputFeatures: MLXArray? = nil,
         attentionMask: MLXArray? = nil,
@@ -914,7 +851,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * 📦 MEMORY: contextSize parameter controls KV cache limit (nil = unlimited)
      * 🔧 MEMORY: memoryOptimization parameter controls periodic eval/cleanup (aligned with flux-2-swift-mlx)
      */
-    public func generateStream(
+    func generateStream(
         inputIds: MLXArray,
         inputFeatures: MLXArray? = nil,
         attentionMask: MLXArray? = nil,
@@ -1112,7 +1049,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * This bypasses the audio encoder and uses embeddings computed externally (e.g., via Core ML)
      * 🔧 MEMORY: memoryOptimization parameter controls periodic eval/cleanup (aligned with flux-2-swift-mlx)
      */
-    public func generateStreamWithAudioEmbeds(
+    func generateStreamWithAudioEmbeds(
         inputIds: MLXArray,
         audioEmbeds: MLXArray,
         attentionMask: MLXArray? = nil,
@@ -1436,7 +1373,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
      * Prepare the cache state and consume the LMInput
      * Required by LanguageModel protocol
      */
-    public func prepare(
+    func prepare(
         _ input: LMInput, cache: [any KVCache], state: LMOutput.State?, prefill: PrefillParameters
     ) throws -> PrepareResult {
         // For Voxtral, we need to handle both text and audio inputs
@@ -1485,7 +1422,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Simplified interface for single token generation - override default
      */
-    public func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
+    func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
         // Process embeddings through language model
         let outputs = callLanguageModel(inputs: inputs, mask: nil, cache: cache, inputsEmbeds: nil)
         // Apply language model head to get logits
@@ -1518,7 +1455,7 @@ extension VoxtralForConditionalGeneration: KVCacheDimensionProvider {
      * Number of attention heads per layer for KV cache
      * Required by KVCacheDimensionProvider protocol
      */
-    public var kvHeads: [Int] {
+    var kvHeads: [Int] {
         // Return array with number of key-value heads for each layer
         // Each layer has textConfig.numberOfKeyValueHeads
         let numLayers = textConfig.numberOfHiddenLayers

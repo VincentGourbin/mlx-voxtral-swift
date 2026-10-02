@@ -160,7 +160,7 @@ extension TekkenTokenizerTests {
     /// as Python mistral-common implementation. This is crucial for model compatibility.
     func testPythonCrossValidation() throws {
         // The full vocabulary is needed: the reference ids come from the real tekken.json (Mini 3B 4-bit pack)
-        let modelPath = ModelRegistry.model(withId: "mini-3b-4bit").flatMap { ModelDownloader.findModelPath(for: $0)?.path }
+        let modelPath = VoxtralModelRegistry.model(withId: "mini-3b-4bit").flatMap { VoxtralModelDownloader.findModelPath(for: $0)?.path }
         guard let modelPath, FileManager.default.fileExists(atPath: "\(modelPath)/tekken.json") else {
             throw XCTSkip("mini-3b-4bit is not downloaded: Python cross-validation needs the full vocabulary")
         }

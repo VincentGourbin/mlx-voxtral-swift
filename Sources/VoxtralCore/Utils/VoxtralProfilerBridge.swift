@@ -4,4 +4,4 @@
 @_exported import MLXProfiler
 
 /// Convenience alias for the shared MLXProfiler instance
-public typealias VoxtralMLXProfiler = MLXProfiler
+typealias VoxtralMLXProfiler = MLXProfiler

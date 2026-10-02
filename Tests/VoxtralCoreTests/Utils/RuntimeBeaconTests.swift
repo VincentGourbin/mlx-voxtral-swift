@@ -2,7 +2,7 @@
  * RuntimeBeaconTests - Unit tests for the opt-in activity beacon.
  *
  * XCTest runs the methods of one class serially, which matters here:
- * RuntimeBeacon.isEnabled and directoryOverride are global state.
+ * VoxtralRuntimeBeacon.isEnabled and directoryOverride are global state.
  */
 
 import XCTest
@@ -20,11 +20,11 @@ final class RuntimeBeaconTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("beacon-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        RuntimeBeacon.directoryOverride = dir
-        RuntimeBeacon.isEnabled = enabled
+        VoxtralRuntimeBeacon.directoryOverride = dir
+        VoxtralRuntimeBeacon.isEnabled = enabled
         defer {
-            RuntimeBeacon.isEnabled = false
-            RuntimeBeacon.directoryOverride = nil
+            VoxtralRuntimeBeacon.isEnabled = false
+            VoxtralRuntimeBeacon.directoryOverride = nil
             try? FileManager.default.removeItem(at: dir)
         }
         return try body(dir)
@@ -37,14 +37,14 @@ final class RuntimeBeaconTests: XCTestCase {
 
     func testDisabledByDefaultBeginReturnsNilAndWritesNothing() throws {
         try withSandbox(enabled: false) { dir in
-            XCTAssertNil(RuntimeBeacon.begin(task: "transcribe"))
+            XCTAssertNil(VoxtralRuntimeBeacon.begin(task: "transcribe"))
             XCTAssertTrue(manifestFiles(in: dir).isEmpty)
         }
     }
 
     func testSessionLifecycleManifestCreatedUpdatedThenDeletedOnEnd() throws {
         try withSandbox { dir in
-            let session = try XCTUnwrap(RuntimeBeacon.begin(task: "tts", model: "tts-4b-mlx"))
+            let session = try XCTUnwrap(VoxtralRuntimeBeacon.begin(task: "tts", model: "tts-4b-mlx"))
 
             let files = manifestFiles(in: dir)
             XCTAssertEqual(files.count, 1)
@@ -57,7 +57,7 @@ final class RuntimeBeaconTests: XCTestCase {
             XCTAssertEqual(json["task"] as? String, "tts")
             XCTAssertEqual(json["model"] as? String, "tts-4b-mlx")
             XCTAssertEqual(json["pid"] as? Int32, ProcessInfo.processInfo.processIdentifier)
-            XCTAssertEqual(json["version"] as? Int, RuntimeBeacon.schemaVersion)
+            XCTAssertEqual(json["version"] as? Int, VoxtralRuntimeBeacon.schemaVersion)
             XCTAssertNil(json["phase"])
 
             session.update(phase: "optimizing", step: 500, totalSteps: 5000)
@@ -80,7 +80,7 @@ final class RuntimeBeaconTests: XCTestCase {
     func testDeinitRemovesManifestWithoutExplicitEnd() throws {
         try withSandbox { dir in
             do {
-                let session = try XCTUnwrap(RuntimeBeacon.begin(task: "enroll-voice"))
+                let session = try XCTUnwrap(VoxtralRuntimeBeacon.begin(task: "enroll-voice"))
                 XCTAssertEqual(manifestFiles(in: dir).count, 1)
                 _ = session  // deallocated at scope exit
             }
@@ -98,7 +98,7 @@ final class RuntimeBeaconTests: XCTestCase {
             let live = dir.appendingPathComponent("1-cafebabe.json")
             try Data("{}".utf8).write(to: live)
 
-            let session = try XCTUnwrap(RuntimeBeacon.begin(task: "transcribe"))
+            let session = try XCTUnwrap(VoxtralRuntimeBeacon.begin(task: "transcribe"))
             defer { session.end() }
 
             let names = manifestFiles(in: dir).map(\.lastPathComponent)

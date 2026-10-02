@@ -16,18 +16,18 @@ final class RuntimeBeaconRaceTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("beacon-race-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        RuntimeBeacon.directoryOverride = dir
-        RuntimeBeacon.isEnabled = true
+        VoxtralRuntimeBeacon.directoryOverride = dir
+        VoxtralRuntimeBeacon.isEnabled = true
         defer {
-            RuntimeBeacon.isEnabled = false
-            RuntimeBeacon.directoryOverride = nil
+            VoxtralRuntimeBeacon.isEnabled = false
+            VoxtralRuntimeBeacon.directoryOverride = nil
             try? FileManager.default.removeItem(at: dir)
         }
 
         let rounds = 50, updates = 1_000
         var residualRounds = 0
         for _ in 0 ..< rounds {
-            let session = try XCTUnwrap(RuntimeBeacon.begin(task: "race"))
+            let session = try XCTUnwrap(VoxtralRuntimeBeacon.begin(task: "race"))
             DispatchQueue.concurrentPerform(iterations: updates + 1) { i in
                 if i == updates / 2 {
                     session.end()

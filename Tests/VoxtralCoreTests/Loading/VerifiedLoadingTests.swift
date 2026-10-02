@@ -15,8 +15,8 @@ import XCTest
 final class VerifiedLoadingTests: XCTestCase {
 
     func testFolderMissingAShardNamesTheMissingKeys() throws {
-        guard let info = ModelRegistry.model(withId: "mini-3b-8bit"),
-              let source = ModelDownloader.findModelPath(for: info) else {
+        guard let info = VoxtralModelRegistry.model(withId: "mini-3b-8bit"),
+              let source = VoxtralModelDownloader.findModelPath(for: info) else {
             throw XCTSkip("mini-3b-8bit is not downloaded")
         }
         let fm = FileManager.default

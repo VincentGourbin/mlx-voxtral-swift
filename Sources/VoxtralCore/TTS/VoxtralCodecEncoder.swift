@@ -23,7 +23,7 @@ import MLXNN
 
 /// Encodes 24kHz mono audio waveform to discrete codec tokens (1 semantic + 36 acoustic per frame at 12.5Hz).
 /// Requires encoder weights which are NOT in the public checkpoint.
-public class VoxtralCodecEncoder: Module {
+class VoxtralCodecEncoder: Module {
 
     let config: VoxtralTTSConfiguration.AudioTokenizerConfiguration
 
@@ -47,7 +47,7 @@ public class VoxtralCodecEncoder: Module {
     static let encoderTransformerLengths = [2, 2, 2, 2]
     static let encoderSlidingWindows = [16, 8, 4, 2]  // halving (vs decoder's doubling)
 
-    public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration, quantizer: MistralAudioCodebook) {
+    init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration, quantizer: MistralAudioCodebook) {
         self.config = config
         self.quantizer = quantizer
         self._alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
@@ -88,7 +88,7 @@ public class VoxtralCodecEncoder: Module {
     /// - Parameter waveform: Audio samples [batch, numSamples] at 24kHz
     /// - Returns: Codes [batch, numFrames, 37] (1 semantic + 36 acoustic) with +2 special offset
     /// - Throws: If encoder weights are not loaded
-    public func encode(_ waveform: MLXArray) throws -> MLXArray {
+    func encode(_ waveform: MLXArray) throws -> MLXArray {
         guard encoderLoaded else {
             throw VoxtralTTSError.modelLoadingFailed(
                 "Codec encoder weights are not available in the public checkpoint. " +
@@ -149,7 +149,7 @@ public class VoxtralCodecEncoder: Module {
     /// - Parameter waveform: Audio samples [numSamples] at 24kHz (mono)
     /// - Parameter embeddingTable: The audio codebook embedding table
     /// - Returns: Voice embedding [numFrames, dim] ready for LLM input
-    public func encodeToVoiceEmbedding(
+    func encodeToVoiceEmbedding(
         waveform: MLXArray,
         embeddingTable: AudioCodebookEmbeddingsContainer,
         config: VoxtralTTSConfiguration

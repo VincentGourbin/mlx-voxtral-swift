@@ -1,5 +1,5 @@
 /**
- * ModelRegistryTests - Unit tests for ModelRegistry
+ * ModelRegistryTests - Unit tests for VoxtralModelRegistry
  */
 
 import XCTest
@@ -65,14 +65,14 @@ final class ModelRegistryTests: XCTestCase {
         XCTAssertFalse(model.recommended)
     }
 
-    // MARK: - ModelRegistry.models Tests
+    // MARK: - VoxtralModelRegistry.models Tests
 
     func testModelsNotEmpty() {
-        XCTAssertFalse(ModelRegistry.models.isEmpty)
+        XCTAssertFalse(VoxtralModelRegistry.models.isEmpty)
     }
 
     func testAllModelsHaveRequiredFields() {
-        for model in ModelRegistry.models {
+        for model in VoxtralModelRegistry.models {
             XCTAssertFalse(model.id.isEmpty, "Model ID should not be empty")
             XCTAssertFalse(model.repoId.isEmpty, "Model repoId should not be empty")
             XCTAssertFalse(model.name.isEmpty, "Model name should not be empty")
@@ -84,24 +84,24 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testAllModelIdsAreUnique() {
-        let ids = ModelRegistry.models.map { $0.id }
+        let ids = VoxtralModelRegistry.models.map { $0.id }
         let uniqueIds = Set(ids)
 
         XCTAssertEqual(ids.count, uniqueIds.count, "All model IDs should be unique")
     }
 
     func testAllRepoIdsAreUnique() {
-        let repoIds = ModelRegistry.models.map { $0.repoId }
+        let repoIds = VoxtralModelRegistry.models.map { $0.repoId }
         let uniqueRepoIds = Set(repoIds)
 
         XCTAssertEqual(repoIds.count, uniqueRepoIds.count, "All repo IDs should be unique")
     }
 
-    // MARK: - ModelRegistry Lookup Tests
+    // MARK: - VoxtralModelRegistry Lookup Tests
 
     func testModelLookupById() {
         // Test with known model IDs
-        let model = ModelRegistry.model(withId: "mini-3b-8bit")
+        let model = VoxtralModelRegistry.model(withId: "mini-3b-8bit")
 
         XCTAssertNotNil(model)
         XCTAssertEqual(model?.id, "mini-3b-8bit")
@@ -109,20 +109,20 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testModelLookupByIdNotFound() {
-        let model = ModelRegistry.model(withId: "non-existent-model")
+        let model = VoxtralModelRegistry.model(withId: "non-existent-model")
 
         XCTAssertNil(model)
     }
 
     func testModelLookupByRepoId() {
-        let model = ModelRegistry.model(withRepoId: "mzbac/voxtral-mini-3b-8bit")
+        let model = VoxtralModelRegistry.model(withRepoId: "mzbac/voxtral-mini-3b-8bit")
 
         XCTAssertNotNil(model)
         XCTAssertEqual(model?.repoId, "mzbac/voxtral-mini-3b-8bit")
     }
 
     func testModelLookupByRepoIdNotFound() {
-        let model = ModelRegistry.model(withRepoId: "fake/non-existent-repo")
+        let model = VoxtralModelRegistry.model(withRepoId: "fake/non-existent-repo")
 
         XCTAssertNil(model)
     }
@@ -130,20 +130,20 @@ final class ModelRegistryTests: XCTestCase {
     // MARK: - Default Model Tests
 
     func testDefaultModelExists() {
-        let defaultModel = ModelRegistry.defaultModel
+        let defaultModel = VoxtralModelRegistry.defaultModel
 
         XCTAssertFalse(defaultModel.id.isEmpty)
         XCTAssertFalse(defaultModel.name.isEmpty)
     }
 
     func testDefaultModelIsRecommended() {
-        let defaultModel = ModelRegistry.defaultModel
+        let defaultModel = VoxtralModelRegistry.defaultModel
 
         XCTAssertTrue(defaultModel.recommended, "Default model should be marked as recommended")
     }
 
     func testAtLeastOneRecommendedModel() {
-        let recommendedModels = ModelRegistry.models.filter { $0.recommended }
+        let recommendedModels = VoxtralModelRegistry.models.filter { $0.recommended }
 
         XCTAssertFalse(recommendedModels.isEmpty, "There should be at least one recommended model")
     }
@@ -151,7 +151,7 @@ final class ModelRegistryTests: XCTestCase {
     // MARK: - Model Filtering Tests
 
     func testOfficialModelsFilter() {
-        let officialModels = ModelRegistry.officialModels
+        let officialModels = VoxtralModelRegistry.officialModels
 
         for model in officialModels {
             XCTAssertTrue(
@@ -162,7 +162,7 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testMiniModelsFilter() {
-        let miniModels = ModelRegistry.miniModels
+        let miniModels = VoxtralModelRegistry.miniModels
 
         for model in miniModels {
             XCTAssertEqual(model.parameters, "3B", "Mini model should have 3B parameters")
@@ -174,7 +174,7 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testSmallModelsFilter() {
-        let smallModels = ModelRegistry.smallModels
+        let smallModels = VoxtralModelRegistry.smallModels
 
         for model in smallModels {
             XCTAssertEqual(model.parameters, "24B", "Small model should have 24B parameters")
@@ -186,13 +186,13 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testFiltersCoverAllModels() {
-        let official = ModelRegistry.officialModels
-        let mini = ModelRegistry.miniModels
-        let small = ModelRegistry.smallModels
+        let official = VoxtralModelRegistry.officialModels
+        let mini = VoxtralModelRegistry.miniModels
+        let small = VoxtralModelRegistry.smallModels
 
         // All models should be in one of the categories
         let totalFiltered = official.count + mini.count + small.count
-        let allModels = ModelRegistry.models.count
+        let allModels = VoxtralModelRegistry.models.count
 
         XCTAssertEqual(
             totalFiltered,
@@ -204,7 +204,7 @@ final class ModelRegistryTests: XCTestCase {
     // MARK: - Model Size Categories
 
     func testMiniModelsHave3BParameters() {
-        let miniModels = ModelRegistry.miniModels
+        let miniModels = VoxtralModelRegistry.miniModels
         XCTAssertFalse(miniModels.isEmpty, "Should have mini models")
 
         for model in miniModels {
@@ -213,7 +213,7 @@ final class ModelRegistryTests: XCTestCase {
     }
 
     func testSmallModelsHave24BParameters() {
-        let smallModels = ModelRegistry.smallModels
+        let smallModels = VoxtralModelRegistry.smallModels
         XCTAssertFalse(smallModels.isEmpty, "Should have small models")
 
         for model in smallModels {
@@ -224,7 +224,7 @@ final class ModelRegistryTests: XCTestCase {
     // MARK: - Quantization Types
 
     func testQuantizationTypesExist() {
-        let quantizations = Set(ModelRegistry.models.map { $0.quantization })
+        let quantizations = Set(VoxtralModelRegistry.models.map { $0.quantization })
 
         // Should have at least 4-bit and 8-bit quantization options
         XCTAssertTrue(
@@ -237,8 +237,8 @@ final class ModelRegistryTests: XCTestCase {
     // MARK: - Case Sensitivity Tests
 
     func testModelLookupIsCaseSensitive() {
-        let modelLower = ModelRegistry.model(withId: "mini-3b-8bit")
-        let modelUpper = ModelRegistry.model(withId: "MINI-3B-8BIT")
+        let modelLower = VoxtralModelRegistry.model(withId: "mini-3b-8bit")
+        let modelUpper = VoxtralModelRegistry.model(withId: "MINI-3B-8BIT")
 
         XCTAssertNotNil(modelLower)
         XCTAssertNil(modelUpper, "Lookup should be case sensitive")
@@ -250,8 +250,8 @@ final class ModelRegistryTests: XCTestCase {
     /// pointed to `VincentGOURBIN/voxtral-small-8bit`: a second 28 GB download and a Hub request at every load.
     func testPipelineModelsMatchRegistry() {
         for model in VoxtralPipeline.Model.allCases {
-            let entry = ModelRegistry.model(withId: model.rawValue)
-            XCTAssertNotNil(entry, "\(model.rawValue) is missing from ModelRegistry")
+            let entry = VoxtralModelRegistry.model(withId: model.rawValue)
+            XCTAssertNotNil(entry, "\(model.rawValue) is missing from VoxtralModelRegistry")
             XCTAssertEqual(model.repoId, entry?.repoId, "\(model.rawValue): pipeline and registry disagree")
         }
     }

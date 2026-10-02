@@ -51,9 +51,9 @@ struct ListModels: ParsableCommand {
 
     func run() throws {
         if downloaded {
-            let downloadedModels = ModelDownloader.listDownloadedModels()
+            let downloadedModels = VoxtralModelDownloader.listDownloadedModels()
             let hasSttModels = !downloadedModels.isEmpty
-            let hasTtsModels = VoxtralTTSRegistry.models.contains { ModelDownloader.isTTSModelDownloaded($0) }
+            let hasTtsModels = VoxtralTTSRegistry.models.contains { VoxtralModelDownloader.isTTSModelDownloaded($0) }
 
             if !hasSttModels && !hasTtsModels {
                 print("\nNo models downloaded yet.")
@@ -64,19 +64,19 @@ struct ListModels: ParsableCommand {
                 print("DOWNLOADED MODELS")
                 print(String(repeating: "=", count: 60))
                 for model in downloadedModels {
-                    if let path = ModelDownloader.findModelPath(for: model) {
+                    if let path = VoxtralModelDownloader.findModelPath(for: model) {
                         print("\n  [STT] \(model.id): \(model.name)")
                         print("    Path: \(path.path)")
                     }
                 }
                 for model in VoxtralTTSRegistry.models {
-                    if let path = ModelDownloader.findTTSModelPath(for: model) {
+                    if let path = VoxtralModelDownloader.findTTSModelPath(for: model) {
                         print("\n  [TTS] \(model.id): \(model.name)")
                         print("    Path: \(path.path)")
                     }
                 }
                 for model in VoxtralRealtimeRegistry.models {
-                    if let path = ModelDownloader.findRealtimeModelPath(for: model) {
+                    if let path = VoxtralModelDownloader.findRealtimeModelPath(for: model) {
                         print("\n  [REALTIME] \(model.id): \(model.name)")
                         print("    Path: \(path.path)")
                     }
@@ -84,10 +84,10 @@ struct ListModels: ParsableCommand {
             }
         } else {
             // STT models
-            ModelRegistry.printAvailableModels()
+            VoxtralModelRegistry.printAvailableModels()
             print("\nSTT download status:")
-            for model in ModelRegistry.models {
-                let status = ModelDownloader.findModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+            for model in VoxtralModelRegistry.models {
+                let status = VoxtralModelDownloader.findModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
                 print("  \(model.id): \(status)")
             }
 
@@ -96,7 +96,7 @@ struct ListModels: ParsableCommand {
             VoxtralTTSRegistry.printAvailableModels()
             print("\nTTS download status:")
             for model in VoxtralTTSRegistry.models {
-                let status = ModelDownloader.findTTSModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+                let status = VoxtralModelDownloader.findTTSModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
                 print("  \(model.id): \(status)")
             }
 
@@ -105,7 +105,7 @@ struct ListModels: ParsableCommand {
             VoxtralRealtimeRegistry.printAvailableModels()
             print("\nRealtime download status:")
             for model in VoxtralRealtimeRegistry.models {
-                let status = ModelDownloader.findRealtimeModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
+                let status = VoxtralModelDownloader.findRealtimeModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
                 print("  \(model.id): \(status)")
             }
         }
@@ -130,7 +130,7 @@ struct Download: AsyncParsableCommand {
 
         // Check if it's a Realtime model
         if let realtimeModel = VoxtralRealtimeRegistry.model(withId: model) {
-            let modelPath = try await ModelDownloader.downloadRealtimeModel(realtimeModel) { progress, message in
+            let modelPath = try await VoxtralModelDownloader.downloadRealtimeModel(realtimeModel) { progress, message in
                 print("[\(Int(progress * 100))%] \(message)")
             }
             print("\n" + String(repeating: "=", count: 60))
@@ -141,7 +141,7 @@ struct Download: AsyncParsableCommand {
             print(String(repeating: "=", count: 60))
         // Check if it's a TTS model
         } else if let ttsModel = VoxtralTTSRegistry.model(withId: model) {
-            let modelPath = try await ModelDownloader.downloadTTSModel(ttsModel) { progress, message in
+            let modelPath = try await VoxtralModelDownloader.downloadTTSModel(ttsModel) { progress, message in
                 print("[\(Int(progress * 100))%] \(message)")
             }
             print("\n" + String(repeating: "=", count: 60))
@@ -151,7 +151,7 @@ struct Download: AsyncParsableCommand {
             print("  voxtral tts \"Hello world\" -o output.wav")
             print(String(repeating: "=", count: 60))
         } else {
-            let modelPath = try await ModelDownloader.resolveModel(model) { progress, message in
+            let modelPath = try await VoxtralModelDownloader.resolveModel(model) { progress, message in
                 print("[\(Int(progress * 100))%] \(message)")
             }
             print("\n" + String(repeating: "=", count: 60))
@@ -191,7 +191,7 @@ struct Transcribe: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TRANSCRIPTION (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
@@ -302,7 +302,7 @@ struct Chat: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL CHAT (VoxtralPipeline API)")
         print(String(repeating: "=", count: 60))
@@ -442,7 +442,7 @@ struct TTS: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL TTS (Text-to-Speech)")
         print(String(repeating: "=", count: 60))
@@ -620,7 +620,7 @@ struct Enroll: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL VOICE ENROLLMENT (cloning)")
         print(String(repeating: "=", count: 60))
@@ -727,7 +727,7 @@ struct Realtime: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         print("\n" + String(repeating: "=", count: 60))
         print("VOXTRAL REALTIME (Streaming STT)")
         print(String(repeating: "=", count: 60))

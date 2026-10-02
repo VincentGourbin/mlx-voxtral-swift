@@ -19,8 +19,8 @@ final class ConsolidatedExclusionTests: XCTestCase {
     private let realtimeRepo = ["config.json", "consolidated.safetensors", "model.safetensors", "params.json", "tekken.json"]
 
     func testSTTSkipsConsolidated() {
-        let kept = ModelDownloader.selectFiles(sttRepo, matching: ModelDownloader.sttDownloadGlobs,
-                                               excluding: ModelDownloader.unusedConsolidatedWeights)
+        let kept = VoxtralModelDownloader.selectFiles(sttRepo, matching: VoxtralModelDownloader.sttDownloadGlobs,
+                                               excluding: VoxtralModelDownloader.unusedConsolidatedWeights)
         XCTAssertFalse(kept.contains("consolidated.safetensors"))
         XCTAssertTrue(kept.contains("model-00001-of-00002.safetensors"))
         XCTAssertTrue(kept.contains("model-00002-of-00002.safetensors"))
@@ -28,13 +28,13 @@ final class ConsolidatedExclusionTests: XCTestCase {
     }
 
     func testRealtimeSkipsConsolidated() {
-        let kept = ModelDownloader.selectFiles(realtimeRepo, matching: ModelDownloader.realtimeDownloadGlobs,
-                                               excluding: ModelDownloader.unusedConsolidatedWeights)
+        let kept = VoxtralModelDownloader.selectFiles(realtimeRepo, matching: VoxtralModelDownloader.realtimeDownloadGlobs,
+                                               excluding: VoxtralModelDownloader.unusedConsolidatedWeights)
         XCTAssertEqual(Set(kept), ["config.json", "model.safetensors", "params.json", "tekken.json"])
     }
 
     func testTTSKeepsConsolidated() {
-        let kept = ModelDownloader.selectFiles(ttsRepo, matching: ModelDownloader.ttsDownloadGlobs, excluding: [])
+        let kept = VoxtralModelDownloader.selectFiles(ttsRepo, matching: VoxtralModelDownloader.ttsDownloadGlobs, excluding: [])
         XCTAssertEqual(Set(kept), ["consolidated.safetensors", "params.json", "tekken.json",
                                    "voice_embedding/neutral_female.pt"])
     }

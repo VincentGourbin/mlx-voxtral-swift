@@ -10,7 +10,7 @@ final class SpecialTokenTests: XCTestCase {
     var tokenizer: TekkenTokenizer!
 
     override func setUpWithError() throws {
-        tokenizer = TekkenTokenizer()
+        tokenizer = TekkenTokenizer.demo()
         // Note: Tests work with demo tokenizer when model files are not available
     }
 

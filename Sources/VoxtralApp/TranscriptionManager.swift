@@ -29,7 +29,7 @@ class TranscriptionManager: ObservableObject {
 
     // Model selection
     @Published var selectedModelId: String = "mini-3b-8bit"
-    @Published var availableModels: [VoxtralModelInfo] = ModelRegistry.models
+    @Published var availableModels: [VoxtralModelInfo] = VoxtralModelRegistry.models
     @Published var downloadedModels: Set<String> = []
     @Published var modelSizes: [String: Int64] = [:]
 
@@ -84,7 +84,7 @@ class TranscriptionManager: ObservableObject {
     }
 
     var selectedModel: VoxtralModelInfo? {
-        ModelRegistry.model(withId: selectedModelId)
+        VoxtralModelRegistry.model(withId: selectedModelId)
     }
 
     var isCurrentModelLoaded: Bool {
@@ -98,13 +98,13 @@ class TranscriptionManager: ObservableObject {
     // MARK: - Model Management
 
     func refreshDownloadedModels() {
-        let downloaded = ModelDownloader.listDownloadedModels()
+        let downloaded = VoxtralModelDownloader.listDownloadedModels()
         downloadedModels = Set(downloaded.map { $0.id })
 
         // Also refresh model sizes
         var sizes: [String: Int64] = [:]
         for model in downloaded {
-            if let size = ModelDownloader.modelSize(for: model) {
+            if let size = VoxtralModelDownloader.modelSize(for: model) {
                 sizes[model.id] = size
             }
         }
@@ -112,26 +112,26 @@ class TranscriptionManager: ObservableObject {
     }
 
     func isModelDownloaded(_ modelId: String) -> Bool {
-        if let model = ModelRegistry.model(withId: modelId) {
-            return ModelDownloader.findModelPath(for: model) != nil
+        if let model = VoxtralModelRegistry.model(withId: modelId) {
+            return VoxtralModelDownloader.findModelPath(for: model) != nil
         }
         return false
     }
 
     func deleteModel(_ modelId: String) async throws {
-        guard let model = ModelRegistry.model(withId: modelId) else { return }
+        guard let model = VoxtralModelRegistry.model(withId: modelId) else { return }
 
         // Unload if currently loaded
         if currentLoadedModelId == modelId {
             unloadModel()
         }
 
-        try ModelDownloader.deleteModel(model)
+        try VoxtralModelDownloader.deleteModel(model)
         refreshDownloadedModels()
     }
 
     func downloadModel(_ modelId: String) async {
-        guard let model = ModelRegistry.model(withId: modelId) else { return }
+        guard let model = VoxtralModelRegistry.model(withId: modelId) else { return }
         guard !isDownloading else { return }
 
         isDownloading = true
@@ -140,7 +140,7 @@ class TranscriptionManager: ObservableObject {
         errorMessage = nil
 
         do {
-            _ = try await ModelDownloader.download(model) { @Sendable [weak self] progress, message in
+            _ = try await VoxtralModelDownloader.download(model) { @Sendable [weak self] progress, message in
                 Task { @MainActor in
                     self?.downloadProgress = progress
                     self?.downloadMessage = message

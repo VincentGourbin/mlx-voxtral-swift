@@ -27,27 +27,27 @@ public enum VoxtralDebug {
     private static let logger = Logger(subsystem: "com.vincentgourbin.voxtral", category: "VoxtralCore")
 
     /// Debug message: stdout and the unified log, only when enabled
-    public static func log(_ message: String) {
+    static func log(_ message: String) {
         guard enabled else { return }
         logger.debug("\(message, privacy: .public)")
         print(message)
     }
 
     /// Token-by-token generation message (only if verboseGeneration is enabled)
-    public static func logGeneration(_ message: String) {
+    static func logGeneration(_ message: String) {
         if verboseGeneration {
             print(message)
         }
     }
 
     /// Important message (fallback, error): always in the unified log, on stdout only when enabled
-    public static func always(_ message: String) {
+    static func always(_ message: String) {
         logger.notice("\(message, privacy: .public)")
         if enabled { print(message) }
     }
 
     /// Output the caller asked for (e.g. `printAvailableModels`): always on stdout
-    public static func console(_ message: String = "") {
+    static func console(_ message: String = "") {
         print(message)
     }
 }

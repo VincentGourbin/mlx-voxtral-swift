@@ -115,7 +115,7 @@ private func quietFrameCount(
 ///   (~0.056), so a very soft onset frame that used to survive may now be
 ///   trimmed; on a quiet clip (peak < 0.44) it sits lower, so faint lead-in
 ///   ambience that used to be cut is now kept.
-public func trimLeadInSilence(
+func trimLeadInSilence(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
     relativeThresholdDB: Float = -25,
@@ -146,25 +146,12 @@ private func trimLead(
     return waveform
 }
 
-/// Deprecated absolute-threshold variant. Note it only preserves the old
-/// semantics for calls that spell out `threshold:` — calls that omitted the
-/// argument resolve to the new relative-threshold function above.
-@available(*, deprecated, message: "A fixed absolute threshold never triggers on enrolled voices; use trimLeadInSilence(_:sampleRate:relativeThresholdDB:absoluteFloor:)")
-public func trimLeadInSilence(_ waveform: MLXArray, sampleRate: Int = 24000, threshold: Float) -> MLXArray {
-    let totalSamples = waveform.dim(0)
-    let frameSize = samplesPerFrame(at: sampleRate)
-    let totalFrames = totalSamples / frameSize
-    guard totalFrames > 0 else { return waveform }
-    return trimLead(waveform, samples: waveform.asType(.float32), totalSamples: totalSamples,
-                    frameSize: frameSize, totalFrames: totalFrames, threshold: threshold)
-}
-
 /// Trim low-energy trailing frames from waveform (fade-out / hang after the
 /// last word). Same relative threshold as `trimLeadInSilence`; scans at most
 /// the last 50 frames (4 s) and always keeps at least one frame. The final
 /// partial frame (< 80 ms remainder) is folded into the last frame's RMS, so
 /// audible content there prevents the trim instead of being dropped unseen.
-public func trimTrailingSilence(
+func trimTrailingSilence(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
     relativeThresholdDB: Float = -25,
@@ -229,7 +216,7 @@ public func trimTrailingSilence(
 ///
 /// Returns `(waveform, 0)` when the window is too short to judge, so callers
 /// keep their existing "no cut" fallback.
-public func trimLeadingCarrierAdaptive(
+func trimLeadingCarrierAdaptive(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
     scanSeconds: Double = 3.0,
@@ -279,7 +266,7 @@ public func trimLeadingCarrierAdaptive(
     return (waveform[(cut * frameSize)...], cut)
 }
 
-public func trimLeadingCarrier(
+func trimLeadingCarrier(
     _ waveform: MLXArray,
     sampleRate: Int = 24000,
     relativeThresholdDB: Float = -25,

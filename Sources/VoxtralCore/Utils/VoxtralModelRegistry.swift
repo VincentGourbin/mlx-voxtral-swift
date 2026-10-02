@@ -1,5 +1,5 @@
 /**
- * ModelRegistry - Registry of available Voxtral models from HuggingFace
+ * VoxtralModelRegistry - Registry of available Voxtral models from HuggingFace
  *
  * Lists all compatible quantized Voxtral models with metadata.
  */
@@ -48,7 +48,7 @@ public struct VoxtralModelInfo: Identifiable, Codable, Sendable {
 }
 
 /// Registry of all available Voxtral models
-public enum ModelRegistry {
+public enum VoxtralModelRegistry {
 
     /// All available models
     public static let models: [VoxtralModelInfo] = [
@@ -131,22 +131,22 @@ public enum ModelRegistry {
     }
 
     /// Find a model by repo ID
-    public static func model(withRepoId repoId: String) -> VoxtralModelInfo? {
+    static func model(withRepoId repoId: String) -> VoxtralModelInfo? {
         models.first(where: { $0.repoId == repoId })
     }
 
     /// Get official Mistral models
-    public static var officialModels: [VoxtralModelInfo] {
+    static var officialModels: [VoxtralModelInfo] {
         models.filter { $0.repoId.hasPrefix("mistralai/") }
     }
 
     /// Get all mini models (3B) - quantized only
-    public static var miniModels: [VoxtralModelInfo] {
+    static var miniModels: [VoxtralModelInfo] {
         models.filter { $0.parameters == "3B" && !$0.repoId.hasPrefix("mistralai/") }
     }
 
     /// Get all small/large models (24B) - quantized only
-    public static var smallModels: [VoxtralModelInfo] {
+    static var smallModels: [VoxtralModelInfo] {
         models.filter { $0.parameters == "24B" && !$0.repoId.hasPrefix("mistralai/") }
     }
 

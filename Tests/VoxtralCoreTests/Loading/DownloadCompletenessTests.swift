@@ -69,8 +69,8 @@ final class DownloadCompletenessTests: XCTestCase {
         super.setUp()
         sandbox = fm.temporaryDirectory.appendingPathComponent("voxtral-completeness-\(UUID().uuidString)")
         try? fm.createDirectory(at: sandbox, withIntermediateDirectories: true)
-        previousCustomDir = ModelDownloader.customModelsDirectory
-        ModelDownloader.customModelsDirectory = sandbox
+        previousCustomDir = VoxtralModelDownloader.customModelsDirectory
+        VoxtralModelDownloader.customModelsDirectory = sandbox
         HubStubProtocol.files = [:]
         HubStubProtocol.corruptSHA = []
         URLProtocol.registerClass(HubStubProtocol.self)
@@ -78,7 +78,7 @@ final class DownloadCompletenessTests: XCTestCase {
 
     override func tearDown() {
         URLProtocol.unregisterClass(HubStubProtocol.self)
-        ModelDownloader.customModelsDirectory = previousCustomDir
+        VoxtralModelDownloader.customModelsDirectory = previousCustomDir
         try? fm.removeItem(at: sandbox)
         super.tearDown()
     }
@@ -118,8 +118,8 @@ final class DownloadCompletenessTests: XCTestCase {
             "tekken.json": Data("{}".utf8),
         ], in: folder)
 
-        XCTAssertNil(ModelDownloader.findModelPath(for: model), "1/5 shards without index must not count as downloaded")
-        XCTAssertFalse(ModelDownloader.isModelDownloaded(model))
+        XCTAssertNil(VoxtralModelDownloader.findModelPath(for: model), "1/5 shards without index must not count as downloaded")
+        XCTAssertFalse(VoxtralModelDownloader.isModelDownloaded(model))
     }
 
     // MARK: - 2. Corrupted index
@@ -135,7 +135,7 @@ final class DownloadCompletenessTests: XCTestCase {
         for i in 1...5 { files["model-0000\(i)-of-00005.safetensors"] = blob(UInt8(i)) }
         try write(files, in: folder)
 
-        XCTAssertNil(ModelDownloader.findModelPath(for: model), "an unreadable index must not count as downloaded")
+        XCTAssertNil(VoxtralModelDownloader.findModelPath(for: model), "an unreadable index must not count as downloaded")
     }
 
     // MARK: - 3. TTS params.json only, then effective resume
@@ -155,18 +155,18 @@ final class DownloadCompletenessTests: XCTestCase {
         ]
         try write(["params.json": remote["params.json"]!], in: folder)
 
-        XCTAssertNil(ModelDownloader.findTTSModelPath(for: model), "params.json alone must not count as downloaded")
+        XCTAssertNil(VoxtralModelDownloader.findTTSModelPath(for: model), "params.json alone must not count as downloaded")
 
         HubStubProtocol.repoId = repoId
         HubStubProtocol.files = remote
-        let url = try await ModelDownloader.downloadTTSModel(model)
+        let url = try await VoxtralModelDownloader.downloadTTSModel(model)
 
         XCTAssertEqual(url.standardizedFileURL, folder.standardizedFileURL)
         for (name, data) in remote {
             XCTAssertEqual(try? Data(contentsOf: folder.appendingPathComponent(name)), data, "\(name) not resumed")
         }
         XCTAssertTrue(fm.fileExists(atPath: folder.appendingPathComponent(".voxtral-complete.json").path))
-        XCTAssertEqual(ModelDownloader.findTTSModelPath(for: model)?.standardizedFileURL, folder.standardizedFileURL)
+        XCTAssertEqual(VoxtralModelDownloader.findTTSModelPath(for: model)?.standardizedFileURL, folder.standardizedFileURL)
     }
 
     // MARK: - 4. Realtime config.json only, then effective resume
@@ -184,16 +184,16 @@ final class DownloadCompletenessTests: XCTestCase {
         ]
         try write(["config.json": remote["config.json"]!], in: folder)
 
-        XCTAssertNil(ModelDownloader.findRealtimeModelPath(for: model), "config.json alone must not count as downloaded")
+        XCTAssertNil(VoxtralModelDownloader.findRealtimeModelPath(for: model), "config.json alone must not count as downloaded")
 
         HubStubProtocol.repoId = repoId
         HubStubProtocol.files = remote
-        _ = try await ModelDownloader.downloadRealtimeModel(model)
+        _ = try await VoxtralModelDownloader.downloadRealtimeModel(model)
 
         for (name, data) in remote {
             XCTAssertEqual(try? Data(contentsOf: folder.appendingPathComponent(name)), data, "\(name) not resumed")
         }
-        XCTAssertEqual(ModelDownloader.findRealtimeModelPath(for: model)?.standardizedFileURL, folder.standardizedFileURL)
+        XCTAssertEqual(VoxtralModelDownloader.findRealtimeModelPath(for: model)?.standardizedFileURL, folder.standardizedFileURL)
     }
 
     // MARK: - 5. Wrong SHA-256 is rejected
@@ -209,7 +209,7 @@ final class DownloadCompletenessTests: XCTestCase {
         HubStubProtocol.corruptSHA = ["model.safetensors"]
 
         do {
-            _ = try await ModelDownloader.downloadRepoDirect(repoId: repoId, matching: ["*.json", "*.safetensors"])
+            _ = try await VoxtralModelDownloader.downloadRepoDirect(repoId: repoId, matching: ["*.json", "*.safetensors"])
             XCTFail("a weight whose SHA-256 differs from the Hub's must be rejected")
         } catch {}
         XCTAssertFalse(fm.fileExists(atPath: folder.appendingPathComponent("model.safetensors").path),
@@ -217,15 +217,4 @@ final class DownloadCompletenessTests: XCTestCase {
         XCTAssertFalse(fm.fileExists(atPath: folder.appendingPathComponent(".voxtral-complete.json").path))
     }
 
-    // MARK: - 6. downloadModel(modelId:) on an unknown id
-
-    func testDownloadModelUnknownIdThrowsAndCreatesNothing() throws {
-        let modelId = uniqueRepo("unknown")
-        let documents = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let stubFolder = documents.appendingPathComponent("models").appendingPathComponent(modelId)
-        defer { try? fm.removeItem(at: stubFolder.deletingLastPathComponent()) }
-
-        XCTAssertThrowsError(try downloadModel(modelId: modelId))
-        XCTAssertFalse(fm.fileExists(atPath: stubFolder.path), "no folder may be created")
-    }
 }

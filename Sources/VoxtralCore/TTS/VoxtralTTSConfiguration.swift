@@ -11,37 +11,37 @@ import Foundation
 // MARK: - Top-Level Configuration
 
 /// Complete TTS model configuration parsed from params.json
-public struct VoxtralTTSConfiguration: Codable, Sendable {
+struct VoxtralTTSConfiguration: Codable, Sendable {
     /// LLM backbone dimension
-    public let dim: Int
+    let dim: Int
     /// Number of transformer layers
-    public let nLayers: Int
+    let nLayers: Int
     /// Attention head dimension
-    public let headDim: Int
+    let headDim: Int
     /// MLP hidden dimension
-    public let hiddenDim: Int
+    let hiddenDim: Int
     /// Number of attention heads
-    public let nHeads: Int
+    let nHeads: Int
     /// Number of key-value heads (GQA)
-    public let nKVHeads: Int
+    let nKVHeads: Int
     /// Whether to use biases in linear layers
-    public let useBiases: Bool
+    let useBiases: Bool
     /// RoPE theta for positional encoding
-    public let ropeTheta: Float
+    let ropeTheta: Float
     /// Layer norm epsilon
-    public let normEps: Float
+    let normEps: Float
     /// Vocabulary size (text tokens)
-    public let vocabSize: Int
+    let vocabSize: Int
     /// Whether embeddings are tied (input/output share weights)
-    public let tiedEmbeddings: Bool
+    let tiedEmbeddings: Bool
     /// Maximum sequence length
-    public let maxSeqLen: Int
+    let maxSeqLen: Int
     /// Maximum position embeddings
-    public let maxPositionEmbeddings: Int
+    let maxPositionEmbeddings: Int
     /// Model type identifier
-    public let modelType: String
+    let modelType: String
     /// Multimodal (audio) configuration
-    public let multimodal: MultimodalConfiguration
+    let multimodal: MultimodalConfiguration
 
     enum CodingKeys: String, CodingKey {
         case dim
@@ -64,15 +64,15 @@ public struct VoxtralTTSConfiguration: Codable, Sendable {
 
 // MARK: - Multimodal Configuration
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Container for audio model and tokenizer configurations
     struct MultimodalConfiguration: Codable, Sendable {
         /// BOS token ID
-        public let bosTokenId: Int
+        let bosTokenId: Int
         /// Audio generation model configuration
-        public let audioModelArgs: AudioModelConfiguration
+        let audioModelArgs: AudioModelConfiguration
         /// Audio tokenizer (codec) configuration
-        public let audioTokenizerArgs: AudioTokenizerConfiguration
+        let audioTokenizerArgs: AudioTokenizerConfiguration
 
         enum CodingKeys: String, CodingKey {
             case bosTokenId = "bos_token_id"
@@ -84,29 +84,29 @@ public extension VoxtralTTSConfiguration {
 
 // MARK: - Audio Model Configuration
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Configuration for the audio generation model (LLM + Flow Matching)
     struct AudioModelConfiguration: Codable, Sendable {
         /// Semantic codebook size (VQ vocabulary)
-        public let semanticCodebookSize: Int
+        let semanticCodebookSize: Int
         /// Acoustic codebook size (FSQ levels per dimension)
-        public let acousticCodebookSize: Int
+        let acousticCodebookSize: Int
         /// Number of acoustic codebook dimensions
-        public let nAcousticCodebook: Int
+        let nAcousticCodebook: Int
         /// Audio encoding parameters
-        public let audioEncodingArgs: AudioEncodingConfiguration
+        let audioEncodingArgs: AudioEncodingConfiguration
         /// Token ID for audio frames
-        public let audioTokenId: Int
+        let audioTokenId: Int
         /// Token ID for beginning of audio
-        public let beginAudioTokenId: Int
+        let beginAudioTokenId: Int
         /// How to combine embeddings ("sum")
-        public let inputEmbeddingConcatType: String
+        let inputEmbeddingConcatType: String
         /// Flow matching transformer configuration
-        public let acousticTransformerArgs: FlowMatchingConfiguration
+        let acousticTransformerArgs: FlowMatchingConfiguration
         /// Probability of unconditional generation during training
-        public let pUncond: Float
+        let pUncond: Float
         /// Token ID used when condition is dropped (CFG unconditional)
-        public let conditionDroppedTokenId: Int
+        let conditionDroppedTokenId: Int
 
         enum CodingKeys: String, CodingKey {
             case semanticCodebookSize = "semantic_codebook_size"
@@ -125,17 +125,17 @@ public extension VoxtralTTSConfiguration {
 
 // MARK: - Audio Encoding Configuration
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Parameters for audio token encoding/interleaving
     struct AudioEncodingConfiguration: Codable, Sendable {
         /// Codebook pattern type ("parallel")
-        public let codebookPattern: String
+        let codebookPattern: String
         /// Number of codebooks (semantic + acoustic = 1 + 36 = 37)
-        public let numCodebooks: Int
+        let numCodebooks: Int
         /// Output audio sampling rate in Hz
-        public let samplingRate: Int
+        let samplingRate: Int
         /// Audio frame rate in Hz (tokens per second)
-        public let frameRate: Float
+        let frameRate: Float
 
         enum CodingKeys: String, CodingKey {
             case codebookPattern = "codebook_pattern"
@@ -148,31 +148,31 @@ public extension VoxtralTTSConfiguration {
 
 // MARK: - Flow Matching Configuration
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Configuration for the 3-layer bidirectional flow matching transformer
     struct FlowMatchingConfiguration: Codable, Sendable {
         /// Input dimension from LLM hidden state
-        public let inputDim: Int
+        let inputDim: Int
         /// Transformer hidden dimension
-        public let dim: Int
+        let dim: Int
         /// Number of transformer layers
-        public let nLayers: Int
+        let nLayers: Int
         /// Attention head dimension
-        public let headDim: Int
+        let headDim: Int
         /// MLP hidden dimension
-        public let hiddenDim: Int
+        let hiddenDim: Int
         /// Number of attention heads
-        public let nHeads: Int
+        let nHeads: Int
         /// Number of key-value heads
-        public let nKVHeads: Int
+        let nKVHeads: Int
         /// Whether to use biases
-        public let useBiases: Bool
+        let useBiases: Bool
         /// RoPE theta
-        public let ropeTheta: Float
+        let ropeTheta: Float
         /// Noise sigma (minimum noise scale)
-        public let sigma: Float
+        let sigma: Float
         /// Maximum noise scale
-        public let sigmaMax: Float
+        let sigmaMax: Float
 
         enum CodingKeys: String, CodingKey {
             case inputDim = "input_dim"
@@ -192,63 +192,63 @@ public extension VoxtralTTSConfiguration {
 
 // MARK: - Audio Tokenizer (Codec) Configuration
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Configuration for the Voxtral Codec decoder
     struct AudioTokenizerConfiguration: Codable, Sendable {
         /// Number of audio channels (1 = mono)
-        public let channels: Int
+        let channels: Int
         /// Audio sampling rate
-        public let samplingRate: Int
+        let samplingRate: Int
         /// Waveform patch size (240 samples = 10ms at 24kHz)
-        public let pretransformPatchSize: Int
+        let pretransformPatchSize: Int
         /// Initial projection kernel size
-        public let patchProjKernelSize: Int
+        let patchProjKernelSize: Int
         /// Semantic codebook size
-        public let semanticCodebookSize: Int
+        let semanticCodebookSize: Int
         /// Semantic embedding dimension
-        public let semanticDim: Int
+        let semanticDim: Int
         /// Acoustic codebook size (FSQ levels)
-        public let acousticCodebookSize: Int
+        let acousticCodebookSize: Int
         /// Acoustic embedding dimension (= number of acoustic codebooks)
-        public let acousticDim: Int
+        let acousticDim: Int
         /// Whether to use weight normalization on convolutions
-        public let convWeightNorm: Bool
+        let convWeightNorm: Bool
         /// Whether convolutions are causal
-        public let causal: Bool
+        let causal: Bool
         /// Sliding window size for attention
-        public let attnSlidingWindowSize: Int
+        let attnSlidingWindowSize: Int
         /// Whether to halve window size at each downsampling (encoder) / double at upsampling (decoder)
-        public let halfAttnWindowUponDownsampling: Bool
+        let halfAttnWindowUponDownsampling: Bool
         /// Transformer hidden dimension
-        public let dim: Int
+        let dim: Int
         /// MLP hidden dimension
-        public let hiddenDim: Int
+        let hiddenDim: Int
         /// Attention head dimension
-        public let headDim: Int
+        let headDim: Int
         /// Number of attention heads
-        public let nHeads: Int
+        let nHeads: Int
         /// Number of key-value heads
-        public let nKVHeads: Int
+        let nKVHeads: Int
         /// QK normalization epsilon
-        public let qkNormEps: Float
+        let qkNormEps: Float
         /// Whether to use QK normalization
-        public let qkNorm: Bool
+        let qkNorm: Bool
         /// Whether to use biases
-        public let useBiases: Bool
+        let useBiases: Bool
         /// Layer norm epsilon
-        public let normEps: Float
+        let normEps: Float
         /// Whether to use LayerScale
-        public let layerScale: Bool
+        let layerScale: Bool
         /// LayerScale initial value
-        public let layerScaleInit: Float
+        let layerScaleInit: Float
         /// Number of transformer layers per decoder block (e.g., "2,2,2,2")
-        public let decoderTransformerLengthsStr: String
+        let decoderTransformerLengthsStr: String
         /// Convolution kernel sizes per decoder block (e.g., "3,4,4,4")
-        public let decoderConvsKernelsStr: String
+        let decoderConvsKernelsStr: String
         /// Convolution strides per decoder block (e.g., "1,2,2,2")
-        public let decoderConvsStridesStr: String
+        let decoderConvsStridesStr: String
         /// Voice preset name → index mapping
-        public let voice: [String: Int]
+        let voice: [String: Int]
 
         enum CodingKeys: String, CodingKey {
             case channels
@@ -283,28 +283,28 @@ public extension VoxtralTTSConfiguration {
         // MARK: - Computed Properties
 
         /// Parsed decoder transformer layer counts per block
-        public var decoderTransformerLengths: [Int] {
+        var decoderTransformerLengths: [Int] {
             decoderTransformerLengthsStr.split(separator: ",").compactMap { Int($0) }
         }
 
         /// Parsed decoder convolution kernel sizes per block
-        public var decoderConvsKernels: [Int] {
+        var decoderConvsKernels: [Int] {
             decoderConvsKernelsStr.split(separator: ",").compactMap { Int($0) }
         }
 
         /// Parsed decoder convolution strides per block
-        public var decoderConvsStrides: [Int] {
+        var decoderConvsStrides: [Int] {
             decoderConvsStridesStr.split(separator: ",").compactMap { Int($0) }
         }
 
         /// Total latent dimension (semantic + acoustic)
-        public var latentDim: Int { semanticDim + acousticDim }
+        var latentDim: Int { semanticDim + acousticDim }
 
         /// Number of decoder blocks
-        public var numDecoderBlocks: Int { decoderTransformerLengths.count }
+        var numDecoderBlocks: Int { decoderTransformerLengths.count }
 
         /// Total upsampling factor from codec frames to waveform patches
-        public var totalUpsamplingFactor: Int {
+        var totalUpsamplingFactor: Int {
             decoderConvsStrides.reduce(1, *)
         }
     }
@@ -312,7 +312,7 @@ public extension VoxtralTTSConfiguration {
 
 // MARK: - Convenience Accessors
 
-public extension VoxtralTTSConfiguration {
+extension VoxtralTTSConfiguration {
     /// Audio model configuration shortcut
     var audioModel: AudioModelConfiguration { multimodal.audioModelArgs }
     /// Audio tokenizer configuration shortcut

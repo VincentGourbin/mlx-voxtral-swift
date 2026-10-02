@@ -34,8 +34,8 @@ final class PublicAPIHonestyTests: XCTestCase {
     // tokenCount: the number of generated tokens, not 0
     @MainActor
     func testTokenCountOfATranscription() async throws {
-        let info = try XCTUnwrap(ModelRegistry.model(withId: "mini-3b-8bit"))
-        try XCTSkipIf(ModelDownloader.findModelPath(for: info) == nil, "mini-3b-8bit is not downloaded")
+        let info = try XCTUnwrap(VoxtralModelRegistry.model(withId: "mini-3b-8bit"))
+        try XCTSkipIf(VoxtralModelDownloader.findModelPath(for: info) == nil, "mini-3b-8bit is not downloaded")
         let manager = VoxtralTranscriptionManager(model: .mini3b8bit)
         try await manager.loadModel()
         let result = try await manager.transcribe(
@@ -90,7 +90,7 @@ final class PublicAPIHonestyTests: XCTestCase {
     // TTS token embeddings of an unsupported type: the synthesis throws before any forward pass
     func testUnsupportedTTSTokenEmbeddingsThrowAtSynthesis() async throws {
         let info = try XCTUnwrap(VoxtralTTSRegistry.model(withId: "tts-4b-4bit"))
-        try XCTSkipIf(ModelDownloader.findTTSModelPath(for: info) == nil, "tts-4b-4bit is not downloaded")
+        try XCTSkipIf(VoxtralModelDownloader.findTTSModelPath(for: info) == nil, "tts-4b-4bit is not downloaded")
         let pipeline = VoxtralTTSPipeline()
         try await pipeline.loadModel(modelInfo: info)
         let model = try XCTUnwrap(pipeline.ttsModel)

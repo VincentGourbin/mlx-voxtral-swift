@@ -22,13 +22,13 @@ import MLXProfiler
 // MARK: - mm_audio_embeddings
 
 /// Container matching `mm_audio_embeddings.*` weight keys.
-public class MMAudioEmbeddings: Module {
+class MMAudioEmbeddings: Module {
 
     @ModuleInfo(key: "audio_codebook_embeddings") var audioCodebookEmbeddings: AudioCodebookEmbeddingsContainer
     // Module type to support both Embedding and QuantizedEmbedding
     @ModuleInfo(key: "tok_embeddings") var tokEmbeddings: Module
 
-    public init(config: VoxtralTTSConfiguration) {
+    init(config: VoxtralTTSConfiguration) {
         // 9088 = (8192+2=8194 semantic) + pad to 8320 + (21+2)*36=828 + pad to 768 → 8320+768=9088
         let semanticPadded = (config.audioModel.semanticCodebookSize / 128 + 1) * 128  // 8320
         let acousticTotal = config.audioModel.acousticCodebookSize * config.audioModel.nAcousticCodebook
@@ -45,7 +45,7 @@ public class MMAudioEmbeddings: Module {
     }
 
     /// Call tok_embeddings, handling both Embedding and QuantizedEmbedding
-    public func embedTokens(_ indices: MLXArray) -> MLXArray {
+    func embedTokens(_ indices: MLXArray) -> MLXArray {
         if let qEmb = tokEmbeddings as? QuantizedEmbedding {
             return qEmb(indices)
         } else if let emb = tokEmbeddings as? Embedding {
@@ -55,16 +55,16 @@ public class MMAudioEmbeddings: Module {
     }
 }
 
-public class AudioCodebookEmbeddingsContainer: Module {
+class AudioCodebookEmbeddingsContainer: Module {
     // Module type to support both Embedding and QuantizedEmbedding
     @ModuleInfo(key: "embeddings") var embeddings: Module
 
-    public init(totalSize: Int, dim: Int) {
+    init(totalSize: Int, dim: Int) {
         self._embeddings.wrappedValue = Embedding(embeddingCount: totalSize, dimensions: dim)
         super.init()
     }
 
-    public func callAsFunction(_ indices: MLXArray) -> MLXArray {
+    func callAsFunction(_ indices: MLXArray) -> MLXArray {
         if let qEmb = embeddings as? QuantizedEmbedding {
             return qEmb(indices)
         } else if let emb = embeddings as? Embedding {
@@ -76,7 +76,7 @@ public class AudioCodebookEmbeddingsContainer: Module {
     /// Gather specific rows of the embedding table, dequantizing only those
     /// rows (not the whole table). Used by voice enrollment to build a voice
     /// embedding as a sum of per-codebook rows.
-    public func rows(_ indices: MLXArray) -> MLXArray {
+    func rows(_ indices: MLXArray) -> MLXArray {
         callAsFunction(indices)
     }
 }
@@ -89,14 +89,14 @@ private let terminalPunctuation: Set<Character> = [".", "!", "?", ":", ";", "\u{
 // MARK: - VoxtralTTSModel
 
 /// The complete Voxtral TTS model.
-public class VoxtralTTSModel: Module {
+class VoxtralTTSModel: Module {
 
     /// Sanitize text for TTS with prosody-aware structural handling.
     ///
     /// Phase 1 converts structural formatting (paragraphs, headers, bullets) into
     /// punctuation that produces natural pauses. Phase 2 normalizes characters.
     /// Voxtral TTS infers all prosody from punctuation — there are no special tokens.
-    public static func sanitizeTextForTTS(_ text: String) -> String {
+    static func sanitizeTextForTTS(_ text: String) -> String {
         var t = text
 
         // === Phase 1: Structural transformations (multi-line, before whitespace collapse) ===
@@ -253,7 +253,7 @@ public class VoxtralTTSModel: Module {
         return converted.joined(separator: " ")
     }
 
-    public let config: VoxtralTTSConfiguration
+    let config: VoxtralTTSConfiguration
 
     @ModuleInfo(key: "mm_audio_embeddings") var mmAudioEmbeddings: MMAudioEmbeddings
     @ModuleInfo var layers: [LlamaDecoderLayer]
@@ -288,7 +288,7 @@ public class VoxtralTTSModel: Module {
         }
     }
 
-    public init(config: VoxtralTTSConfiguration) {
+    init(config: VoxtralTTSConfiguration) {
         self.config = config
 
         self._mmAudioEmbeddings.wrappedValue = MMAudioEmbeddings(config: config)
@@ -319,7 +319,7 @@ public class VoxtralTTSModel: Module {
     /// Forward through LLM backbone (layers + norm only, no lm_head).
     /// Passes nil mask — LlamaAttention uses .causal mode internally for T > 1.
     /// Relies on MLX lazy evaluation to batch GPU operations across layers.
-    public func llmForward(
+    func llmForward(
         inputEmbeds: MLXArray,
         cache: [any KVCache]
     ) -> MLXArray {
@@ -331,12 +331,12 @@ public class VoxtralTTSModel: Module {
     }
 
     /// Create KV caches for all LLM layers.
-    public func createCache() -> [any KVCache] {
+    func createCache() -> [any KVCache] {
         layers.map { _ in KVCacheSimple() }
     }
 
     /// Embed text token IDs using the shared text embedding table.
-    public func embedTokens(_ tokenIds: MLXArray) -> MLXArray {
+    func embedTokens(_ tokenIds: MLXArray) -> MLXArray {
         mmAudioEmbeddings.embedTokens(tokenIds)
     }
 
@@ -348,7 +348,7 @@ public class VoxtralTTSModel: Module {
     /// From paper Section 3.1: segments are interleaved with <next> between A1 and T2,
     /// and <repeat> between T2 and A2.
     /// Verified against mistral_common.SpeechRequest output.
-    public func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer, sanitize: Bool = true) -> [Int32] {
+    func encodeText(_ text: String, voiceFrameCount: Int, tokenizer: TekkenTokenizer, sanitize: Bool = true) -> [Int32] {
         let processedText = sanitize ? Self.sanitizeTextForTTS(text) : text
         let textTokens = tokenizer.encode(processedText).map { Int32($0) }
 
@@ -370,7 +370,7 @@ public class VoxtralTTSModel: Module {
     ///
     /// Voice embeddings REPLACE the audio token embeddings at positions where token == AUDIO (24).
     /// Reference: voxtral_tts.py lines 646-670
-    public func buildInputEmbeddings(inputIds: MLXArray, voiceEmbedding: MLXArray) -> MLXArray {
+    func buildInputEmbeddings(inputIds: MLXArray, voiceEmbedding: MLXArray) -> MLXArray {
         // Embed all tokens via text embedding table
         var embeddings = embedTokens(inputIds)  // (1, T, dim)
 
@@ -403,7 +403,7 @@ public class VoxtralTTSModel: Module {
     /// Uses pre-computed codebookOffsets array (built once at init).
     ///
     /// Reference: voxtral_tts.py lines 621-644
-    public func codesToGlobalIndices(_ codes: MLXArray) -> MLXArray {
+    func codesToGlobalIndices(_ codes: MLXArray) -> MLXArray {
         codes + _codebookOffsets
     }
 
@@ -412,7 +412,7 @@ public class VoxtralTTSModel: Module {
     /// Deep-copy KV caches so a cached prefix can be reused across syntheses
     /// without the generation loop mutating the cached copy (see
     /// `cloneKVCaches` for the aliasing analysis).
-    public func cloneCache(_ caches: [any KVCache]) -> [any KVCache] {
+    func cloneCache(_ caches: [any KVCache]) -> [any KVCache] {
         cloneKVCaches(caches)
     }
 
@@ -421,7 +421,7 @@ public class VoxtralTTSModel: Module {
     /// text, so its KV depends only on the voice — cache it once and reuse it
     /// (cloned) for every synthesis with the same voice, skipping the O(T²)
     /// voice prefill each time.
-    public func precomputeVoicePrefixCache(voiceEmbedding: MLXArray) -> (cache: [any KVCache], prefixLen: Int) {
+    func precomputeVoicePrefixCache(voiceEmbedding: MLXArray) -> (cache: [any KVCache], prefixLen: Int) {
         let voiceFrameCount = voiceEmbedding.dim(0)
         let audioTokenId = Int32(config.multimodal.audioModelArgs.audioTokenId)
         var prefixIds: [Int32] = [
@@ -443,7 +443,7 @@ public class VoxtralTTSModel: Module {
     /// Generate speech from text with voice conditioning.
     ///
     /// Reference: voxtral_tts.py lines 446-586
-    public func generate(
+    func generate(
         text: String,
         voiceEmbedding: MLXArray,
         tokenizer: TekkenTokenizer,
@@ -568,7 +568,7 @@ public class VoxtralTTSModel: Module {
     }
 
     /// Decode audio codes to waveform.
-    public func decodeToWaveform(_ codes: MLXArray) -> MLXArray {
+    func decodeToWaveform(_ codes: MLXArray) -> MLXArray {
         let waveform = audioTokenizer.decode(codes)
         return waveform.squeezed(axis: 0)  // (samples,)
     }
@@ -576,15 +576,15 @@ public class VoxtralTTSModel: Module {
     // MARK: - Streaming Generation
 
     /// Streaming chunk yielded during generation.
-    public struct GenerationChunk: @unchecked Sendable {
+    struct GenerationChunk: @unchecked Sendable {
         /// All accumulated codes so far: (1, totalFrames, 37)
-        public let accumulatedCodes: MLXArray
+        let accumulatedCodes: MLXArray
         /// Number of new frames in this chunk
-        public let newFrameCount: Int
+        let newFrameCount: Int
         /// Total frames generated so far
-        public let totalFrames: Int
+        let totalFrames: Int
         /// Whether this is the final chunk
-        public let isFinal: Bool
+        let isFinal: Bool
 
         /// `accumulatedCodes` is evaluated here: chunks are consumed on another task (MLX-004).
         init(accumulatedCodes: MLXArray, newFrameCount: Int, totalFrames: Int, isFinal: Bool) {
@@ -599,7 +599,7 @@ public class VoxtralTTSModel: Module {
     /// Generate speech codes as a stream, yielding chunks of accumulated codes every `chunkSize` frames.
     ///
     /// The caller can decode each chunk incrementally using `decodeToWaveform`.
-    public func generateStreaming(
+    func generateStreaming(
         text: String,
         voiceEmbedding: MLXArray,
         tokenizer: TekkenTokenizer,
@@ -767,7 +767,7 @@ public class VoxtralTTSModel: Module {
 /// freshly concatenated arrays before any in-place slice assignment.
 /// Guarded by `KVCacheCloneTests` — revisit if MLXLMCommon's
 /// `KVCacheSimple.update`/`state` semantics change.
-public func cloneKVCaches(_ caches: [any KVCache]) -> [any KVCache] {
+func cloneKVCaches(_ caches: [any KVCache]) -> [any KVCache] {
     caches.map { c in
         let fresh = KVCacheSimple()
         let s = c.state

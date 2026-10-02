@@ -24,10 +24,10 @@ final class CrossActorWaveformTests: XCTestCase {
         try XCTSkipUnless(env["VOXTRAL_CROSS_ACTOR"] == "1",
                           "Set VOXTRAL_CROSS_ACTOR=1 to run this heavy test")
 
-        let savedDir = ModelDownloader.customModelsDirectory
-        defer { ModelDownloader.customModelsDirectory = savedDir }
+        let savedDir = VoxtralModelDownloader.customModelsDirectory
+        defer { VoxtralModelDownloader.customModelsDirectory = savedDir }
         if let dir = env["VOXTRAL_MODELS_DIR"] {
-            ModelDownloader.customModelsDirectory = URL(fileURLWithPath: dir)
+            VoxtralModelDownloader.customModelsDirectory = URL(fileURLWithPath: dir)
         }
         let modelId = env["VOXTRAL_TTS_MODEL"] ?? "tts-4b-4bit"
         let modelInfo = try XCTUnwrap(VoxtralTTSRegistry.model(withId: modelId))

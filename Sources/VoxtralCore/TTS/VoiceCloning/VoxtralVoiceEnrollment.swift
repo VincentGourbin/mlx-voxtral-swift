@@ -128,7 +128,7 @@ public final class VoxtralVoiceEnrollment {
     let nAcoustic: Int       // number of acoustic codebooks, e.g. 36
     let acousticLevels: Int  // FSQ levels per acoustic codebook, e.g. 21
 
-    public init(model: VoxtralTTSModel, config: Config = Config()) {
+    init(model: VoxtralTTSModel, config: Config = Config()) {
         self.model = model
         self.config = config
         self.numSamples = config.numFrames * Self.samplesPerFrame
@@ -151,7 +151,7 @@ public final class VoxtralVoiceEnrollment {
     /// a low soft floor rather than zeroed: exact zeros are themselves
     /// learned and reproduce as hard-chopped micro-gaps in every synthesis
     /// (see `Config.gateAttenuationDB`).
-    public func prepareReference(url: URL) throws -> MLXArray {
+    func prepareReference(url: URL) throws -> MLXArray {
         // Read the file at its NATIVE rate as mono float32 (channel mix only —
         // no sample-rate conversion here, which is where AVAudioConverter is
         // unreliable for upsampling), then resample to 24 kHz ourselves.
@@ -491,18 +491,6 @@ public final class VoxtralVoiceEnrollment {
 
     // MARK: - Optimization
 
-    /// Run the enrollment loop and return the learned discrete codes (T, 37).
-    /// Ignores `checkpointURL`, cancellation and divergence: use the throwing overload.
-    @available(*, deprecated, message: "Use optimize(reference:progress:shouldContinue:), which reports divergence, cancellation and resumes from checkpoints")
-    public func optimize(
-        reference: MLXArray,                       // (numSamples,) 24 kHz mono
-        progress: ((Progress) -> Void)? = nil
-    ) -> MLXArray {
-        // Too short a reference: no codes (the throwing overload reports it) instead of a precondition failure (K-27)
-        guard reference.dim(0) >= numSamples else { return MLXArray.zeros([0, 1 + nAcoustic], type: Int32.self) }
-        return optimizeCore(reference: reference, progress: progress, shouldContinue: nil, resume: nil, checkpoint: nil).codes
-    }
-
     /// Thrown when the enrollment optimization diverges to a non-finite loss
     /// and never produced a usable (finite) step to fall back to.
     public struct EnrollmentDivergedError: Error, CustomStringConvertible {
@@ -517,7 +505,7 @@ public final class VoxtralVoiceEnrollment {
     /// predicate cannot leak an under-trained result to the caller.
     /// With `Config.checkpointURL`, the run resumes from an existing checkpoint and saves one every
     /// `checkpointEvery` epochs and on cancellation (K-26).
-    public func optimize(
+    func optimize(
         reference: MLXArray,                       // (numSamples,) 24 kHz mono
         progress: ((Progress) -> Void)? = nil,
         shouldContinue: @escaping () -> Bool
@@ -649,7 +637,7 @@ public final class VoxtralVoiceEnrollment {
         let ref = reference[0 ..< numSamples]
         let losses = EnrollmentLossComputer(checkedReference: ref, sampleRate: 24_000, nMels: 128)  // length checked above
 
-        let beacon = RuntimeBeacon.begin(task: "enroll-voice")
+        let beacon = VoxtralRuntimeBeacon.begin(task: "enroll-voice")
         defer { beacon?.end() }
         // Throttle manifest refreshes: ~100 over the whole run, not one per epoch.
         let beaconEvery = max(1, config.epochs / 100)
@@ -827,7 +815,7 @@ public final class VoxtralVoiceEnrollment {
     /// Convert discrete codes (T, 37) to a voice embedding, appending the
     /// END_AUDIO terminator frame (required — all official presets have it).
     /// Mirrors upstream codes_to_embeddings.py --add-end-token.
-    public func codesToVoiceEmbedding(_ codes: MLXArray) -> MLXArray {
+    func codesToVoiceEmbedding(_ codes: MLXArray) -> MLXArray {
         let T = codes.dim(0)
         let cb = 1 + nAcoustic  // codebooks per frame
 

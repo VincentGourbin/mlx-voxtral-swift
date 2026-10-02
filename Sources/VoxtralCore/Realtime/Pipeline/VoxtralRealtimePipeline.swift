@@ -99,7 +99,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 busy: VoxtralRealtimeError.busy, state: .loading, newGeneration: true)
 
             let modelInfo = try Self.modelInfo(for: modelId)
-            let beacon = RuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
+            let beacon = VoxtralRuntimeBeacon.begin(task: "load-realtime-model", model: modelInfo.id)
             defer { beacon?.end() }
 
             do {
@@ -107,7 +107,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
                 progress?(0.05, "Resolving Realtime model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
-                let modelDir = try await ModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
+                let modelDir = try await VoxtralModelDownloader.downloadRealtimeModel(modelInfo) { p, msg in
                     progress?(0.05 + p * 0.35, msg)
                 }
                 self.modelDirectory = modelDir
@@ -160,7 +160,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
             }
 
             let session = MLXProfiler.shared.activeSession
-            let beacon = RuntimeBeacon.begin(task: "transcribe-realtime")
+            let beacon = VoxtralRuntimeBeacon.begin(task: "transcribe-realtime")
             defer { beacon?.end() }
 
             do {

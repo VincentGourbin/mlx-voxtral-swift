@@ -2,8 +2,7 @@
  * TekkenStrictLoadTests - K-7 (S-05, MLX-022)
  *
  * A missing or invalid tekken.json raises a typed error in the STT, TTS and Realtime loading
- * paths instead of a silent byte-level demo tokenizer; on a real tekken.json the strict loader
- * produces the same ids as the legacy (deprecated) initializer.
+ * paths instead of a silent byte-level demo tokenizer (the legacy fallback initializer was removed in 3.0, K-31).
  */
 
 import Foundation
@@ -20,12 +19,12 @@ final class TekkenStrictLoadTests: XCTestCase {
         super.setUp()
         sandbox = fm.temporaryDirectory.appendingPathComponent("voxtral-tekken-\(UUID().uuidString)")
         try? fm.createDirectory(at: sandbox, withIntermediateDirectories: true)
-        savedCustomDir = ModelDownloader.customModelsDirectory
-        ModelDownloader.customModelsDirectory = sandbox
+        savedCustomDir = VoxtralModelDownloader.customModelsDirectory
+        VoxtralModelDownloader.customModelsDirectory = sandbox
     }
 
     override func tearDown() {
-        ModelDownloader.customModelsDirectory = savedCustomDir
+        VoxtralModelDownloader.customModelsDirectory = savedCustomDir
         try? fm.removeItem(at: sandbox)
         super.tearDown()
     }
@@ -46,7 +45,7 @@ final class TekkenStrictLoadTests: XCTestCase {
         let manifest = """
         {"version": 1, "repoId": "\(repoId)", "files": [{"path": "\(configFile)", "size": \(config.count)}]}
         """
-        try Data(manifest.utf8).write(to: folder.appendingPathComponent(ModelDownloader.manifestFileName))
+        try Data(manifest.utf8).write(to: folder.appendingPathComponent(VoxtralModelDownloader.manifestFileName))
         return folder
     }
 
@@ -92,45 +91,4 @@ final class TekkenStrictLoadTests: XCTestCase {
         }
     }
 
-    @available(*, deprecated, message: "compares with the deprecated legacy initializer on purpose")
-    func testIdsIdenticalWithRealTekken() throws {
-        ModelDownloader.customModelsDirectory = savedCustomDir
-        guard let info = ModelRegistry.model(withId: "mini-3b-8bit"),
-              let folder = ModelDownloader.findModelPath(for: info) else {
-            throw XCTSkip("mini-3b-8bit is not downloaded")
-        }
-        let strict = try TekkenTokenizer.load(modelPath: folder.path)
-        let legacy = TekkenTokenizer(modelPath: folder.path)
-        let sentences = [
-            "Capital Gains and Capital One are two different things.",
-            "The capital of France is Paris.",
-            "Flux Forge Studio turns your Mac into a complete AI creative studio.",
-            "Generate high-quality images and videos from text.",
-            "Train your own custom models, all locally on your Mac.",
-            "No data is sent to the cloud.",
-            "Hello, world! How are you today?",
-            "The quick brown fox jumps over the lazy dog.",
-            "It costs $12.50, or roughly €11.",
-            "Transcribe this audio, please: 3, 2, 1, go.",
-            "Bonjour, ceci est un test de transcription.",
-            "Le capital de la société a augmenté de 10 %.",
-            "Où est la gare ? À gauche, après le café.",
-            "Fluxforge Studio transforme votre Mac en studio de création IA complet.",
-            "Aucune donnée envoyée dans le cloud.",
-            "L'été dernier, nous sommes allés à Montréal.",
-            "Il était une fois un garçon qui aimait les mathématiques.",
-            "Voxtral transcrit et comprend l'audio.",
-            "Émile a reçu 42 messages — c'est beaucoup !",
-            "Ça marche très bien, merci beaucoup.",
-        ]
-        var identical = 0
-        for sentence in sentences {
-            let ids = strict.encode(sentence)
-            XCTAssertEqual(ids, legacy.encode(sentence), sentence)
-            XCTAssertTrue(ids.allSatisfy { $0 >= 1_000 }, "text ids are rank + 1000: \(sentence)")
-            if ids == legacy.encode(sentence) { identical += 1 }
-        }
-        print("[tekken-strict] ids identical on \(identical)/\(sentences.count) sentences")
-        XCTAssertEqual(identical, sentences.count)
-    }
 }

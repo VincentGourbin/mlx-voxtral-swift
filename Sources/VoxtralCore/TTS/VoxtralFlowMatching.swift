@@ -20,7 +20,7 @@ import MLXRandom
 
 /// Multi-head attention without causal mask, no KV cache, no positional encoding.
 /// Weight keys: attention.{wq, wk, wv, wo}
-public class BidirectionalAttention: Module {
+class BidirectionalAttention: Module {
 
     let nHeads: Int
     let nKVHeads: Int
@@ -32,7 +32,7 @@ public class BidirectionalAttention: Module {
     @ModuleInfo(key: "wv") var wv: Linear
     @ModuleInfo(key: "wo") var wo: Linear
 
-    public init(dim: Int, nHeads: Int, nKVHeads: Int, headDim: Int, useBiases: Bool = false) {
+    init(dim: Int, nHeads: Int, nKVHeads: Int, headDim: Int, useBiases: Bool = false) {
         self.nHeads = nHeads
         self.nKVHeads = nKVHeads
         self.headDim = headDim
@@ -45,7 +45,7 @@ public class BidirectionalAttention: Module {
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         let B = x.dim(0)
         let T = x.dim(1)
 
@@ -72,14 +72,14 @@ public class BidirectionalAttention: Module {
 // MARK: - Acoustic Transformer Block
 
 /// Weight keys: layers.N.{attention_norm, attention, ffn_norm, feed_forward}
-public class AcousticTransformerBlock: Module {
+class AcousticTransformerBlock: Module {
 
     @ModuleInfo(key: "attention_norm") var attentionNorm: RMSNorm
     @ModuleInfo(key: "ffn_norm") var ffnNorm: RMSNorm
     @ModuleInfo var attention: BidirectionalAttention
     @ModuleInfo(key: "feed_forward") var feedForward: FMFeedForward
 
-    public init(config: VoxtralTTSConfiguration.FlowMatchingConfiguration) {
+    init(config: VoxtralTTSConfiguration.FlowMatchingConfiguration) {
         self._attentionNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.sigma)
         self._ffnNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.sigma)
         self._attention.wrappedValue = BidirectionalAttention(
@@ -95,7 +95,7 @@ public class AcousticTransformerBlock: Module {
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         var h = x + attention(attentionNorm(x))
         h = h + feedForward(ffnNorm(h))
         return h
@@ -105,19 +105,19 @@ public class AcousticTransformerBlock: Module {
 // MARK: - Feed Forward (SwiGLU)
 
 /// Weight keys: feed_forward.{w1, w2, w3}
-public class FMFeedForward: Module {
+class FMFeedForward: Module {
     @ModuleInfo var w1: Linear
     @ModuleInfo var w2: Linear
     @ModuleInfo var w3: Linear
 
-    public init(dim: Int, hiddenDim: Int, bias: Bool = false) {
+    init(dim: Int, hiddenDim: Int, bias: Bool = false) {
         self._w1.wrappedValue = Linear(dim, hiddenDim, bias: bias)
         self._w2.wrappedValue = Linear(hiddenDim, dim, bias: bias)
         self._w3.wrappedValue = Linear(dim, hiddenDim, bias: bias)
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         w2(silu(w1(x)) * w3(x))
     }
 }
@@ -126,11 +126,11 @@ public class FMFeedForward: Module {
 
 /// Sinusoidal time embedding matching vllm-omni convention: (cos, sin) order.
 /// Reference: acoustic_head.py lines 112-129
-public class TimeEmbedding: Module {
+class TimeEmbedding: Module {
     // Computed constant, not a weight: the `_` prefix keeps it out of parameters() (verified loading, K-7)
     let _invFreq: MLXArray
 
-    public init(dim: Int, theta: Float = 10000.0) {
+    init(dim: Int, theta: Float = 10000.0) {
         let half = dim / 2
         self._invFreq = MLX.exp(
             MLXArray(-log(theta)) * MLXArray(0..<half).asType(.float32) / MLXArray(Float(half))
@@ -139,7 +139,7 @@ public class TimeEmbedding: Module {
     }
 
     /// t: (B,) → (B, dim)
-    public func callAsFunction(_ t: MLXArray) -> MLXArray {
+    func callAsFunction(_ t: MLXArray) -> MLXArray {
         var tInput = t.asType(.float32)
         if tInput.ndim == 1 {
             tInput = MLX.expandedDimensions(tInput, axis: -1)  // (B, 1)
@@ -161,7 +161,7 @@ public class TimeEmbedding: Module {
 /// 1. Semantic prediction is DIRECT from LLM hidden (no transformer pass)
 /// 2. Velocity prediction: inputs are STACKED as (B, 3, dim), output taken at position 0
 /// 3. _run_transformer = layers + norm
-public class FlowMatchingAudioTransformer: Module {
+class FlowMatchingAudioTransformer: Module {
 
     let semanticCodebookSize: Int
     let acousticCodebookSize: Int
@@ -188,7 +188,7 @@ public class FlowMatchingAudioTransformer: Module {
     @ModuleInfo(key: "semantic_codebook_output") var semanticCodebookOutput: Linear   // [8320, dim]
     @ModuleInfo(key: "acoustic_codebook_output") var acousticCodebookOutput: Linear   // [36, dim]
 
-    public init(config: VoxtralTTSConfiguration) {
+    init(config: VoxtralTTSConfiguration) {
         let fmConfig = config.flowMatching
         self.semanticCodebookSize = config.audioModel.semanticCodebookSize
         self.acousticCodebookSize = config.audioModel.acousticCodebookSize
@@ -245,7 +245,7 @@ public class FlowMatchingAudioTransformer: Module {
     /// Predict semantic codebook index DIRECTLY from LLM hidden state.
     /// No transformer pass — just a linear projection + argmax with masking.
     /// Reference: acoustic_head.py lines 178-191
-    public func predictSemantic(_ llmOutput: MLXArray, debug: Bool = false) -> MLXArray {
+    func predictSemantic(_ llmOutput: MLXArray, debug: Bool = false) -> MLXArray {
         var logits = semanticCodebookOutput(llmOutput).asType(.float32)  // (B, 8320)
         if debug {
             let raw = logits[0]
@@ -282,7 +282,7 @@ public class FlowMatchingAudioTransformer: Module {
     /// - Acoustic: FSQ index [0..20] + 2 = [2..22]
     ///
     /// Reference: acoustic_head.py lines 193-234
-    public func decodeOneFrame(_ llmOutput: MLXArray) -> MLXArray {
+    func decodeOneFrame(_ llmOutput: MLXArray) -> MLXArray {
         let B = llmOutput.dim(0)
         let N_SPECIAL: Int32 = 2  // empty_audio=0, end_audio=1
 
@@ -338,13 +338,13 @@ public class FlowMatchingAudioTransformer: Module {
 // MARK: - Utilities
 
 /// Quantize continuous values to FSQ levels (without special token offset).
-public func quantizeToFSQ(_ x: MLXArray, levels: Int) -> MLXArray {
+func quantizeToFSQ(_ x: MLXArray, levels: Int) -> MLXArray {
     let clamped = MLX.clip(x, min: MLXArray(Float(-1.0)), max: MLXArray(Float(1.0)))
     let scaled = (clamped + MLXArray(Float(1.0))) * MLXArray(Float(levels - 1) / 2.0)
     return MLX.round(scaled).asType(.int32)
 }
 
 /// Dequantize FSQ indices back to continuous values in [-1, 1].
-public func dequantizeFSQ(_ indices: MLXArray, levels: Int) -> MLXArray {
+func dequantizeFSQ(_ indices: MLXArray, levels: Int) -> MLXArray {
     return (2.0 * indices.asType(.float32) / MLXArray(Float(levels - 1))) - 1.0
 }

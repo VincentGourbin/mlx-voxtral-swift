@@ -55,10 +55,10 @@ struct STFTResolution {
 /// Differentiable losses against a fixed reference waveform.
 /// Index tables, filterbank and the reference's magnitudes are precomputed
 /// once for the signal length; each epoch only re-derives the prediction.
-public final class EnrollmentLossComputer {
+final class EnrollmentLossComputer {
 
-    public let signalLength: Int
-    public let sampleRate: Int
+    let signalLength: Int
+    let sampleRate: Int
 
     /// Multi-resolution FFT sizes — identical to the Python reference.
     static let fftSizes = [2296, 1418, 876, 542, 334, 206, 126, 76]
@@ -75,18 +75,11 @@ public final class EnrollmentLossComputer {
     /// - Parameter reference: the target waveform (signalLength,), constant
     ///   for the whole optimization.
     /// Throws instead of stopping on a reference shorter than the smallest FFT (K-27)
-    public convenience init(validating reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) throws {
+    convenience init(validating reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) throws {
         guard reference.dim(0) >= Self.fftSizes.last! else {
             throw VoxtralTTSError.invalidConfiguration(
                 "reference too short for spectral losses (\(reference.dim(0)) samples, at least \(Self.fftSizes.last!))")
         }
-        self.init(checkedReference: reference, sampleRate: sampleRate, nMels: nMels)
-    }
-
-    @available(*, deprecated, message: "Stops the process on a reference shorter than 76 samples; use init(validating:sampleRate:nMels:), which throws.")
-    public convenience init(reference: MLXArray, sampleRate: Int = 24_000, nMels: Int = 128) {
-        precondition(reference.dim(0) >= Self.fftSizes.last!,
-                     "reference too short for spectral losses (\(reference.dim(0)) samples)")
         self.init(checkedReference: reference, sampleRate: sampleRate, nMels: nMels)
     }
 
@@ -121,13 +114,13 @@ public final class EnrollmentLossComputer {
     // MARK: - Public losses (prediction vs. the stored reference)
 
     /// Mean absolute error between the prediction and the reference waveform.
-    public func l1Loss(_ pred: MLXArray) -> MLXArray {
+    func l1Loss(_ pred: MLXArray) -> MLXArray {
         MLX.mean(MLX.abs(pred - reference))
     }
 
     /// Multi-resolution STFT loss: spectral convergence + log-magnitude L1,
     /// averaged over resolutions. Mirrors multi_resolution_stft_loss.
-    public func multiResolutionSTFTLoss(_ pred: MLXArray) -> MLXArray {
+    func multiResolutionSTFTLoss(_ pred: MLXArray) -> MLXArray {
         guard !resolutions.isEmpty else { return MLXArray(Float(0)) }
         var total = MLXArray(Float(0))
         for (i, res) in resolutions.enumerated() {
@@ -145,7 +138,7 @@ public final class EnrollmentLossComputer {
 
     /// L1 over log-mel spectrograms. Mirrors mel_spectrogram_loss
     /// (n_fft 2048, hop 512, 128 HTK mels, power 1.0).
-    public func melLoss(_ pred: MLXArray) -> MLXArray {
+    func melLoss(_ pred: MLXArray) -> MLXArray {
         let melPred = MLX.matmul(Self.magnitudeSpectrogram(pred, resolution: melResolution), melFilterbank)
         return MLX.mean(MLX.abs(
             MLX.log(melPred + 1e-5) - MLX.log(targetMel + 1e-5)

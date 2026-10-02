@@ -22,12 +22,12 @@ final class PipelineStateStressTests: XCTestCase {
         super.setUp()
         sandbox = fm.temporaryDirectory.appendingPathComponent("voxtral-state-stress-\(UUID().uuidString)")
         try? fm.createDirectory(at: sandbox, withIntermediateDirectories: true)
-        savedCustomDir = ModelDownloader.customModelsDirectory
-        ModelDownloader.customModelsDirectory = sandbox
+        savedCustomDir = VoxtralModelDownloader.customModelsDirectory
+        VoxtralModelDownloader.customModelsDirectory = sandbox
     }
 
     override func tearDown() {
-        ModelDownloader.customModelsDirectory = savedCustomDir
+        VoxtralModelDownloader.customModelsDirectory = savedCustomDir
         try? fm.removeItem(at: sandbox)
         super.tearDown()
     }
@@ -45,7 +45,7 @@ final class PipelineStateStressTests: XCTestCase {
         let params = Data("{}".utf8)
         try params.write(to: folder.appendingPathComponent("params.json"))
         try Data("{\"version\":1,\"repoId\":\"x\",\"files\":[{\"path\":\"params.json\",\"size\":\(params.count)}]}".utf8)
-            .write(to: folder.appendingPathComponent(ModelDownloader.manifestFileName))
+            .write(to: folder.appendingPathComponent(VoxtralModelDownloader.manifestFileName))
 
         for _ in 0 ..< iterations {
             let pipeline = VoxtralTTSPipeline()

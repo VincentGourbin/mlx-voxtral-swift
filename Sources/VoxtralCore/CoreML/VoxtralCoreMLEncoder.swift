@@ -113,28 +113,28 @@ public enum VoxtralCoreMLVariant: String, Sendable {
 }
 
 /// Configuration for Core ML encoder
-public struct VoxtralCoreMLConfig {
+struct VoxtralCoreMLConfig {
     /// Model variant (mini or small)
-    public var variant: VoxtralCoreMLVariant
+    var variant: VoxtralCoreMLVariant
 
     /// Preferred compute units (default: cpuAndNeuralEngine for ANE)
-    public var computeUnits: MLComputeUnits
+    var computeUnits: MLComputeUnits
 
     /// Whether to allow low precision accumulation (faster but less precise)
-    public var allowLowPrecisionAccumulationOnGPU: Bool
+    var allowLowPrecisionAccumulationOnGPU: Bool
 
     /// Expected input shape [batch, melBins, frames]
-    public let inputShape: [Int] = [1, 128, 3000]
+    let inputShape: [Int] = [1, 128, 3000]
 
     /// Expected output shape [batch, audioFrames, hiddenSize] - depends on variant
-    public var outputShape: [Int] {
+    var outputShape: [Int] {
         [1, 375, variant.hiddenSize]
     }
 
     /// Default configuration: Mini variant on the Neural Engine. On the GPU (MPSGraph) Core ML deadlocks
     /// with MLX in the same process: its first prediction waits forever for a Metal command buffer
     /// (K-32b, decided by Vincent on 2026-10-01; ANE output identical to MLX on C-moyen)
-    public static var `default`: VoxtralCoreMLConfig {
+    static var `default`: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
             computeUnits: .cpuAndNeuralEngine,
@@ -143,7 +143,7 @@ public struct VoxtralCoreMLConfig {
     }
 
     /// Default configuration for Mini variant (Neural Engine, see `default`)
-    public static var mini: VoxtralCoreMLConfig {
+    static var mini: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
             computeUnits: .cpuAndNeuralEngine,
@@ -152,7 +152,7 @@ public struct VoxtralCoreMLConfig {
     }
 
     /// Default configuration for Small variant (Neural Engine, see `default`)
-    public static var small: VoxtralCoreMLConfig {
+    static var small: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .small,
             computeUnits: .cpuAndNeuralEngine,
@@ -162,7 +162,7 @@ public struct VoxtralCoreMLConfig {
 
     /// Configuration for GPU-only execution. Deadlocks when MLX runs in the same process (the STT
     /// pipeline does): use only in a process without MLX (K-32b)
-    public static var gpuOnly: VoxtralCoreMLConfig {
+    static var gpuOnly: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
             computeUnits: .cpuAndGPU,
@@ -171,7 +171,7 @@ public struct VoxtralCoreMLConfig {
     }
 
     /// Configuration for CPU-only execution (fallback)
-    public static var cpuOnly: VoxtralCoreMLConfig {
+    static var cpuOnly: VoxtralCoreMLConfig {
         VoxtralCoreMLConfig(
             variant: .mini,
             computeUnits: .cpuOnly,
@@ -179,7 +179,7 @@ public struct VoxtralCoreMLConfig {
         )
     }
 
-    public init(
+    init(
         variant: VoxtralCoreMLVariant = .mini,
         computeUnits: MLComputeUnits = .cpuAndNeuralEngine,
         allowLowPrecisionAccumulationOnGPU: Bool = true
@@ -195,14 +195,6 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     // MARK: - Static Configuration
 
-    /// An extra bundle searched for a bundled encoder. VoxtralApp no longer bundles one: the encoder is downloaded
-    /// (`downloadFromHuggingFace(variant:progress:)`) (ASK-27, K-28)
-    @available(*, deprecated, message: "Encoders are downloaded with downloadFromHuggingFace(variant:progress:); a bundled encoder is still found in Bundle.main.")
-    public static var resourceBundle: Bundle? {
-        get { _resourceBundle.get() }
-        set { _resourceBundle.set(newValue) }
-    }
-    private static let _resourceBundle = Locked<Bundle?>(nil)
 
     // MARK: - Properties
 
@@ -210,10 +202,10 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     private let model: MLModel
 
     /// Configuration used for this encoder
-    public let config: VoxtralCoreMLConfig
+    let config: VoxtralCoreMLConfig
 
     /// Whether the model is loaded and ready
-    public var isReady: Bool { true }
+    var isReady: Bool { true }
 
     /// Model input name
     private let inputName = "mel_spectrogram"
@@ -227,7 +219,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     /// - Parameters:
     ///   - modelURL: URL to the .mlpackage or .mlmodelc
     ///   - config: Configuration for compute units and options
-    public init(modelURL: URL, config: VoxtralCoreMLConfig = .default) throws {
+    init(modelURL: URL, config: VoxtralCoreMLConfig = .default) throws {
         self.config = config
 
         // Create MLModel configuration
@@ -256,7 +248,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     /// Initialize by searching for the model in common locations
     /// - Parameter config: Configuration for compute units and options
-    public convenience init(config: VoxtralCoreMLConfig = .default) throws {
+    convenience init(config: VoxtralCoreMLConfig = .default) throws {
         // Search order:
         // 1. App bundle
         // 2. Documents directory
@@ -288,19 +280,6 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
                 foundURL = url
                 VoxtralDebug.log("[CoreML] Found in main bundle: \(url.path)")
                 break
-            }
-        }
-
-        // Search in app resource bundle (set by VoxtralApp)
-        if foundURL == nil, let appBundle = VoxtralCoreMLEncoder._resourceBundle.get() {
-            for name in modelNames {
-                let baseName = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
-                let ext = URL(fileURLWithPath: name).pathExtension
-                if let url = appBundle.url(forResource: baseName, withExtension: ext) {
-                    foundURL = url
-                    VoxtralDebug.log("[CoreML] Found in app resource bundle: \(url.path)")
-                    break
-                }
             }
         }
 
@@ -358,7 +337,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     /// Encode audio mel-spectrogram to embeddings
     /// - Parameter melSpectrogram: Mel spectrogram as MLMultiArray [1, 128, 3000]
     /// - Returns: Audio embeddings as MLMultiArray [1, 375, 3072]
-    public func encode(_ melSpectrogram: MLMultiArray) throws -> MLMultiArray {
+    func encode(_ melSpectrogram: MLMultiArray) throws -> MLMultiArray {
         // Validate input shape
         let shape = melSpectrogram.shape.map { $0.intValue }
         guard shape == config.inputShape else {
@@ -395,7 +374,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     ///   - melData: Flat Float array of mel spectrogram data
     ///   - shape: Shape of the data [batch, melBins, frames]
     /// - Returns: Audio embeddings as MLMultiArray [1, 375, 3072]
-    public func encode(_ melData: [Float], shape: [Int]) throws -> MLMultiArray {
+    func encode(_ melData: [Float], shape: [Int]) throws -> MLMultiArray {
         guard shape == config.inputShape else {
             throw VoxtralCoreMLError.invalidInputShape(shape, expected: config.inputShape)
         }
@@ -415,7 +394,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     // MARK: - Utility Methods
 
     /// Get information about the loaded model
-    public var modelDescription: String {
+    var modelDescription: String {
         let desc = model.modelDescription
         var info = "VoxtralCoreMLEncoder:\n"
         info += "  Input: \(desc.inputDescriptionsByName.keys.joined(separator: ", "))\n"
@@ -427,7 +406,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     }
 
     /// Check if Core ML with ANE is available on this device
-    public static var isANEAvailable: Bool {
+    static var isANEAvailable: Bool {
         // ANE is available on Apple Silicon Macs and A11+ iOS devices
         #if os(macOS)
         // Check for Apple Silicon
@@ -448,10 +427,10 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     // MARK: - HuggingFace Download
 
     /// Default HuggingFace repository for Core ML encoder (Mini variant)
-    public static let defaultHuggingFaceRepo = "VincentGOURBIN/voxtral-encoder-coreml-mini"
+    static let defaultHuggingFaceRepo = "VincentGOURBIN/voxtral-encoder-coreml-mini"
 
     /// Default model name in the repository
-    public static let defaultModelName = "VoxtralEncoderMini.mlmodelc"
+    static let defaultModelName = "VoxtralEncoderMini.mlmodelc"
 
     /// Download Core ML encoder from HuggingFace Hub
     /// - Parameters:
@@ -470,7 +449,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         // Same layout and completeness manifest as every other model (K-6):
         // modelsDirectory/<org>/<repo>/<name>, under customModelsDirectory when the app sets one.
         // No HubApi: nothing is written to ~/.cache/huggingface and a verified copy loads offline.
-        let repoDir = ModelDownloader.modelsDirectory.appendingPathComponent(repo)
+        let repoDir = VoxtralModelDownloader.modelsDirectory.appendingPathComponent(repo)
         let modelPath = repoDir.appendingPathComponent(modelName)
         if isCompleteEncoder(repoDir: repoDir, modelPath: modelPath) {
             progress?(1.0, "Core ML \(variant.rawValue) model found in cache")
@@ -483,7 +462,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         let callback = Locked(progress)
         do {
             // The glob does not cross "/" (no `**`): the .mlmodelc is two levels deep at most
-            _ = try await ModelDownloader.downloadRepoDirect(
+            _ = try await VoxtralModelDownloader.downloadRepoDirect(
                 repoId: repo,
                 matching: ["\(modelName)/*", "\(modelName)/*/*"],
                 progress: { fraction, message in callback.get()?(0.1 + 0.85 * fraction, message) }
@@ -502,9 +481,9 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     /// A downloaded encoder is usable when its repo folder carries a verified manifest
     /// and the compiled model holds both its program and its weights.
     private static func isCompleteEncoder(repoDir: URL, modelPath: URL) -> Bool {
-        ModelDownloader.hasCompleteManifest(repoDir)
-            && ModelDownloader.fileSize(at: modelPath.appendingPathComponent("model.mil")) != nil
-            && ModelDownloader.fileSize(at: modelPath.appendingPathComponent("weights/weight.bin")) != nil
+        VoxtralModelDownloader.hasCompleteManifest(repoDir)
+            && VoxtralModelDownloader.fileSize(at: modelPath.appendingPathComponent("model.mil")) != nil
+            && VoxtralModelDownloader.fileSize(at: modelPath.appendingPathComponent("weights/weight.bin")) != nil
     }
 
     /// Download Core ML encoder for a specific MLX model
@@ -527,7 +506,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     ///   - variant: Model variant to download
     ///   - config: Core ML configuration (will be updated with variant if needed)
     ///   - progress: Optional progress callback
-    public static func fromHuggingFace(
+    static func fromHuggingFace(
         variant: VoxtralCoreMLVariant = .mini,
         config: VoxtralCoreMLConfig? = nil,
         progress: ((Double, String) -> Void)? = nil
@@ -546,7 +525,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
     ///   - mlxModelRepoId: MLX model repository ID to match variant
     ///   - config: Core ML configuration
     ///   - progress: Optional progress callback
-    public static func forMLXModel(
+    static func forMLXModel(
         mlxModelRepoId: String,
         config: VoxtralCoreMLConfig? = nil,
         progress: ((Double, String) -> Void)? = nil
@@ -563,7 +542,7 @@ extension VoxtralCoreMLEncoder {
     /// Async version of encode
     /// - Parameter melSpectrogram: Mel spectrogram as MLMultiArray
     /// - Returns: Audio embeddings as MLMultiArray
-    public func encodeAsync(_ melSpectrogram: MLMultiArray) async throws -> MLMultiArray {
+    func encodeAsync(_ melSpectrogram: MLMultiArray) async throws -> MLMultiArray {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
@@ -584,7 +563,7 @@ extension VoxtralCoreMLEncoder {
     /// Measure encoding time for benchmarking
     /// - Parameter melSpectrogram: Input mel spectrogram
     /// - Returns: Tuple of (result, timeInMilliseconds)
-    public func encodeWithTiming(_ melSpectrogram: MLMultiArray) throws -> (MLMultiArray, Double) {
+    func encodeWithTiming(_ melSpectrogram: MLMultiArray) throws -> (MLMultiArray, Double) {
         let start = CFAbsoluteTimeGetCurrent()
         let result = try encode(melSpectrogram)
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
@@ -596,7 +575,7 @@ extension VoxtralCoreMLEncoder {
     ///   - iterations: Number of iterations
     ///   - warmup: Number of warmup iterations
     /// - Returns: Average time in milliseconds
-    public func benchmark(iterations: Int = 10, warmup: Int = 3) throws -> Double {
+    func benchmark(iterations: Int = 10, warmup: Int = 3) throws -> Double {
         // Create test input
         let testInput = try MLMultiArray(
             shape: config.inputShape.map { NSNumber(value: $0) },

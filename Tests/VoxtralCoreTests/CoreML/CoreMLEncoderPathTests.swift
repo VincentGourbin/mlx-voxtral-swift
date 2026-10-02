@@ -65,9 +65,9 @@ final class CoreMLEncoderPathTests: XCTestCase {
         let hubBefore = bytes(under: hubCache)
 
         try? fm.removeItem(at: modelsRoot)
-        let saved = ModelDownloader.customModelsDirectory
-        ModelDownloader.customModelsDirectory = modelsRoot
-        defer { ModelDownloader.customModelsDirectory = saved }
+        let saved = VoxtralModelDownloader.customModelsDirectory
+        VoxtralModelDownloader.customModelsDirectory = modelsRoot
+        defer { VoxtralModelDownloader.customModelsDirectory = saved }
 
         // 1st hybrid load: downloads under the app-chosen root
         let first = try await VoxtralHybridEncoder.withHuggingFaceDownload(variant: .mini, preferredBackend: .coreML)

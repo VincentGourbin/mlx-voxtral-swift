@@ -3,12 +3,40 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 2.3.0
+## [Unreleased] — 3.0.0
 
-Minor release from the 2026-09-27 audit (`docs/audit/2026-09-27/PLAN.md`; each entry cites its fiche K-n). Some
-public defaults change behaviour (ASK-9 = A: minor version).
+Release from the 2026-09-27 audit (`docs/audit/2026-09-27/PLAN.md`; each entry cites its fiche K-n). It started as a
+minor 2.3 (ASK-9 = A); the public API review K-31 (ASK-25 = A, applied on the same branch by Vincent's decision of
+2026-10-02) makes it a **major** release.
+
+### Breaking — public API review (K-31)
+The public surface goes from 1,110 `public` lines to 338: the facades stay public, the model internals become
+`internal`, and the APIs deprecated during this cycle are removed. The reviewed list is
+`docs/audit/2026-09-27/K-31-liste-api.md`.
+- **Renamed** (the old name stays as a deprecated typealias through 3.x): `ModelRegistry` → `VoxtralModelRegistry`,
+  `ModelDownloader` → `VoxtralModelDownloader`, `ModelDownloaderError` → `VoxtralModelDownloaderError`,
+  `DownloadProgressCallback` → `VoxtralDownloadProgressCallback`, `RuntimeBeacon` → `VoxtralRuntimeBeacon`. Hosts
+  that had their own `ModelRegistry`/`ModelDownloader` no longer need typealiases or `VoxtralCore.` qualification.
+- **Still public**: `VoxtralPipeline`, `VoxtralTranscriptionManager`, `VoxtralTTSPipeline`,
+  `VoxtralTTSSynthesisManager`, `VoxtralRealtimePipeline`, `VoxtralRealtimeManager` with their configurations, states
+  and errors; the three registries and their model infos; `VoxtralModelDownloader`; `VoxtralVoice`,
+  `TTSSynthesisResult`, `TTSStreamingChunk`, `WAVWriter`; `VoxtralVoiceEnrollment.Config`/`Progress` and its errors;
+  ZeroVoice (`VoxtralZeroVoice`, `VoiceRecipe`, `VoiceFamily`, voice blending functions); the static Core ML
+  encoder download (`VoxtralCoreMLEncoder.downloadFromHuggingFace`, `downloadForMLXModel`, `VoxtralCoreMLVariant`);
+  `VoxtralRuntimeBeacon`; `MemoryOptimizationConfig`; `VoxtralError`; `VoxtralDebug.enabled`.
+- **Now internal**: the model classes and their configurations (STT, TTS, codec, flow matching, Realtime), the
+  loaders (`loadVoxtralStandardModel`, `loadVoxtralTTSModel`, `loadVoxtralRealtimeModel`), the processor, feature
+  extractor and tokenizer, the hybrid/Core ML encoder instances, `VoxtralMemoryManager`, the TTS trimming functions,
+  `VoxtralVoicePresetManager`, the `VoxtralVoiceEnrollment` instance (enroll through `VoxtralTTSPipeline.enrollVoice`),
+  the TTS pipeline's `ttsModel`/`tokenizer`/`voiceEmbeddings`.
+- **Removed from the public API** (deprecated earlier in this cycle, ASK-23): every symbol listed under *Deprecated*
+  below. The legacy loaders, `VoxtralGenerator`, offline quantization helpers, `ModelDownloader.hubApi`/
+  `reconfigureHubApi()` and `VoxtralCoreMLEncoder.resourceBundle` are deleted; the legacy model classes that the live
+  model still references are kept `internal`.
 
 ### Migration notes for consumers
+- **K-31**: rename the five types above (or keep the deprecated aliases for now); remove calls to
+  `ModelDownloader.reconfigureHubApi()`; enroll voices through `VoxtralTTSPipeline.enrollVoice`.
 - **Exhaustive `switch` over the public error enums** needs a `default:` or the new cases: `VoxtralError.mlx`,
   `.unsupported`, `.missingWeights`, `.invalidTokenizer`, `.contextTooLong`; `busy` in `VoxtralPipelineError`,
   `VoxtralTTSError` and `VoxtralRealtimeError`.
@@ -115,7 +143,7 @@ public defaults change behaviour (ASK-9 = A: minor version).
   `RealtimeQuantizationConfig` (informational).
 - **K-9 — `VoxtralRealtimeModelInfo.files`**: the exact repository files an entry downloads.
 
-### Deprecated
+### Deprecated (2.3 cycle; removed in 3.0 by K-31)
 - **K-30 — legacy Python-port family and dead public code** (ASK-23: deprecated in 2.3, removed in 3.0; each message
   names the replacement): `VoxtralGenerator` (stops the process at load) and its extensions,
   `VoxtralGenerationParameters`, the library `VoxtralCLI` class, `loadVoxtralModel(modelPath:dtype:lazy:)`,

@@ -11,7 +11,7 @@ final class ModelLoadingTests: XCTestCase {
 
     func testLoadConfigForKnownModel() {
         // Get a known model from registry
-        let model = ModelRegistry.defaultModel
+        let model = VoxtralModelRegistry.defaultModel
 
         // Can't actually load without the files, but verify the model info is complete
         XCTAssertFalse(model.repoId.isEmpty, "Model should have repo ID")
@@ -21,7 +21,7 @@ final class ModelLoadingTests: XCTestCase {
     // MARK: - Quantization Detection Tests
 
     func testDetectQuantizationFrom4BitModel() {
-        let model = ModelRegistry.model(withId: "mini-3b-4bit")
+        let model = VoxtralModelRegistry.model(withId: "mini-3b-4bit")
 
         XCTAssertNotNil(model, "Should find 4-bit model")
         if let model = model {
@@ -33,7 +33,7 @@ final class ModelLoadingTests: XCTestCase {
     }
 
     func testDetectQuantizationFrom8BitModel() {
-        let model = ModelRegistry.model(withId: "mini-3b-8bit")
+        let model = VoxtralModelRegistry.model(withId: "mini-3b-8bit")
 
         XCTAssertNotNil(model, "Should find 8-bit model")
         if let model = model {
@@ -107,7 +107,7 @@ final class ModelLoadingTests: XCTestCase {
 
     func testMemoryEstimationForMiniModel() {
         // Mini models should require less memory
-        let miniModel = ModelRegistry.model(withId: "mini-3b-4bit")
+        let miniModel = VoxtralModelRegistry.model(withId: "mini-3b-4bit")
 
         if let model = miniModel {
             // 4-bit 3B model should be around 2GB
@@ -119,7 +119,7 @@ final class ModelLoadingTests: XCTestCase {
     }
 
     func testParameterCountFormat() {
-        for model in ModelRegistry.models {
+        for model in VoxtralModelRegistry.models {
             XCTAssertTrue(
                 model.parameters.hasSuffix("B") || model.parameters.hasSuffix("M"),
                 "Parameters should be in B (billion) or M (million) format: \(model.parameters)"
@@ -130,7 +130,7 @@ final class ModelLoadingTests: XCTestCase {
     // MARK: - Model Info Completeness Tests
 
     func testAllModelsHaveDescription() {
-        for model in ModelRegistry.models {
+        for model in VoxtralModelRegistry.models {
             XCTAssertFalse(
                 model.description.isEmpty,
                 "Model \(model.id) should have a description"
@@ -139,7 +139,7 @@ final class ModelLoadingTests: XCTestCase {
     }
 
     func testAllModelsHaveRepoId() {
-        for model in ModelRegistry.models {
+        for model in VoxtralModelRegistry.models {
             XCTAssertTrue(
                 model.repoId.contains("/"),
                 "Repo ID should be in format 'owner/repo': \(model.repoId)"
@@ -148,7 +148,7 @@ final class ModelLoadingTests: XCTestCase {
     }
 
     func testAllModelsHaveQuantizationInfo() {
-        for model in ModelRegistry.models {
+        for model in VoxtralModelRegistry.models {
             XCTAssertFalse(
                 model.quantization.isEmpty,
                 "Model \(model.id) should have quantization info"

@@ -36,9 +36,9 @@ final class TTSCarrierCodeProbeTests: XCTestCase {
         guard let modelInfo = VoxtralTTSRegistry.model(withId: "tts-4b-mlx") else {
             throw XCTSkip("tts-4b-mlx not in registry")
         }
-        let modelDir = try await ModelDownloader.downloadTTSModel(modelInfo)
+        let modelDir = try await VoxtralModelDownloader.downloadTTSModel(modelInfo)
         let model = try loadVoxtralTTSModel(from: modelDir)
-        let tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+        let tokenizer = try TekkenTokenizer.load(modelPath: modelDir.path)
 
         let arrays = try MLX.loadArrays(url: URL(fileURLWithPath: embPath))
         guard let emb = arrays["embedding"] ?? arrays.values.first else {

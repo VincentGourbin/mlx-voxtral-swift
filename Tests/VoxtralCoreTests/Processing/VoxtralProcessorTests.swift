@@ -11,14 +11,14 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - Initialization Tests
 
     func testProcessorInitWithDefaultTokenizer() {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         XCTAssertNotNil(processor, "Processor should initialize with default tokenizer")
     }
 
     func testProcessorInitWithFeatureExtractor() {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let featureExtractor = VoxtralFeatureExtractor()
         let processor = VoxtralProcessor(
             featureExtractor: featureExtractor,
@@ -31,7 +31,7 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - Decode Tests
 
     func testDecodeEmptyTokens() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let result = try processor.decode([], skipSpecialTokens: true)
@@ -39,7 +39,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testDecodeWithSkipSpecialTokens() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         // Encode some text
@@ -51,7 +51,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testDecodeWithMLXArray() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         // Create MLXArray of token IDs
@@ -65,7 +65,7 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - Batch Decode Tests
 
     func testBatchDecodeEmpty() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let result = try processor.batchDecode([], skipSpecialTokens: true)
@@ -73,7 +73,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testBatchDecodeMultipleSequences() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let texts = ["Hello", "World"]
@@ -88,7 +88,7 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - CallAsFunction Tests
 
     func testCallAsFunctionWithTextOnly() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let result = try processor(text: "Hello world", audio: nil)
@@ -99,7 +99,7 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - Edge Cases
 
     func testDecodeInvalidTokenFormat() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         // Try to decode an unsupported type (String instead of tokens)
@@ -112,7 +112,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testDecodeVeryLongSequence() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         // Create a long sequence of token IDs
@@ -125,7 +125,7 @@ final class VoxtralProcessorTests: XCTestCase {
     // MARK: - Tokenizer Integration Tests
 
     func testProcessorUsesTokenizer() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let text = "Hello world"
@@ -136,7 +136,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testProcessorWithUnicodeText() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let text = "Hello 世界"
@@ -147,7 +147,7 @@ final class VoxtralProcessorTests: XCTestCase {
     }
 
     func testProcessorWithEmoji() throws {
-        let tokenizer = TekkenTokenizer()
+        let tokenizer = TekkenTokenizer.demo()
         let processor = VoxtralProcessor(tokenizer: tokenizer)
 
         let text = "Hello 🎵"

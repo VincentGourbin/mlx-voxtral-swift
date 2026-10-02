@@ -11,17 +11,17 @@ import AVFoundation
 
 // Constants - Direct Python equivalents
 let SAMPLE_RATE: Int = 16000
-public let N_FFT: Int = 400
-public let HOP_LENGTH: Int = 160
+let N_FFT: Int = 400
+let HOP_LENGTH: Int = 160
 let CHUNK_LENGTH: Int = 30  // seconds
 let N_SAMPLES: Int = CHUNK_LENGTH * SAMPLE_RATE  // 480000
 let N_FRAMES: Int = N_SAMPLES / HOP_LENGTH  // 3000
-public let N_MELS: Int = 128
+let N_MELS: Int = 128
 
 /**
  * Direct Python equivalent: def load_audio(file: str) -> np.ndarray
  */
-public func loadAudio(_ file: String) throws -> MLXArray {
+func loadAudio(_ file: String) throws -> MLXArray {
     // Python equivalent: soundfile.read(file, dtype="float32")
     // Use AVFoundation with hardware-accelerated resampling + mono conversion
 
@@ -278,7 +278,7 @@ func getMelFilters(nMels: Int = N_MELS) -> MLXArray {
 /**
  * Direct Python equivalent: def log_mel_spectrogram(audio: mx.array, n_mels: int, n_fft: int, hop_length: int, global_max: Optional[float]) -> Union[mx.array, Tuple[mx.array, float]]
  */
-public func logMelSpectrogram(
+func logMelSpectrogram(
     _ audio: MLXArray, 
     nMels: Int = N_MELS, 
     nFft: Int = N_FFT, 
@@ -423,7 +423,7 @@ func processAudioForVoxtral(
 /**
  * Direct Python equivalent: class VoxtralFeatureExtractor
  */
-public class VoxtralFeatureExtractor {
+class VoxtralFeatureExtractor {
     
     let featureSize: Int
     let samplingRate: Int
@@ -433,7 +433,7 @@ public class VoxtralFeatureExtractor {
     let paddingValue: Float
     let nbMaxFrames: Int
     
-    public init(
+    init(
         featureSize: Int = 128,
         samplingRate: Int = 16000,
         hopLength: Int = 160,
@@ -453,7 +453,7 @@ public class VoxtralFeatureExtractor {
     /**
      * Direct Python equivalent: def __call__(self, raw_speech, sampling_rate=None, return_tensors="np")
      */
-    public func callAsFunction(
+    func callAsFunction(
         rawSpeech: Any,
         samplingRate: Int? = nil,
         returnTensors: String = "np"

@@ -1,5 +1,5 @@
 /**
- * ModelDownloader - Downloads Voxtral models from HuggingFace Hub
+ * VoxtralModelDownloader - Downloads Voxtral models from HuggingFace Hub
  *
  * Uses the Hub module from swift-transformers for downloads.
  * Provides progress tracking and local caching.
@@ -11,7 +11,7 @@ import Hub
 
 /// Progress callback for download updates
 /// Swift 6: @Sendable for safe cross-isolation usage
-public typealias DownloadProgressCallback = @Sendable (Double, String) -> Void
+public typealias VoxtralDownloadProgressCallback = @Sendable (Double, String) -> Void
 
 /// Cross-platform home directory (macOS: ~/, iOS: app container Documents)
 private func platformHomeDirectory() -> URL {
@@ -23,7 +23,7 @@ private func platformHomeDirectory() -> URL {
 }
 
 /// Model downloader with HuggingFace Hub integration
-public class ModelDownloader {
+public class VoxtralModelDownloader {
 
     /// Override the default models directory. Set before first download.
     public static var customModelsDirectory: URL? {
@@ -31,49 +31,6 @@ public class ModelDownloader {
         set { _customModelsDirectory.set(newValue) }
     }
     private static let _customModelsDirectory = Locked<URL?>(nil)
-
-    /// Hub API instance (lazily created once, under a lock)
-    private static let _hubApi = Locked<HubApi?>(nil)
-
-    @available(*, deprecated, message: "Downloads no longer go through HubApi (K-6, K-25): setting customModelsDirectory is enough.")
-    public static var hubApi: HubApi {
-        _hubApi.withLock { api in
-            if let existing = api { return existing }
-            let created = createHubApi()
-            api = created
-            return created
-        }
-    }
-
-    private static func createHubApi() -> HubApi {
-        // Disable network monitor that can incorrectly trigger offline mode
-        // This happens when connection is detected as "constrained" or "expensive"
-        setenv("CI_DISABLE_NETWORK_MONITOR", "1", 1)
-
-        let base: URL?
-        if let custom = customModelsDirectory {
-            // HubApi appends "models/" to downloadBase, so pass the parent
-            base = custom.deletingLastPathComponent()
-        } else {
-            base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        }
-
-        // cache: nil disables swift-transformers' content-addressed blob cache
-        // (~/.cache/huggingface/hub), so downloads land directly under
-        // downloadBase — i.e. everything lives under ~/Library/Caches/models.
-        return HubApi(
-            downloadBase: base,
-            cache: nil,
-            useOfflineMode: false
-        )
-    }
-
-    /// Recreate the HubApi to pick up a new customModelsDirectory.
-    /// Call after setting customModelsDirectory.
-    @available(*, deprecated, message: "Downloads no longer go through HubApi (K-6, K-25): setting customModelsDirectory is enough.")
-    public static func reconfigureHubApi() {
-        _hubApi.set(createHubApi())
-    }
 
     // MARK: - Direct downloader (URLSession)
 
@@ -89,12 +46,12 @@ public class ModelDownloader {
     /// replaces its destination; the completeness manifest (`manifestFileName`)
     /// is removed first and written last, so an interrupted download is never
     /// taken for a complete one (MLX-012).
-    public static func downloadRepoDirect(
+    static func downloadRepoDirect(
         repoId: String,
         revision: String = "main",
         matching globs: [String],
         excluding exclusions: [String] = [],
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         struct LFS: Decodable { let oid: String; let size: Int? }
         struct TreeEntry: Decodable { let type: String; let path: String; let size: Int?; let lfs: LFS? }
@@ -290,7 +247,7 @@ public class ModelDownloader {
     /// Models directory. Canonical location for all downloaded models:
     /// ~/Library/Caches/models (the same base HubApi downloads to), unless
     /// overridden via customModelsDirectory.
-    public static var modelsDirectory: URL {
+    static var modelsDirectory: URL {
         if let custom = customModelsDirectory { return custom }
         let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return cachesDir.appendingPathComponent("models")
@@ -302,7 +259,7 @@ public class ModelDownloader {
     }
 
     /// Get local path for a model
-    public static func localPath(for model: VoxtralModelInfo, in directory: URL? = nil) -> URL {
+    static func localPath(for model: VoxtralModelInfo, in directory: URL? = nil) -> URL {
         let baseDir = directory ?? modelsDirectory
         // {org}/{repo} subdirectories — the layout HubApi resolves models into.
         return baseDir.appendingPathComponent(model.repoId)
@@ -310,14 +267,14 @@ public class ModelDownloader {
 
     /// List all downloaded models
     public static func listDownloadedModels(in directory: URL? = nil) -> [VoxtralModelInfo] {
-        return ModelRegistry.models.filter { model in
+        return VoxtralModelRegistry.models.filter { model in
             findModelPath(for: model) != nil
         }
     }
 
     /// Get the HuggingFace Hub cache path for a model
     /// Checks both the new Library/Caches location and the legacy ~/.cache/huggingface location
-    public static func hubCachePath(for model: VoxtralModelInfo) -> URL? {
+    static func hubCachePath(for model: VoxtralModelInfo) -> URL? {
         // First check the new location: ~/Library/Caches/models/{org}/{repo}
         if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
             let newPath = cacheDir
@@ -387,7 +344,7 @@ public class ModelDownloader {
     /// Without an index, only a single-file `model.safetensors` counts as complete:
     /// the Hub lists `model.safetensors.index.json` after the shards, so "no index"
     /// is the normal state of an interrupted download (MLX-012).
-    public static func verifyShardedModel(at path: URL) -> (complete: Bool, missing: [String]) {
+    static func verifyShardedModel(at path: URL) -> (complete: Bool, missing: [String]) {
         let indexName = "model.safetensors.index.json"
         let indexPath = path.appendingPathComponent(indexName)
 
@@ -476,7 +433,7 @@ public class ModelDownloader {
     /// Download a model using Hub API
     public static func download(
         _ model: VoxtralModelInfo,
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         // findModelPath only returns complete folders (`isComplete(folder:)`)
         if let existingPath = findModelPath(for: model) {
@@ -510,7 +467,7 @@ public class ModelDownloader {
     public static func downloadByRepoId(
         _ repoId: String,
         excluding exclusions: [String] = [],
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         progress?(0.0, "Starting download...")
         VoxtralDebug.log("\nDownloading from HuggingFace: \(repoId)")
@@ -531,10 +488,10 @@ public class ModelDownloader {
     /// Resolve a model identifier to a local path, downloading if necessary
     public static func resolveModel(
         _ identifier: String,
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         // Try to find by ID first
-        if let model = ModelRegistry.model(withId: identifier) {
+        if let model = VoxtralModelRegistry.model(withId: identifier) {
             if let existingPath = findModelPath(for: model) {
                 return existingPath
             }
@@ -542,7 +499,7 @@ public class ModelDownloader {
         }
 
         // Try to find by repo ID
-        if let model = ModelRegistry.model(withRepoId: identifier) {
+        if let model = VoxtralModelRegistry.model(withRepoId: identifier) {
             if let existingPath = findModelPath(for: model) {
                 return existingPath
             }
@@ -612,7 +569,7 @@ public class ModelDownloader {
     /// Delete a downloaded model
     public static func deleteModel(_ model: VoxtralModelInfo) throws {
         guard let path = locateModelFolder(for: model) else {
-            throw ModelDownloaderError.modelNotFound
+            throw VoxtralModelDownloaderError.modelNotFound
         }
 
         // Determine if it's in Hub cache (need to delete parent folder) or local directory
@@ -635,25 +592,25 @@ public class ModelDownloader {
     // MARK: - Convenience Methods for Default Model
 
     /// Check if the default/recommended model is downloaded
-    public static func isDefaultModelDownloaded() -> Bool {
-        findModelPath(for: ModelRegistry.defaultModel) != nil
+    static func isDefaultModelDownloaded() -> Bool {
+        findModelPath(for: VoxtralModelRegistry.defaultModel) != nil
     }
 
     /// Download the default/recommended model
-    public static func downloadDefaultModel(
-        progress: DownloadProgressCallback? = nil
+    static func downloadDefaultModel(
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
-        try await download(ModelRegistry.defaultModel, progress: progress)
+        try await download(VoxtralModelRegistry.defaultModel, progress: progress)
     }
 
     /// Delete the default/recommended model
-    public static func deleteDefaultModel() throws {
-        try deleteModel(ModelRegistry.defaultModel)
+    static func deleteDefaultModel() throws {
+        try deleteModel(VoxtralModelRegistry.defaultModel)
     }
 
     /// Get the default model info
-    public static var defaultModel: VoxtralModelInfo {
-        ModelRegistry.defaultModel
+    static var defaultModel: VoxtralModelInfo {
+        VoxtralModelRegistry.defaultModel
     }
 
     // MARK: - TTS Model Support
@@ -719,7 +676,7 @@ public class ModelDownloader {
     /// Download a TTS model (includes voice embeddings)
     public static func downloadTTSModel(
         _ model: VoxtralTTSModelInfo,
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         // Check if already downloaded
         if let existingPath = findTTSModelPath(for: model) {
@@ -749,9 +706,9 @@ public class ModelDownloader {
     }
 
     /// Resolve a TTS model identifier, downloading if necessary
-    public static func resolveTTSModel(
+    static func resolveTTSModel(
         _ identifier: String,
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         // Try by ID in TTS registry
         if let model = VoxtralTTSRegistry.model(withId: identifier) {
@@ -773,7 +730,7 @@ public class ModelDownloader {
 
     // MARK: - Realtime Model Methods
 
-    public static func isRealtimeModelDownloaded(_ model: VoxtralRealtimeModelInfo) -> Bool {
+    static func isRealtimeModelDownloaded(_ model: VoxtralRealtimeModelInfo) -> Bool {
         findRealtimeModelPath(for: model) != nil
     }
 
@@ -831,7 +788,7 @@ public class ModelDownloader {
     /// Download a Realtime model
     public static func downloadRealtimeModel(
         _ model: VoxtralRealtimeModelInfo,
-        progress: DownloadProgressCallback? = nil
+        progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
         if let existingPath = findRealtimeModelPath(for: model) {
             progress?(1.0, "Realtime model already downloaded")
@@ -856,7 +813,7 @@ public class ModelDownloader {
 }
 
 /// Errors for model downloading
-public enum ModelDownloaderError: LocalizedError {
+public enum VoxtralModelDownloaderError: LocalizedError {
     case modelNotFound
     case downloadFailed(String)
 

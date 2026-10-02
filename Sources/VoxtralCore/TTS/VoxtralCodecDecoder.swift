@@ -18,11 +18,11 @@ import MLXNN
 
 /// Container for weight norm parameters at the "weight" level.
 /// Matches: parametrizations.weight.{original0, original1}
-public class WeightNormParams: Module {
+class WeightNormParams: Module {
     var original0: MLXArray  // (out_ch, 1, 1) — gain
     var original1: MLXArray  // (out_ch, in_ch, K) — direction
 
-    public init(outChannels: Int, inChannels: Int, kernelSize: Int) {
+    init(outChannels: Int, inChannels: Int, kernelSize: Int) {
         self.original0 = MLX.ones([outChannels, 1, 1])
         self.original1 = MLX.zeros([outChannels, inChannels, kernelSize])
         super.init()
@@ -31,10 +31,10 @@ public class WeightNormParams: Module {
 
 /// Container for parametrizations.
 /// Matches: parametrizations.weight.*
-public class WeightParametrizations: Module {
+class WeightParametrizations: Module {
     @ModuleInfo(key: "weight") var weight: WeightNormParams
 
-    public init(outChannels: Int, inChannels: Int, kernelSize: Int) {
+    init(outChannels: Int, inChannels: Int, kernelSize: Int) {
         self._weight.wrappedValue = WeightNormParams(outChannels: outChannels, inChannels: inChannels, kernelSize: kernelSize)
         super.init()
     }
@@ -44,11 +44,11 @@ public class WeightParametrizations: Module {
 /// Weight keys: conv.parametrizations.weight.{original0, original1}
 ///
 /// Reference: audio_tokenizer.py lines 68-142
-public class WeightNormConv: Module {
+class WeightNormConv: Module {
 
     @ModuleInfo var parametrizations: WeightParametrizations
 
-    public init(outChannels: Int, inChannels: Int, kernelSize: Int) {
+    init(outChannels: Int, inChannels: Int, kernelSize: Int) {
         self._parametrizations.wrappedValue = WeightParametrizations(
             outChannels: outChannels, inChannels: inChannels, kernelSize: kernelSize
         )
@@ -65,7 +65,7 @@ public class WeightNormConv: Module {
 
     /// Apply causal or transposed convolution.
     /// Reference: audio_tokenizer.py lines 97-142
-    public func callAsFunction(_ x: MLXArray, stride: Int = 1, transpose: Bool = false) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, stride: Int = 1, transpose: Bool = false) -> MLXArray {
         let weight = getWeight()  // (out_ch, in_ch, K)
         if transpose {
             return convTranspose1d(x, weight: weight, stride: stride)
@@ -109,10 +109,10 @@ public class WeightNormConv: Module {
 // MARK: - Conv Block
 
 /// A conv block matching decoder_blocks.{even_index}.conv
-public class ConvBlock: Module {
+class ConvBlock: Module {
     @ModuleInfo var conv: WeightNormConv
 
-    public init(outChannels: Int, inChannels: Int, kernelSize: Int) {
+    init(outChannels: Int, inChannels: Int, kernelSize: Int) {
         self._conv.wrappedValue = WeightNormConv(outChannels: outChannels, inChannels: inChannels, kernelSize: kernelSize)
         super.init()
     }
@@ -147,7 +147,7 @@ func getAlibiSlopes(nHeads: Int) -> MLXArray {
 // MARK: - Codec Attention (ALiBi + QK-norm + sliding window)
 
 /// Reference: audio_tokenizer.py lines 173-243
-public class CodecAttention: Module {
+class CodecAttention: Module {
 
     let nHeads: Int
     let nKVHeads: Int
@@ -161,7 +161,7 @@ public class CodecAttention: Module {
     @ModuleInfo(key: "q_norm") var qNorm: RMSNorm?
     @ModuleInfo(key: "k_norm") var kNorm: RMSNorm?
 
-    public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
+    init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self.nHeads = config.nHeads
         self.nKVHeads = config.nKVHeads
         self.headDim = config.headDim
@@ -180,7 +180,7 @@ public class CodecAttention: Module {
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
         let B = x.dim(0)
         let T = x.dim(1)
 
@@ -238,7 +238,7 @@ public class CodecAttention: Module {
 // MARK: - Codec Transformer Layer (with LayerScale)
 
 /// Reference: audio_tokenizer.py lines 253-285
-public class CodecTransformerLayer: Module {
+class CodecTransformerLayer: Module {
 
     @ModuleInfo(key: "attention_norm") var attentionNorm: RMSNorm
     @ModuleInfo(key: "ffn_norm") var ffnNorm: RMSNorm
@@ -249,7 +249,7 @@ public class CodecTransformerLayer: Module {
     var attention_scale: MLXArray
     var ffn_scale: MLXArray
 
-    public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
+    init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self.useLayerScale = config.layerScale
 
         self._attentionNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.normEps)
@@ -267,7 +267,7 @@ public class CodecTransformerLayer: Module {
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
         var h = attention(attentionNorm(x), alibiSlopes: alibiSlopes, windowSize: windowSize)
         if useLayerScale { h = h * attention_scale }
         var out = x + h
@@ -280,34 +280,34 @@ public class CodecTransformerLayer: Module {
 }
 
 /// SwiGLU feed-forward matching feed_forward.{w1, w2, w3}
-public class CodecFeedForward: Module {
+class CodecFeedForward: Module {
     @ModuleInfo var w1: Linear
     @ModuleInfo var w2: Linear
     @ModuleInfo var w3: Linear
 
-    public init(dim: Int, hiddenDim: Int) {
+    init(dim: Int, hiddenDim: Int) {
         self._w1.wrappedValue = Linear(dim, hiddenDim, bias: false)
         self._w2.wrappedValue = Linear(hiddenDim, dim, bias: false)
         self._w3.wrappedValue = Linear(dim, hiddenDim, bias: false)
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         w2(silu(w1(x)) * w3(x))
     }
 }
 
 // MARK: - Transformer Block (N layers)
 
-public class CodecTransformerBlock: Module {
+class CodecTransformerBlock: Module {
     @ModuleInfo var layers: [CodecTransformerLayer]
 
-    public init(nLayers: Int, config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
+    init(nLayers: Int, config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self._layers.wrappedValue = (0..<nLayers).map { _ in CodecTransformerLayer(config: config) }
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int = 0) -> MLXArray {
         var h = x
         for layer in layers {
             h = layer(h, alibiSlopes: alibiSlopes, windowSize: windowSize)
@@ -320,11 +320,11 @@ public class CodecTransformerBlock: Module {
 
 /// EMA-based semantic codebook. Decode in float32 for precision.
 /// Reference: audio_tokenizer.py lines 311-338
-public class SemanticCodebook: Module {
+class SemanticCodebook: Module {
     var cluster_usage: MLXArray
     var embedding_sum: MLXArray
 
-    public init(codebookSize: Int, dim: Int) {
+    init(codebookSize: Int, dim: Int) {
         self.cluster_usage = MLX.ones([codebookSize])
         self.embedding_sum = MLX.zeros([codebookSize, dim])
         super.init()
@@ -333,29 +333,29 @@ public class SemanticCodebook: Module {
     /// Centroid table (codebookSize, dim) in float32.
     /// Exposed for voice enrollment, which needs a differentiable
     /// soft lookup (probabilities × codebook) alongside the hard one.
-    public var codebook: MLXArray {
+    var codebook: MLXArray {
         embedding_sum.asType(.float32) / MLX.maximum(
             MLX.expandedDimensions(cluster_usage.asType(.float32), axis: -1),
             MLXArray(Float(1e-8))
         )
     }
 
-    public func decode(_ indices: MLXArray) -> MLXArray {
+    func decode(_ indices: MLXArray) -> MLXArray {
         return codebook[indices]
     }
 }
 
 /// FSQ acoustic codebook — no learned parameters.
 /// Reference: audio_tokenizer.py lines 341-351
-public class AcousticCodebook: Module {
+class AcousticCodebook: Module {
     let codebookSize: Int
 
-    public init(codebookSize: Int) {
+    init(codebookSize: Int) {
         self.codebookSize = codebookSize
         super.init()
     }
 
-    public func decode(_ indices: MLXArray) -> MLXArray {
+    func decode(_ indices: MLXArray) -> MLXArray {
         // [0, codebookSize-1] → [-1, 1]
         return (2.0 * indices.asType(.float32) / MLXArray(Float(codebookSize - 1))) - 1.0
     }
@@ -363,12 +363,12 @@ public class AcousticCodebook: Module {
 
 /// Combined semantic + acoustic codebook.
 /// Reference: audio_tokenizer.py lines 354-386
-public class MistralAudioCodebook: Module {
+class MistralAudioCodebook: Module {
     @ModuleInfo(key: "semantic_codebook") var semanticCodebook: SemanticCodebook
 
     let acousticCodebook: AcousticCodebook
 
-    public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
+    init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self._semanticCodebook.wrappedValue = SemanticCodebook(
             codebookSize: config.semanticCodebookSize, dim: config.semanticDim
         )
@@ -378,7 +378,7 @@ public class MistralAudioCodebook: Module {
 
     /// Decode codes WITH special token offset.
     /// codes: (B, T, 37) where semantic in [2..8193], acoustic in [2..22]
-    public func decode(_ codes: MLXArray) -> MLXArray {
+    func decode(_ codes: MLXArray) -> MLXArray {
         let N_SPECIAL: Int32 = 2
         // Strip special token offset
         let semanticCodes = codes[0..., 0..., 0] - MLXArray(N_SPECIAL)    // (B, T) in [0..8191]
@@ -399,7 +399,7 @@ public class MistralAudioCodebook: Module {
 /// decoder_blocks = [conv0, xformer0, conv1, xformer1, conv2, xformer2, conv3, xformer3]
 /// Sliding windows: [2, 4, 8, 16] (encoder reversed)
 /// Strides: [1, 2, 2, 2] → 8x total upsampling
-public class VoxtralCodecDecoder: Module {
+class VoxtralCodecDecoder: Module {
 
     let config: VoxtralTTSConfiguration.AudioTokenizerConfiguration
 
@@ -411,7 +411,7 @@ public class VoxtralCodecDecoder: Module {
     let _alibiSlopes: MLXArray
     let strides: [Int]
 
-    public init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
+    init(config: VoxtralTTSConfiguration.AudioTokenizerConfiguration) {
         self.config = config
         self._alibiSlopes = getAlibiSlopes(nHeads: config.nHeads)
         self.strides = config.decoderConvsStrides
@@ -439,7 +439,7 @@ public class VoxtralCodecDecoder: Module {
 
     /// Decode audio codes to waveform.
     /// codes: (B, T, 37) — with +2 special token offset
-    public func decode(_ codes: MLXArray) -> MLXArray {
+    func decode(_ codes: MLXArray) -> MLXArray {
         return forwardEmbeddings(quantizer.decode(codes))
     }
 
@@ -448,7 +448,7 @@ public class VoxtralCodecDecoder: Module {
     /// used by voice enrollment, where gradients flow through `embeddings`
     /// while the decoder weights stay frozen.
     /// embeddings: (B, T, 292) → waveform (B, T*1920)
-    public func forwardEmbeddings(_ embeddings: MLXArray) -> MLXArray {
+    func forwardEmbeddings(_ embeddings: MLXArray) -> MLXArray {
         var x = embeddings
 
         // Sliding windows: [2, 4, 8, 16] — encoder reversed

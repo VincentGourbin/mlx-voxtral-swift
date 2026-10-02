@@ -20,11 +20,11 @@ import MLXLMCommon
 // MARK: - Causal Conv1d
 
 /// Left-padded causal 1D convolution.
-public class RealtimeCausalConv1d: Module {
+class RealtimeCausalConv1d: Module {
     @ModuleInfo var conv: Conv1d
     let padding: Int
 
-    public init(inChannels: Int, outChannels: Int, kernelSize: Int, stride: Int = 1) {
+    init(inChannels: Int, outChannels: Int, kernelSize: Int, stride: Int = 1) {
         self.padding = kernelSize - stride
         self._conv.wrappedValue = Conv1d(
             inputChannels: inChannels,
@@ -35,7 +35,7 @@ public class RealtimeCausalConv1d: Module {
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         // x: [batch, seq, channels] (MLX conv1d NLC format)
         var padded = x
         if padding > 0 {
@@ -86,7 +86,7 @@ func computeRoPEFreqs(positions: MLXArray, headDim: Int, theta: Float) -> (cos: 
 
 /// Multi-head attention with selective biases: wq/wv/wo have bias, wk does NOT.
 /// Cannot reuse LlamaAttention which uses a single attentionBias for all projections.
-public class RealtimeEncoderAttention: Module {
+class RealtimeEncoderAttention: Module {
 
     let nHeads: Int
     let headDim: Int
@@ -99,7 +99,7 @@ public class RealtimeEncoderAttention: Module {
     @ModuleInfo(key: "wv") var wv: Linear
     @ModuleInfo(key: "wo") var wo: Linear
 
-    public init(config: RealtimeEncoderConfig) {
+    init(config: RealtimeEncoderConfig) {
         self.nHeads = config.nHeads
         self.headDim = config.headDim
         self.slidingWindow = config.slidingWindow
@@ -122,7 +122,7 @@ public class RealtimeEncoderAttention: Module {
     /// mask: precomputed additive mask [seq, kv_len] or nil
     /// cache: optional (keys, values) for streaming
     /// maskMode: explicit mask (sliding-window chunks, K-13); takes precedence over `mask`
-    public func callAsFunction(
+    func callAsFunction(
         _ x: MLXArray,
         ropeCos: MLXArray,
         ropeSin: MLXArray,
@@ -176,19 +176,19 @@ public class RealtimeEncoderAttention: Module {
 // MARK: - Encoder SwiGLU FFN
 
 /// SwiGLU feed-forward for encoder. w1=gate(no bias), w3=up(no bias), w2=down(bias).
-public class RealtimeEncoderFFN: Module {
+class RealtimeEncoderFFN: Module {
     @ModuleInfo(key: "feed_forward_w1") var w1: Linear
     @ModuleInfo(key: "feed_forward_w2") var w2: Linear
     @ModuleInfo(key: "feed_forward_w3") var w3: Linear
 
-    public init(dim: Int, hiddenDim: Int) {
+    init(dim: Int, hiddenDim: Int) {
         self._w1.wrappedValue = Linear(dim, hiddenDim, bias: false)
         self._w3.wrappedValue = Linear(dim, hiddenDim, bias: false)
         self._w2.wrappedValue = Linear(hiddenDim, dim, bias: true)
         super.init()
     }
 
-    public func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray) -> MLXArray {
         w2(silu(w1(x)) * w3(x))
     }
 }
@@ -197,7 +197,7 @@ public class RealtimeEncoderFFN: Module {
 
 /// Single causal encoder transformer layer: RMSNorm + attention + SwiGLU FFN.
 /// FFN weights are flat on the layer (feed_forward_w1/w2/w3), matching Python structure.
-public class RealtimeEncoderLayer: Module {
+class RealtimeEncoderLayer: Module {
 
     @ModuleInfo(key: "attention_norm") var attentionNorm: RMSNorm
     @ModuleInfo var attention: RealtimeEncoderAttention
@@ -208,7 +208,7 @@ public class RealtimeEncoderLayer: Module {
     @ModuleInfo(key: "feed_forward_w2") var w2: Linear
     @ModuleInfo(key: "feed_forward_w3") var w3: Linear
 
-    public init(config: RealtimeEncoderConfig) {
+    init(config: RealtimeEncoderConfig) {
         self._attentionNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.normEps)
         self._attention.wrappedValue = RealtimeEncoderAttention(config: config)
         self._ffnNorm.wrappedValue = RMSNorm(dimensions: config.dim, eps: config.normEps)
@@ -219,7 +219,7 @@ public class RealtimeEncoderLayer: Module {
         super.init()
     }
 
-    public func callAsFunction(
+    func callAsFunction(
         _ x: MLXArray,
         ropeCos: MLXArray,
         ropeSin: MLXArray,
@@ -245,7 +245,7 @@ public class RealtimeEncoderLayer: Module {
 // MARK: - Audio Encoder
 
 /// Complete causal audio encoder: conv stem → transformer → norm → 4x downsample+project.
-public class VoxtralRealtimeEncoder: Module {
+class VoxtralRealtimeEncoder: Module {
 
     let config: RealtimeEncoderConfig
 
@@ -261,7 +261,7 @@ public class VoxtralRealtimeEncoder: Module {
     @ModuleInfo(key: "audio_language_projection_0") var adapterLinear1: Linear
     @ModuleInfo(key: "audio_language_projection_2") var adapterLinear2: Linear
 
-    public init(config: RealtimeEncoderConfig, decoderDim: Int) {
+    init(config: RealtimeEncoderConfig, decoderDim: Int) {
         self.config = config
 
         self._conv1.wrappedValue = RealtimeCausalConv1d(
@@ -293,7 +293,7 @@ public class VoxtralRealtimeEncoder: Module {
 
     /// Run conv layers on mel spectrogram. Aligns output to downsample factor.
     /// mel: [mel_bins, frames] → returns [seq, dim]
-    public func convStem(_ mel: MLXArray) -> MLXArray {
+    func convStem(_ mel: MLXArray) -> MLXArray {
         // mel: [128, frames] → [1, frames, 128] (NLC for conv1d)
         var x = mel.transposed(1, 0).expandedDimensions(axis: 0)
         x = gelu(conv1(x))
@@ -312,7 +312,7 @@ public class VoxtralRealtimeEncoder: Module {
 
     /// Downsample 4x and project to decoder dimension.
     /// encoded: [seq, dim] → [seq/4, decoder_dim]
-    public func downsampleAndProject(_ encoded: MLXArray) -> MLXArray {
+    func downsampleAndProject(_ encoded: MLXArray) -> MLXArray {
         let seqLen = encoded.dim(0)
         let ds = config.downsampleFactor
         let dsLen = seqLen / ds
@@ -326,7 +326,7 @@ public class VoxtralRealtimeEncoder: Module {
     /// Beyond the sliding window the encoder attends within the window only (K-13, P-62): a full causal
     /// pass would attend past 15 s, a context the model never saw, and degenerate.
     /// mel: [mel_bins, frames] → [seq/4, decoder_dim]
-    public func callAsFunction(_ mel: MLXArray) -> MLXArray {
+    func callAsFunction(_ mel: MLXArray) -> MLXArray {
         let convOut = convStem(mel)
         if convOut.dim(0) <= config.slidingWindow {
             return encodeFull(convOut)
@@ -340,7 +340,7 @@ public class VoxtralRealtimeEncoder: Module {
     /// Encode window-sized chunks with a rotating KV cache per layer (mlx-audio `encode_chunks`):
     /// query i attends to keys i-window+1 … i, at absolute RoPE positions. Memory is O(window) per chunk.
     /// convOut: [seq, dim] → normed [seq, dim]
-    public func encodeChunked(_ convOut: MLXArray) -> MLXArray {
+    func encodeChunked(_ convOut: MLXArray) -> MLXArray {
         let seqLen = convOut.dim(0)
         let window = config.slidingWindow
         let caches = layers.map { _ in RotatingKVCache(maxSize: window, keep: 0) }
@@ -367,7 +367,7 @@ public class VoxtralRealtimeEncoder: Module {
 
     /// Encode using full-sequence causal attention (for audio within sliding window).
     /// convOut: [seq, dim] → [seq/4, decoder_dim]
-    public func encodeFull(_ convOut: MLXArray) -> MLXArray {
+    func encodeFull(_ convOut: MLXArray) -> MLXArray {
         let seqLen = convOut.dim(0)
         let positions = MLXArray(0..<Int32(seqLen))
         let (ropeCos, ropeSin) = computeRoPEFreqs(

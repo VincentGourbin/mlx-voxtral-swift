@@ -54,7 +54,7 @@ final class TTSConsecutiveSynthesisReproTests: XCTestCase {
         let modelDir: URL
         if let override = ProcessInfo.processInfo.environment["VOXTRAL_TTS_REPRO_MODEL"] {
             modelDir = URL(fileURLWithPath: override)
-        } else if let found = ModelDownloader.findTTSModelPath(for: VoxtralTTSRegistry.defaultModel) {
+        } else if let found = VoxtralModelDownloader.findTTSModelPath(for: VoxtralTTSRegistry.defaultModel) {
             modelDir = found
         } else {
             throw XCTSkip("Default TTS model not downloaded")
@@ -69,7 +69,7 @@ final class TTSConsecutiveSynthesisReproTests: XCTestCase {
         print("[repro] voice embedding shape: \(voiceEmb.shape)")
 
         let model = try loadVoxtralTTSModel(from: modelDir)
-        let tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+        let tokenizer = try TekkenTokenizer.load(modelPath: modelDir.path)
 
         let text = "Bonjour, ceci est un test de synthèse vocale avec une voix personnalisée pour vérifier la stabilité."
         let outDir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["VOXTRAL_TTS_REPRO_OUT"]

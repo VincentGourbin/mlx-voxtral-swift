@@ -78,7 +78,7 @@ private func float16BitsToFloat(_ bits: UInt16) -> Float {
 }
 
 /// Bridge utilities for MLX <-> Core ML tensor conversion
-public struct MLXCoreMLBridge {
+struct MLXCoreMLBridge {
 
     // MARK: - MLXArray to MLMultiArray
 
@@ -86,7 +86,7 @@ public struct MLXCoreMLBridge {
     /// - Parameter mlxArray: Source MLXArray
     /// - Returns: Equivalent MLMultiArray
     /// - Throws: Error if conversion fails
-    public static func toMLMultiArray(_ mlxArray: MLXArray) throws -> MLMultiArray {
+    static func toMLMultiArray(_ mlxArray: MLXArray) throws -> MLMultiArray {
         // Ensure array is evaluated
         eval(mlxArray)
 
@@ -157,7 +157,7 @@ public struct MLXCoreMLBridge {
     /// Convert MLMultiArray to MLXArray for MLX
     /// - Parameter multiArray: Source MLMultiArray
     /// - Returns: Equivalent MLXArray
-    public static func toMLXArray(_ multiArray: MLMultiArray) -> MLXArray {
+    static func toMLXArray(_ multiArray: MLMultiArray) -> MLXArray {
         // Get shape
         let shape = multiArray.shape.map { $0.intValue }
         let count = shape.reduce(1, *)
@@ -207,38 +207,19 @@ public struct MLXCoreMLBridge {
 
     // MARK: - Optimized Zero-Copy Conversion (when possible)
 
-    /// Convert MLXArray to MLMultiArray using pointer if possible
-    /// This avoids a copy when the MLXArray has contiguous memory layout
-    /// - Warning: The returned MLMultiArray shares memory with the input
-    /// - Parameter mlxArray: Source MLXArray (must outlive the returned MLMultiArray)
-    /// - Returns: MLMultiArray sharing memory with input
-    @available(*, deprecated, message: "Copies the data like toMLMultiArray(); there is no zero-copy path.")
-    public static func toMLMultiArrayNoCopy(_ mlxArray: MLXArray) throws -> MLMultiArray {
-        // Evaluate to ensure data is materialized
-        eval(mlxArray)
-
-        // Note: True zero-copy requires MLX to expose raw pointers
-        // Copies: same conversion as the regular path
-        // In future, with MLX updates, we could use:
-        // return try MLMultiArray(dataPointer: mlxArray.rawPointer, ...)
-
-        // Fall back to copy-based conversion
-        return try toMLMultiArray(mlxArray)
-    }
-
     // MARK: - Batch Conversion
 
     /// Convert multiple MLXArrays to MLMultiArrays
     /// - Parameter arrays: Array of MLXArrays to convert
     /// - Returns: Array of equivalent MLMultiArrays
-    public static func toMLMultiArrayBatch(_ arrays: [MLXArray]) throws -> [MLMultiArray] {
+    static func toMLMultiArrayBatch(_ arrays: [MLXArray]) throws -> [MLMultiArray] {
         try arrays.map { try toMLMultiArray($0) }
     }
 
     /// Convert multiple MLMultiArrays to MLXArrays
     /// - Parameter arrays: Array of MLMultiArrays to convert
     /// - Returns: Array of equivalent MLXArrays
-    public static func toMLXArrayBatch(_ arrays: [MLMultiArray]) -> [MLXArray] {
+    static func toMLXArrayBatch(_ arrays: [MLMultiArray]) -> [MLXArray] {
         arrays.map { toMLXArray($0) }
     }
 
@@ -249,7 +230,7 @@ public struct MLXCoreMLBridge {
     ///   - mlxShape: Shape of MLXArray
     ///   - mlShape: Shape of MLMultiArray
     /// - Returns: true if shapes match
-    public static func validateShapes(_ mlxShape: [Int], _ mlShape: [NSNumber]) -> Bool {
+    static func validateShapes(_ mlxShape: [Int], _ mlShape: [NSNumber]) -> Bool {
         guard mlxShape.count == mlShape.count else { return false }
         for (a, b) in zip(mlxShape, mlShape) {
             if a != b.intValue { return false }
@@ -261,12 +242,12 @@ public struct MLXCoreMLBridge {
 // MARK: - Errors
 
 /// Errors that can occur during MLX-CoreML bridging
-public enum MLXCoreMLBridgeError: Error, LocalizedError {
+enum MLXCoreMLBridgeError: Error, LocalizedError {
     case unsupportedDataType(String)
     case shapeMismatch(mlxShape: [Int], mlShape: [Int])
     case conversionFailed(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unsupportedDataType(let type):
             return "Unsupported data type for conversion: \(type)"
@@ -284,7 +265,7 @@ extension MLXArray {
 
     /// Convert this MLXArray to Core ML MLMultiArray
     /// - Returns: Equivalent MLMultiArray
-    public func toMLMultiArray() throws -> MLMultiArray {
+    func toMLMultiArray() throws -> MLMultiArray {
         try MLXCoreMLBridge.toMLMultiArray(self)
     }
 }
@@ -295,7 +276,7 @@ extension MLMultiArray {
 
     /// Convert this MLMultiArray to MLX MLXArray
     /// - Returns: Equivalent MLXArray
-    public func toMLXArray() -> MLXArray {
+    func toMLXArray() -> MLXArray {
         MLXCoreMLBridge.toMLXArray(self)
     }
 }
@@ -307,7 +288,7 @@ extension MLXCoreMLBridge {
     /// Measure conversion time for benchmarking
     /// - Parameter mlxArray: Input to convert
     /// - Returns: Tuple of (result, timeInMilliseconds)
-    public static func toMLMultiArrayWithTiming(_ mlxArray: MLXArray) throws -> (MLMultiArray, Double) {
+    static func toMLMultiArrayWithTiming(_ mlxArray: MLXArray) throws -> (MLMultiArray, Double) {
         let start = CFAbsoluteTimeGetCurrent()
         let result = try toMLMultiArray(mlxArray)
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
@@ -317,7 +298,7 @@ extension MLXCoreMLBridge {
     /// Measure conversion time for benchmarking
     /// - Parameter multiArray: Input to convert
     /// - Returns: Tuple of (result, timeInMilliseconds)
-    public static func toMLXArrayWithTiming(_ multiArray: MLMultiArray) -> (MLXArray, Double) {
+    static func toMLXArrayWithTiming(_ multiArray: MLMultiArray) -> (MLXArray, Double) {
         let start = CFAbsoluteTimeGetCurrent()
         let result = toMLXArray(multiArray)
         let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0

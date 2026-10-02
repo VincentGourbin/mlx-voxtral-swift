@@ -86,7 +86,7 @@ struct ProfileRun: AsyncParsableCommand {
     var beacon = false
 
     func run() async throws {
-        RuntimeBeacon.isEnabled = beacon
+        VoxtralRuntimeBeacon.isEnabled = beacon
         // Validate inputs
         switch pipeline {
         case .stt, .realtime:

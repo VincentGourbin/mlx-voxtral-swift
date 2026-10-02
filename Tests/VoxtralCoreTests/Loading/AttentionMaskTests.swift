@@ -3,9 +3,8 @@
  *
  * The STT decoder's attention masks come from the cache (boolean, shaped like the keys it presents), not from a
  * hand-made additive fp32 mask: a bf16 model no longer fails with "Mask type must promote to output type", a
- * wrapped RotatingKVCache prefilled in two chunks gets the right shape, and the legacy decoder no longer stops at
- * its second prefill chunk (its [T, T] mask did not match offset + T keys).
- * The legacy test builds the legacy decoder as loadVoxtralModel(modelPath:dtype:lazy:) does, reduced.
+ * wrapped RotatingKVCache prefilled in two chunks gets the right shape. (The legacy-decoder case went with the
+ * legacy loaders, removed in 3.0, K-31.)
  */
 
 import Foundation
@@ -53,28 +52,4 @@ final class AttentionMaskTests: XCTestCase {
         XCTAssertEqual(keysShapes[1][1], keysShapes[1][2], "the mask spans the keys of the wrapped cache")
     }
 
-    /// The legacy decoder (LlamaModel), built the way loadVoxtralModel(modelPath:dtype:lazy:) builds it
-    /// (VoxtralForConditionalGeneration(config:) from the config dictionaries), reduced and with random weights:
-    /// that loader cannot load the only bf16 folder on the machine (keyNotFound audio_tower.conv2.weight after its
-    /// sanitize, a separate legacy-loader defect), so the decoder path is exercised directly.
-    func testLegacyPrompt600PositionsDoesNotStop() throws {
-        let text: [String: Any] = [
-            "vocab_size": 2048, "hidden_size": 64, "intermediate_size": 128, "num_hidden_layers": 2,
-            "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 16, "max_position_embeddings": 8192,
-            "rms_norm_eps": 1e-5, "rope_theta": 1_000_000.0,
-        ]
-        let audio: [String: Any] = [
-            "hidden_size": 32, "intermediate_size": 128, "num_hidden_layers": 1, "num_attention_heads": 2,
-            "head_dim": 16, "max_source_positions": 1500, "num_mel_bins": 128,
-        ]
-        let config = PythonVoxtralConfig(
-            audio_config: VoxtralEncoderConfig.fromDictionary(audio), text_config: VoxtralTextConfig.fromDictionary(text),
-            audio_token_id: 24, projector_hidden_act: "gelu")
-        MLXRandom.seed(5)
-        let model = VoxtralForConditionalGeneration(config: config)
-        XCTAssertTrue(model.language_model is LlamaModel, "the legacy initializer builds the legacy decoder")
-        let inputIds = MLXArray((0 ..< 600).map { Int32(1000 + $0 % 500) }).reshaped([1, 600])
-        XCTAssertNoThrow(try model.generateStream(inputIds: inputIds, maxNewTokens: 1, memoryOptimization: .disabled))
-        print("[mask] LEGACY prompt 600 positions (legacy decoder, 2 prefill chunks) : OK (pas d'arrêt)")
-    }
 }

@@ -29,9 +29,9 @@ final class EnrollInferenceExclusionTests: XCTestCase {
     func testEnrollmentAndStreamingNeverOverlap() async throws {
         let env = ProcessInfo.processInfo.environment
         try XCTSkipUnless(env["VOXTRAL_ENROLL_EXCLUSION"] == "1", "Set VOXTRAL_ENROLL_EXCLUSION=1 to run")
-        let saved = ModelDownloader.customModelsDirectory
-        defer { ModelDownloader.customModelsDirectory = saved }
-        if let dir = env["VOXTRAL_MODELS_DIR"] { ModelDownloader.customModelsDirectory = URL(fileURLWithPath: dir) }
+        let saved = VoxtralModelDownloader.customModelsDirectory
+        defer { VoxtralModelDownloader.customModelsDirectory = saved }
+        if let dir = env["VOXTRAL_MODELS_DIR"] { VoxtralModelDownloader.customModelsDirectory = URL(fileURLWithPath: dir) }
 
         let pipeline = VoxtralTTSPipeline(configuration: .init(maxFrames: 60))
         try await pipeline.loadModel(modelInfo: XCTUnwrap(VoxtralTTSRegistry.model(withId: "tts-4b-4bit")))

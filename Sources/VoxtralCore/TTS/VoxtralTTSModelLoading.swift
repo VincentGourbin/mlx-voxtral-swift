@@ -13,7 +13,7 @@ import MLXLMCommon
 
 // MARK: - TTS Model Loading
 
-public func loadVoxtralTTSModel(
+func loadVoxtralTTSModel(
     from modelDirectory: URL,
     progressCallback: ((Float, String) -> Void)? = nil
 ) throws -> VoxtralTTSModel {

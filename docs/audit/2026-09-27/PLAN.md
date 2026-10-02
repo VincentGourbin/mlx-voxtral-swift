@@ -1399,3 +1399,15 @@ Gabarits :
   - `GREEN RuntimeBeaconRaceTests : 0 manifeste résiduel sur 1000` (50 tours ; rouge sur l'ancien code : 50/50).
   - Suite : `Executed 587 tests, with 36 tests skipped and 0 failures`.
 - Note : le `.mlmodelc` local ignoré (1,2 Go) est déplacé hors des sources (`/Volumes/Lexar/models/local-backups/`).
+
+## K-31 — Revue d'API publique 3.0 — 2026-10-02 — validée (dérogations de Vincent)
+- Fait (ASK-25 = A) : liste proposée (`docs/audit/2026-09-27/K-31-liste-api.md`), validée telle quelle par Vincent,
+  appliquée sur la branche (3.0 directe). Façades publiques ; modèles, chargeurs, processeur, tokenizer, encodeurs
+  Core ML/hybride internes ; 9 fichiers hérités supprimés et membres dépréciés retirés ; préfixes `VoxtralModelRegistry`,
+  `VoxtralModelDownloader`(`Error`), `VoxtralDownloadProgressCallback`, `VoxtralRuntimeBeacon` avec typealias
+  dépréciés ; faute `applyTranscritionRequest` corrigée ; CHANGELOG en 3.0.0. Tests du chemin hérité retirés (5).
+- Porte observée :
+  - `PUBLIC declarations : 338 (≤ 300 non tenu ; accepté par Vincent, liste validée prioritaire)` (1 110 avant).
+  - `FLUXFORGE` : non vérifié ici, à la charge de Vincent à la transmission (décision du 2026-10-02).
+  - `** BUILD SUCCEEDED **` VoxtralCLI, VoxtralApp, VoxtralTTSStreamingDemo (Release).
+  - Suite : `Executed 582 tests, with 36 tests skipped and 0 failures`.

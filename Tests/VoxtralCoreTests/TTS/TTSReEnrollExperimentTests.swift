@@ -49,17 +49,17 @@ final class TTSReEnrollExperimentTests: XCTestCase {
               "recon=\(cfg.reconstructionWeight) percept=\(cfg.perceptualWeight) mel=\(cfg.melWeight)")
 
         let model = try loadVoxtralTTSModel(from: modelDir)
-        let tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+        let tokenizer = try TekkenTokenizer.load(modelPath: modelDir.path)
 
         // --- Enroll ---
         let enroller = VoxtralVoiceEnrollment(model: model, config: cfg)
         let reference = try enroller.prepareReference(url: URL(fileURLWithPath: refPath))
-        let codes = enroller.optimize(reference: reference) { p in
+        let codes = try enroller.optimize(reference: reference, progress: { p in
             if p.epoch % cfg.logEvery == 0 {
                 print(String(format: "[enroll] epoch %d/%d total=%.4f recon=%.4f",
                              p.epoch, cfg.epochs, p.totalLoss, p.reconLoss))
             }
-        }
+        }, shouldContinue: { true })
         let emb = enroller.codesToVoiceEmbedding(codes)
         let embURL = outDir.appendingPathComponent("enrolled_\(tag).safetensors")
         try MLX.save(arrays: ["embedding": emb], url: embURL)

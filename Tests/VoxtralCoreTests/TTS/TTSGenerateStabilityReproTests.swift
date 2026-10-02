@@ -90,7 +90,7 @@ final class TTSGenerateStabilityReproTests: XCTestCase {
         let modelDir: URL
         if let override = env["VOXTRAL_TTS_REPRO_MODEL"] {
             modelDir = URL(fileURLWithPath: override)
-        } else if let found = ModelDownloader.findTTSModelPath(for: VoxtralTTSRegistry.defaultModel) {
+        } else if let found = VoxtralModelDownloader.findTTSModelPath(for: VoxtralTTSRegistry.defaultModel) {
             modelDir = found
         } else {
             throw XCTSkip("Default TTS model not downloaded")
@@ -117,7 +117,7 @@ final class TTSGenerateStabilityReproTests: XCTestCase {
 
         print("[repro] embedding \(voiceEmb.shape), runs/group=\(runs), out=\(outDir.path)")
         let model = try loadVoxtralTTSModel(from: modelDir)
-        let tokenizer = TekkenTokenizer(modelPath: modelDir.path)
+        let tokenizer = try TekkenTokenizer.load(modelPath: modelDir.path)
 
         // Group SEED: fixed seed each run, no clearCache.
         var seedRuns: [RunStats] = []

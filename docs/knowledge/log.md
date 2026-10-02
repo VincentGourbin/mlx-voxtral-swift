@@ -132,3 +132,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-28 : clone neuf constructible** (4 schémas Release, plus de ressource `.mlmodelc` déclarée) ; app
   empaquetée par `Scripts/package-app.sh` (bundles dans `Contents/Resources`, où MLX trouve son `metallib`) ;
   `RuntimeBeacon` : 50/50 tours laissaient un manifeste avant le correctif, 0 après.
+- 2026-10-02 — **K-31 : API 3.0** : surface publique 1 110 → 338 lignes (façades seulement), types génériques
+  préfixés `Voxtral…` (alias dépréciés), code hérité supprimé ; FluxForge à migrer par Vincent (retirer
+  `reconfigureHubApi()` et ses typealias de contournement).

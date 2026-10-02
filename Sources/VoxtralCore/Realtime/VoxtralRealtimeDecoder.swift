@@ -21,7 +21,7 @@ import MLXLMCommon
 
 /// Sinusoidal time embedding for Ada RMS-Norm conditioning.
 /// t_value: number of delay tokens (e.g. 6.0 for 480ms) → [dim] vector
-public func computeTimeEmbedding(tValue: Float, dim: Int, theta: Float = 10000.0) -> MLXArray {
+func computeTimeEmbedding(tValue: Float, dim: Int, theta: Float = 10000.0) -> MLXArray {
     let halfDim = dim / 2
     let invFreq = MLX.exp(
         -log(theta) * MLXArray(stride(from: 0, to: halfDim, by: 1).map { Float($0) / Float(halfDim) })
@@ -35,23 +35,23 @@ public func computeTimeEmbedding(tValue: Float, dim: Int, theta: Float = 10000.0
 /// Adaptive RMSNorm with time conditioning.
 /// Per-layer MLP: Linear(dim→bottleneck) → GELU → Linear(bottleneck→dim)
 /// Applied as: rms_norm(x) * (1 + ada_scale)
-public class AdaRMSNorm: Module {
+class AdaRMSNorm: Module {
     @ModuleInfo(key: "ada_down") var adaDown: Linear
     @ModuleInfo(key: "ada_up") var adaUp: Linear
 
-    public init(dim: Int, bottleneckDim: Int) {
+    init(dim: Int, bottleneckDim: Int) {
         self._adaDown.wrappedValue = Linear(dim, bottleneckDim, bias: false)
         self._adaUp.wrappedValue = Linear(bottleneckDim, dim, bias: false)
         super.init()
     }
 
     /// Precompute ada_scale from time conditioning. Returns [dim].
-    public func computeScale(_ tCond: MLXArray) -> MLXArray {
+    func computeScale(_ tCond: MLXArray) -> MLXArray {
         adaUp(gelu(adaDown(tCond)))
     }
 
     /// Apply adaptive scaling: x * (1 + ada_scale)
-    public func callAsFunction(_ x: MLXArray, adaScale: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, adaScale: MLXArray) -> MLXArray {
         x * (1.0 + adaScale)
     }
 }
@@ -60,7 +60,7 @@ public class AdaRMSNorm: Module {
 
 /// Single decoder transformer layer with Ada RMS-Norm on FFN branch.
 /// Reuses LlamaAttention for standard GQA attention (no biases, RoPE).
-public class RealtimeDecoderLayer: Module {
+class RealtimeDecoderLayer: Module {
 
     @ModuleInfo(key: "attention_norm") var attentionNorm: RMSNorm
     @ModuleInfo var attention: LlamaAttention
@@ -72,7 +72,7 @@ public class RealtimeDecoderLayer: Module {
     @ModuleInfo(key: "feed_forward_w2") var w2: Linear
     @ModuleInfo(key: "feed_forward_w3") var w3: Linear
 
-    public init(decoderConfig: RealtimeDecoderConfig) {
+    init(decoderConfig: RealtimeDecoderConfig) {
         let llamaConfig = LlamaConfig(
             vocabSize: decoderConfig.vocabSize,
             hiddenSize: decoderConfig.dim,
@@ -110,7 +110,7 @@ public class RealtimeDecoderLayer: Module {
 
     /// Forward pass.
     /// embeds: [1, seq, dim], adaScale: precomputed [dim] or nil
-    public func callAsFunction(
+    func callAsFunction(
         _ hiddenStates: MLXArray,
         attentionMask: MLXArray? = nil,
         cache: (any KVCache)? = nil,
@@ -136,7 +136,7 @@ public class RealtimeDecoderLayer: Module {
 // MARK: - Decoder
 
 /// Full LLM decoder with tied embeddings and Ada RMS-Norm.
-public class VoxtralRealtimeDecoder: Module {
+class VoxtralRealtimeDecoder: Module {
 
     let config: RealtimeDecoderConfig
 
@@ -147,7 +147,7 @@ public class VoxtralRealtimeDecoder: Module {
     /// Precomputed ada_scales per layer (set via precomputeAdaScales)
     var adaScales: [MLXArray?] = []
 
-    public init(config: RealtimeDecoderConfig) {
+    init(config: RealtimeDecoderConfig) {
         self.config = config
 
         self._tokEmbeddings.wrappedValue = Embedding(
@@ -163,7 +163,7 @@ public class VoxtralRealtimeDecoder: Module {
 
     /// Precompute Ada RMS-Norm scales from delay conditioning.
     /// Call once after model loading with the chosen delay.
-    public func precomputeAdaScales(tCond: MLXArray) {
+    func precomputeAdaScales(tCond: MLXArray) {
         adaScales = layers.map { layer in
             layer.adaNorm?.computeScale(tCond)
         }
@@ -174,23 +174,23 @@ public class VoxtralRealtimeDecoder: Module {
     }
 
     /// Embed a single token ID.
-    public func embedToken(_ tokenId: Int) -> MLXArray {
+    func embedToken(_ tokenId: Int) -> MLXArray {
         tokEmbeddings.weight[tokenId]
     }
 
     /// Embed token IDs.
-    public func embedTokens(_ tokenIds: MLXArray) -> MLXArray {
+    func embedTokens(_ tokenIds: MLXArray) -> MLXArray {
         tokEmbeddings(tokenIds)
     }
 
     /// Compute logits via tied embeddings: h @ tok_embeddings^T
-    public func logits(_ h: MLXArray) -> MLXArray {
+    func logits(_ h: MLXArray) -> MLXArray {
         MLX.matmul(h, tokEmbeddings.weight.transposed())
     }
 
     /// Create fresh KV caches for all layers: a ring buffer sized to the decoder sliding window
     /// (8192 steps = 11 min of audio), like the mlx-audio reference (K-13, P-63).
-    public func createCache() -> [any KVCache] {
+    func createCache() -> [any KVCache] {
         layers.map { _ in RotatingKVCache(maxSize: config.slidingWindow, keep: 0) }
     }
 
@@ -198,7 +198,7 @@ public class VoxtralRealtimeDecoder: Module {
     /// embeds: [seq, dim] input embeddings (audio + text summed)
     /// cache: KV caches (must always be provided — use createCache() to initialize)
     /// Returns: hidden states [seq, dim]
-    public func forward(
+    func forward(
         embeds: MLXArray,
         cache: [any KVCache]
     ) -> MLXArray {

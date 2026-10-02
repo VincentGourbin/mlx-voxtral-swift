@@ -14,7 +14,7 @@ import MLXLMCommon  // Use official KVCache protocol from MLXLMCommon
  * Direct Python equivalent: class LlamaAttention(nn.Module)
  * Multi-headed attention with rotary embeddings.
  */
-public class LlamaAttention: Module {
+class LlamaAttention: Module {
     
     // Python: def __init__(self, config):
     let config: LlamaConfig
@@ -29,16 +29,16 @@ public class LlamaAttention: Module {
     let scale: Float
     
     // @ModuleInfo required for quantization support (MLX needs to replace Linear with QuantizedLinear)
-    @ModuleInfo(key: "q_proj") public var qProj: Linear
-    @ModuleInfo(key: "k_proj") public var kProj: Linear
-    @ModuleInfo(key: "v_proj") public var vProj: Linear
-    @ModuleInfo(key: "o_proj") public var oProj: Linear
+    @ModuleInfo(key: "q_proj") var qProj: Linear
+    @ModuleInfo(key: "k_proj") var kProj: Linear
+    @ModuleInfo(key: "v_proj") var vProj: Linear
+    @ModuleInfo(key: "o_proj") var oProj: Linear
     let rope: MLXLMRope
     
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaConfig) {
+    init(config: LlamaConfig) {
         // Python: super().__init__()
         // Python: self.config = config
         self.config = config
@@ -86,7 +86,7 @@ public class LlamaAttention: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, cache: Optional[KVCache] = None) -> mx.array:
      */
-    public func callAsFunction(
+    func callAsFunction(
         _ hiddenStates: MLXArray,
         attentionMask: MLXArray? = nil,
         cache: (any KVCache)? = nil
@@ -166,22 +166,22 @@ public class LlamaAttention: Module {
  * Direct Python equivalent: class LlamaMLP(nn.Module)
  * Llama MLP with SiLU activation.
  */
-public class LlamaMLP: Module {
+class LlamaMLP: Module {
 
     // Python: def __init__(self, config):
     let config: LlamaConfig
     let hiddenSize: Int
     let intermediateSize: Int
     // @ModuleInfo required for quantization support (MLX needs to replace Linear with QuantizedLinear)
-    @ModuleInfo(key: "gate_proj") public var gateProj: Linear
-    @ModuleInfo(key: "up_proj") public var upProj: Linear
-    @ModuleInfo(key: "down_proj") public var downProj: Linear
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear
+    @ModuleInfo(key: "up_proj") var upProj: Linear
+    @ModuleInfo(key: "down_proj") var downProj: Linear
     let actFn: (MLXArray) -> MLXArray
 
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaConfig) {
+    init(config: LlamaConfig) {
         // Python: super().__init__()
         // Python: self.config = config
         self.config = config
@@ -207,7 +207,7 @@ public class LlamaMLP: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array) -> mx.array:
      */
-    public func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
+    func callAsFunction(_ hiddenStates: MLXArray) -> MLXArray {
         // Python: return self.down_proj(self.act_fn(self.gate_proj(hidden_states)) * self.up_proj(hidden_states))
         return downProj(actFn(gateProj(hiddenStates)) * upProj(hiddenStates))
     }
@@ -217,19 +217,19 @@ public class LlamaMLP: Module {
  * Direct Python equivalent: class LlamaDecoderLayer(nn.Module)
  * Llama decoder layer.
  */
-public class LlamaDecoderLayer: Module {
+class LlamaDecoderLayer: Module {
 
     let hiddenSize: Int
     // @ModuleInfo required for weight loading
-    @ModuleInfo(key: "self_attn") public var selfAttn: LlamaAttention
-    @ModuleInfo public var mlp: LlamaMLP
-    @ModuleInfo(key: "input_layernorm") public var inputLayernorm: RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") public var postAttentionLayernorm: RMSNorm
+    @ModuleInfo(key: "self_attn") var selfAttn: LlamaAttention
+    @ModuleInfo var mlp: LlamaMLP
+    @ModuleInfo(key: "input_layernorm") var inputLayernorm: RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayernorm: RMSNorm
 
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaConfig) {
+    init(config: LlamaConfig) {
         // Python: super().__init__()
         // Python: self.hidden_size = config.hidden_size
         self.hiddenSize = config.hiddenSize
@@ -250,7 +250,7 @@ public class LlamaDecoderLayer: Module {
     /**
      * Direct Python equivalent: def __call__(self, hidden_states: mx.array, attention_mask: Optional[mx.array] = None, cache: Optional[KVCache] = None) -> mx.array:
      */
-    public func callAsFunction(
+    func callAsFunction(
         _ hiddenStates: MLXArray,
         attentionMask: MLXArray? = nil,
         cache: (any KVCache)? = nil
@@ -272,20 +272,20 @@ public class LlamaDecoderLayer: Module {
  * Direct Python equivalent: class LlamaModel(nn.Module)
  * Llama model for Voxtral text generation.
  */
-public class LlamaModel: Module {
+class LlamaModel: Module {
     
     let config: LlamaConfig
     let paddingIdx: Int?
     let vocabSize: Int
     // @ModuleInfo required for weight loading
-    @ModuleInfo(key: "embed_tokens") public var embedTokens: Embedding
-    @ModuleInfo public var layers: [LlamaDecoderLayer]
-    @ModuleInfo public var norm: RMSNorm
+    @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
+    @ModuleInfo var layers: [LlamaDecoderLayer]
+    @ModuleInfo var norm: RMSNorm
 
     /**
      * Direct Python equivalent: def __init__(self, config):
      */
-    public init(config: LlamaConfig) {
+    init(config: LlamaConfig) {
         // Python: super().__init__()
         // Python: self.config = config
         self.config = config
@@ -312,7 +312,7 @@ public class LlamaModel: Module {
     /**
      * Direct Python equivalent: def __call__(self, inputs: Optional[mx.array] = None, mask: Optional[mx.array] = None, cache: Optional[List[KVCache]] = None, inputs_embeds: Optional[mx.array] = None) -> mx.array:
      */
-    public func callAsFunction(
+    func callAsFunction(
         inputs: MLXArray? = nil,
         mask: MLXArray? = nil,
         cache: [any KVCache]? = nil,
@@ -359,35 +359,35 @@ public class LlamaModel: Module {
  * Direct Python equivalent: config object (matches Python Llama config)
  * Configuration structure that corresponds exactly to the Python config used in models/llama.py
  */
-public struct LlamaConfig {
+struct LlamaConfig {
     // Core model dimensions
-    public let vocabSize: Int
-    public let hiddenSize: Int
-    public let intermediateSize: Int
-    public let numHiddenLayers: Int
-    public let numAttentionHeads: Int
-    public let numKeyValueHeads: Int
+    let vocabSize: Int
+    let hiddenSize: Int
+    let intermediateSize: Int
+    let numHiddenLayers: Int
+    let numAttentionHeads: Int
+    let numKeyValueHeads: Int
     
     // Optional head dimension (Python: hasattr(config, "head_dim"))
-    public let headDim: Int?
+    let headDim: Int?
     
     // RoPE configuration
-    public let maxPositionEmbeddings: Int
-    public let ropeTheta: Float
-    public let ropeTraditional: Bool?
-    public let ropeScaling: [String: Any]?
+    let maxPositionEmbeddings: Int
+    let ropeTheta: Float
+    let ropeTraditional: Bool?
+    let ropeScaling: [String: Any]?
     
     // Normalization
-    public let rmsNormEps: Float
+    let rmsNormEps: Float
     
     // Bias configuration (Python: config.attention_bias, config.mlp_bias)
-    public let attentionBias: Bool
-    public let mlpBias: Bool
+    let attentionBias: Bool
+    let mlpBias: Bool
     
     // Token IDs
-    public let padTokenId: Int?
+    let padTokenId: Int?
     
-    public init(
+    init(
         vocabSize: Int = 32000,
         hiddenSize: Int = 4096,
         intermediateSize: Int = 11008,
@@ -426,15 +426,15 @@ public struct LlamaConfig {
  * Direct Python equivalent: initialize_rope() from mlx_lm.models.rope_utils
  * This replaces the direct RoPE instantiation to match MLX-LM's approach
  */
-public struct MLXLMRope {
+struct MLXLMRope {
     let rope: RoPE
     
-    public func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, offset: Int = 0) -> MLXArray {
         // Standard RoPE (no MLX-LM rope scaling on this legacy path)
         return rope(x, offset: offset)
     }
     
-    public func callAsFunction(_ queries: MLXArray, _ keys: MLXArray, offset: Int = 0) -> (MLXArray, MLXArray) {
+    func callAsFunction(_ queries: MLXArray, _ keys: MLXArray, offset: Int = 0) -> (MLXArray, MLXArray) {
         // Standard RoPE
         return (rope(queries, offset: offset), rope(keys, offset: offset))
     }
@@ -443,7 +443,7 @@ public struct MLXLMRope {
 /**
  * Direct Python equivalent: initialize_rope() function
  */
-public func initializeRope(
+func initializeRope(
     headDim: Int,
     ropeTheta: Float,
     ropeTraditional: Bool,
@@ -463,44 +463,6 @@ public func initializeRope(
 /**
  * Direct Python equivalent: scaled_dot_product_attention() from mlx_lm.models.base
  */
-@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use MLXFast.scaledDotProductAttention.")
-public func mlxLMScaledDotProductAttention(
-    queries: MLXArray,
-    keys: MLXArray,
-    values: MLXArray,
-    cache: (any KVCache)? = nil,
-    scale: Float,
-    mask: MLXArray? = nil
-) -> MLXArray {
-    // Use the .causal mode when appropriate — this matches Python's mask="causal"
-    // which uses an optimized internal kernel with better numerical properties.
-    let querySeqLen = queries.shape[2]
-    let keySeqLen = keys.shape[2]
-
-    if mask != nil, querySeqLen == keySeqLen {
-        // Prefill: use .causal mode (matches Python's mask="causal")
-        return MLXFast.scaledDotProductAttention(
-            queries: queries, keys: keys, values: values,
-            scale: scale, mask: .causal
-        )
-    } else if mask != nil, keySeqLen != querySeqLen {
-        // Incremental decode with explicit mask (rare case)
-        let fullMask = createCausalMask(N: keySeqLen)
-        let startRow = keySeqLen - querySeqLen
-        let adjustedMask = fullMask[startRow..<keySeqLen, 0..<keySeqLen]
-            .expandedDimensions(axes: [0, 1])
-        return MLXFast.scaledDotProductAttention(
-            queries: queries, keys: keys, values: values,
-            scale: scale, mask: .array(adjustedMask)
-        )
-    } else {
-        // No mask (single token decode)
-        return MLXFast.scaledDotProductAttention(
-            queries: queries, keys: keys, values: values,
-            scale: scale, mask: .none
-        )
-    }
-}
 
 /**
  * Direct Python equivalent: def create_causal_mask(N: int, offset: int = 0, window_size: Optional[int] = None, lengths: Optional[mx.array] = None):
@@ -509,33 +471,5 @@ public func mlxLMScaledDotProductAttention(
  * Before: O(N²) CPU loops with individual element assignments
  * After: O(1) GPU operations - orders of magnitude faster for large N
  */
-@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Additive fp32 mask; use MLXLMCommon.createCausalMask(n:offset:) (boolean).")
-public func createCausalMask(
-    N: Int,
-    offset: Int = 0,
-    windowSize: Int? = nil,
-    lengths: MLXArray? = nil
-) -> MLXArray {
-    // Create row and column index grids
-    let rowIndices = MLXArray(Array(0..<N).map { Float($0) }).reshaped([N, 1])
-    let colIndices = MLXArray(Array(0..<N).map { Float($0) }).reshaped([1, N])
-
-    // Causal mask: allowed positions (col <= row + offset) get 0, masked positions get -inf
-    // This is an ADDITIVE mask for scaledDotProductAttention
-    let offsetFloat = MLXArray(Float(offset))
-    let causalCondition = colIndices .<= (rowIndices + offsetFloat)
-    // Start with 0 for allowed, -inf for masked
-    var mask = MLX.where(causalCondition, MLXArray(Float(0)), MLXArray(Float(-1e9)))
-
-    // Apply sliding window if specified
-    if let windowSize = windowSize {
-        let windowSizeFloat = MLXArray(Float(windowSize))
-        let windowCondition = colIndices .>= (rowIndices - windowSizeFloat)
-        let windowMask = MLX.where(windowCondition, MLXArray(Float(0)), MLXArray(Float(-1e9)))
-        mask = mask + windowMask  // Both must be 0 for the position to be allowed
-    }
-
-    return mask
-}
 
 // mlxLMCreateAttentionMask and KVCache are now defined in MLXLMBridge.swift

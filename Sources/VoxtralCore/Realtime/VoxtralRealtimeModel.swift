@@ -20,14 +20,14 @@ import MLXProfiler
 
 // MARK: - VoxtralRealtimeModel
 
-public class VoxtralRealtimeModel: Module {
+class VoxtralRealtimeModel: Module {
 
-    public let config: VoxtralRealtimeConfiguration
+    let config: VoxtralRealtimeConfiguration
 
     @ModuleInfo var encoder: VoxtralRealtimeEncoder
     @ModuleInfo var decoder: VoxtralRealtimeDecoder
 
-    public init(config: VoxtralRealtimeConfiguration) {
+    init(config: VoxtralRealtimeConfiguration) {
         self.config = config
         self._encoder.wrappedValue = VoxtralRealtimeEncoder(
             config: config.encoderArgs, decoderDim: config.decoder.dim
@@ -40,13 +40,13 @@ public class VoxtralRealtimeModel: Module {
 
     /// Encode mel spectrogram to audio embeddings.
     /// mel: [mel_bins, frames] → [n_tokens, decoder_dim]
-    public func encodeAudio(_ mel: MLXArray) -> MLXArray {
+    func encodeAudio(_ mel: MLXArray) -> MLXArray {
         encoder(mel)
     }
 
     /// Extract audio embeddings (public API for embedding extraction).
     /// mel: [mel_bins, frames] → [1, n_tokens, decoder_dim]
-    public func extractAudioEmbeddings(_ mel: MLXArray) -> MLXArray {
+    func extractAudioEmbeddings(_ mel: MLXArray) -> MLXArray {
         encoder(mel).expandedDimensions(axis: 0)
     }
 
@@ -54,7 +54,7 @@ public class VoxtralRealtimeModel: Module {
 
     /// Transcribe audio from mel spectrogram.
     /// Returns (text_tokens, audio_embeddings).
-    public func generate(
+    func generate(
         mel: MLXArray,
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
@@ -165,7 +165,7 @@ public class VoxtralRealtimeModel: Module {
     }
 
     /// True when the last `generate` stopped on its text-token budget rather than the audio end (K-5)
-    public private(set) var lastGenerationTruncated = false
+    private(set) var lastGenerationTruncated = false
 
     /// The decode loop's bounds, separated from the model so they can be tested: one step per
     /// audio frame after the prompt; `sample()` gives the next token, `advance(pos, token, count)`
