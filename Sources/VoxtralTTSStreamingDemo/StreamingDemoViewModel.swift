@@ -33,6 +33,8 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var enrollStatus: String = ""
     @Published var enrollProgress: Double = 0        // 0…1 over epochs
     @Published var clonedVoices: [ClonedVoice] = []
+    /// A voice of this name exists: `enroll(overwrite: true)` replaces it once the user confirms (A-19)
+    @Published var overwriteCandidate: String?
 
     struct ClonedVoice: Identifiable, Hashable {
         let name: String
@@ -56,6 +58,8 @@ final class StreamingDemoViewModel: ObservableObject {
     @Published var segEnd: Double = 8
     @Published var refBuilderBusy = false
     @Published var refBuilderStatus: String = ""
+    /// The running ffmpeg work (probe, preview, build); cancelling it terminates the process (A-18)
+    private var refBuilderTask: Task<Void, Never>?
     let ffmpegAvailable = FFmpeg.isAvailable
 
     var refExtractsTotal: Double { refExtracts.reduce(0) { $0 + $1.duration } }
@@ -286,7 +290,8 @@ No account required. No data sent to the cloud. All models run locally on your A
         segStart = 0
         segEnd = min(cloneDuration, 8)
         refBuilderStatus = "Reading \(url.lastPathComponent)…"
-        Task {
+        refBuilderTask?.cancel()
+        refBuilderTask = Task {
             do {
                 let dur = try await FFmpeg.duration(of: url)
                 await MainActor.run {
@@ -305,7 +310,8 @@ No account required. No data sent to the cloud. All models run locally on your A
         guard let src = refSourceURL, segEnd > segStart else { return }
         let (start, end) = (segStart, segEnd)
         refBuilderStatus = "Extracting preview…"
-        Task {
+        refBuilderTask?.cancel()
+        refBuilderTask = Task {
             do {
                 let out = Self.refWorkDir.appendingPathComponent("preview.wav")
                 try await FFmpeg.extractSegment(from: src, start: start, end: end, to: out)
@@ -318,6 +324,26 @@ No account required. No data sent to the cloud. All models run locally on your A
             } catch {
                 await MainActor.run { self.refBuilderStatus = "Error: \(error.localizedDescription)" }
             }
+        }
+    }
+
+    /// Stop the running ffmpeg work (the process is terminated).
+    func cancelReferenceBuild() {
+        refBuilderTask?.cancel()
+        refBuilderTask = nil
+        if refBuilderBusy {
+            refBuilderBusy = false
+            refBuilderStatus = "Cancelled"
+        }
+    }
+
+    /// Delete the recordings, extracts and assembled references of the reference builder.
+    private func removeReferenceWorkFiles() {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: Self.refWorkDir, includingPropertiesForKeys: nil)) ?? []
+        files.forEach { try? FileManager.default.removeItem(at: $0) }
+        if referenceURL?.deletingLastPathComponent().standardizedFileURL == Self.refWorkDir.standardizedFileURL {
+            referenceURL = nil
         }
     }
 
@@ -341,13 +367,15 @@ No account required. No data sent to the cloud. All models run locally on your A
         refBuilderBusy = true
         refBuilderStatus = "Building reference…"
         let extracts = refExtracts
-        Task {
+        refBuilderTask?.cancel()
+        refBuilderTask = Task {
+            var parts: [URL] = []
+            defer { parts.forEach { try? FileManager.default.removeItem(at: $0) } }
             do {
-                var parts: [URL] = []
                 for (i, e) in extracts.enumerated() {
                     let part = Self.refWorkDir.appendingPathComponent("part_\(i).wav")
-                    try await FFmpeg.extractSegment(from: src, start: e.start, end: e.end, to: part)
                     parts.append(part)
+                    try await FFmpeg.extractSegment(from: src, start: e.start, end: e.end, to: part)
                 }
                 let out = Self.refWorkDir.appendingPathComponent("reference_\(UUID().uuidString).wav")
                 try await FFmpeg.concat(parts, to: out)
@@ -404,11 +432,25 @@ No account required. No data sent to the cloud. All models run locally on your A
 
     /// Enroll a voice from `referenceURL` using the currently loaded model.
     /// Runs the (long) optimization off the main actor and streams progress.
-    func enroll() {
+    /// The name is checked first, and an existing voice is replaced only with `overwrite` (A-19).
+    func enroll(overwrite: Bool = false) {
         guard isModelLoaded, let pipeline, !isEnrolling, !isSynthesizing else { return }
         guard let ref = referenceURL else { log("No reference audio selected"); return }
-        let name = cloneName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { log("Enter a name for the cloned voice"); return }
+        let name: String
+        do {
+            name = try VoiceName.validate(cloneName)
+        } catch {
+            log(error.localizedDescription)
+            enrollStatus = error.localizedDescription
+            return
+        }
+        let existing = Self.clonedVoicesDir.appendingPathComponent("\(name).safetensors")
+        guard overwrite || !FileManager.default.fileExists(atPath: existing.path) else {
+            overwriteCandidate = name
+            enrollStatus = "A voice named \u{201C}\(name)\u{201D} exists"
+            return
+        }
+        overwriteCandidate = nil
 
         isEnrolling = true
         enrollCancel.set(false)
@@ -453,6 +495,7 @@ No account required. No data sent to the cloud. All models run locally on your A
                     self?.isEnrolling = false
                     self?.refreshClonedVoices()
                     self?.selectedVoice = "cloned:\(name)"
+                    self?.removeReferenceWorkFiles()
                 }
             } catch is CancellationError {
                 await MainActor.run {

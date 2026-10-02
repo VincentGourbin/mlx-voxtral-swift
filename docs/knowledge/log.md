@@ -129,3 +129,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-8 : quantification décodée comme MLXLMCommon** : les packs 2026 à `"mode"` (aufklarer, Markus) se
   chargent ; Markus Mini 8 b encodeur dense : 0 clé en écart, greedy identique à mlx-voxtral. Les packs mlx-voxtral
   sauvegardent `embed_tokens` deux fois (alias Python) : la vérification `[.all]` exige de retirer l'alias.
+- 2026-10-02 — **K-28 : clone neuf constructible** (4 schémas Release, plus de ressource `.mlmodelc` déclarée) ; app
+  empaquetée par `Scripts/package-app.sh` (bundles dans `Contents/Resources`, où MLX trouve son `metallib`) ;
+  `RuntimeBeacon` : 50/50 tours laissaient un manifeste avant le correctif, 0 après.

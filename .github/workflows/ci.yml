@@ -23,10 +23,6 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      - name: Placeholder for the untracked Core ML resource of VoxtralApp
-        # VoxtralEncoderFull.mlmodelc (1.3 GB) is not in git; the app looks it up at run time only (K-28 removes it)
-        run: mkdir -p Sources/VoxtralApp/Resources/VoxtralEncoderFull.mlmodelc
-
       - name: Build and test
         run: |
           set -o pipefail

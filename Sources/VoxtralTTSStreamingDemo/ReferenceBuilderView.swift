@@ -97,7 +97,7 @@ struct ReferenceBuilderView: View {
 
             Divider()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { vm.cancelReferenceBuild(); dismiss() }
                 Spacer()
                 if vm.refExtractsTotal > 0 && vm.refExtractsTotal < target {
                     Text("Need ~\(String(format: "%.0f", target - vm.refExtractsTotal)) s more")

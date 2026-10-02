@@ -144,6 +144,9 @@ public enum RuntimeBeacon {
 
         private let fileURL: URL
         private let state: OSAllocatedUnfairLock<State>
+        /// Serializes the file writes and the removal: a write checks `ended` under it, so an `update` racing an
+        /// `end` can no longer recreate the manifest after its removal (A-20, K-28)
+        private let io = NSLock()
 
         private static let encoder: JSONEncoder = {
             let e = JSONEncoder()
@@ -202,15 +205,17 @@ public enum RuntimeBeacon {
                 return true
             }
             if shouldRemove {
-                try? FileManager.default.removeItem(at: fileURL)
+                io.withLock { try? FileManager.default.removeItem(at: fileURL) }
             }
         }
 
-        /// Atomic write so a monitor never reads a half-written manifest.
+        /// Atomic write so a monitor never reads a half-written manifest; skipped once the session has ended.
         private func write() {
-            let manifest = state.withLock { $0.manifest }
-            guard let data = try? Self.encoder.encode(manifest) else { return }
-            try? data.write(to: fileURL, options: .atomic)
+            io.withLock {
+                guard let manifest = state.withLock({ $0.ended ? nil : $0.manifest }),
+                      let data = try? Self.encoder.encode(manifest) else { return }
+                try? data.write(to: fileURL, options: .atomic)
+            }
         }
     }
 }

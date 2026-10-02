@@ -195,8 +195,9 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
 
     // MARK: - Static Configuration
 
-    /// Set this to the app's resource bundle before creating encoder instances
-    /// VoxtralApp should set this to Bundle.module in its initialization
+    /// An extra bundle searched for a bundled encoder. VoxtralApp no longer bundles one: the encoder is downloaded
+    /// (`downloadFromHuggingFace(variant:progress:)`) (ASK-27, K-28)
+    @available(*, deprecated, message: "Encoders are downloaded with downloadFromHuggingFace(variant:progress:); a bundled encoder is still found in Bundle.main.")
     public static var resourceBundle: Bundle? {
         get { _resourceBundle.get() }
         set { _resourceBundle.set(newValue) }

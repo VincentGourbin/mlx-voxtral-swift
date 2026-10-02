@@ -13,11 +13,7 @@ struct VoxtralAppMain: App {
         // Suppress MLX Metal shader compilation warnings
         // These are internal to the MLX framework and not actionable
         setenv("MTL_SHADER_VALIDATION", "0", 1)
-
-        // Configure Core ML encoder to find resources in this app's bundle
-        if #available(macOS 13.0, *) {
-            VoxtralCoreMLEncoder.resourceBundle = Bundle.module
-        }
+        // The Core ML encoder is downloaded at run time, not bundled (ASK-27, K-28)
     }
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 

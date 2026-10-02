@@ -241,6 +241,16 @@ struct StreamingDemoView: View {
                     }
                     .controlSize(.small)
                     .disabled(!vm.isModelLoaded || vm.isEnrolling || vm.isSynthesizing || vm.referenceURL == nil)
+                    .confirmationDialog(
+                        "Replace the voice \u{201C}\(vm.overwriteCandidate ?? "")\u{201D}?",
+                        isPresented: Binding(get: { vm.overwriteCandidate != nil },
+                                             set: { if !$0 { vm.overwriteCandidate = nil } })
+                    ) {
+                        Button("Replace", role: .destructive) { vm.enroll(overwrite: true) }
+                        Button("Cancel", role: .cancel) { vm.overwriteCandidate = nil }
+                    } message: {
+                        Text("Enrolling again overwrites the saved voice.")
+                    }
 
                     if vm.isEnrolling {
                         Button("Cancel") { vm.cancelEnroll() }

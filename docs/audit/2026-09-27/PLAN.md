@@ -1377,3 +1377,25 @@ Gabarits :
   - `PARITY swift == mlx-voxtral(python) sur fluxforge_short_en_6bit.wav` : « LuxForge Studio turns your Mac into a
     complete AI creative studio. » des deux côtés (mlx-voxtral 0.0.6, mlx 0.32.3, greedy, pénalité 1,2).
   - Scan MLX-025 : 3 → 0. Suite : `Executed 586 tests, with 36 tests skipped and 0 failures`.
+
+## K-28 — Build depuis un clone neuf, app empaquetée, démo robuste, `RuntimeBeacon` — 2026-10-02 — validée
+- Fait (ASK-27 = A) : `.copy("Resources/VoxtralEncoderFull.mlmodelc")` retiré de `Package.swift` (l'app télécharge
+  l'encodeur Core ML) ; `VoxtralCoreMLEncoder.resourceBundle` déprécié et plus utilisé par l'app ; étape « placeholder »
+  retirée de la CI. `create_app_bundle.sh` (Debug, sans bundles) remplacé par `Scripts/package-app.sh` (xcodebuild
+  Release dans `.build/xcode-app`, bundles SwiftPM copiés dans `Contents/Resources`, signature ad hoc). Démo :
+  lanceur de processus FFmpeg qui vide les deux tubes pendant l'exécution et termine le processus à l'annulation
+  (bouton Cancel du constructeur de référence) ; extraits `part_*` supprimés après assemblage, dossier de travail
+  vidé après un enrôlement réussi ; nom de voix validé avant l'enrôlement (`VoiceName`), écrasement d'une voix
+  existante demandé par une confirmation. `RuntimeBeacon` : écriture et suppression sérialisées, `ended` retesté
+  sous le verrou.
+- Porte observée :
+  - Avant (clone neuf `5dca7ee`) : `** BUILD FAILED **` VoxtralApp, `Invalid Resource 'Resources/VoxtralEncoderFull.mlmodelc': File not found`.
+  - `FRESH CLONE ** BUILD SUCCEEDED ** × 4, 0 « Invalid Resource »` (VoxtralCore, VoxtralCLI, VoxtralApp,
+    VoxtralTTSStreamingDemo, Release).
+  - `APP empaquetée : transcription C-court EN OK` (`Scripts/package-app.sh`, 37 Mo ; transcription faite par
+    Vincent dans l'app, mini-3b-8bit, MLX).
+  - `Scripts/check-demo-ffmpeg.sh` : `STDERR 1 Mo → processus terminé (0.09 s)` ; `annulation → processus tué en
+    0.001 s` ; `../x`, `a/b`, `.hidden` refusés. Rouge (ancien lanceur) : `KO blocked > 30 s`.
+  - `GREEN RuntimeBeaconRaceTests : 0 manifeste résiduel sur 1000` (50 tours ; rouge sur l'ancien code : 50/50).
+  - Suite : `Executed 587 tests, with 36 tests skipped and 0 failures`.
+- Note : le `.mlmodelc` local ignoré (1,2 Go) est déplacé hors des sources (`/Volumes/Lexar/models/local-backups/`).

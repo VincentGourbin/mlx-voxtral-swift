@@ -90,7 +90,12 @@ git clone https://github.com/VincentGourbin/mlx-voxtral-swift.git
 cd mlx-voxtral-swift
 xcodebuild -scheme VoxtralCLI -configuration Release \
   -derivedDataPath .build/xcode -destination 'platform=macOS' build
+
+# Package the macOS app (Release, with its resource bundles) as .build/Voxtral.app
+Scripts/package-app.sh
 ```
+
+The app downloads the Core ML encoder the first time the hybrid backend is used; nothing large is bundled.
 
 The executable is `.build/xcode/Build/Products/Release/VoxtralCLI`; its help text calls it `voxtral`, which is
 only the command name (`VoxtralCLI.swift:23`), not an installed binary.
@@ -428,7 +433,7 @@ mlx-voxtral-swift/
 │   └── VoxtralTTSStreamingDemo/    # SwiftUI TTS streaming + voice cloning demo
 ├── Tests/VoxtralCoreTests/
 ├── Examples/                       # ReferenceImplementation.swift (STT usage, not compiled by any target)
-├── Scripts/                        # Python annexes: CoreMLConversion, VoiceCloningResearch
+├── Scripts/                        # package-app.sh, check scripts, Python annexes (CoreMLConversion, VoiceCloningResearch)
 ├── docs/                           # Guides, benchmarks, References, Weights, audit
 │   └── examples/                   # Generated audio samples (WAV)
 ├── BENCHMARKS.md                   # Raw benchmark lines (protocol in docs/Benchmarks.md)

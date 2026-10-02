@@ -36,6 +36,11 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-10 — `VoxtralPipeline.Model.repoId` comes from `ModelRegistry`**: `small-24b-8bit` is
   `VincentGOURBIN/voxtral-small-8bit` (was `mzbac/Voxtral-Small-24B-2507-8bit` in the enum, ASK-15), and `loadModel()`
   resolves by id, so a downloaded model loads offline without a Hub request.
+- **K-28 — builds from a fresh clone**: VoxtralApp no longer declares the untracked `VoxtralEncoderFull.mlmodelc`
+  resource (the Core ML encoder is downloaded); `Scripts/package-app.sh` replaces `create_app_bundle.sh` (Release,
+  resource bundles included). `RuntimeBeacon`: an `update` racing `end` can no longer recreate the manifest. Demo:
+  ffmpeg pipes drained while running, cancellation terminates the process, voice names checked before enrollment,
+  overwriting a voice asks for confirmation.
 - **K-8 — quantization read like MLXLMCommon**: `"mode"`, per-layer entries and metadata keys no longer fail
   `config.json` (2026 packs such as `MarkusKaemmerer/…-dense-encoder` and `aufklarer/…` load); the mode reaches
   `quantize` in the STT, Realtime and TTS loaders. Non-affine modes (mxfp4, mxfp8, nvfp4) load as **experimental**
@@ -132,6 +137,8 @@ public defaults change behaviour (ASK-9 = A: minor version).
 - **K-7 — `TekkenTokenizer(modelPath:)`**: falls back silently to a demo vocabulary; use `TekkenTokenizer.load(modelPath:)`.
 - **K-26 — `VoxtralVoiceEnrollment.optimize(reference:progress:)`** (non-throwing): ignores divergence, cancellation
   and checkpoints; use `optimize(reference:progress:shouldContinue:)`.
+
+- **K-28 — `VoxtralCoreMLEncoder.resourceBundle`**: encoders are downloaded (`downloadFromHuggingFace(variant:progress:)`).
 
 ### Removed
 - **K-32 — the `VoxtralBenchmark` executable** (ASK-26 = B), replaced by `VoxtralCLI bench`.

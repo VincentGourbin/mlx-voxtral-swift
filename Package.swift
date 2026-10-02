@@ -68,10 +68,8 @@ let package = Package(
             dependencies: [
                 "VoxtralCore"
             ],
-            exclude: ["Resources/Info.plist"],
-            resources: [
-                .copy("Resources/VoxtralEncoderFull.mlmodelc")
-            ]
+            // The Core ML encoder is downloaded at run time (VoxtralHybridEncoder), never bundled (ASK-27, K-28)
+            exclude: ["Resources/Info.plist"]
         ),
         // CLI transcription tool
         .executableTarget(

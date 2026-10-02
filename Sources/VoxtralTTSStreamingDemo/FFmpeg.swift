@@ -73,24 +73,82 @@ enum FFmpeg {
 
     // MARK: - Process runner
 
-    private static func run(_ path: String, _ args: [String]) async throws -> String {
-        try await withCheckedThrowingContinuation { cont in
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: path)
-            proc.arguments = args
-            let outPipe = Pipe(), errPipe = Pipe()
-            proc.standardOutput = outPipe
-            proc.standardError = errPipe
-            proc.terminationHandler = { p in
-                let out = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                if p.terminationStatus == 0 {
-                    cont.resume(returning: out)
+    /// Runs a tool and returns its stdout. Both pipes are drained while it runs, so a process writing more than a
+    /// pipe buffer cannot block; cancelling the calling task terminates the process (A-18, K-28).
+    static func run(_ path: String, _ args: [String]) async throws -> String {
+        let run = ProcessRun(path: path, args: args)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { run.start($0) }
+        } onCancel: {
+            run.cancel()
+        }
+    }
+
+    /// One process, its two drained pipes, and the cancellation flag, shared by the task and its cancel handler.
+    private final class ProcessRun: @unchecked Sendable {
+        private let process = Process()
+        private let outPipe = Pipe(), errPipe = Pipe()
+        private let lock = NSLock()
+        private var cancelled = false
+
+        init(path: String, args: [String]) {
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = args
+            process.standardOutput = outPipe
+            process.standardError = errPipe
+        }
+
+        func start(_ continuation: CheckedContinuation<String, Error>) {
+            let out = PipeDrain(), err = PipeDrain()
+            process.terminationHandler = { [self] p in
+                let output = out.wait(), errors = err.wait()
+                if lock.withLock({ cancelled }) {
+                    continuation.resume(throwing: CancellationError())
+                } else if p.terminationStatus == 0 {
+                    continuation.resume(returning: output)
                 } else {
-                    cont.resume(throwing: FFmpegError.failed(err.isEmpty ? "exit \(p.terminationStatus)" : err))
+                    let tail = errors.count > 2_000 ? "…" + errors.suffix(2_000) : errors
+                    continuation.resume(throwing: FFmpegError.failed(tail.isEmpty ? "exit \(p.terminationStatus)" : tail))
                 }
             }
-            do { try proc.run() } catch { cont.resume(throwing: error) }
+            // Cancelled before launch: never start; a launch failure resumes here, not in the handler
+            let launchError: Error? = lock.withLock {
+                if cancelled { return CancellationError() }
+                do { try process.run() } catch { return error }
+                return nil
+            }
+            if let launchError {
+                process.terminationHandler = nil
+                continuation.resume(throwing: launchError)
+                return
+            }
+            out.start(outPipe.fileHandleForReading)
+            err.start(errPipe.fileHandleForReading)
+        }
+
+        func cancel() {
+            lock.withLock {
+                cancelled = true
+                if process.isRunning { process.terminate() }
+            }
+        }
+    }
+
+    /// Reads a pipe to its end on its own thread while the process runs.
+    private final class PipeDrain: @unchecked Sendable {
+        private let done = DispatchSemaphore(value: 0)
+        private var data = Data()
+
+        func start(_ handle: FileHandle) {
+            Thread.detachNewThread { [self] in
+                data = handle.readDataToEndOfFile()
+                done.signal()
+            }
+        }
+
+        func wait() -> String {
+            done.wait()
+            return String(decoding: data, as: UTF8.self)
         }
     }
 }
