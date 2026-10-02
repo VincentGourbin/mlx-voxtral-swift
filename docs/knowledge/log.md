@@ -120,3 +120,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-29 : CI GitHub Actions verte** (`macos-26`, Xcode 26.6, 569 tests dont les tests MLX, 4 min 25 s) ;
   les tests « de logique » appellent maintenant les fonctions de production. Constat : le « top-p » du sampling STT est
   un top-k(1000).
+- 2026-10-02 — **K-30 : famille legacy dépréciée (2.3)**, 37 symboles avec alternative, 0 appel interne. FluxForge : une
+  ligne à retirer à la fusion (`ModelDownloader.reconfigureHubApi()`, sans effet depuis K-6/K-25).

@@ -441,7 +441,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /// The decoder and head types the forward passes support: the throwing entry points check them up front and
     /// throw instead of reaching an unsupported-type stop (K-27)
     func validateModuleTypes() throws {
-        guard language_model is LlamaModel || language_model is LlamaModelWrapper || language_model is LlamaStandardModel else {
+        guard language_model is LlamaModel || language_model is LlamaStandardModel else {
             throw VoxtralError.invalidConfiguration("Unsupported language_model type: \(type(of: language_model))")
         }
         guard lm_head is QuantizedLinear || lm_head is Linear else {
@@ -456,8 +456,8 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     // Internal access needed for VoxtralHybridEncoder extension to use loaded audio tower
     var standardModel: VoxtralStandardModel?
     // Python: self.language_model = LlamaModel(text_config)  
-    // Swift: Use LlamaModel for non-quantized, LlamaModelWrapper for quantized models
-    @ModuleInfo public var language_model: Module  // Can be LlamaModel or LlamaModelWrapper
+    // Swift: LlamaStandardModel (pipelines) or LlamaModel (legacy decoder)
+    @ModuleInfo public var language_model: Module  // LlamaStandardModel or the legacy LlamaModel
     
     // Python: self.embed_tokens = self.language_model.embed_tokens
     // Swift: Real property that shares the same instance (can be Embedding or QuantizedEmbedding)
@@ -518,8 +518,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     private func callLanguageModel(inputs: MLXArray?, mask: MLXArray?, cache: [any KVCache]?, inputsEmbeds: MLXArray?) -> MLXArray {
         if let llamaModel = language_model as? LlamaModel {
             return llamaModel(inputs: inputs, mask: mask, cache: cache, inputsEmbeds: inputsEmbeds)
-        } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
-            return llamaModelWrapper(inputs ?? MLXArray.zeros([1, 1]), cache: cache)
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             return llamaStandardModel.callAsFunction(inputs: inputs, mask: mask, cache: cache, inputsEmbeds: inputsEmbeds)
         } else {
@@ -648,8 +646,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     public func getLanguageModelLayerCount() -> Int {
         if let llamaModel = language_model as? LlamaModel {
             return llamaModel.layers.count
-        } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
-            return llamaModelWrapper.layers.count
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             return llamaStandardModel.layers.count
         } else {
@@ -736,12 +732,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Python: inputs_embeds = self.embed_tokens(input_ids)
             if let llamaModel = language_model as? LlamaModel {
                 embeddings = llamaModel.embedTokens(ids)
-            } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
-                if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
-                    embeddings = quantizedEmbedding(ids)
-                } else {
-                    embeddings = llamaModelWrapper.embed_tokens(ids)
-                }
             } else if let llamaStandardModel = language_model as? LlamaStandardModel {
                 embeddings = llamaStandardModel.embedTokens(ids)
             } else {
@@ -856,6 +846,7 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
     /**
      * Direct Python equivalent: @classmethod def from_pretrained(cls, model_path: str) -> VoxtralForConditionalGeneration
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Builds an unloaded model; use VoxtralPipeline.loadModel().")
     public static func fromPretrained(_ modelPath: String) throws -> VoxtralForConditionalGeneration {
         // Python: config = VoxtralConfig.from_pretrained(model_path)
         // Python: model = cls(config)
@@ -1312,12 +1303,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
         var embeddings: MLXArray
         if let llamaModel = language_model as? LlamaModel {
             embeddings = llamaModel.embedTokens(inputIds)
-        } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
-            if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
-                embeddings = quantizedEmbedding(inputIds)
-            } else {
-                embeddings = llamaModelWrapper.embed_tokens(inputIds)
-            }
         } else if let llamaStandardModel = language_model as? LlamaStandardModel {
             embeddings = llamaStandardModel.embedTokens(inputIds)
         } else {
@@ -1469,13 +1454,6 @@ public class VoxtralForConditionalGeneration: Module, LanguageModel {
             // Use language_model.embed_tokens instead of self.embed_tokens
             if let llamaModel = language_model as? LlamaModel {
                 mergedEmbeddings = llamaModel.embedTokens(input.text.tokens)
-            } else if let llamaModelWrapper = language_model as? LlamaModelWrapper {
-                if let quantizedEmbedding = llamaModelWrapper.embed_tokens as? QuantizedEmbedding {
-                    mergedEmbeddings = quantizedEmbedding(input.text.tokens)
-                } else {
-                    // Regular Embedding case
-                    mergedEmbeddings = llamaModelWrapper.embed_tokens(input.text.tokens)
-                }
             } else if let llamaStandardModel = language_model as? LlamaStandardModel {
                 mergedEmbeddings = llamaStandardModel.embedTokens(input.text.tokens)
             } else {

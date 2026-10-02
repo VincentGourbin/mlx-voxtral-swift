@@ -19,6 +19,7 @@ extension VoxtralForConditionalGeneration {
      * 2. multiModalProjector.linear2 (6-bit) ✅
      * 3. lm_head (6-bit) ❓ <- This was missing!
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralPipeline.loadModel().")
     public func replaceAllQuantizedLinearWithWeights(_ moduleWeights: [String: [(String, MLXArray)]]) {
         writeDebugToDump("🔧 REPLACING ALL QUANTIZED LINEAR MODULES (including lm_head)\n")
         
@@ -87,6 +88,7 @@ extension VoxtralMultiModalProjector {
      * This mimics what Python does: dst[k] = new_value in Module.update()
      * But since Swift doesn't have mutable dictionary-like access, we replace the whole module
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralPipeline.loadModel().")
     public func replaceQuantizedLinearWithWeights(_ moduleWeights: [String: [(String, MLXArray)]]) {
         writeDebugToDump("🔧 REPLACING QUANTIZED LINEAR MODULES WITH CORRECT WEIGHTS\n")
         

@@ -21,6 +21,7 @@ extension VoxtralForConditionalGeneration {
      * 
      * Key difference: Python uses tree_unflatten + update which preserves quantized structure
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralPipeline.loadModel(), which verifies the weights.")
     public func customLoadWeights(_ weights: [(String, MLXArray)], strict: Bool = true) throws {
         writeDebugToDump("\n🔧 CUSTOM LOAD_WEIGHTS: Starting with \(weights.count) weights\n")
         
@@ -72,6 +73,7 @@ extension VoxtralForConditionalGeneration {
      * 
      * Strategy: Load weights to specific modules individually to avoid corruption
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
     private func applyWeightsTargeted(_ weights: [(String, MLXArray)]) throws {
         writeDebugToDump("🔧 APPLY_WEIGHTS_TARGETED: Processing \(weights.count) weights\n")
         

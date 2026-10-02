@@ -15,6 +15,7 @@ import MLXNN
  * Never downloaded anything: it created an empty folder and printed the patterns. It now throws
  * without touching the disk; use `ModelDownloader.download(_:)` or `ModelDownloader.downloadByRepoId(_:)`.
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). It never downloads; use ModelDownloader.download(_:) or downloadByRepoId(_:).")
 public func downloadModel(modelId: String, revision: String? = nil) throws -> URL {
     throw VoxtralError.unsupported(
         "downloadModel(modelId:) does not download; use ModelDownloader.download(_:) or ModelDownloader.downloadByRepoId(_:) for \(modelId)")
@@ -23,6 +24,7 @@ public func downloadModel(modelId: String, revision: String? = nil) throws -> UR
 /**
  * Direct Python equivalent: def load_config(model_path: Path) -> Dict
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func loadConfig(modelPath: URL) throws -> [String: Any] {
     // Python: config_path = model_path / "config.json"
     let configPath = modelPath.appendingPathComponent("config.json")
@@ -45,6 +47,7 @@ public func loadConfig(modelPath: URL) throws -> [String: Any] {
 /**
  * Direct Python equivalent: def load_weights(model_path: Path) -> Dict[str, mx.array]
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use loadVoxtralStandardModel(modelPath:).")
 public func loadWeights(modelPath: URL) throws -> [String: MLXArray] {
     // Python: weights = {}
     var weights: [String: MLXArray] = [:]
@@ -93,6 +96,7 @@ public func loadWeights(modelPath: URL) throws -> [String: MLXArray] {
 /**
  * Direct Python equivalent: def load_voxtral_model(model_path, dtype=mx.float16, lazy=True)
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use loadVoxtralStandardModel(modelPath:) or VoxtralPipeline.")
 public func loadVoxtralModel(
     modelPath: String,
     dtype: MLX.DType = .float16,
@@ -344,6 +348,7 @@ extension MLXArray {
  * This would be implemented in the modeling file
  */
 extension VoxtralForConditionalGeneration {
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralForConditionalGeneration(standardModel:).")
     convenience init(config: PythonVoxtralConfig) {
         // Python: VoxtralForConditionalGeneration(config)
         // Convert PythonVoxtralConfig to VoxtralConfig with real values from config.json

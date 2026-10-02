@@ -611,6 +611,7 @@ public class TekkenTokenizer {
      * Encode transcription request (équivalent encode_transcription dans Python)
      * Cette méthode sera utilisée pour les requêtes audio/transcription
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines.")
     public func encodeTranscription(text: String, audioData: Data? = nil) -> [Int] {
         // Pour l'instant, utiliser la même logique que encode standard
         // Same encoding as a chat request: no transcription-specific logic
@@ -692,6 +693,7 @@ public class TekkenTokenizer {
 /**
  * AudioEncoder - Audio tokenisation 75fps exacte
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines.")
 public class AudioEncoder {
     
     private let sampleRate = 16000
@@ -751,6 +753,7 @@ public class AudioEncoder {
 /**
  * ChatTemplateProcessor - Application template Voxtral exacte
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Not used by the pipelines; it reads URLs synchronously.")
 public class ChatTemplateProcessor {
     
     private let audioTokenId = 24

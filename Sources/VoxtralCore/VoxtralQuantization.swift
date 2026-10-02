@@ -46,6 +46,7 @@ private func hasQuantizationScales(_ param: MLXArray) -> Bool {
 /**
  * Direct Python equivalent: quantize_model = mlx_lm.utils.quantize_model
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Quantized packs are loaded as published (mlx-community, mzbac).")
 public func quantizeModel<T: Module>(_ model: T, groupSize: Int = 64, bits: Int = 4, classPredicate: ((String, Module) -> Bool)? = nil) throws {
     // Python: mlx_lm.utils.quantize_model() equivalent
     // Swift MLX: quantize(model:groupSize:bits:filter:apply:) from MLXNN
@@ -72,6 +73,7 @@ public func quantizeModel<T: Module>(_ model: T, groupSize: Int = 64, bits: Int 
 /**
  * Direct Python equivalent: save_config = mlx_lm.utils.save_config
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func saveConfig(_ config: [String: Any], to path: String) throws {
     // Python: save_config(config, path)
     let configData = try JSONSerialization.data(withJSONObject: config, options: .prettyPrinted)
@@ -82,6 +84,7 @@ public func saveConfig(_ config: [String: Any], to path: String) throws {
 /**
  * Direct Python equivalent: save_model = mlx_lm.utils.save_model
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Does not serialize the weights.")
 public func saveModel<T: Module>(_ model: T, to path: String) throws {
     // Python: mlx_lm.utils.save_model(model, path)
     VoxtralDebug.log("Saving model to: \(path)")
@@ -110,6 +113,7 @@ public func saveModel<T: Module>(_ model: T, to path: String) throws {
  * Swift equivalent of mlx.utils.tree_reduce
  * Based on MLX C++ source: https://github.com/ml-explore/mlx/blob/8f163a367d28c6b09b5f7eeb4fe21f7f36fc2c56/python/src/trees.h#L45
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func treeReduce<T, U>(
     _ fn: (T, Any) -> T,
     _ tree: U,
@@ -145,6 +149,7 @@ public func treeReduce<T, U>(
  * Swift equivalent of mlx.utils.tree_flatten
  * Based on MLX C++ source: https://github.com/ml-explore/mlx/blob/8f163a367d28c6b09b5f7eeb4fe21f7f36fc2c56/python/src/trees.h#L45
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func treeFlatten<T>(_ tree: T) -> [(String, Any)] {
     var flattened: [(String, Any)] = []
     
@@ -181,6 +186,7 @@ public func treeFlatten<T>(_ tree: T) -> [(String, Any)] {
  * Direct Python equivalent: def compute_bits_per_weight(model)
  * Exact line-by-line translation of mlx.voxtral/quantization.py:17-42
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func computeBitsPerWeight<T: Module>(_ model: T) -> Float {
     // Python: """Compute average bits per weight, handling different mlx_lm versions."""
     // Python: try:
@@ -239,6 +245,7 @@ public func computeBitsPerWeight<T: Module>(_ model: T) -> Float {
 // DEPRECATED: Use voxtralMixedQuantizationPredicate from MLXLMBridge.swift instead
 // This old implementation is replaced by the new Python-equivalent version
 /*
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func voxtralMixedQuantizationPredicate(
     path: String,
     module: Module,
@@ -352,6 +359,7 @@ public func voxtralMixedQuantizationPredicate(
 // DEPRECATED: Use loadQuantizedVoxtral from MLXLMBridge.swift instead
 // This old implementation is replaced by the new Python-equivalent version  
 /*
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use loadVoxtralStandardModel(modelPath:).")
 public func loadQuantizedVoxtral(
     model: Module,
     weights: [String: Any],
@@ -527,6 +535,7 @@ public func saveQuantizedModel<T: Module>(
 /**
  * Direct Python equivalent: def get_quantization_stats(model: nn.Module) -> Dict[str, Any]
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func getQuantizationStats<T: Module>(_ model: T) -> [String: Any] {
     var stats: [String: Any] = [:]
     var quantizedLayers = 0

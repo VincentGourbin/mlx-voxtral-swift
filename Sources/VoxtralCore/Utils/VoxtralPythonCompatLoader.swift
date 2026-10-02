@@ -13,6 +13,7 @@ import MLXNN
  * Python-compatible load_voxtral_model equivalent
  * Uses our validated loadVoxtralStandardModel internally
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use loadVoxtralStandardModel(modelPath:) or VoxtralPipeline.")
 public func loadVoxtralModel(
     modelPath: String,
     dtype: DType = .float16

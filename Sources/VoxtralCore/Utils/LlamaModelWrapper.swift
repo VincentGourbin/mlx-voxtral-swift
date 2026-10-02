@@ -13,6 +13,7 @@ import MLXLMCommon
 /**
  * Wrapper minimal pour les anciens codes qui référencent LlamaModelWrapper
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Never built by the loaders; the decoder is LlamaStandardModel.")
 public class LlamaModelWrapper: Module {
     let embed_tokens: Embedding
     let layers: [LlamaStandardBlock]

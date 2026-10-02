@@ -1295,3 +1295,25 @@ Gabarits :
   - Suite locale `Executed 569 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
 - Écarts : la cible VoxtralApp embarque `VoxtralEncoderFull.mlmodelc` (1,3 Go, hors git) : la CI crée un dossier vide à
   sa place (point de K-28) ; `LegacyNoDumpTests` passe en `XCTSkip` sans modèle.
+
+## K-30 — Déprécier l'API legacy et morte publique (2.3) — 2026-10-02 — validée
+- Fait (ASK-23 = A) : 37 annotations `@available(*, deprecated, message:)` (liste S-13 lot 2 + S-14, alternative dans
+  chaque message ; voir CHANGELOG), en plus des 14 de K-7/K-26/K-27 (51 dans VoxtralCore). Pour qu'aucun code vivant
+  n'appelle du déprécié : branches `as? LlamaModelWrapper` retirées du décodeur (jamais construit), aide privée morte
+  `MLXLMBridge.loadWeights(from: String)` supprimée, extensions de `VoxtralGenerator` et aide privée de
+  `customLoadWeights` dépréciées avec eux.
+- Porte observée :
+  - `DEPRECATED 37 symboles annotés (liste S-13 lot 2 + S-14)`.
+  - `BUILD VoxtralCore : 0 avertissement de dépréciation interne` (VoxtralCLI : seul `String(cString:)` de Foundation,
+    préexistant ; VoxtralTTSStreamingDemo : 0 ; VoxtralApp : 0 après le report de `resourceBundle`).
+  - Recherche GitHub `--owner VincentGourbin` sur 28 symboles : 0 usage hors de ce dépôt, sauf homonymes de
+    flux-2-swift-mlx (`createCausalMask`, `reconfigureHubApi`, `fromPretrained` de ses propres modules) et
+    `ModelDownloader.reconfigureHubApi()` de FluxForge (`Fluxforge_StudioApp.swift:104`, déprécié par K-27).
+  - `FLUXFORGE build : 1 avertissement Voxtral attendu` (lecture des sources : FluxForge suit `main`, il ne compile pas
+    contre la branche) : décision de Vincent (2026-10-02) : la dépréciation reste, FluxForge supprime cet appel sans
+    effet à la fusion.
+  - Suite `Executed 569 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+- Écart : `VoxtralCoreMLEncoder.resourceBundle` (cité par la fiche) n'est pas déprécié ici : VoxtralApp l'utilise pour
+  l'encodeur embarqué, que K-28 retire (ASK-27) ; la dépréciation va avec ce retrait.
+- Obligations à la fusion sur `main` (complète la vérification du 2026-10-01) : FluxForge retire
+  `ModelDownloader.reconfigureHubApi()` (`Fluxforge_StudioApp.swift:104`).

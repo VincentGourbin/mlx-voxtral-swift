@@ -45,6 +45,7 @@ import MLXLMCommon
  * Direct Python equivalent: from mlx_lm.models.base import create_attention_mask
  * Python source: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/base.py
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). The cache builds the masks (K-3).")
 public func mlxLMCreateAttentionMask(_ x: MLXArray, cache: [any KVCache]? = nil) -> MLXArray? {
     // Python: def create_attention_mask(h: mx.array, cache: Optional[Any] = None, return_array: bool = False)
     // Exact translation of mlx_lm.models.llama.create_attention_mask
@@ -92,6 +93,7 @@ public func mlxLMCreateAttentionMask(_ x: MLXArray, cache: [any KVCache]? = nil)
  * Direct Python equivalent: from mlx_lm.models.base import scaled_dot_product_attention  
  * Python source: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/base.py
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use MLXFast.scaledDotProductAttention.")
 public func mlxLMScaledDotProductAttention(
     queries: MLXArray,
     keys: MLXArray, 
@@ -135,6 +137,7 @@ public func mlxLMScaledDotProductAttention(
  * Direct Python equivalent: from mlx_lm.models.rope_utils import initialize_rope
  * Python source: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/rope_utils.py
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use MLXNN.RoPE.")
 public func mlxLMInitializeRope(
     headDim: Int,
     maxPositionEmbeddings: Int = 2048,
@@ -175,6 +178,7 @@ public func mlxLMInitializeRope(
 /**
  * Direct Python equivalent: from mlx_lm.utils import get_model_path
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use ModelDownloader.resolveModel(_:).")
 public func mlxLMGetModelPath(_ modelName: String) -> String {
     // Python: def get_model_path(model_name: str) -> str
     // This function resolves model names to local paths or downloads them
@@ -203,6 +207,7 @@ public extension VoxtralForConditionalGeneration {
      * Convenience initializer that loads a model from path
      * Python equivalent: model = VoxtralForConditionalGeneration.from_pretrained(path)
      */
+    @available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralPipeline.loadModel() or loadVoxtralStandardModel(modelPath:).")
     convenience init(path: String) throws {
         // Python: model, _ = load_voxtral_model(model_id, dtype=dtype)
         // Use the SAME function as Python - no multiple versions!
@@ -416,26 +421,6 @@ public extension VoxtralForConditionalGeneration {
         return values
     }
     
-    /**
-     * Load model weights from directory
-     * Python equivalent: model.load_state_dict(weights)
-     */
-    private func loadWeights(from path: String) throws {
-        // Python: weights = load_weights(model_path)
-        let modelURL = URL(fileURLWithPath: path)
-        let weights = try VoxtralCore.loadWeights(modelPath: modelURL)
-        
-        VoxtralDebug.log("Loading \(weights.count) weight tensors from: \(path)")
-        
-        // Python: weights = model.sanitize(weights)
-        let sanitizedWeights = try self.sanitize(weights)
-        
-        // Python: model.load_weights(list(weights.items()), strict=True)
-        let weightItems = sanitizedWeights.map { (key: $0.key, value: $0.value) }
-        try self.loadWeights(weightItems, strict: true)
-        
-        VoxtralDebug.log("✅ Successfully loaded \(sanitizedWeights.count) weight tensors")
-    }
 }
 
 // MARK: - MLX Voxtral Quantization Functions
@@ -445,6 +430,7 @@ public extension VoxtralForConditionalGeneration {
  * Direct Python equivalent: compute_bits_per_weight(model)
  * Python source: mlx.voxtral/quantization.py lines 17-42
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func computeBitsPerWeight(_ model: Module) -> Float {
     // Python: def compute_bits_per_weight(model)
     // Handle different mlx versions like Python does
@@ -483,6 +469,7 @@ public func computeBitsPerWeight(_ model: Module) -> Float {
  * Direct Python equivalent: voxtral_mixed_quantization_predicate()
  * Python source: mlx.voxtral/quantization.py lines 97-139
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 public func voxtralMixedQuantizationPredicate(
     path: String,
     module: Module,

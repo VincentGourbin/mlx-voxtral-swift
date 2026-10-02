@@ -12,6 +12,7 @@ import MLXNN
 /**
  * Generation Parameters - Equivalent to Python argparse arguments
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use VoxtralPipeline.")
 public struct VoxtralGenerationParameters {
     /// Model name or path (default: "mistralai/Voxtral-Mini-3B-2507")
     public let model: String
@@ -66,6 +67,7 @@ public struct VoxtralGenerationParameters {
 /**
  * VoxtralGenerator - Main class equivalent to Python generate.py main() function
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). It stops the process at load; use VoxtralPipeline.transcribe(audio:language:).")
 public class VoxtralGenerator {
     
     internal let parameters: VoxtralGenerationParameters
@@ -161,6 +163,7 @@ public struct ProcessedInputs {
 /**
  * Command line interface - equivalent to Python if __name__ == "__main__":
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use the VoxtralCLI executable.")
 public class VoxtralCLI {
     
     /**

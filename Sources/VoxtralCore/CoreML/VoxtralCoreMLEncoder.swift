@@ -291,7 +291,7 @@ public class VoxtralCoreMLEncoder: @unchecked Sendable {
         }
 
         // Search in app resource bundle (set by VoxtralApp)
-        if foundURL == nil, let appBundle = Self.resourceBundle {
+        if foundURL == nil, let appBundle = VoxtralCoreMLEncoder._resourceBundle.get() {
             for name in modelNames {
                 let baseName = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
                 let ext = URL(fileURLWithPath: name).pathExtension

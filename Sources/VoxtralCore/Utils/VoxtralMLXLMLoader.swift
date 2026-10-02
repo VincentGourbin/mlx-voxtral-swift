@@ -13,6 +13,7 @@ import MLXLMCommon
  * Load Voxtral model using MLXLMCommon.loadWeights()
  * Replaces our custom loadVoxtralModel() completely
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use loadVoxtralStandardModel(modelPath:).")
 public func loadVoxtralModelWithMLXLM(
     modelPath: String,
     dtype: MLX.DType = .float16

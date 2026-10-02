@@ -463,6 +463,7 @@ public func initializeRope(
 /**
  * Direct Python equivalent: scaled_dot_product_attention() from mlx_lm.models.base
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Use MLXFast.scaledDotProductAttention.")
 public func mlxLMScaledDotProductAttention(
     queries: MLXArray,
     keys: MLXArray,
@@ -508,6 +509,7 @@ public func mlxLMScaledDotProductAttention(
  * Before: O(N²) CPU loops with individual element assignments
  * After: O(1) GPU operations - orders of magnitude faster for large N
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23). Additive fp32 mask; use MLXLMCommon.createCausalMask(n:offset:) (boolean).")
 public func createCausalMask(
     N: Int,
     offset: Int = 0,

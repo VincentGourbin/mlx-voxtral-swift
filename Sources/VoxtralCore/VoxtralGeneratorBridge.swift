@@ -9,6 +9,7 @@ import Foundation
 import MLX
 import MLXNN
 
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 extension VoxtralGenerator {
     
     /**
@@ -230,6 +231,7 @@ extension VoxtralGenerator {
  * Factory method pour créer un VoxtralGenerator avec les classes existantes
  * Equivalent to Python script usage patterns
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 extension VoxtralGenerator {
     
     /**
@@ -261,6 +263,7 @@ extension VoxtralGenerator {
  * Convenience methods for common use cases
  * Equivalent to Python script examples
  */
+@available(*, deprecated, message: "Legacy Python-port path, removed in 3.0 (ASK-23).")
 extension VoxtralGenerator {
     
     /**

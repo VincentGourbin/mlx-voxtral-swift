@@ -96,6 +96,18 @@ public defaults change behaviour (ASK-9 = A: minor version).
   `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
 
 ### Deprecated
+- **K-30 — legacy Python-port family and dead public code** (ASK-23: deprecated in 2.3, removed in 3.0; each message
+  names the replacement): `VoxtralGenerator` (stops the process at load) and its extensions,
+  `VoxtralGenerationParameters`, the library `VoxtralCLI` class, `loadVoxtralModel(modelPath:dtype:lazy:)`,
+  `loadVoxtralModel(modelPath:dtype:)`, `loadVoxtralModelWithMLXLM`, `downloadModel(modelId:revision:)`,
+  `loadConfig(modelPath:)`, `loadWeights(modelPath:)`, `VoxtralForConditionalGeneration.init(path:)`,
+  `init(config: PythonVoxtralConfig)`, `fromPretrained(_:)`, `customLoadWeights`, `replaceAllQuantizedLinearWithWeights`,
+  `VoxtralMultiModalProjector.replaceQuantizedLinearWithWeights`, `LlamaModelWrapper`, `mlxLMCreateAttentionMask`,
+  `mlxLMScaledDotProductAttention` (×2), `mlxLMInitializeRope`, `mlxLMGetModelPath`, `createCausalMask(N:…)`,
+  `quantizeModel`, `saveConfig`, `saveModel`, `treeReduce`, `treeFlatten`, `computeBitsPerWeight` (×2),
+  `voxtralMixedQuantizationPredicate` (×2), `loadQuantizedVoxtral` (the `VoxtralQuantization` overload),
+  `getQuantizationStats`, `AudioEncoder`, `ChatTemplateProcessor`, `TekkenTokenizer.encodeTranscription`.
+  `language_model` no longer accepts a `LlamaModelWrapper` (never built by the loaders).
 - **K-27** — `VoxtralTranscriptionManager.chat(systemPrompt:userMessage:)` (always throws `audioRequired`),
   `saveQuantizedModel` (writes only `config.json`), `MLXCoreMLBridge.toMLMultiArrayNoCopy` (copies),
   `VoxtralForConditionalGeneration.init(officialLlama:config:)` (legacy decoder, random `lm_head`),
