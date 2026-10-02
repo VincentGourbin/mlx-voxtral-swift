@@ -284,7 +284,7 @@ reference (audit FV-10); re-measured by fiche K-34.
 | Model ID | HuggingFace Repo | Download (GB)¹ | GPU Peak³ | Speed³ |
 |----------|------------------|------|----------|-------|
 | `small-24b` | `mistralai/Voxtral-Small-24B-2507` | 48.53 (+ 48.52 `consolidated.safetensors`, also downloaded at v2.2.2: 97.05) | 55.56 GB | 0.54 tok/s |
-| `small-24b-8bit` | `VincentGOURBIN/voxtral-small-8bit` (registry) · `mzbac/Voxtral-Small-24B-2507-8bit` (`VoxtralPipeline`) | 26.50 · 28.06 | 30.96 GB | 0.74 tok/s |
+| `small-24b-8bit` | `VincentGOURBIN/voxtral-small-8bit` | 26.50 | 30.96 GB | 0.74 tok/s |
 | `small-4bit` | `VincentGOURBIN/voxtral-small-4bit-mixed` | 14.86 | 20.55 GB | **1.00 tok/s** |
 
 ³ **Definition**: chat (analysis) mode, 53 to 70 generated tokens, hybrid backend, M3 Max 96 GB; Speed = generated
@@ -296,9 +296,9 @@ The `*.safetensors` download pattern also fetches `consolidated.safetensors` for
 (`ModelDownloader.swift:361-365`, audit S-07; fixed by fiche K-24). Backends `.auto` and `.hybrid` also download the
 Core ML encoder: 1.32 GB (Mini), 1.38 GB (Small).
 
-`small-24b-8bit` points to two repositories: the registry entry (`ModelRegistry.swift:89-97`, used by
-`VoxtralCLI download` and the app) and the `VoxtralPipeline.Model.small24b8bit` enum (`VoxtralPipeline.swift:47-48`,
-used by `VoxtralPipeline`, `VoxtralCLI transcribe` and `chat`) — audit S-06, fixed by fiche K-10.
+`VoxtralPipeline.Model` reads its repositories from `ModelRegistry` (one table for the pipeline, the CLI and the app,
+fiche K-10): `small-24b-8bit` is `VincentGOURBIN/voxtral-small-8bit` (ASK-15); before 2.3 the pipeline enum pointed to
+`mzbac/Voxtral-Small-24B-2507-8bit` (a second 28 GB download).
 
 > **Default**: `mini-3b-8bit` (`VoxtralPipeline.Model.recommended`, `VoxtralPipeline.swift:67`). Reference
 > configurations and their measured trade-offs: [docs/References.md](docs/References.md) (to measure).

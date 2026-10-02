@@ -33,6 +33,9 @@ public defaults change behaviour (ASK-9 = A: minor version).
   `lastResultTruncated` (STT), `lastTranscriptionTruncated` (Realtime). The Realtime loop runs one step per audio frame.
 - **K-6 — `downloadModel(modelId:revision:)`**, a placeholder, now throws `VoxtralError.unsupported` instead of
   pretending to download (use `ModelDownloader`).
+- **K-10 — `VoxtralPipeline.Model.repoId` comes from `ModelRegistry`**: `small-24b-8bit` is
+  `VincentGOURBIN/voxtral-small-8bit` (was `mzbac/Voxtral-Small-24B-2507-8bit` in the enum, ASK-15), and `loadModel()`
+  resolves by id, so a downloaded model loads offline without a Hub request.
 - **K-11 — one operation at a time per pipeline**: a second call while a transcription, a synthesis or a voice
   enrollment runs is refused with `busy` instead of racing (the enrollment's gradient with an inference could
   deadlock the process). Voice enrollment no longer draws from the global RNG shared with synthesis.

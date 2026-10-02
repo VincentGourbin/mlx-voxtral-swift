@@ -243,4 +243,20 @@ final class ModelRegistryTests: XCTestCase {
         XCTAssertNotNil(modelLower)
         XCTAssertNil(modelUpper, "Lookup should be case sensitive")
     }
+
+    // MARK: - One table for the pipeline and the registry (K-10, S-06, ASK-15)
+
+    /// Before, `.small24b8bit` pointed to `mzbac/Voxtral-Small-24B-2507-8bit` while the registry (what the app downloads)
+    /// pointed to `VincentGOURBIN/voxtral-small-8bit`: a second 28 GB download and a Hub request at every load.
+    func testPipelineModelsMatchRegistry() {
+        for model in VoxtralPipeline.Model.allCases {
+            let entry = ModelRegistry.model(withId: model.rawValue)
+            XCTAssertNotNil(entry, "\(model.rawValue) is missing from ModelRegistry")
+            XCTAssertEqual(model.repoId, entry?.repoId, "\(model.rawValue): pipeline and registry disagree")
+        }
+    }
+
+    func testSmall8BitIsTheRegistryRepository() {
+        XCTAssertEqual(VoxtralPipeline.Model.small24b8bit.repoId, "VincentGOURBIN/voxtral-small-8bit")  // ASK-15 = A
+    }
 }

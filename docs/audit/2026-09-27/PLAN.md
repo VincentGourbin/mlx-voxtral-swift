@@ -1317,3 +1317,22 @@ Gabarits :
   l'encodeur embarqué, que K-28 retire (ASK-27) ; la dépréciation va avec ce retrait.
 - Obligations à la fusion sur `main` (complète la vérification du 2026-10-01) : FluxForge retire
   `ModelDownloader.reconfigureHubApi()` (`Fluxforge_StudioApp.swift:104`).
+
+## K-10 — `repoId` STT : une seule source (registre), résolution par id, chargement hors ligne — 2026-10-02 — validée
+- Fait (ASK-15 = A) : `VoxtralPipeline.Model.repoId` est lu dans `ModelRegistry` (une seule table pour le pipeline, le
+  CLI et l'app) ; `small-24b-8bit` = `VincentGOURBIN/voxtral-small-8bit` (l'enum pointait `mzbac/Voxtral-Small-24B-2507-8bit`) ;
+  `loadModel` résout par id (`resolveModel(model.rawValue)`) : une copie locale du registre ne déclenche aucune requête
+  au Hub (avant : `downloadByRepoId`, liste de l'arbre à chaque chargement et second dossier de 28 Go). README et
+  `docs/References.md` alignés.
+- Porte observée :
+  - `GREEN ModelRegistryTests.testPipelineModelsMatchRegistry : 0 failures` (classe `Executed 24 tests, with 0
+    failures`) ; rouge avant : `small-24b-8bit: pipeline and registry disagree` (« mzbac/… » ≠ « VincentGOURBIN/… »).
+  - `OFFLINE small-24b-8bit chargé, 0 octet réseau` : téléchargé par `VoxtralCLI download small-24b-8bit` (25 Go, 5
+    fragments, sans `consolidated`), puis `VoxtralCLI transcribe … -m small-24b-8bit -b mlx` sous `sandbox-exec` (sortie
+    IP interdite, vérifié : `curl` → 000) : transcription « LuxForge Studio turns your Mac into a complete AI creative
+    studio. ».
+  - `DISK un seul dossier Small 8 bits` (`VincentGOURBIN/voxtral-small-8bit`, sur le Lexar via le lien de dossier).
+  - Suite `Executed 571 tests, with 33 tests skipped and 0 failures (0 unexpected)`.
+- Écart : le contrôle hors ligne passe par le CLI (pas l'app), comme la fiche le permet ; « 0 octet réseau » est garanti
+  par le sandbox plutôt que mesuré par `nettop`. Incident corrigé avant commit : l'écriture du test avait écrasé
+  `Registry/ModelRegistryTests.swift` (22 tests) ; fichier restauré, les 2 tests ajoutés à la classe.

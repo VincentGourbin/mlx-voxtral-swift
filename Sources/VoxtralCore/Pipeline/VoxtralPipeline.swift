@@ -33,22 +33,10 @@ public class VoxtralPipeline: @unchecked Sendable {
         case small24b8bit = "small-24b-8bit"
         case small4bit = "small-4bit"
 
-        /// Get the HuggingFace repo ID for this model
+        /// HuggingFace repository of this model, read from `ModelRegistry`: one table for the pipeline, the app and
+        /// the downloader (K-10, ASK-15)
         public var repoId: String {
-            switch self {
-            case .mini3b:
-                return "mistralai/Voxtral-Mini-3B-2507"
-            case .mini3b8bit:
-                return "mzbac/voxtral-mini-3b-8bit"
-            case .mini3b4bit:
-                return "mzbac/voxtral-mini-3b-4bit-mixed"
-            case .small24b:
-                return "mistralai/Voxtral-Small-24B-2507"
-            case .small24b8bit:
-                return "mzbac/Voxtral-Small-24B-2507-8bit"
-            case .small4bit:
-                return "VincentGOURBIN/voxtral-small-4bit-mixed"
-            }
+            ModelRegistry.model(withId: rawValue)?.repoId ?? rawValue
         }
 
         /// Human-readable display name
@@ -267,7 +255,8 @@ public class VoxtralPipeline: @unchecked Sendable {
                 // Download/resolve model path
                 progress?(0.1, "Downloading model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
-                let modelPath = try await ModelDownloader.resolveModel(model.repoId) { downloadProgress, status in
+                // By id: a local copy needs no network request (K-10)
+                let modelPath = try await ModelDownloader.resolveModel(model.rawValue) { downloadProgress, status in
                     progress?(0.1 + downloadProgress * 0.4, status)
                 }
                 session?.endPhase("1. Model Download", category: .modelLoad)

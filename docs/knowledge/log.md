@@ -122,3 +122,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   un top-k(1000).
 - 2026-10-02 — **K-30 : famille legacy dépréciée (2.3)**, 37 symboles avec alternative, 0 appel interne. FluxForge : une
   ligne à retirer à la fusion (`ModelDownloader.reconfigureHubApi()`, sans effet depuis K-6/K-25).
+- 2026-10-02 — **K-10 : une seule table de modèles STT** (registre) ; Small 8 bits = VincentGOURBIN, chargé hors ligne
+  sans requête réseau. Leçon : ne jamais écrire un fichier de test avec `cat >` sans vérifier qu'il n'existe pas.
