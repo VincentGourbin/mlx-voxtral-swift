@@ -521,7 +521,7 @@ réponse datée ici.
 | ASK-15 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `small-24b-8bit` = `VincentGOURBIN/voxtral-small-8bit` (registre et README) ; l'enum `VoxtralPipeline.Model.small24b8bit` s'aligne dessus (K-10). |
 | ASK-16 | | | |
 | ASK-17 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : corriger `realtime-4b` (liste de fichiers fixée, config lue depuis `params.json`, id strict) (K-9). |
-| ASK-18 | | | (vérification juridique) |
+| ASK-18 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : « FluxForge est gratuit et le restera » ; usage non commercial, les profils TTS peuvent être recommandés et PK-2 publié (dérivé CC BY-NC 4.0 : attribution, licence reprise, mention « non commercial » sur chaque page TTS). À rouvrir si FluxForge devient payant (prix, achat intégré, publicité). |
 | ASK-19 | | | |
 | ASK-20 | | | |
 | ASK-21 | B | 2026-10-02 | Donnée par Vincent dans la session Mac : les modes non affines (mxfp4, mxfp8, nvfp4) sont acceptés au chargement en **expérimental**, sans profil ni garantie de qualité (K-8 : décodage correct du mode, avertissement, hors profils). |

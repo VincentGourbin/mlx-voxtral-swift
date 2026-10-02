@@ -79,6 +79,9 @@ Measured on C-moyen EN (167 s), transcription delay 480 ms (Mistral's recommenda
 
 ### `tts` — Voxtral 4B TTS 2603 (**CC BY-NC 4.0**)
 
+Non-commercial use only. FluxForge is free and will stay free (Vincent, ASK-18 = A, 2026-10-02), so these profiles are
+recommended for it; a paid or monetized host needs a commercial licence from Mistral.
+
 Measured with `neutral_female`, seed 42; short = 13 words, long = 163 words. The TTS exists in 4, 6 and 16 bits;
 6-bit is declared as an intermediate width (ASK-19).
 
@@ -86,7 +89,7 @@ Measured with `neutral_female`, seed 42; short = 13 words, long = 163 words. The
 |---|---|---|---|---|---|---|
 | `tts/4bit-fast` | `mlx-community/Voxtral-4B-TTS-2603-mlx-4bit` · 2.51 | short / long | 7.4 / 74.1 s | 0.63 / 0.46 | 0.23 / 0.38 s | 4.3 / 12.9 GB |
 | `tts/6bit-fast` | `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit` · 3.47 | short / long | 7.8 / 77.3 s | 0.65 / 0.54 | 0.25 / 0.40 s | 5.2 / 14.1 GB |
-| `tts/8bit-*` | **none valid** → pack PK-2 to publish (4.37 GB) | | | | | ASK-18, ASK-19 |
+| `tts/8bit-*` | **none valid** → pack PK-2 to publish (4.37 GB) | | | | | ASK-19, ASK-22 |
 | `tts/16bit-fast` | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` · 8.00 (registry default) | short / long | 6.5 / 83.9 s | **1.81 / 1.85** | 0.39 / 0.51 s | 10.2 / 20.6 GB |
 | `tts/*-lean` | same packs | to measure | | | | |
 
@@ -118,7 +121,7 @@ Nothing is published without a decision (ASK-22); the upload stays a manual step
 | # | Pack | Size | Needed for | Prerequisites | Decision |
 |---|---|---|---|---|---|
 | PK-1 | Realtime 8-bit, mlx-audio format (encoder + decoder 8 b, `tok_embeddings` 8 b) | 4.73 GB | `realtime/8bit-*` (no loadable 8-bit pack exists) | K-8 ✓ | ASK-20, ASK-22 |
-| PK-2 | TTS 8-bit (LLM + FM 8 b, codec bf16) | 4.37 GB | `tts/8bit-*` | K-8 ✓; **licence CC BY-NC** | ASK-18, ASK-19, ASK-22 |
+| PK-2 | TTS 8-bit (LLM + FM 8 b, codec bf16) | 4.37 GB | `tts/8bit-*` | K-8 ✓; licence CC BY-NC kept (ASK-18 = A: non-commercial use) | ASK-19, ASK-22 |
 | PK-3 | Mini « LM 4 b, `lm_head` 6 b, encoder 8 b or bf16 » | 3.05 / 3.67 GB | a better `mini/4bit` (today's 4-bit text differs from bf16) | K-42 keeps `.mlx` | ASK-6, ASK-22 |
 | PK-4 | Small 4/8-bit with dense encoder | 15.02 / 27.14 GB | `small/*` quality | K-8 ✓ (Markus packs load) | **no upload if ASK-16 = A**: reference the Markus repositories, pinned by revision + SHA-256 |
 
