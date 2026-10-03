@@ -1461,6 +1461,12 @@ Statistics:
 - Note : K-24 excluait `consolidated*` des téléchargements Realtime (cette entrée récupérait alors `model.safetensors`
   transformers et son `config.json`, illisible) ; la liste propre à l'entrée prime désormais (même taille, 8,86 Go).
 
+- Complément du 2026-10-03 (vérification #569) : preuve rouge dans un worktree jetable de `3345dc2`, `loadRealtimeConfig` et
+  `modelInfo(for:)` remis tels qu'à `bce0329` (`config.json` d'abord sans repli ; id inconnu → défaut) :
+  - RED : `testTransformersConfigIsSkippedForParamsJSON` : `caught error: "DecodingError.keyNotFound: Key 'dim' not found in keyed decoding container. …"` ;
+    `testUnknownModelIdThrows` : `XCTAssertThrowsError failed: did not throw an error` ;
+    `Executed 5 tests, with 1 test skipped and 2 failures (1 unexpected) in 1.434 (1.435) seconds`, exit=65.
+  - GREEN (branche) : `Executed 5 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.006 (0.007) seconds`, exit=0.
 ## K-8 — Quantification lue comme l'amont, modes non affines en expérimental — 2026-10-02 — validée
 - Fait (ASK-21 = B) : `PackQuantization` (nouveau, interne) décode le bloc avec `MLXLMCommon.BaseConfiguration`
   (`mode`, entrées par couche, `false`, clés de métadonnées) pour les trois chargeurs (STT, Realtime, TTS) ; le mode
