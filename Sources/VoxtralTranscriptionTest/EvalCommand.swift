@@ -4,7 +4,7 @@
  * Transcribes the clips of a declared corpus (`docs/eval/corpus.json`: audio, language, exact reference text, both
  * SHA-256) and prints one `EVAL {json}` line per clip (also appended to `<out>/eval.jsonl`): normalized WER (see
  * `WER.swift`), word counts, length ratio, last reference sentence present, required sentences present, output
- * SHA-256. Same refusals as `bench` (Debug binary, busy machine) and a corpus whose files do not match their SHA-256
+ * SHA-256; the transcription is written next to `eval.jsonl` (`<out>/<tag>/`). Same refusals as `bench` (Debug binary, busy machine) and a corpus whose files do not match their SHA-256
  * is refused. Greedy decoding: two runs on the same build give the same scores.
  */
 
@@ -103,6 +103,12 @@ enum EvalRunner {
         record["out_sha256"] = BenchJSON.sha256(Data(hypothesis.utf8))
         record["reference_sha256"] = clip.referenceSHA256
         record["tag"] = common.tag
+        // The transcription itself, for diagnosis: <out>/<tag>/<pipeline>_<language mode>_<clip>.txt
+        let textDir = URL(fileURLWithPath: common.out).appendingPathComponent(common.tag)
+        try? FileManager.default.createDirectory(at: textDir, withIntermediateDirectories: true)
+        let mode = base["language_mode"] as? String ?? "auto"
+        try? hypothesis.write(to: textDir.appendingPathComponent("\(base["pipeline"] ?? "x")_\(mode)_\(clip.id).txt"),
+                              atomically: true, encoding: .utf8)
         BenchJSON.emit(record, out: common.out, tag: "EVAL", file: "eval.jsonl")
     }
 }
