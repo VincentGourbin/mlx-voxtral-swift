@@ -1331,6 +1331,20 @@ Gabarits :
 - Écarts : la cible VoxtralApp embarque `VoxtralEncoderFull.mlmodelc` (1,3 Go, hors git) : la CI crée un dossier vide à
   sa place (point de K-28) ; `LegacyNoDumpTests` passe en `XCTSkip` sans modèle.
 
+- Complément du 2026-10-03 (vérification #577) : trois paires rouge/vert à HEAD, cassures non commitées :
+  1. `|| frame == 0` retiré (`VoxtralTTSModeling.swift:272`), `testEOACheckScheduleCoversEveryFrame` :
+     `Executed 1 test, with 1 failure (0 unexpected) in 2.163 (2.164) seconds` ;
+     `XCTAssertEqual failed: ("[3, 7, 11, 15]") is not equal to ("[0, 3, 7, 11, 15]") - the first frame is checked at once (an immediate end of audio)` ;
+     exit=65 → vert : `Executed 1 test, with 0 failures (0 unexpected) in 0.001 (0.002) seconds`, exit=0.
+  2. `contentsOfDirectory(at: modelURL, includingPropertiesForKeys: nil)` (`VoxtralStandardLoader.swift:1020-1021`),
+     `testLiveLoaderFollowsSymlinkedModelDirectory` : `Executed 1 test, with 1 failure (1 unexpected) in 1.490 (1.491) seconds` ;
+     `caught error: "Error Domain=NSCocoaErrorDomain Code=256 … NSUnderlyingError=… {Error Domain=NSPOSIXErrorDomain Code=20 "Not a directory"}"`
+     (pas « No weight files found » : l'API `URL` lève sur le lien) ; exit=65 → vert :
+     `Executed 1 test, with 0 failures (0 unexpected) in 0.023 (0.023) seconds`, exit=0.
+  3. Test nucleus rendu discriminant (logits croissants : top 1000 ≈ 0,81 de la masse, attente 1 500) ; cassure
+     `MLXArray(Float(1e-9))` → `kthProb` (`VoxtralModeling.swift:1326`) : `Executed 1 test, with 1 failure (0 unexpected) in 1.432 (1.433) seconds` ;
+     `XCTAssertEqual failed: ("1000") is not equal to ("1500")` ; exit=65 → vert :
+     `Executed 1 test, with 0 failures (0 unexpected) in 0.029 (0.029) seconds`, exit=0.
 ## K-30 — Déprécier l'API legacy et morte publique (2.3) — 2026-10-02 — validée
 - Fait (ASK-23 = A) : 37 annotations `@available(*, deprecated, message:)` (liste S-13 lot 2 + S-14, alternative dans
   chaque message ; voir CHANGELOG), en plus des 14 de K-7/K-26/K-27 (51 dans VoxtralCore). Pour qu'aucun code vivant

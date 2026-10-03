@@ -88,8 +88,10 @@ final class PerformanceOptimizationTests: XCTestCase {
     }
 
     func testNucleusMaskKeepsEverythingWhenTheCandidatesMissTopP() {
-        let flat = MLXArray.zeros([1, 1500])  // uniform: the top 1000 hold 2/3 of the mass
-        XCTAssertEqual(keptCount(VoxtralForConditionalGeneration.nucleusMask(flat, topP: 0.9)), 1500)
+        // Increasing logits: the top 1000 hold ≈ 0.81 of the mass, below topP 0.9 → nothing may be masked (K-29: the
+        // former uniform input passed even with the kth-probability cutoff)
+        let ramped = MLXArray((0 ..< 1500).map { Float($0) / 1000 }).reshaped(1, 1500)
+        XCTAssertEqual(keptCount(VoxtralForConditionalGeneration.nucleusMask(ramped, topP: 0.9)), 1500)
     }
 
     func testNucleusMaskDoesNotFilterASmallVocabulary() {
