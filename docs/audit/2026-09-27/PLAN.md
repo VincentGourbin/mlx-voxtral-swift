@@ -1282,6 +1282,55 @@ Gabarits :
   le test NODUMP passe par le chargeur legacy `loadVoxtralModel(modelPath:dtype:lazy:)`, qui émet les messages
   `writeDebugToDump` (puis échoue sur le dossier bf16, `keyNotFound`, constat de K-3). Famille à déprécier (K-30).
 
+- Complément du 2026-10-03 (vérification #571) : synthèse CLI sur le binaire Release de HEAD `d8b239e5` (`** BUILD SUCCEEDED **`),
+  `$CLI tts "Bonjour, comment ça va ?" -m tts-4b-6bit --seed 1 -o …/k23.wav > k23-stdout.txt` → `EXIT=0` ;
+  `grep -c '\[GEN\]' k23-stdout.txt` → `0`. Sortie complète :
+
+```
+
+============================================================
+VOXTRAL TTS (Text-to-Speech)
+============================================================
+
+Model: Voxtral TTS 4B (6-bit)
+Text: Bonjour, comment ça va ?
+Output: .local-runs/k23/k23.wav
+
+[1/3] Loading TTS model...
+  [5%] Resolving TTS model...
+  [40%] TTS model already downloaded
+  [35%] Loading tokenizer...
+  [40%] Loading TTS model...
+  [44%] Loading configuration...
+  [48%] Creating model structure...
+  [52%] Loading weights...
+  [64%] Mapping weight names...
+  [65%] Applying 6-bit quantization (affine)...
+  [67%] Applying weights to model...
+  [80%] Model loaded successfully
+  [90%] Loading voice embeddings...
+  [100%] TTS model ready (20 voices loaded)
+  Model loaded in 0.19s
+
+[2/3] Generating speech...
+  Voice: Neutral Female
+
+[3/3] Saving audio...
+
+------------------------------------------------------------
+Audio saved to: .local-runs/k23/k23.wav
+------------------------------------------------------------
+
+Statistics:
+  TTFT: 512ms
+  Duration: 2.48s
+  Frames: 31
+  Generation time: 5.10s
+  Real-time factor: 2.06x
+  Frames/sec: 6.1
+
+============================================================
+```
 ## K-27 — API publique honnête (souches dépréciées, `tokenCount`, plus de `as!`/`precondition` publics) — 2026-10-02 — validée
 - Fait : `TranscriptionResult.tokenCount` = jetons générés (`VoxtralPipeline.lastTokenCount`, additif). Souches
   dépréciées avec un message exact : `chat(systemPrompt:userMessage:)` (lève toujours `audioRequired`),
