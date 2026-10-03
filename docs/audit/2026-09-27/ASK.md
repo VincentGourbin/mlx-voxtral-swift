@@ -575,6 +575,13 @@ Décisions de Vincent du 2026-10-03, données au planificateur :
   par segment de langue (= C-moyen EN et FR). La traduction du français en anglais sur un audio long EN/FR alterné,
   transcrit d'un bloc, est une limite du modèle qui ne sera pas corrigée : aucune fiche de correctif.
 
+- **K-35 (#588), 2026-10-03, décision de l'agent** — clause « textes : court, 60 s = premier paragraphe du long, long
+  complet ». Raison : le premier paragraphe du texte long fait 40 mots (≈ 15 s d'audio), pas 60 s ; le texte long
+  complet (163 mots) dure ≈ 75 s. Décision : court = `docs/eval/tts/short_en.txt` (11 mots), « 60 s » =
+  `medium_en.txt` (Long EN complet, 163 mots), long = `long_en.txt` (Long EN × 2, 326 mots, texte de K-12) ; copies
+  octet pour octet des fichiers déjà mesurés (`.local-runs/corpus/tts_*`), SHA-256 dans `docs/eval/tts/README.md`.
+  Preuve : `wc -w` 11 / 163 / 326 ; audio mesuré 7,4–7,8 s / 74–84 s (lignes `prof-*` de `BENCHMARKS.md`).
+
 Décisions du planificateur du 2026-10-03 :
 
 - Clauses sur du code retiré ou rendu `internal` par K-31 (liste ASK-25 = A, 3.0 directe), sans objet à HEAD : K-3
