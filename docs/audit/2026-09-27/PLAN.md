@@ -1489,6 +1489,11 @@ Statistics:
     complete AI creative studio. » des deux côtés (mlx-voxtral 0.0.6, mlx 0.32.3, greedy, pénalité 1,2).
   - Scan MLX-025 : 3 → 0. Suite : `Executed 586 tests, with 36 tests skipped and 0 failures`.
 
+- Complément du 2026-10-03 (vérification #568) : preuve rouge complète. Worktree jetable de `3345dc2` (parent de K-8),
+  fixtures copiées, `K8RedTests` (API du parent seulement : `JSONDecoder().decode(VoxtralStandardConfiguration.self, …)`) :
+  - RED : `testAufklarerConfigDecodes` et `testMarkusConfigDecodes` : `XCTAssertNoThrow failed: threw error "DecodingError.typeMismatch: Expected value of type QuantizationValue. Path: quantization.mode. Debug description: Expected Bool, Int or QuantizationConfig"` ;
+    `Executed 2 tests, with 2 failures (0 unexpected) in 1.484 (1.485) seconds`, exit=65.
+  - GREEN (même fichier à HEAD, non commité) : `Executed 2 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds`, exit=0.
 ## K-28 — Build depuis un clone neuf, app empaquetée, démo robuste, `RuntimeBeacon` — 2026-10-02 — validée
 - Fait (ASK-27 = A) : `.copy("Resources/VoxtralEncoderFull.mlmodelc")` retiré de `Package.swift` (l'app télécharge
   l'encodeur Core ML) ; `VoxtralCoreMLEncoder.resourceBundle` déprécié et plus utilisé par l'app ; étape « placeholder »
