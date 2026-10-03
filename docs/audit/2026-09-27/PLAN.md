@@ -1253,6 +1253,42 @@ Gabarits :
   au-delà `maxFrames` = 2 500 (fr06, 333 jetons). « 0 troncature d'une parole » : porte telle qu'écrite, décision du
   planificateur du 2026-10-03 (`ASK.md` §Dérogations).
 
+- Complément du 2026-10-03 (vérification #564) : binaire « avant » au parent `3756545` (worktree jetable), « après » =
+  Release de HEAD `c4e74816` ; voix `fr_female` par `--voice-embedding` (graine appliquée). Sortie brute :
+
+```
+fr01 avant:  Duration: 41.12s  Frames: 517 
+fr01 apres:  Duration: 11.20s  Frames: 143 
+fr01 avant STT: Comment ça va ?
+fr01 apres STT: Je ne comprends pas ce que vous dites.
+r45 seed 1 avant:  Duration: 16.32s  Frames: 209 
+r45 seed 1 apres:  Duration: 10.24s  Frames: 133 
+r45 seed 2 avant:  Duration: 8.88s  Frames: 115 
+r45 seed 2 apres:  Duration: 8.88s  Frames: 115 
+r45 seed 3 avant:  Duration: 3.84s  Frames: 49 
+r45 seed 3 apres:  Duration: 3.84s  Frames: 49 
+r45 seed 4 avant:  Duration: 8.08s  Frames: 102 
+r45 seed 4 apres:  Duration: 8.08s  Frames: 102 
+r45 seed 5 avant:  Duration: 2.16s  Frames: 27 
+r45 seed 5 apres:  Duration: 2.16s  Frames: 27 
+r45 seed 6 avant:  Duration: 2.88s  Frames: 38 
+r45 seed 6 apres:  Duration: 2.88s  Frames: 38 
+r45 seed 7 avant:  Duration: 8.48s  Frames: 108 
+r45 seed 7 apres:  Duration: 8.48s  Frames: 108 
+r45 seed 8 avant:  Duration: 2.00s  Frames: 25 
+r45 seed 8 apres:  Duration: 2.00s  Frames: 25 
+r45 seed 9 avant:  Duration: 2.00s  Frames: 26 
+r45 seed 9 apres:  Duration: 2.00s  Frames: 26 
+r45 seed 10 avant:  Duration: 3.60s  Frames: 45 
+r45 seed 10 apres:  Duration: 3.60s  Frames: 45 
+```
+
+  - fr01 (6 bits, graine 2) : avant 517 frames / 41,12 s, transcrit « Comment ça va ? » ; après 143 frames / 11,20 s,
+    transcrit « Je ne comprends pas ce que vous dites. » : le plafond arrête l'emballement mais la sortie plafonnée ne
+    dit pas le texte non plus (dégénérée des deux côtés).
+  - Reproducteur #45 (bf16, `--no-sanitize`, graines 1 à 10) : un emballement avant (graine 1 : 209 frames) ramené à
+    133 frames après ; les 9 autres graines identiques avant/après (25 à 115 frames). RUNAWAY repro : 133 frames après
+    (= plafond 70 + 10,4 × jetons du texte ; 3,02 × 44, soit une frame au-dessus de « < 3 × 44 »), avant : 209.
 ## K-23 — Code mort sans risque retiré, famille legacy muette, logs `os.Logger` — 2026-10-02 — validée
 - Fait (lot 1 de S-13, aucun retrait public) : supprimés `Scripts/VoxtralGenerate.swift` (+ son `exclude` de
   `Package.swift`), les fichiers-commentaires `Scripts/Scripts.swift`, `Utils/Utils.swift`, `Models/Models.swift`, les
