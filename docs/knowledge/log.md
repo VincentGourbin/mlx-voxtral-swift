@@ -140,3 +140,6 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `mini-3b-8bit` : 1,8 % EN / 2,2 % FR sur C-moyen ; l'auto-détection vaut la langue imposée. Deux limites du modèle :
   sur un audio long EN/FR alterné il **traduit le français en anglais**, et sur un clip FR de 17 s il saute la 1ʳᵉ
   phrase (le juge Realtime, lui, s'arrête après). Le juge Realtime n'est pas fiable sur du français court.
+- 2026-10-03 — **K-37 : enrôlement** ≈ 62–65 ms/époque (6 bits comme bf16) ; pic 2,7 Go seul contre 6,1 Go (6 bits) /
+  11,6 Go (bf16) après une synthèse dans la même pipeline : libérer le LLM avant d'enrôler vaut le code (K-64), car il
+  ne sert pas à l'enrôlement (voix identique quel que soit le pack). `bench enroll --seed` n'était pas appliqué avant.

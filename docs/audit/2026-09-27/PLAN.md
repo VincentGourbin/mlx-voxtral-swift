@@ -1442,3 +1442,16 @@ Gabarits :
   - Constat annexe : sur le 20 s FR, le STT saute la première phrase (« Vos projets restent sur votre propre
     ordinateur. ») ; le clip est sain (pauses normales).
 - Lignes `BENCH`/`EVAL` dans `BENCHMARKS.md` (section du 2026-10-03).
+
+## K-37 — Baseline enrôlement (s/époque, pic, résidence du LLM) — 2026-10-03 — validée
+- Premier commit (`fc8af1f7`) : `bench enroll` applique la graine (`config.seed = seed`, aide corrigée) et nomme le
+  scénario (`cli` | `after_synthesis`). Contrôle de graine (5 époques, 2 passes) : rouge sans le correctif
+  `out_sha256=DIFFERENT` (b2f267bf… / 5a18561e…) ; vert `seed7` `identical` (448fadcf…), `seed8` `identical`
+  (b045e246…, différent de seed7).
+- Porte observée (200 époques, graine 7, 2 passes, cooldown 120 s, arbre propre `fc8af1f7`) :
+  - `BENCH {"pipeline":"enroll","model":"tts-4b-6bit","scenario":"cli","epoch_ms_p50":62.01/62.62,"peak_footprint_mb":2668/2672}`
+  - `BENCH {…"scenario":"after_synthesis",…"epoch_ms_p50":64.01/63.35,"peak_footprint_mb":6145/6148}`
+  - `tts-4b-mlx` : `cli` 2 670–2 678 Mo, `after_synthesis` 11 590–11 596 Mo ; A/A `epoch_ms_p50` 0,98 / 1,04 / 2,27 /
+    0,63 % (`tts-4b-mlx cli` refait : 1re série 3,76 %, passe 1 pendant Time Machine `backupd` 64 %).
+  - `DECISION residency : (b−a)/a = +130 % (6 bits) / +334 % (bf16) → garder` (`docs/knowledge/decisions/enroll-residency.md`).
+- Constat : la voix enrôlée est identique entre packs et scénarios (`f18162fc…`) : l'enrôlement n'utilise pas le LLM.
