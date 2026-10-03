@@ -37,6 +37,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 ### Migration notes for consumers
 - **K-31**: rename the five types above (or keep the deprecated aliases for now); remove calls to
   `ModelDownloader.reconfigureHubApi()`; enroll voices through `VoxtralTTSPipeline.enrollVoice`.
+- **K-10 — `small-24b-8bit` reads `VincentGOURBIN/voxtral-small-8bit`** (≈ 26.5 GB, downloaded at the first load);
+  an old `mzbac/Voxtral-Small-24B-2507-8bit` folder (≈ 28 GB) is no longer used and can be deleted.
+- **K-9 — a `realtime-4b` folder downloaded with an intermediate build** (between `3756545`, K-24, and `3345dc2`,
+  K-9) holds only the transformers `model.safetensors`: `findRealtimeModelPath` takes it for complete and loading
+  fails with `missingWeights`. Delete the folder and download it again.
 - **Exhaustive `switch` over the public error enums** needs a `default:` or the new cases: `VoxtralError.mlx`,
   `.unsupported`, `.missingWeights`, `.invalidTokenizer`, `.contextTooLong`; `busy` in `VoxtralPipelineError`,
   `VoxtralTTSError` and `VoxtralRealtimeError`.
@@ -59,8 +64,6 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-5 — STT `maxTokens` is `Int?`** (was `Int`), default `nil`: the token budget follows the audio duration
   (`max(500, ⌈seconds × 6⌉ + 64)`). An explicit value stays a ceiling. Reaching it is reported, not silent:
   `lastResultTruncated` (STT), `lastTranscriptionTruncated` (Realtime). The Realtime loop runs one step per audio frame.
-- **K-6 — `downloadModel(modelId:revision:)`**, a placeholder, now throws `VoxtralError.unsupported` instead of
-  pretending to download (use `ModelDownloader`).
 - **K-10 — `VoxtralPipeline.Model.repoId` comes from `ModelRegistry`**: `small-24b-8bit` is
   `VincentGOURBIN/voxtral-small-8bit` (was `mzbac/Voxtral-Small-24B-2507-8bit` in the enum, ASK-15), and `loadModel()`
   resolves by id, so a downloaded model loads offline without a Hub request.
@@ -68,7 +71,8 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   resource (the Core ML encoder is downloaded); `Scripts/package-app.sh` replaces `create_app_bundle.sh` (Release,
   resource bundles included). `RuntimeBeacon`: an `update` racing `end` can no longer recreate the manifest. Demo:
   ffmpeg pipes drained while running, cancellation terminates the process, voice names checked before enrollment,
-  overwriting a voice asks for confirmation.
+  overwriting a voice asks for confirmation; the `part_*` extracts are deleted once assembled and the reference
+  builder's working folder (recordings included) is emptied after a successful enrollment.
 - **K-8 — quantization read like MLXLMCommon**: `"mode"`, per-layer entries and metadata keys no longer fail
   `config.json` (2026 packs such as `MarkusKaemmerer/…-dense-encoder` and `aufklarer/…` load); the mode reaches
   `quantize` in the STT, Realtime and TTS loaders. Non-affine modes (mxfp4, mxfp8, nvfp4) load as **experimental**
@@ -90,8 +94,9 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-15 — work off Swift's cooperative pool**: model loading and generation run on a dedicated queue; a cancelled
   Task stops a transcription, a synthesis or a Realtime run within one step with `CancellationError`, the pipeline
   back to `.ready`. Measured on 11 min of audio: STT 116 ms (`.mlx`) and 221 ms (`.auto`, Core ML encoder), TTS batch
-  61 ms, Realtime 49 ms. The work runs on one serial queue: STT and TTS started in parallel by a host now run one
-  after the other.
+  61 ms, Realtime 49 ms. All pipelines share one serial queue (`voxtral.mlx-work`, `OffPoolExecution.swift:37`): an
+  STT and a TTS of the same process run one after the other, and a long uncancelled task delays the next ones,
+  model loading included.
 - **K-24 — STT and Realtime downloads skip `consolidated.safetensors`** (a second copy of the weights their
   loaders never read: Mini 3B 9.36 GB instead of 18.7 GB, Small 24B 48.5 instead of 97 GB); registry `size` shows the
   exact size and `quantization` the real precision (`bfloat16` for the Mistral STT packs); the Core ML encoder variant
@@ -104,26 +109,21 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   unloaded MLX encoder.
 - **K-26 — voice enrollment is reproducible**: the same `Config.seed` and reference give the same codes (the
   spectral loss had a non-deterministic GPU gradient). Without a seed, runs still differ.
-- **K-32 — `fullCleanup()` no longer resets the MLX peak-memory counter** (the field `resetPeakMemory` stays and has
-  no effect): measuring tools reset it themselves.
-- **K-32b — `VoxtralCoreMLConfig` presets `default`, `mini` and `small` use `.cpuAndNeuralEngine`**: on the GPU
-  (MPSGraph) Core ML deadlocked with MLX in the same process, the first prediction waiting forever for a Metal command
-  buffer (backend `.auto`, the default, hung). `gpuOnly` stays on the GPU and must not share a process with MLX.
+- **K-32b — `VoxtralPipeline(backend: .auto)`, the default, encodes on the Neural Engine** (`.cpuAndNeuralEngine`;
+  confirmed by Vincent on 2026-10-03): on the GPU (MPSGraph) Core ML deadlocked with MLX in the same process, the
+  first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
 - **K-1 — `VoxtralError.mlx(String)`**: an MLX error raised inside a public entry point (transcribe, chat,
   synthesis, Realtime, loading) is thrown instead of terminating the host process.
 - **K-2 — `VoxtralError.contextTooLong(prompt:maxTokens:limit:)`.**
-- **K-4 — `VoxtralForConditionalGeneration.stopTokenIds`**, set by the pipeline from its tokenizer.
 - **K-5 — `lastResultTruncated`** (STT) and **`lastTranscriptionTruncated`** (Realtime).
 - **K-6 — `VoxtralError.unsupported(String)`** and a download manifest (`.voxtral-complete.json`, SHA-256 per file):
   a model folder counts as downloaded only when its manifest is complete.
 - **K-7 — `VoxtralError.missingWeights([String])`** (weights checked against the model's keys and shapes),
-  **`VoxtralError.invalidTokenizer(String)`** and **`TekkenTokenizer.load(modelPath:) throws`**.
+  and **`VoxtralError.invalidTokenizer(String)`**.
 - **K-11 — `busy(String)`** in `VoxtralPipelineError`, `VoxtralTTSError` and `VoxtralRealtimeError`.
 - **K-14 — `VoxtralTTSPipeline.frameCap(forText:)`, `textTokenCount(_:)`, `lastSynthesisTruncated`.**
-- **K-16 — `VoxtralMemoryManager.optimizeIfNeeded(tokenIndex:config:)`**: the pipeline passes its own memory
-  configuration instead of writing the shared one.
 - **K-26 — `VoxtralVoiceEnrollment.Config.seed`, `checkpointURL`, `checkpointEvery`** and
   `EnrollmentCheckpointError`: an interrupted enrollment resumes from its checkpoint and ends with the codes of an
   uninterrupted run. CLI `enroll`: `--seed`, `--checkpoint`, `--checkpoint-every`, `--stop-after`.
@@ -135,17 +135,18 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   configurations (`nil` by default: the host's MLX setting is untouched). When set, the limit applies after loading
   and the host's value is restored at `unload()`.
 
-- **K-23 — `VoxtralDebug.console(_:)`** for output a caller asked for (model listings).
-- **K-27 — `VoxtralPipeline.lastTokenCount`**, `loadVoxtralStandardModel(modelPath:)`, `EnrollmentLossComputer(validating:)`.
+- **K-27 — `VoxtralPipeline.lastTokenCount`.**
 - **K-24 — registries**: `approximateBytes` (exact bytes of the downloaded weights) on `VoxtralModelInfo`,
-  `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `ModelDownloader.downloadRepoDirect(…, excluding:)` and
-  `downloadByRepoId(_:excluding:progress:)`; `VoxtralCoreMLVariant.variant(forConfigAt:)`.
+  `VoxtralTTSModelInfo` and `VoxtralRealtimeModelInfo`; `VoxtralModelDownloader.downloadByRepoId(_:excluding:progress:)`;
+  `VoxtralCoreMLVariant.variant(forConfigAt:)`.
 
-- **K-8 — `mode: String?`** on `VoxtralStandardConfiguration.QuantizationValue.QuantizationConfig` and
-  `RealtimeQuantizationConfig` (informational).
+- Internal since K-31, not API: `stopTokenIds` (K-4), `TekkenTokenizer.load(modelPath:)` (K-7),
+  `VoxtralMemoryManager.optimizeIfNeeded` (K-16), `VoxtralDebug.console` (K-23), `loadVoxtralStandardModel(modelPath:)`
+  and `EnrollmentLossComputer(validating:)` (K-27), `downloadRepoDirect(…, excluding:)` (K-24), `mode` of the STT and
+  Realtime quantization configurations (K-8).
 - **K-9 — `VoxtralRealtimeModelInfo.files`**: the exact repository files an entry downloads.
 
-### Deprecated (2.3 cycle; removed in 3.0 by K-31)
+### Deprecated, then removed in 3.0.0 (K-30, K-31; no 2.3 published)
 - **K-30 — legacy Python-port family and dead public code** (ASK-23: deprecated in 2.3, removed in 3.0; each message
   names the replacement): `VoxtralGenerator` (stops the process at load) and its extensions,
   `VoxtralGenerationParameters`, the library `VoxtralCLI` class, `loadVoxtralModel(modelPath:dtype:lazy:)`,
@@ -155,18 +156,19 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   `VoxtralMultiModalProjector.replaceQuantizedLinearWithWeights`, `LlamaModelWrapper`, `mlxLMCreateAttentionMask`,
   `mlxLMScaledDotProductAttention` (×2), `mlxLMInitializeRope`, `mlxLMGetModelPath`, `createCausalMask(N:…)`,
   `quantizeModel`, `saveConfig`, `saveModel`, `treeReduce`, `treeFlatten`, `computeBitsPerWeight` (×2),
-  `voxtralMixedQuantizationPredicate` (×2), `loadQuantizedVoxtral` (the `VoxtralQuantization` overload),
+  `voxtralMixedQuantizationPredicate`,
   `getQuantizationStats`, `AudioEncoder`, `ChatTemplateProcessor`, `TekkenTokenizer.encodeTranscription`.
   `language_model` no longer accepts a `LlamaModelWrapper` (never built by the loaders).
 - **K-27** — `VoxtralTranscriptionManager.chat(systemPrompt:userMessage:)` (always throws `audioRequired`),
   `saveQuantizedModel` (writes only `config.json`), `MLXCoreMLBridge.toMLMultiArrayNoCopy` (copies),
   `VoxtralForConditionalGeneration.init(officialLlama:config:)` (legacy decoder, random `lm_head`),
   `ModelDownloader.hubApi` / `reconfigureHubApi()` (downloads no longer use HubApi),
-  `loadVoxtralStandardModel(modelPath:dtype:)` (`dtype` ignored; use `loadVoxtralStandardModel(modelPath:)`),
-  `EnrollmentLossComputer(reference:)` (stops on a short reference; use `init(validating:)`).
-- **K-7 — `TekkenTokenizer(modelPath:)`**: falls back silently to a demo vocabulary; use `TekkenTokenizer.load(modelPath:)`.
+  `loadVoxtralStandardModel(modelPath:dtype:)` (`dtype` ignored; use `VoxtralPipeline.loadModel()`),
+  `EnrollmentLossComputer(reference:)` (stops on a short reference; enroll through `VoxtralTTSPipeline.enrollVoice`).
+- **K-7 — `TekkenTokenizer(modelPath:)`**: falls back silently to a demo vocabulary; the pipelines' `loadModel()`
+  load the tokenizer strictly.
 - **K-26 — `VoxtralVoiceEnrollment.optimize(reference:progress:)`** (non-throwing): ignores divergence, cancellation
-  and checkpoints; use `optimize(reference:progress:shouldContinue:)`.
+  and checkpoints; enroll through `VoxtralTTSPipeline.enrollVoice`.
 
 - **K-28 — `VoxtralCoreMLEncoder.resourceBundle`**: encoders are downloaded (`downloadFromHuggingFace(variant:progress:)`).
 
@@ -183,11 +185,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   prefill chunk. Outputs unchanged (logits identical).
 - **K-13 — Realtime beyond 15 s**: the encoder attends within its 750-position sliding window (chunks with a rotating
   KV cache) and the decoder keeps its 8 192-step window; output no longer degenerates after about 30 s.
-- **K-13 — `TekkenTokenizer.decode(skipSpecialTokens: true)` skips every control token** (ids below the special-token
-  count), not only BOS/EOS/PAD: Realtime output no longer contains NUL bytes between words.
+- **K-13 — Realtime output no longer contains NUL bytes between words**: decoding skips every control token
+  (`[STREAMING_PAD]`, `[STREAMING_WORD]`…), not only BOS/EOS/PAD.
 - **K-16 — shared state under locks** (mel filter cache, debug flags, `customModelsDirectory`, memory manager
-  configuration) and results evaluated before they cross actors (`TTSSynthesisResult`, `TTSStreamingChunk`,
-  `GenerationChunk`): no more data races between pipelines.
+  configuration) and results evaluated before they cross actors (`TTSSynthesisResult`, `TTSStreamingChunk`): no more
+  data races between pipelines.
 
 ### Dependencies
 - **K-22** — `VoxtralCore` depends on mlx-swift, mlx-swift-lm (`MLXLMCommon`), `Hub` and swift-mlx-profiler only;

@@ -241,8 +241,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     /// True when the last `transcribe` stopped on its text budget (`maxTokens`) before the audio ended (K-5)
     public var lastTranscriptionTruncated: Bool { model?.lastGenerationTruncated ?? false }
 
-    /// Share of the last transcription's decode steps whose token carries no text (control tokens such as
-    /// [STREAMING_PAD]): the padding K-73 would skip (bench, K-36)
+    /// Share of the last transcription's decode steps whose token carries no text: control tokens, [STREAMING_PAD]
+    /// and [STREAMING_WORD] included (`docs/bench.schema.json`; bench, K-36)
     public private(set) var lastPadFraction: Double?
 
     // MARK: - Audio Preparation

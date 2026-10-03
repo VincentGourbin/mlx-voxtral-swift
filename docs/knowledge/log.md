@@ -147,3 +147,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   d'attente) → 221 ms ; le `convStem` Realtime, évalué d'un bloc sur tout l'audio, retenait l'annulation ≈ 3 s une fois
   sur trois → évalué par tranches de 60 s (résultat identique, L2 0). Leçon : un test d'annulation qui ne passe qu'une
   fois ne prouve rien si l'instant d'annulation tombe dans une phase variable ; le relancer.
+- 2026-10-03 — **R-4 : dépôt aligné sur la vérification du 2026-10-03** (décisions dans `ASK.md` §Dérogations,
+  CHANGELOG 3.0.0 sans symbole interne, PLAN §3 = tracker). Parité streaming K-12 jugée sur la sortie brute (sans
+  rognage) : codes identiques, audio à 1,24e-6 du batch (≤ 1e-5, décision de Vincent) ; K-43 tolère 1e-4. Les quatre
+  classes de tests gardés restent vertes à HEAD.

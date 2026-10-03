@@ -512,7 +512,7 @@ réponse datée ici.
 | ASK-6 | | | |
 | ASK-7 | A | 2026-10-01 | Donnée par Vincent au planificateur, 2026-10-01 : contexte complet ; le profil lean borne la durée d'audio acceptée (erreur typée au-delà) ; le seuil de 12 Go se lit avec le plafond de cache MLX (10,99 Go de pic avec K-52, pour 8,6 Go de mémoire MLX active). |
 | ASK-8 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : défaut `nil`, budget proportionnel à la durée (STT), boucle bornée par l'audio (Realtime) ; valeur explicite = plafond de jetons texte signalé `truncated` (K-5). |
-| ASK-9 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : un défaut public change quand la porte l'emporte (version mineure, CHANGELOG, FluxForge prévenu) ; A pour K-5 et K-14, fiche par fiche pour K-51, K-61, K-64. |
+| ASK-9 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : un défaut public change quand la porte l'emporte (version mineure, CHANGELOG, FluxForge prévenu) ; A pour K-5 et K-14, fiche par fiche pour K-51, K-61, K-64. K-5 et K-14 partent dans la 3.0.0. |
 | ASK-10 | | | |
 | ASK-11 | A | 2026-10-01 | Donnée par Vincent dans la session Mac : texte identique sur C-court et WER normalisé ≤ référence +0,2 pt sur C-moyen EN/FR (16 et 8 bits ; +0,5 pt pour la tête 4 bits de K-46). |
 | ASK-12 | A, sous condition | 2026-10-01 | Donnée par Vincent dans la session Mac : mlx-audio accepté **comme référence seulement** — sortie capturée une fois (environnement Python temporaire hors du dépôt, commit épinglé) et figée en fichier texte ; **aucune dépendance** du code, des tests ou du build à un backend Python. |
@@ -526,7 +526,7 @@ réponse datée ici.
 | ASK-20 | | | |
 | ASK-21 | B | 2026-10-02 | Donnée par Vincent dans la session Mac : les modes non affines (mxfp4, mxfp8, nvfp4) sont acceptés au chargement en **expérimental**, sans profil ni garantie de qualité (K-8 : décodage correct du mode, avertissement, hors profils). |
 | ASK-22 | | | |
-| ASK-23 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : dépréciation annotée en 2.3 (additif, K-30), suppression en 3.0. |
+| ASK-23 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : dépréciation annotée en 2.3 (additif, K-30), suppression en 3.0. 3.0.0 directe, sans 2.3 publiée (décision de Vincent du 2026-10-03, donnée au planificateur). |
 | ASK-24 | | | |
 | ASK-25 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : revue 3.0 sur une liste proposée par K-31, relue et amendée par Vincent avant application. |
 | ASK-26 | B | 2026-09-30 | Donnée par Vincent dans la session Mac : `VoxtralBenchmark` retiré du `Package.swift`, remplacé par `VoxtralCLI bench` (K-32). |
@@ -539,8 +539,43 @@ réponse datée ici.
 ### Dérogations
 
 - **K-31, 2026-10-02** (Vincent, session Mac) : liste validée telle quelle, appliquée sur la branche d'audit (3.0
-  directe) ; 338 lignes `public` acceptées au lieu de ≤ 300 ; la clause FluxForge est vérifiée par Vincent à la
-  transmission (`docs/audit/2026-09-27/K-31-liste-api.md` §E).
+  directe) ; 338 lignes `public` acceptées au lieu de ≤ 300 (`docs/audit/2026-09-27/K-31-liste-api.md` §E). La clause
+  FluxForge sort de la porte Voxtral : Vincent la traite à la fusion (entrée FluxForge du 2026-10-03 ci-dessous).
+
+Décisions de Vincent du 2026-10-03, données au planificateur :
+
+- **K-12 (#570), 2026-10-03** : parité streaming = codes identiques bit à bit ; audio concaténé brut
+  (`trimLeadIn=false`, `trimTail=false`) à max|Δ| ≤ 1e-5 du batch, même graine (observé 1,24e-6) ; aucune fiche
+  n'exige l'identité exacte (K-43 : 1e-4).
+- **K-32b (#604), 2026-10-03** : préréglages Core ML default/mini/small sur `.cpuAndNeuralEngine`, ce qui change le
+  défaut public `.auto` ; ASK-6 / K-42 tranchent ensuite `.auto` contre `.mlx`.
+- **K-13 (#582), 2026-10-03** : clause WER jugée contre la référence mlx-audio figée (`docs/eval/realtime-reference/`)
+  avec la tolérance d'ASK-11, provisoire jusqu'au WER exact de K-33 repris par K-36 ; dérive ms/pas au-delà de
+  ≈ 9 000 pas (jusqu'à +63 %) jugée thermique : coût par pas constant après la rotation 8 192, mémoire plate
+  6 392,7 Mo, tranche 8 250–8 450 à +1,6 % ; le protocole de K-36 refroidit et ordonne les clips.
+- **K-27 (#575), 2026-10-03** : arrêt `fatalError`/`precondition` conservé pour un appel direct au modèle hors
+  frontière MLX (`MLXErrorBoundary.swift:43`), `prepare(_:cache:state:prefill:)` et appels directs à
+  `VoxtralTTSModel` compris ; non atteignable depuis l'API publique depuis K-31 (`58917f3`).
+- **FluxForge (K-22, K-30, K-31), 2026-10-03** : toute clause FluxForge sort des portes Voxtral (K-30 : 0 usage hors
+  dépôt, 0 avertissement de dépréciation dans FluxForge, `reconfigureHubApi` ; K-31 : FluxForge compile sans ses
+  typealias) ; Vincent les traite à la fusion.
+- **K-15 (#580), 2026-10-03** : la porte d'annulation couvre le backend par défaut `.auto` ; point d'annulation dans
+  la boucle Core ML (`VoxtralHybridEncoder.swift`, `encodeCoreML`) et test C-long en `.auto`, par le commit
+  `fix(K-15)` (`a4beb715`).
+
+Décisions du planificateur du 2026-10-03 :
+
+- Clauses sur du code retiré ou rendu `internal` par K-31 (liste ASK-25 = A, 3.0 directe), sans objet à HEAD : K-3
+  « invite de 600 positions via `loadVoxtralModel` (chemin hérité) » ; K-23 « 0 écriture dans /tmp pendant une
+  génération par `VoxtralGenerator` » ; K-30 annotations S-14 de `writeDebugToDump` et `loadQuantizedVoxtral` ; K-27
+  classes de modèle publiques.
+- K-7 : traduction `attention.wq/wk/wv/wo` → `q/k/v/o_proj` du sanitizer Realtime (`26f3d83`), rapportée comme choix
+  de Vincent (rapport K-7 du 2026-09-30), retenue ; référence de K-9 pour `realtime-4b-fp16` à partir de `26f3d83`.
+- K-31 : « ≤ 300 lignes public » remplacé par « liste validée par Vincent (ASK-25 = A) appliquée ; compte consigné :
+  338 (1 110 avant) ».
+- K-14 : la clause « 0 troncature » reste telle qu'écrite ; la sortie fr01 6 bits graine 2 (517 → 143 frames) n'est
+  requalifiée « dégénérée » que sur preuves recopiées dans #564 : transcriptions avant/après de ce cas et
+  reproducteur #45 dans ses propres conditions.
 
 - **K-22, 2026-10-01** (Vincent, au planificateur) : la clause « FluxForge compile (si présent sur la machine) » est
   vérifiée à la fusion de la branche sur `main` (FluxForge suit `main`), pas sur la branche d'audit.

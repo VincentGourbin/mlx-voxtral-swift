@@ -106,9 +106,8 @@ tasks:
   - id: K-5
     subject: "[voxtral K-5] Supprimer les troncatures silencieuses (maxTokens STT = f(durée), boucle Realtime bornée par l'audio)"
     severity: high
-    notes: "⛔ oui — ASK-8 (sémantique de `maxTokens`) avant de changer un défaut public"
+    notes: "ASK-8 = A (2026-09-30), ASK-9 = A (2026-09-30)"
     task:
-      needs_decision: [ASK-8, ASK-9]
       goal: "Supprimer les troncatures silencieuses (maxTokens STT = f(durée), boucle Realtime bornée par l'audio)"
       gate: "STT : C-moyen EN (167 s), C-moyen FR (174 s) et C-long : dernière phrase de la référence présente, longueur ≤ 1,5 × la référence ; Realtime : C-long transcrit en entier (dernière phrase présente) ; test unitaire « nombre de pas = nombre de trames » rouge sans le correctif ; un budget dépassé est signalé (champ `truncated` ou erreur)."
       instructions: |
@@ -167,7 +166,6 @@ tasks:
     task:
       goal: "Décoder la quantification comme l'amont (mode/per-layer), refuser les modes non affines"
       gate: "5/5 fixtures `config.json` décodées (mzbac 4 b mixte, VincentGOURBIN 8 b, aufklarer `mode`, Markus per-layer + `mode`, mxfp4 synthétique → erreur explicite) ; `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` chargé avec `verify: [.all]` : 0 clé manquante ou en trop ; transcription greedy identique à mlx-voxtral (Python, même pack) sur C-court EN ; TTS : fixture « 3 shards + index » chargée, fixture `quantization_config` seule → chargement correct ou erreur explicite."
-      needs_decision: [ASK-21]
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -183,9 +181,8 @@ tasks:
   - id: K-9
     subject: "[voxtral K-9] Realtime: entrée mistralai originale chargeable (params.json + consolidated), id strict"
     severity: high
-    notes: "⛔ oui — ASK-17 (corriger l'entrée plutôt que la retirer ; retrait = cassant)"
+    notes: "ASK-17 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-17]
       goal: "Realtime: entrée mistralai originale chargeable (params.json + consolidated), id strict"
       gate: "2 fixtures de décodage vertes (`config.json` transformers ignoré → config Mistral depuis `params.json`, `quantization == nil`) ; téléchargement de `realtime-4b` = 8,87 Go ± 1 % (au lieu de 17,72) ; chargement `verify: [.all]` : 0 clé manquante ou en trop ; transcription C-court EN identique au pack `realtime-4b-fp16` (ou WER ≤ +0,2 pt) ; test « id inconnu → erreur ; nil → défaut »."
       instructions: |
@@ -203,9 +200,8 @@ tasks:
   - id: K-10
     subject: "[voxtral K-10] repoId STT: une seule source (registre), résolution par id, chargement hors ligne"
     severity: high
-    notes: "⛔ oui — ASK-15 (dépôt Small 8 bits retenu)"
+    notes: "ASK-15 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-15]
       goal: "repoId STT: une seule source (registre), résolution par id, chargement hors ligne"
       gate: "test « chaque `VoxtralPipeline.Model` existe dans `ModelRegistry` avec le même repoId » vert (rouge avant) ; modèle Small 8 bits téléchargé par l'app puis `loadModel` en mode avion → chargé, 0 octet réseau (`nettop` ou Little Snitch) ; un seul dossier `small-8bit` sur disque."
       instructions: |
@@ -252,9 +248,8 @@ tasks:
   - id: K-13
     subject: "[voxtral K-13] Realtime: fenêtres glissantes encodeur (750) et décodeur (8192) appliquées"
     severity: high
-    notes: "⛔ oui — ASK-11 (tolérance) et ASK-12 (référence mlx-audio) avant la porte de parité"
+    notes: "ASK-11 = A (2026-10-01), ASK-12 = A sous condition (2026-10-01)"
     task:
-      needs_decision: [ASK-11, ASK-12]
       goal: "Realtime: fenêtres glissantes encodeur (750) et décodeur (8192) appliquées"
       gate: "embeddings identiques (L2 relative < 1e-3) à `encodeFull` sur un clip ≤ 15 s ; C-moyen : WER ≤ valeur actuelle et comparaison à mlx-audio (commit épinglé) consignée ; texte identique sur C-moyen avec la fenêtre décodeur ; C-xlong (≈ 17 min) : pic stable après 8 192 pas (±5 %), ms/pas au-delà de 8 192 = ms/pas à 8 000 (±5 %) ; pic d'encodage indépendant de la durée (±10 % entre 3 et 12 min)."
       instructions: |
@@ -279,7 +274,6 @@ tasks:
     task:
       goal: "Plafond de frames TTS proportionnel au texte"
       gate: "0 troncature sur 12 textes × 3 graines × 3 packs (4 / 6 / bf16) ; le reproducteur #45 (voix dégénérée ou texte sans ponctuation finale, `--no-sanitize`) s'arrête sous 3 × la longueur attendue ; `a`, `b` et leur distribution frames/jeton consignés."
-      needs_decision: [ASK-9]
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -325,9 +319,8 @@ tasks:
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
   - id: K-22
     subject: "[voxtral K-22] Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
-    notes: "⛔ oui — ASK-28 (rester sur `main` + `Package.resolved` suivi, ou passer au prochain tag avec FluxForge)"
+    notes: "ASK-28 = A (2026-09-30)"
     task:
-      needs_decision: [ASK-28]
       goal: "Dépendances élaguées, Package.resolved suivi, profiler 1.5.1, @available nettoyés"
       gate: "`xcodebuild` Release de `VoxtralCLI`, `VoxtralApp`, `VoxtralBenchmark`, `VoxtralTTSStreamingDemo` : `** BUILD SUCCEEDED **` (4/4) et suite de tests verte ; `swift package show-dependencies` affiche `swift-mlx-profiler` 1.5.1 et la révision de `mlx-swift-lm` notée ; `Package.resolved` suivi, révision identique après `swift package resolve` sur deux clones ; `grep -rc '@available(macOS 1[34]' Sources` = 0 ; temps de build propre de `VoxtralCore` avant/après consigné ; FluxForge compile (si présent sur la machine)."
       instructions: |
@@ -422,9 +415,8 @@ tasks:
   - id: K-28
     subject: "[voxtral K-28] Build depuis un clone neuf, empaquetage Release, démo et RuntimeBeacon robustes"
     severity: low
-    notes: "⛔ oui — ASK-27 (ressource `VoxtralEncoderFull.mlmodelc` embarquée ou téléchargée)"
+    notes: "ASK-27 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-27]
       goal: "Build depuis un clone neuf, empaquetage Release, démo et RuntimeBeacon robustes"
       gate: "`git clone` dans un dossier neuf + `xcodebuild` Release des 4 schémas : `** BUILD SUCCEEDED **` sans « Invalid Resource » ; app empaquetée (script réécrit en `xcodebuild` Release + bundles) lancée : transcrit C-court EN ; test FFmpeg : 1 Mo sur stderr → processus terminé ; annulation → processus tué < 1 s ; nom `../x` refusé avant l'enrôlement, écrasement demandé explicitement ; 1 000 `update` concurrents d'un `end` → 0 manifeste résiduel."
       instructions: |
@@ -457,9 +449,8 @@ tasks:
   - id: K-30
     subject: "[voxtral K-30] Déprécier l'API legacy/morte publique (2.3)"
     severity: low
-    notes: "⛔ oui — ASK-23 (dépréciation 2.3 puis suppression 3.0, ou suppression directe)"
+    notes: "ASK-23 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-23]
       goal: "Déprécier l'API legacy/morte publique (2.3)"
       gate: "liste S-13 lot 2 + S-14 entièrement annotée (grep) ; build de la bibliothèque sans avertissement interne (aucun appel interne à du déprécié) ; recherche GitHub `user:VincentGourbin` sur chaque symbole = 0 usage (relue) et, si FluxForge est présent, son build n'affiche aucun avertissement de dépréciation Voxtral ; CHANGELOG (section 2.3) listant chaque symbole."
       instructions: |
@@ -477,11 +468,10 @@ tasks:
   - id: K-31
     subject: "[voxtral K-31] Revue d'API publique (3.0, sur liste validée)"
     severity: low
-    notes: "⛔ oui — ASK-25 (liste des symboles publics conservés ; version 3.0)"
+    notes: "ASK-25 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-25]
       goal: "Revue d'API publique (3.0, sur liste validée)"
-      gate: "liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte."
+      gate: "liste validée par Vincent (ASK-25 = A) appliquée ; compte consigné : 338 lignes `public` (1 110 avant) ; FluxForge hors porte Voxtral (Vincent, à la fusion) ; suite verte."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -491,15 +481,14 @@ tasks:
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : liste validée par Vincent (ASK-25) appliquée ; `grep -c '^\s*public' -r Sources/VoxtralCore` ≤ 300 ; FluxForge compile sans ses typealias de contournement (`ModelManager.swift`, `LTXBeaconBridge.swift`) ; suite verte.
+        Porte : liste validée par Vincent (ASK-25 = A) appliquée ; compte consigné : 338 lignes `public` (1 110 avant) ; FluxForge hors porte Voxtral (Vincent, à la fusion) ; suite verte.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-30]
   - id: K-32
     subject: "[voxtral K-32] Instrument VoxtralCLI bench validé en A/A (≤3 %), JSON par mesure"
     severity: high
-    notes: "⛔ oui — ASK-26 (sort de `VoxtralBenchmark` : réorienté vers `bench` ou retiré)"
+    notes: "ASK-26 = B (2026-09-30)"
     task:
-      needs_decision: [ASK-26]
       goal: "Instrument VoxtralCLI bench validé en A/A (≤3 %), JSON par mesure"
       gate: "A/A sur la même commande, deux passes après 120 s : dispersion ≤ 3 % sur le total hors chargement et sur `step_ms_p50`, pour `stt` (mini-3b-8bit, C-moyen EN, `.mlx`), `tts` (tts-4b-6bit, texte court, graine 42) et `realtime` (realtime-4b-4bit, C-moyen EN) ; `out_sha256` identique entre passes ; lignes JSON valides contre `docs/bench.schema.json` ; binaire Debug refusé (ligne `REFUSED debug build`) ; `grep -rn resetPeakMemory Sources/VoxtralCore` = 0 ; `chat` (mini-3b-8bit, C-court EN, question fixe de `docs/eval/chat-questions.json`, greedy) : dispersion ≤ 3 % sur `ttft_ms` et tok/s."
       instructions: |
@@ -625,9 +614,8 @@ tasks:
   - id: K-38
     subject: "[voxtral K-38] Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
     severity: high
-    notes: "⛔ oui — ASK-11 (tolérance de parité : texte identique ou WER ≤ réf + 0,2 pt)"
+    notes: "ASK-11 = A (2026-10-01)"
     task:
-      needs_decision: [ASK-11]
       goal: "Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
       gate: "audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11)."
       instructions: |
@@ -647,7 +635,7 @@ tasks:
     severity: high
     notes: "⛔ oui — ASK-13 (écoute à l'aveugle ou porte objective seule) avant de conclure"
     task:
-      needs_decision: [ASK-11, ASK-13]
+      needs_decision: [ASK-13]
       goal: "FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
       gate: "pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige."
       instructions: |
@@ -1213,9 +1201,8 @@ tasks:
   - id: K-74
     subject: "[voxtral K-74] Un seul LLM typé, chargeur amont"
     severity: low
-    notes: "⛔ oui — ASK-23 (`LlamaModel`, `VoxtralConfig`, `PythonVoxtralConfig` publics)"
+    notes: "ASK-23 = A (2026-10-02)"
     task:
-      needs_decision: [ASK-23]
       goal: "Un seul LLM typé, chargeur amont"
       gate: "parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`)."
       instructions: |
@@ -1303,7 +1290,7 @@ tasks:
     subject: "[voxtral K-79] Décider le défaut TTS par la mesure et mesurer la matrice TTS"
     notes: "⛔ oui — ASK-5 (politique de défaut) ; ASK-18 (licence) avant toute recommandation commerciale"
     task:
-      needs_decision: [ASK-5, ASK-13, ASK-18]
+      needs_decision: [ASK-5, ASK-13]
       goal: "Décider le défaut TTS par la mesure et mesurer la matrice TTS"
       gate: "`TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun."
       instructions: |
@@ -1321,9 +1308,9 @@ tasks:
   - id: K-80
     subject: "[voxtral K-80] Produire et publier les packs décidés (SHA-256, cartes)"
     severity: low
-    notes: "⛔ oui — ASK-22 (quels packs, quel compte) ; ASK-18 pour tout pack TTS"
+    notes: "⛔ oui — ASK-22 (quels packs, quel compte) ; ASK-18 = A (2026-10-02, usage non commercial)"
     task:
-      needs_decision: [ASK-16, ASK-18, ASK-19, ASK-20, ASK-22]
+      needs_decision: [ASK-16, ASK-19, ASK-20, ASK-22]
       goal: "Produire et publier les packs décidés (SHA-256, cartes)"
       gate: "pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour."
       instructions: |

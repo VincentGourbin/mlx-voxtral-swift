@@ -30,6 +30,10 @@ Une ligne sans révision résolue de `mlx_swift_lm` n'est pas une référence : 
 
 Aucune ligne : la baseline est À MESURER (PLAN.md §2 ; fiches K-34 à K-37).
 
+> **Note (2026-10-03, R-4)** : dans les sections antérieures à `1a38ff8` (K-32b) ci-dessous, `phases_ms` compte deux
+> fois les phases imbriquées (leur somme dépasse `total_ms`) : ces phases ne servent pas de référence. `ttft_ms`,
+> `step_ms_*`, la phase `encode` et les pics restent valables. Aucune ligne n'est modifiée.
+
 ## 2026-09-30 — K-32 : A/A de validation de l'instrument (`--passes 2 --warmup 1 --cooldown 120 --tag A`)
 
 ```

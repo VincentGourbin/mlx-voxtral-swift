@@ -137,9 +137,9 @@ final class TTSStreamingCancellationTests: XCTestCase {
             ? MLX.abs(stream.asType(.float32) - batch.asType(.float32)).max().item(Float.self) : .infinity
         print("[stream] PARITY samples stream=\(stream.dim(0)) batch=\(batch.dim(0)) max|Δ|=\(maxDiff)")
         XCTAssertEqual(stream.dim(0), batch.dim(0))
-        // Vincent, 2026-10-01: codes identical + audio max|Δ| ≤ 1e-5 (float noise of the per-chunk codec
-        // re-decode; bit-identical audio belongs to K-43, incremental decoding)
-        XCTAssertLessThanOrEqual(maxDiff, 1e-5, "stream concat == batch (seed 42)")
+        // Vincent, 2026-10-03 (ASK.md §Dérogations): codes identical + raw concatenated audio (no trimming) within
+        // max|Δ| ≤ 1e-5 of batch (float noise of the per-chunk codec re-decode); K-43 tolerates 1e-4
+        XCTAssertLessThanOrEqual(maxDiff, 1e-5, "raw stream concat within 1e-5 of batch (seed 42)")
     }
 
     private func waitForReady(_ pipeline: VoxtralTTSPipeline, timeout: TimeInterval = 30) async throws {

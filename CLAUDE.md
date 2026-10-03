@@ -48,12 +48,12 @@ xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
   Construire avec `-onlyUsePackageVersionsFromResolvedFile` ; chaque mesure note les révisions résolues (piège 21).
 - Changer une exigence de version passe par ASK-28 (épinglage, synchronisé avec FluxForge).
 
-## API publique
-- Consommateurs connus : FluxForge Studio (App Store) et SongAnalysisDb. Symboles consommés :
-  `VoxtralPipeline(.mini3b4bit)`, `ModelRegistry`, `ModelDownloader.customModelsDirectory`,
-  `RuntimeBeacon.isEnabled`, `VoxtralTTSPipeline` (audit-stabilite.md §0).
-- Tout retrait ou renommage public est cassant : dépréciation d'abord (K-30), décision de Vincent (ASK-23) ;
-  sinon, changements additifs seulement.
+## API publique (3.0.0)
+- Consommateurs : FluxForge Studio (App Store) et SongAnalysisDb. Symboles consommés : `VoxtralPipeline(.mini3b4bit)`,
+  `VoxtralModelRegistry`, `VoxtralModelDownloader.customModelsDirectory`, `VoxtralRuntimeBeacon.isEnabled`,
+  `VoxtralTTSPipeline` ; anciens noms (`ModelRegistry`…) = typealias dépréciés en 3.x (`Utils/DeprecatedNames.swift`).
+- 3.0.0 = dépréciation (K-30) et retrait (K-31) sans 2.3 publiée (décision de Vincent, 2026-10-03) ; ensuite, additif
+  seulement : tout retrait ou renommage passe par une dépréciation publiée et une décision de Vincent.
 
 ## Commits
 - `type(scope): summary` en anglais (`fix`, `feat`, `docs`, `perf`, `test`, `chore` : `git log`) ; une fiche

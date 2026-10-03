@@ -33,7 +33,7 @@ le 2026-10-02** et appliquée (K-31). Décisions et amendements : §E.
 | Registres | `ModelRegistry` → **`VoxtralModelRegistry`** ; `VoxtralModelInfo` ; `VoxtralTTSRegistry`, `VoxtralTTSModelInfo` ; `VoxtralRealtimeRegistry`, `VoxtralRealtimeModelInfo` | `models`, `defaultModel`, `model(withId:)` ; `printAvailableModels` → `internal` |
 | Téléchargement | `ModelDownloader` → **`VoxtralModelDownloader`** ; `ModelDownloaderError` → **`VoxtralModelDownloaderError`** ; `DownloadProgressCallback` → **`VoxtralDownloadProgressCallback`** | les 9 appels de FluxForge ci-dessus + `downloadRealtimeModel`, `findRealtimeModelPath`, `downloadByRepoId` |
 | Core ML | `VoxtralCoreMLEncoder` (statique seulement), `VoxtralCoreMLVariant`, `VoxtralCoreMLError` | `downloadFromHuggingFace`, `downloadForMLXModel`, `variant(forConfigAt:)`, `fromMLXModelRepoId` ; l'instance et ses fabriques (`init`, `encode`, `fromHuggingFace`, `forMLXModel`, MLMultiArray) → `internal` |
-| Infra | `RuntimeBeacon` → **`VoxtralRuntimeBeacon`** ; `VoxtralError` ; `VoxtralDebug` ; `VoxtralCoreVersion` | `isEnabled`, `begin`, `Session` ; `VoxtralDebug.isEnabled` seulement |
+| Infra | `RuntimeBeacon` → **`VoxtralRuntimeBeacon`** ; `VoxtralError` ; `VoxtralDebug` ; `VoxtralCoreVersion` | `isEnabled`, `begin`, `Session` ; `VoxtralDebug.enabled` et `verboseGeneration` seulement (`VoxtralDebug.swift:14`, `:21` ; correction de fait du 2026-10-03) |
 
 **Renommages** : l'ancien nom reste un `@available(*, deprecated, renamed:)` typealias pendant la 3.x (FluxForge
 compile alors sans ses `typealias FluxModelRegistry`), retrait en 4.0.
@@ -61,6 +61,10 @@ compile alors sans ses `typealias FluxModelRegistry`), retrait en 4.0.
 - **Utilitaires** : `VoxtralMemoryManager`, `VoxtralMLXProfiler` (typealias).
 
 ## C. Retiré (déprécié en 2.3 par K-30/K-27, ASK-23 : retrait en 3.0)
+
+Correction de fait du 2026-10-03 (liste validée inchangée) : la famille `VoxtralConfig` / `LlamaModel` /
+`VoxtralAttention` (et `VoxtralEncoder(Layer)`, `VoxtralMultiModalProjector`, `ProcessedInputs`) est passée `internal`
+(§E), pas supprimée : le modèle vivant la référence encore.
 
 La liste « Deprecated » du `CHANGELOG.md` (K-30, K-27, K-28) : famille portage Python (`VoxtralGenerator`,
 `VoxtralGenerationParameters`, `ProcessedInputs`, la classe `VoxtralCLI`, `VoxtralConfig`, `VoxtralTextConfig`,

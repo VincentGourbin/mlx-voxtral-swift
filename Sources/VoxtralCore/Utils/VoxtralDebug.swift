@@ -1,7 +1,7 @@
 /**
  * VoxtralDebug - Centralized logging for VoxtralCore
  *
- * The library writes nothing to stdout unless `enabled` (CLI `--debug`) or for `console` output a caller asked for
+ * The library writes nothing to stdout unless `enabled` (`VoxtralDebug.enabled = true`, set by the host) or for `console` output a caller asked for
  * (model listings). Messages also go to the unified log (`os.Logger`, subsystem `com.vincentgourbin.voxtral`),
  * readable with Console or `log stream` (K-23).
  */

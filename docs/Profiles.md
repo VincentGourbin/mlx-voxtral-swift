@@ -1,5 +1,7 @@
 # Reference profiles (v0, provisional)
 
+> **Indicative only**: n = 1 pass, loaded machine; not a reference before K-34…K-37 / K-77 (PLAN §0).
+
 A profile fixes **every** setting that matters for one pipeline: weights, backend, memory policy, decoding settings.
 Same profile + same seed = same output, comparable time on comparable hardware. Naming follows the Gemma4 standard:
 `<family>/<bits>bit-<fast|lean>`.
@@ -18,7 +20,7 @@ for the cloud verification of lots 1–2. Quality is compared between packs (sam
 Glossary: **RTF** = processing time ÷ audio duration (< 1 = faster than real time). **TTFA** = time to the first
 audio. **Peak** = highest process footprint, MLX buffer cache included.
 
-## Recommended now
+## Recommended now (indicative; the `lean` profiles are not measured)
 
 | Mac | Transcription | Live transcription | Speech synthesis | Voice cloning |
 |---|---|---|---|---|
@@ -39,14 +41,14 @@ Measured on C-moyen EN (167 s of audio), backend `.mlx`, `maxTokens` nil (sized 
 | Profile | Weights (Hub · GB) | Total | RTF | First token | ms/token | Peak | Text vs bf16 |
 |---|---|---|---|---|---|---|---|
 | `mini/4bit-fast` | `mzbac/voxtral-mini-3b-4bit-mixed` · 3.20 | 12.8 s | 0.077 | 4.7 s | 15.8 | 9.3 GB | differs (−5 % chars) |
-| `mini/4bit-lean` | same | to measure | | | | | |
+| `mini/4bit-lean` | same | not measured | | | | | |
 | `mini/8bit-fast` | `mzbac/voxtral-mini-3b-8bit` · 5.40 | 16.2 s | 0.097 | 4.7 s | 22.0 | 10.9 GB | **identical** |
-| `mini/8bit-lean` | same | to measure | | | | | |
+| `mini/8bit-lean` | same | not measured | | | | | |
 | `mini/16bit-fast` | `mistralai/Voxtral-Mini-3B-2507` · 9.36 | 77.1 s | 0.46 | 4.8 s | 139.1 | 16.8 GB | reference |
-| `mini/16bit-lean` | same | to measure | | | | | |
+| `mini/16bit-lean` | same | not measured | | | | | |
 
 - Long audio (C-long, 11 min 21 s, `mini/8bit`): without a cache limit the peak reaches **37.6 GB**; with
-  `cacheLimitBytes` = 2 GB, **10.3 GB**, same text, no time cost (K-52, measured).
+  `cacheLimitBytes` = 2 GB, **10.3 GB**, same text, 61.5 s against 82.0 s without the limit (K-52; n = 1).
 - Candidate weights: `MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder` (6.02 GB, bf16 encoder) loads since
   K-8 and transcribes C-court EN exactly like `mlx-voxtral` (Python); external WER 4.27 % vs 4.74 % for the uniform
   8-bit. Using a third-party repository in a profile is ASK-16.
@@ -59,9 +61,9 @@ Not measured on this machine (packs not downloaded); K-34 gives the verdict for 
 
 | Profile | Weights (Hub · GB) | Machine | Status |
 |---|---|---|---|
-| `small/4bit-*` | `VincentGOURBIN/voxtral-small-4bit-mixed` · 14.86 (or Markus 4-bit dense encoder · 15.02, loads since K-8) | 32 GB (`lean`, to confirm: issue #21 saw a 22 GB peak) | to measure |
-| `small/8bit-*` | `VincentGOURBIN/voxtral-small-8bit` · 26.50 (ASK-15) | ≥ 48 GB | to measure |
-| `small/16bit-*` | `mistralai/Voxtral-Small-24B-2507` · 48.53 | ≥ 64 GB | to measure |
+| `small/4bit-*` | `VincentGOURBIN/voxtral-small-4bit-mixed` · 14.86 (or Markus 4-bit dense encoder · 15.02, loads since K-8) | 32 GB (`lean`, to confirm: issue #21 saw a 22 GB peak) | not measured |
+| `small/8bit-*` | `VincentGOURBIN/voxtral-small-8bit` · 26.50 (ASK-15) | ≥ 48 GB | not measured |
+| `small/16bit-*` | `mistralai/Voxtral-Small-24B-2507` · 48.53 | ≥ 64 GB | not measured |
 
 ### `realtime` — Voxtral Mini 4B Realtime 2602 (Apache-2.0)
 
@@ -70,12 +72,13 @@ Measured on C-moyen EN (167 s), transcription delay 480 ms (Mistral's recommenda
 | Profile | Weights (Hub · GB) | Total | RTF | ms per frame | Peak | Status |
 |---|---|---|---|---|---|---|
 | `realtime/4bit-fast` | `mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit` · 3.13 | 61.7 s | 0.37 | 27.8 | 9.8 GB | measured |
-| `realtime/4bit-lean` | same | to measure | | | | |
+| `realtime/4bit-lean` | same | not measured | | | | |
 | `realtime/8bit-*` | **none loadable** → pack PK-1 to publish (4.73 GB) | | | | | ASK-20, ASK-22 |
 | `realtime/16bit-fast` | `mlx-community/…-2602-fp16` · 8.87 (or `mistralai/…` bf16 · 8.86, loads since K-9, same text) | 293.6 s | 1.76 | 137.9 | 16.4 GB | **slower than real time** (fp32, K-60) |
-| `realtime/16bit-lean` | same | to measure | | | | |
+| `realtime/16bit-lean` | same | not measured | | | | |
 
-72 % of the decode steps emit no text (`pad_fraction`): the room fiche K-73 would use.
+72 % of the decode steps emit no text (`pad_fraction`, `[STREAMING_PAD]` and `[STREAMING_WORD]` included): not the
+margin K-73 would use as is.
 
 ### `tts` — Voxtral 4B TTS 2603 (**CC BY-NC 4.0**)
 
@@ -91,7 +94,7 @@ Measured with `neutral_female`, seed 42; short = 13 words, long = 163 words. The
 | `tts/6bit-fast` | `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit` · 3.47 | short / long | 7.8 / 77.3 s | 0.65 / 0.54 | 0.25 / 0.40 s | 5.2 / 14.1 GB |
 | `tts/8bit-*` | **none valid** → pack PK-2 to publish (4.37 GB) | | | | | ASK-19, ASK-22 |
 | `tts/16bit-fast` | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` · 8.00 (registry default) | short / long | 6.5 / 83.9 s | **1.81 / 1.85** | 0.39 / 0.51 s | 10.2 / 20.6 GB |
-| `tts/*-lean` | same packs | to measure | | | | |
+| `tts/*-lean` | same packs | not measured | | | | |
 
 - Streaming a long text is much slower than batch today (each chunk re-decodes the audio so far: 495 s for 182 s of
   audio in 4-bit, K-43): stream short texts only.
@@ -102,9 +105,9 @@ Measured with `neutral_female`, seed 42; short = 13 words, long = 163 words. The
 
 | Setting | `fast` | `lean` | Status |
 |---|---|---|---|
-| STT backend | `.mlx` | `.mlx` | measured: Core ML (`.auto`) is 1.1–1.9 × slower on these clips (K-32b); the rule of K-42 decides (ASK-6) |
-| `cacheLimitBytes` (STT, TTS, Realtime) | 4 GB | 2 GB | 2 GB measured on STT C-long (K-52); 4 GB to measure |
-| Clear the MLX cache after each call | no | yes (`unload()` between models of a chain) | to measure |
+| STT backend | `.mlx` | `.mlx` | open: ASK-6 / K-42 (Core ML `.auto` was 1.1–1.9 × slower on these clips, K-32b) |
+| `cacheLimitBytes` (STT, TTS, Realtime) | 4 GB | 2 GB | 2 GB measured on STT C-long (K-52); 4 GB not measured |
+| Clear the MLX cache after each call | no | yes (`unload()` between models of a chain) | not measured |
 | STT `maxTokens` | nil (6 tokens/s of audio + 64, ≥ 500) | same | measured (K-5) |
 | STT `temperature` / `repetitionPenalty` | 0 / 1.2 | 0 / 1.2 | 1.0 to evaluate with WER (K-33; external: 1.2 drops 27 % of commas on a 10 min podcast) |
 | Realtime `transcriptionDelayMs` | 480 | 480 | Mistral's value (FLEURS WER 8.72 %) |
