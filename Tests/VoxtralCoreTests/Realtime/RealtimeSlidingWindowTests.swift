@@ -79,4 +79,19 @@ final class RealtimeSlidingWindowTests: XCTestCase {
         print("[sliding-window] EQUIV within window: L2 rel = \(l2)")
         XCTAssertLessThan(l2, 1e-3)
     }
+
+    // The conv stem evaluated in slices (K-15: cancellable on long audio) equals the one-pass conv stem, for slice
+    // sizes that do and do not divide the length
+    func testChunkedConvStemMatchesOnePass() throws {
+        let encoder = try tinyEncoder()
+        let mel = MLXRandom.normal([16, 98])
+        let reference = encoder.convStem(mel)
+        for chunk in [2, 6, 10, 98, 200] {
+            let chunked = try XCTUnwrap(encoder.convStemChunked(mel, chunkFrames: chunk))
+            XCTAssertEqual(chunked.shape, reference.shape, "chunk \(chunk)")
+            let l2 = relativeL2(chunked, reference)
+            print("[conv-stem] chunk \(chunk): L2 rel = \(l2)")
+            XCTAssertLessThan(l2, 1e-6, "chunk \(chunk)")
+        }
+    }
 }

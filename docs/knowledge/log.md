@@ -143,3 +143,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-03 — **K-37 : enrôlement** ≈ 62–65 ms/époque (6 bits comme bf16) ; pic 2,7 Go seul contre 6,1 Go (6 bits) /
   11,6 Go (bf16) après une synthèse dans la même pipeline : libérer le LLM avant d'enrôler vaut le code (K-64), car il
   ne sert pas à l'enrôlement (voix identique quel que soit le pack). `bench enroll --seed` n'était pas appliqué avant.
+- 2026-10-03 — **K-15, complément `.auto`** : la boucle de l'encodeur Core ML n'avait aucun point d'annulation (12,3 s
+  d'attente) → 221 ms ; le `convStem` Realtime, évalué d'un bloc sur tout l'audio, retenait l'annulation ≈ 3 s une fois
+  sur trois → évalué par tranches de 60 s (résultat identique, L2 0). Leçon : un test d'annulation qui ne passe qu'une
+  fois ne prouve rien si l'instant d'annulation tombe dans une phase variable ; le relancer.

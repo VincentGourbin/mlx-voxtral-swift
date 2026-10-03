@@ -88,8 +88,10 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   audio stops at about 3 × the expected duration instead of 2 500 frames (200 s); `framesPerTextToken = nil` restores
   the fixed cap. `lastSynthesisTruncated` tells when the cap was reached.
 - **K-15 — work off Swift's cooperative pool**: model loading and generation run on a dedicated queue; a cancelled
-  Task stops a transcription, a synthesis or a Realtime run within one step (< 200 ms measured on 11 min of audio)
-  with `CancellationError`, the pipeline back to `.ready`.
+  Task stops a transcription, a synthesis or a Realtime run within one step with `CancellationError`, the pipeline
+  back to `.ready`. Measured on 11 min of audio: STT 116 ms (`.mlx`) and 221 ms (`.auto`, Core ML encoder), TTS batch
+  61 ms, Realtime 49 ms. The work runs on one serial queue: STT and TTS started in parallel by a host now run one
+  after the other.
 - **K-24 — STT and Realtime downloads skip `consolidated.safetensors`** (a second copy of the weights their
   loaders never read: Mini 3B 9.36 GB instead of 18.7 GB, Small 24B 48.5 instead of 97 GB); registry `size` shows the
   exact size and `quantization` the real precision (`bfloat16` for the Mistral STT packs); the Core ML encoder variant

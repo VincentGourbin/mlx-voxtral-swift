@@ -308,6 +308,36 @@ class VoxtralRealtimeEncoder: Module {
         return x
     }
 
+    /// The conv stem evaluated in slices of `chunkFrames` mel frames (even), each with 4 frames of left context: conv1
+    /// (k 3, s 1) and conv2 (k 3, s 2) are causal, so output j only reads mel frames 2j-3 … 2j+1 and the result equals
+    /// `convStem(mel)`. Each slice is evaluated, and a cancelled caller stops between slices instead of waiting for
+    /// the whole audio (≈ 3 s on 11 min, K-15). Returns nil when cancelled.
+    func convStemChunked(_ mel: MLXArray, chunkFrames: Int = 6000) -> MLXArray? {
+        let frames = mel.dim(1)
+        precondition(chunkFrames > 0 && chunkFrames % 2 == 0, "chunkFrames must be even")
+        let context = 4
+        var pieces: [MLXArray] = []
+        for start in stride(from: 0, to: frames, by: chunkFrames) {
+            if VoxtralCancellation.isCancelled { return nil }
+            let end = min(start + chunkFrames, frames)
+            let from = max(0, start - context)
+            var x = mel[0..., from ..< end].transposed(1, 0).expandedDimensions(axis: 0)
+            x = gelu(conv1(x))
+            x = gelu(conv2(x))
+            x = x.squeezed(axis: 0)
+            // Outputs computed from the left context (zero-padded inside this slice) are dropped: 2 when there is one
+            let piece = start == 0 ? x : x[((start - from) / 2)...]
+            MLX.eval(piece)
+            pieces.append(piece)
+        }
+        var x = MLX.concatenated(pieces, axis: 0)
+        let trunc = x.dim(0) % config.downsampleFactor
+        if trunc > 0 {
+            x = x[trunc..., 0...]
+        }
+        return x
+    }
+
     // MARK: - Transformer + Adapter
 
     /// Downsample 4x and project to decoder dimension.
@@ -327,13 +357,18 @@ class VoxtralRealtimeEncoder: Module {
     /// pass would attend past 15 s, a context the model never saw, and degenerate.
     /// mel: [mel_bins, frames] → [seq/4, decoder_dim]
     func callAsFunction(_ mel: MLXArray) -> MLXArray {
-        let convOut = convStem(mel)
-        if convOut.dim(0) <= config.slidingWindow {
-            return encodeFull(convOut)
+        // Within the window (mel ≤ 2 × window frames): one pass, full causal attention
+        if mel.dim(1) <= 2 * config.slidingWindow {
+            let convOut = convStem(mel)
+            if convOut.dim(0) <= config.slidingWindow {
+                return encodeFull(convOut)
+            }
+            MLX.eval(convOut)
+            return downsampleAndProject(encodeChunked(convOut))
         }
-        // The conv stem over the whole audio, evaluated before the chunks: a cancelled caller then stops at the
-        // first chunk boundary (K-15)
-        MLX.eval(convOut)
+        // Long audio: the conv stem slice by slice, then the transformer chunk by chunk, so a cancelled caller stops
+        // at the next slice or chunk boundary (K-15); the pipeline then throws
+        guard let convOut = convStemChunked(mel) else { return MLXArray.zeros([0, config.dim]) }  // cancelled
         return downsampleAndProject(encodeChunked(convOut))
     }
 

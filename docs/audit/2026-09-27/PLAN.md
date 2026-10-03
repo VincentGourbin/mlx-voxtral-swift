@@ -1175,6 +1175,17 @@ Gabarits :
 - Écarts : VoxtralApp est un exécutable SwiftPM ; lancé seul il n'ouvre pas de fenêtre et, emballé dans un `.app`, ses
   bundles de ressources doivent être à la racine du bundle (sinon `Bundle.module` arrête l'app) : point pour K-28
   (empaquetage). Un premier enregistrement (5 min) s'est arrêté avant le clic : refait.
+- **Complément du 2026-10-03 (vérification du planificateur, décision de Vincent : la porte couvre `.auto`)** :
+  - `testCancelSTTOnCLongAuto` (`VoxtralPipeline(model: .mini3b8bit)`, défaut `.auto`, échec si
+    `encoderStatus` ne dit pas `Core ML available: true`). Rouge sans le correctif :
+    `Executed 1 test, with 1 failure` ; `[cancel] STT .auto 12291 ms, state ready`.
+  - Correctifs : `try VoxtralCancellation.check()` à chaque fenêtre de `encodeCoreML` (couvre aussi `chat()`) ;
+    Realtime : le `convStem` sur tout l'audio, évalué d'un bloc, retenait l'annulation ≈ 3 s (une fois sur trois :
+    `[cancel] RT 3085 ms`, puis 434 / 216 ms) → `convStemChunked` (tranches de 60 s, 4 trames de contexte,
+    `RealtimeSlidingWindowTests.testChunkedConvStemMatchesOnePass` : L2 rel = 0.0 pour 5 tailles de tranche).
+  - Vert : `Executed 4 tests, with 0 failures` ; `[cancel] STT 116 ms` · `STT .auto 221 ms` · `TTS 61 ms` ·
+    `RT 49 ms`, état `ready`. Témoin Realtime inchangé : `out_sha256` `318f6cc0…` (62,0 s). Suite : `Executed 584
+    tests, with 37 tests skipped and 0 failures`.
 
 ## K-24 — Registres exacts (tailles, précisions), consolidated exclu en STT, variante Core ML par config — 2026-10-01 — validée
 - Fait : `ModelDownloader.downloadRepoDirect(…, excluding:)` (additif) et `selectFiles` ; STT (registre et repli par

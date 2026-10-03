@@ -2,7 +2,7 @@
  * CancellationTests - K-15 (cooperative cancellation, work off the cooperative pool)
  *
  * A cancelled Task stops a long generation within 2 s with CancellationError and leaves the pipeline `.ready`:
- * STT on C-long (≈ 11 min, mini-3b-8bit `.mlx`), TTS batch on a long text (tts-4b-4bit), Realtime on C-long.
+ * STT on C-long (≈ 11 min, mini-3b-8bit, backends `.mlx` and `.auto` with Core ML), TTS batch on a long text (tts-4b-4bit), Realtime on C-long.
  * Each run is cancelled 3 s after it starts. Before K-15 the work ran to its end (minutes).
  * Heavy (real models): skipped unless VOXTRAL_CANCEL=1 (`TEST_RUNNER_VOXTRAL_CANCEL=1 xcodebuild test …`);
  * C-long is `.local-runs/corpus/c_long.wav` (PLAN.md §5).
@@ -49,6 +49,19 @@ final class CancellationTests: XCTestCase {
         try await pipeline.loadModel()
         let ms = try await cancelAfterThreeSeconds("STT") { _ = try await pipeline.transcribe(audio: audio) }
         print("[cancel] STT \(Int(ms)) ms, state \(pipeline.state)")
+        XCTAssertLessThan(ms, 2000)
+        XCTAssertTrue(pipeline.isReady)
+    }
+
+    /// Same on the default backend `.auto` (Core ML encoder): its window loop had no cancellation point (K-15, 2026-10-03)
+    func testCancelSTTOnCLongAuto() async throws {
+        let audio = try cLong()
+        let pipeline = VoxtralPipeline(model: .mini3b8bit)
+        try await pipeline.loadModel()
+        let status = pipeline.encoderStatus
+        XCTAssertTrue(status.contains("Core ML available: true"), "the test must run the Core ML encoder: \(status)")
+        let ms = try await cancelAfterThreeSeconds("STT .auto") { _ = try await pipeline.transcribe(audio: audio) }
+        print("[cancel] STT .auto \(Int(ms)) ms, state \(pipeline.state)")
         XCTAssertLessThan(ms, 2000)
         XCTAssertTrue(pipeline.isReady)
     }

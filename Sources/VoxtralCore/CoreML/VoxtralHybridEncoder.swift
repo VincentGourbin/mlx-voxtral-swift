@@ -234,6 +234,8 @@ class VoxtralHybridEncoder {
         // Process each chunk through Core ML
         // Note: Core ML expects [1, 128, 3000] per inference
         for chunkIdx in 0..<numChunks {
+            // Cancellation point per 30 s window: a cancelled transcription stops here (K-15, `.auto` backend)
+            try VoxtralCancellation.check()
             // Extract single chunk
             let chunk = inputFeatures[chunkIdx]  // [128, 3000]
             let batchedChunk = expandedDimensions(chunk, axis: 0)  // [1, 128, 3000]

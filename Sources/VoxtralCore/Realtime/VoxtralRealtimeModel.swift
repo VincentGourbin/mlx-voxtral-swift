@@ -75,6 +75,8 @@ class VoxtralRealtimeModel: Module {
         // A caught MLX error leaves empty arrays: stop before reading shapes or items;
         // the public boundary (withMLXErrors) then throws VoxtralError.mlx (K-1)
         if MLXErrorScope.hasError { return ([], adapterOut) }
+        // Cancelled during the encoding: stop before reading shapes; the pipeline throws CancellationError (K-15)
+        if VoxtralCancellation.isCancelled { return ([], adapterOut) }
         DTypeAudit.report("realtime", "mel", mel)
         DTypeAudit.report("realtime", "encoder_out", adapterOut)
         let nAudioTotal = adapterOut.dim(0)
