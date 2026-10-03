@@ -51,6 +51,8 @@ Scripts/CoreMLConversion/output/
 # Audio/Media files (for testing - not committed)
 *.mp3
 *.wav
+# Evaluation clips referenced by docs/eval/corpus.json (K-33): versioned, their SHA-256 is checked by `voxtral eval`
+!docs/eval/clips/*.wav
 *.m4a
 *.flac
 *.ogg
