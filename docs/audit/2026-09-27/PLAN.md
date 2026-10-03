@@ -1627,6 +1627,13 @@ Statistics:
   - `DECISION residency : (b−a)/a = +130 % (6 bits) / +334 % (bf16) → garder` (`docs/knowledge/decisions/enroll-residency.md`).
 - Constat : la voix enrôlée est identique entre packs et scénarios (`f18162fc…`) : l'enrôlement n'utilise pas le LLM.
 
+- Complément du 2026-10-03 (vérification #586, décision de Vincent : séries refaites) : quatre séries `A2-*` à
+  `0074f910` (arbre propre, binaire reconstruit avant, aucune compilation pendant), `machine-check … --cooldown 120
+  --procs 'Voxtral.*|FluxForge.*'` sans `KO` avant chaque série (sorties dans le commentaire de #586 ; un premier
+  essai de `A2-6bit-after_synthesis` refusé : `mediaanalysisd` 80 %, refait). A/A `epoch_ms_p50` : 0,03 / 1,04 / 0,13 /
+  0,11 % ; pics (i) → (ii) : 6 bits 2668.9 → 6140.9 Mo (+130.1 %), bf16
+  2664.3 → 11585.6 Mo (+334.8 %) → garder (reconfirmé). Lignes dans `BENCHMARKS.md`.
+  Réserve : Spotlight actif en fin de 5 passes sur 8 (`top_process`).
 ## R-4 — régularisation après la vérification du 2026-10-03 — rapportée
 - Fait (#608) : `fix(R-4)` (`f7795529`) : avertissement « experimental » de K-8 via `VoxtralDebug.always`,
   `VoxtralCoreVersion` 3.0.0. `docs(R-4)` : décisions de Vincent et du planificateur du 2026-10-03 dans `ASK.md`

@@ -19,3 +19,15 @@ codec decoder, which is bf16 in every pack, and never runs the LLM.
 **Decision**: (ii) − (i) ≥ 5 % → the residency part of K-64 is **kept**. Freeing (or never materializing) the LLM
 before enrolling saves 3.5 GB (6-bit) to 8.9 GB (bf16) with no effect on the result, since the LLM does not take part
 in enrollment. Speed is the same in both scenarios (≈ 62–65 ms per epoch).
+
+## Séries refaites le 2026-10-03 (`0074f910`, tags `A2-*`, machine-check sans `KO` avant chaque série)
+
+| Pack | (i) seul : pic | (ii) après synthèse : pic | (ii) − (i) | `epoch_ms_p50` (i) / (ii) | A/A `epoch_ms_p50` (i) / (ii) |
+|---|---|---|---|---|---|
+| `tts-4b-6bit` | 2668.9 Mo | 6140.9 Mo | **+130.1 %** | 61.86 / 61.98 ms | 0,03 / 1,04 % |
+| `tts-4b-mlx` (bf16) | 2664.3 Mo | 11585.6 Mo | **+334.8 %** | 61.53 / 61.22 ms | 0,13 / 0,11 % |
+
+Décision reconfirmée : (ii) − (i) ≥ 5 % → **garder** le volet résidence de K-64. Ces valeurs remplacent celles du
+tableau ci-dessus (dont la série `mlx cli` écartée : 2 674 Mo et « 64.5 (redo) » étaient inexacts).
+Réserve : Spotlight (`CoreSpotlight`, 87–110 %) tournait en fin de 5 des 8 passes (`top_process`), sans effet visible
+sur la dispersion.
