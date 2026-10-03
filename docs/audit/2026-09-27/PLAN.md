@@ -1646,3 +1646,11 @@ Statistics:
   - `EnrollmentReproTests` : `Executed 5 tests, with 0 failures (0 unexpected) in 5.118 (5.121) seconds`, exit=0
   - `STTMaskParityTests` : `Executed 1 test, with 0 failures (0 unexpected) in 35.888 (35.890) seconds`, exit=0
 - Essai à blanc `dispatch.py tasks.yaml` : `Avertissements (1)` (K-61 : ASK-9 a une réponse datée) ; `Erreurs     : aucune`.
+
+## Rôles : session Voxtral du Mac autonome — 2026-10-03 — fait
+- Décision de Vincent du 2026-10-03 : la session Voxtral du Mac planifie, dispatche, exécute, vérifie
+  (`applied` → `verified`) et replanifie ce dépôt ; la session cloud n'intervient que sur demande d'audit. Protocole de
+  vérification (deux sous-agents en lecture seule, règles de preuve), périmètre des décisions de l'agent et ordre de
+  travail : `docs/audit/2026-09-27/VERIFY.md`. `CLAUDE.md` §Rôles et `ASK.md` §Dérogations mis à jour ; décision K-14 du
+  2026-10-03 (porte reformulée) inscrite. #590 (replanification des lots 4 à 6) passe à la session du Mac.
+

@@ -538,6 +538,13 @@ réponse datée ici.
 
 ### Dérogations
 
+- **Rôles (2026-10-03, Vincent)** : session Voxtral du Mac autonome (plan, dispatch, exécution, vérification,
+  replanification) ; remplace la répartition du 2026-09-28 pour ce dépôt. Protocole : `VERIFY.md`.
+- **K-14 (#564), 2026-10-03** (décision de Vincent, donnée au planificateur ; porte reformulée) : « 0 troncature » —
+  une sortie déjà au-delà de 3 × l'attendu peut être coupée par le plafond, même si le texte arrive plus tard (cas
+  fr01 `tts-4b-6bit` graine 2, 517 → 143 frames, accepté) ; reproducteur #45 tenu si la génération s'arrête au plafond
+  ou en dessous (≤ 70 + ⌈10,4 × jetons⌉ ; observé 133 = plafond à 6 jetons, avant : 209).
+
 - **K-31, 2026-10-02** (Vincent, session Mac) : liste validée telle quelle, appliquée sur la branche d'audit (3.0
   directe) ; 338 lignes `public` acceptées au lieu de ≤ 300 (`docs/audit/2026-09-27/K-31-liste-api.md` §E). La clause
   FluxForge sort de la porte Voxtral : Vincent la traite à la fusion (entrée FluxForge du 2026-10-03 ci-dessous).

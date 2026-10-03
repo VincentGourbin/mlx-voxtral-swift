@@ -3,10 +3,10 @@
 Consignes d'agent, tirées du plan d'audit du 2026-09-27 ([`PLAN.md`](docs/audit/2026-09-27/PLAN.md) §0, §5).
 Mémoire : [`docs/knowledge/index.md`](docs/knowledge/index.md) ; toute conclusion durable va dans [`log.md`](docs/knowledge/log.md).
 
-## Rôles (décidés par Vincent le 2026-09-28)
-- La session Voxtral du Mac est la seule à committer ici ; tout autre agent passe par une tâche action-plans.
-- Planification et vérification (applied → verified) : une session cloud, dans action-plans uniquement.
-- Réponses aux ASK et fusions : Vincent.
+## Rôles (décision de Vincent du 2026-10-03)
+- Session Voxtral du Mac autonome : plan, dispatch, exécution, vérification ([`VERIFY.md`](docs/audit/2026-09-27/VERIFY.md)), replan.
+- À Vincent seulement (ASK fermée, tâche `blocked`, un message par jour au plus) : API publique, défauts publics,
+  garanties mesurées affaiblies, dépendances et licences, fusions sur `main` et tags, FluxForge.
 
 ## Build : `xcodebuild`, jamais `swift build`
 `swift build` ne compile ni n'embarque complètement les shaders Metal de MLX (commentaire du mainteneur,
