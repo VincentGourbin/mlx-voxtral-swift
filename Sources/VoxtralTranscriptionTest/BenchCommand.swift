@@ -627,7 +627,7 @@ struct BenchEnroll: AsyncParsableCommand {
     @Option(name: .long) var model: String = "tts-4b-6bit"
     @Option(name: .long, help: "Reference audio") var input: String
     @Option(name: .long) var epochs: Int = 100
-    @Option(name: .long, help: "Recorded for K-26 (seeded enrollment); the loop uses its own random state until then")
+    @Option(name: .long, help: "Enrollment seed (K-26): same seed and reference give the same voice")
     var seed: UInt64 = 42
     @Flag(name: .long, help: "Synthesize once before enrolling (resident LLM scenario)") var afterSynthesis: Bool = false
     @OptionGroup var common: BenchCommonOptions
@@ -641,7 +641,7 @@ struct BenchEnroll: AsyncParsableCommand {
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("voxtral-bench-enroll.safetensors")
         let base: [String: Any] = [
             "pipeline": "enroll", "model": model, "input": input, "epochs": epochs, "seed": Int(seed),
-            "after_synthesis": afterSynthesis, "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default",
+            "after_synthesis": afterSynthesis, "scenario": afterSynthesis ? "after_synthesis" : "cli", "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default",
         ]
         try await BenchRunner.run(common, base: base, metrics: ["total_ms", "epoch_ms_p50"]) { _, _ in
             var epochTimes: [Double] = []
@@ -651,6 +651,7 @@ struct BenchEnroll: AsyncParsableCommand {
             var config = VoxtralVoiceEnrollment.Config()
             config.epochs = epochs
             config.logEvery = 1
+            config.seed = seed  // K-37: the seed was recorded in the line but never applied
             let m = try await PassMeasurement.run {
                 embedding = try pipeline.enrollVoice(
                     referenceURL: URL(fileURLWithPath: input), outputURL: output, config: config,
