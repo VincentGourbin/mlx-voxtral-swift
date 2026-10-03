@@ -27,6 +27,10 @@ print((okContains ? "OK  " : "KO  ") + "contains (accents, word boundaries)"); i
 let last = WER.lastSentence(of: "One. Two three!\nAucune donnée envoyée dans le cloud.\n")
 print((last == "Aucune donnée envoyée dans le cloud" ? "OK  " : "KO  ") + "lastSentence → \(last)")
 if last != "Aucune donnée envoyée dans le cloud" { failures += 1 }
+let cov = WER.coverage("bla No account is required, no data is sent to the cloud", sentence: "No account is required, and no data is sent to the cloud.")
+print((abs(cov - 11.0 / 12) < 1e-9 ? "OK  " : "KO  ") + "coverage one word missing → \(cov)"); if abs(cov - 11.0 / 12) >= 1e-9 { failures += 1 }
+let full = WER.coverage("x Aucune donnée envoyée dans le cloud.", sentence: "Aucune donnee envoyee dans le cloud")
+print((full == 1 ? "OK  " : "KO  ") + "coverage full sentence → \(full)"); if full != 1 { failures += 1 }
 exit(failures == 0 ? 0 : 1)
 SWIFT
 xcrun swiftc -swift-version 6 -O -o "$WORK/check" Sources/VoxtralTranscriptionTest/WER.swift "$WORK/main.swift"

@@ -96,8 +96,11 @@ enum EvalRunner {
         record["length_ratio"] = BenchJSON.round(
             score.referenceWords == 0 ? 0 : Double(score.hypothesisWords) / Double(score.referenceWords), 3) ?? 0
         record["last_sentence_present"] = WER.contains(hypothesis, sentence: WER.lastSentence(of: reference))
+        // Gate (K-33, Vincent 2026-10-03): the last sentence counts as present at coverage ≥ 0.9
+        record["last_sentence_coverage"] = BenchJSON.round(WER.coverage(hypothesis, sentence: WER.lastSentence(of: reference)), 3) ?? 0
         if let required = clip.mustContain {
             record["must_contain_present"] = required.allSatisfy { WER.contains(hypothesis, sentence: $0) }
+            record["must_contain_coverage"] = BenchJSON.round(required.map { WER.coverage(hypothesis, sentence: $0) }.min() ?? 0, 3) ?? 0
         }
         record["truncated"] = truncated
         record["out_sha256"] = BenchJSON.sha256(Data(hypothesis.utf8))

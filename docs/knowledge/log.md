@@ -151,3 +151,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   CHANGELOG 3.0.0 sans symbole interne, PLAN §3 = tracker). Parité streaming K-12 jugée sur la sortie brute (sans
   rognage) : codes identiques, audio à 1,24e-6 du batch (≤ 1e-5, décision de Vincent) ; K-43 tolère 1e-4. Les quatre
   classes de tests gardés restent vertes à HEAD.
+- 2026-10-03 — **K-33 débloquée (Vincent, option A)** : « dernière phrase présente » = ≥ 90 % de ses mots
+  (`last_sentence_coverage`), C-long jugé par langue. À retenir pour les hôtes : Voxtral Mini **ne sait pas transcrire
+  d'un bloc un audio long qui alterne anglais et français** (il traduit le français) et ne sera pas corrigé : découper
+  par langue avant de transcrire.

@@ -80,6 +80,32 @@ enum WER {
         return !needle.isEmpty && (" " + normalize(text) + " ").contains(" " + needle + " ")
     }
 
+    /// Share of the words of `sentence` found, in order, in `text` (normalized): 1 when the sentence is present, 11/12
+    /// when one word of twelve is missing. Computed on the best-matching window of `text` (K-33, Vincent 2026-10-03:
+    /// « last sentence present » = coverage ≥ 0.9)
+    static func coverage(_ text: String, sentence: String) -> Double {
+        let needle = words(sentence), hay = words(text)
+        guard !needle.isEmpty else { return 0 }
+        guard !hay.isEmpty else { return 0 }
+        // Longest common subsequence of the sentence with each window of the text twice its length
+        let width = min(hay.count, needle.count * 2)
+        var best = 0
+        for start in 0 ... max(0, hay.count - width) {
+            let window = hay[start ..< min(hay.count, start + width)]
+            var previous = [Int](repeating: 0, count: window.count + 1)
+            for word in needle {
+                var current = [Int](repeating: 0, count: window.count + 1)
+                for (j, other) in window.enumerated() {
+                    current[j + 1] = word == other ? previous[j] + 1 : max(previous[j + 1], current[j])
+                }
+                previous = current
+            }
+            best = max(best, previous[window.count])
+            if best == needle.count { break }
+        }
+        return Double(best) / Double(needle.count)
+    }
+
     /// Last sentence of a reference text (split on . ! ?)
     static func lastSentence(of text: String) -> String {
         let sentences = text.split(whereSeparator: { ".!?".contains($0) })

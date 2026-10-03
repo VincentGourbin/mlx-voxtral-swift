@@ -1466,7 +1466,7 @@ Gabarits :
   tracker) : note indicative, n = 1, machine chargée, jamais une baseline.
 - Désormais, l'entrée d'une fiche `applied` est titrée « — rapportée » (la vérification la valide).
 
-## K-33 — Éval reproductible (WER, juge, auto-détection) — 2026-10-03 — bloquée (2 critères de l'amendement du 2026-10-01)
+## K-33 — Éval reproductible (WER, juge, auto-détection) — 2026-10-03 — rapportée (décision de Vincent : option A)
 - Fait : `voxtral eval stt|realtime` (`EvalCommand.swift`, `WER.swift` vérifié par `Scripts/check-wer.sh`, 10 cas ;
   même valeur que jiwer 3.0.4 sur la référence mlx-audio) ; corpus déclaré `docs/eval/corpus.json` (12 clips, SHA-256
   de chaque audio et référence, refus sinon) ; `voxtral tts --seed` appliqué aux voix prédéfinies et au mélange.
@@ -1494,6 +1494,12 @@ Gabarits :
     ordinateur. ») ; le clip est sain (pauses normales).
 - Lignes `BENCH`/`EVAL` dans `BENCHMARKS.md` (section du 2026-10-03).
 
+- Décision de Vincent du 2026-10-03 (`ASK.md` §Dérogations) : option A. `voxtral eval` ajoute
+  `last_sentence_coverage` et `must_contain_coverage` (part des mots retrouvés dans l'ordre ; `Scripts/check-wer.sh` :
+  11/12 → 0,917). Sur les transcriptions enregistrées : C-moyen EN `last_sentence_coverage` 0,917 (« and » manquant),
+  ratio 0,995 → tenu ; C-moyen FR dernière phrase présente, ratio 1,0 → tenu ; C-long par segment = ces deux clips :
+  première phrase EN « Flux Forge Studio turns… » 10/11 mots = 0,909 et dernière phrase FR présente → tenu. C-long
+  transcrit d'un bloc en auto-détection : 0,167 / ratio 0,635 (traduction FR → EN), limite du modèle consignée.
 ## K-37 — Baseline enrôlement (s/époque, pic, résidence du LLM) — 2026-10-03 — rapportée
 - Premier commit (`fc8af1f7`) : `bench enroll` applique la graine (`config.seed = seed`, aide corrigée) et nomme le
   scénario (`cli` | `after_synthesis`). Contrôle de graine (5 époques, 2 passes) : rouge sans le correctif

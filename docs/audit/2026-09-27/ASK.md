@@ -563,6 +563,11 @@ Décisions de Vincent du 2026-10-03, données au planificateur :
   la boucle Core ML (`VoxtralHybridEncoder.swift`, `encodeCoreML`) et test C-long en `.auto`, par le commit
   `fix(K-15)` (`a4beb715`).
 
+- **K-33 (#585), 2026-10-03** (Vincent, session Mac) : option A. « Dernière phrase présente » = au moins 90 % de ses
+  mots retrouvés dans l'ordre (`last_sentence_coverage` ≥ 0,9 ; même règle pour les phrases exigées) ; C-long évalué
+  par segment de langue (= C-moyen EN et FR). La traduction du français en anglais sur un audio long EN/FR alterné,
+  transcrit d'un bloc, est une limite du modèle qui ne sera pas corrigée : aucune fiche de correctif.
+
 Décisions du planificateur du 2026-10-03 :
 
 - Clauses sur du code retiré ou rendu `internal` par K-31 (liste ASK-25 = A, 3.0 directe), sans objet à HEAD : K-3
