@@ -74,7 +74,7 @@ struct PackQuantization: Sendable {
     private func warnIfExperimental(source: String) {
         let experimental = modes.subtracting([.affine]).map(\.rawValue).sorted()
         guard !experimental.isEmpty else { return }
-        VoxtralDebug.console(
+        VoxtralDebug.always(
             "warning: \(source): quantization mode \(experimental.joined(separator: ", ")) is experimental "
                 + "(no profile, quality not measured)")
     }

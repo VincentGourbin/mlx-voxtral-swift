@@ -42,7 +42,7 @@
 
 // MARK: - Version Information
 // Python: __version__ = "0.1.0"
-public let VoxtralCoreVersion = "0.1.0"
+public let VoxtralCoreVersion = "3.0.0"
 
 // MARK: - Public API Summary
 /**
