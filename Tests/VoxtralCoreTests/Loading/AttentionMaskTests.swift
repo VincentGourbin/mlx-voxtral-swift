@@ -35,10 +35,12 @@ final class AttentionMaskTests: XCTestCase {
         let model = try makeReducedVoxtralModel()
         let language = try XCTUnwrap(model.language_model as? LlamaStandardModel)
         let caches: [any KVCache] = (0 ..< 2).map { _ in RotatingKVCache(maxSize: 8, keep: 0) }
-        let embeddings = MLXRandom.normal([1, 12, 64], key: MLXRandom.key(3))
+        // 10 + 6 positions through a window of 8: at the 2nd chunk the wrapped cache presents fewer keys (13) than
+        // offset + T (16), the width of the former hand-made mask (K-3, discriminating since 2026-10-03)
+        let embeddings = MLXRandom.normal([1, 16, 64], key: MLXRandom.key(3))
         var keysShapes: [[Int]] = []
         try withMLXErrors { errors in
-            for chunk in [embeddings[0..., 0 ..< 6, 0...], embeddings[0..., 6 ..< 12, 0...]] {
+            for chunk in [embeddings[0..., 0 ..< 10, 0...], embeddings[0..., 10 ..< 16, 0...]] {
                 let mask = try XCTUnwrap(LlamaStandardModel.causalMask(n: chunk.dim(1), cache: caches[0]))
                 XCTAssertEqual(mask.dtype, .bool)
                 let out = language(inputs: nil, mask: nil, cache: caches, inputsEmbeds: chunk)
@@ -48,7 +50,8 @@ final class AttentionMaskTests: XCTestCase {
             }
         }
         print("[mask] rotating chunks (mask rows, mask cols, keys) = \(keysShapes)")
-        XCTAssertEqual(keysShapes.count, 2)
+        XCTAssertEqual(keysShapes, [[10, 10, 10], [6, 13, 13]])
+        XCTAssertLessThan(keysShapes[1][2], 16, "the wrapped cache presents fewer keys than offset + T")
         XCTAssertEqual(keysShapes[1][1], keysShapes[1][2], "the mask spans the keys of the wrapped cache")
     }
 

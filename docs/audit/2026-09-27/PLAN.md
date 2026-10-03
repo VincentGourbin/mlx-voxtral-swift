@@ -1151,8 +1151,12 @@ Gabarits :
 - Porte observée :
   - `GREEN AttentionMaskTests : Executed 4 tests, with 0 failures (0 unexpected)` ; rouge avec les anciens masques :
     préfill bf16 → `mlx("[scaled_dot_product_attention] …")`, décodeur hérité 600 positions → `Fatal error: Index out
-    of range` (runner arrêté) ; le test du `RotatingKVCache` enroulé (`[[6, 6, 6], [6, 12, 12]]`, masque `.bool`)
-    passait déjà avec l'ancien masque (même largeur offset + T).
+    of range` (runner arrêté) ; le test du `RotatingKVCache` enroulé, rendu discriminant le 2026-10-03 (#578 :
+    `maxSize: 8`, tranches 10 puis 6) : rouge avec l'ancien masque (`createCausalMask(n:offset:)`, largeur offset + T)
+    `Executed 1 test, with 1 failure (1 unexpected) in 1.424 (1.425) seconds` ;
+    `caught error: "mlx("[broadcast_shapes] Shapes (6,16) and (1,4,6,13) cannot be broadcast. …")"`, exit=65 → vert
+    `Executed 1 test, with 0 failures (0 unexpected) in 0.039 (0.040) seconds`,
+    `[mask] rotating chunks (mask rows, mask cols, keys) = [[10, 10, 10], [6, 13, 13]]`, exit=0.
   - `PARITY greedy 3/3 identiques ; logits L2 rel max=0.0` (C-court EN/FR, C-moyen EN, mini-3b-8bit `.mlx`).
   - `LEGACY prompt 600 positions … : OK (pas d'arrêt)`. Écart : via un décodeur hérité réduit construit comme le fait
     `loadVoxtralModel(modelPath:dtype:lazy:)` (`VoxtralForConditionalGeneration(config:)`) ; ce chargeur ne charge pas
