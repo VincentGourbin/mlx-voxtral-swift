@@ -1,0 +1,17 @@
+Fluxforge Studio transforme votre Mac en un studio de création complet. Générez des images et des vidéos de haute qualité à partir de texte, entraînez vos propres modèles personnalisés et gérez votre bibliothèque créative, le tout en local sur votre Mac, sans nuage ni abonnement.
+
+Forgez votre idée. Fluxforge est un atelier créatif complet pour explorer vos idées visuelles. Décrivez votre concept en quelques mots, importez une image ou un son, puis avancez librement. Essayez des variantes, changez de style ou transformez une image fixe en courte animation. Chaque étape est enregistrée dans un arbre de branches : rien ne se perd et tout se retrouve. Vous pouvez remonter votre historique sur une frise interactive, explorer une autre branche et reprendre n'importe quel projet depuis votre bibliothèque.
+
+La génération d'images propose plusieurs modèles, d'un modèle rapide qui tourne sur un ordinateur portable modeste à un modèle plus lent qui donne la meilleure qualité sur une grosse station de travail. Vous pouvez régler la résolution, le nombre d'étapes et le guidage, utiliser des images de référence et laisser l'application améliorer votre description.
+
+La génération de vidéos crée de courts extraits à partir d'un texte ou d'une image. Une variante rapide donne un aperçu immédiat, et une variante de haute qualité produit la version finale. Vous pouvez ajouter une bande sonore, choisir un passage d'un extrait et ne régénérer que cette partie avec une nouvelle description.
+
+L'animation donne vie à n'importe quelle image en un seul clic. Choisissez un mouvement de caméra, une action, un effet naturel ou une expression du visage, et combinez-les comme vous le souhaitez. Chaque animation apparaît directement dans votre arbre de créations, à côté de l'image dont elle est issue.
+
+L'extension de toile repousse les bords de vos images. Ajoutez de l'espace dans la direction de votre choix et laissez le modèle compléter la scène dans le même style.
+
+Les adaptateurs personnalisés s'importent en un clic, et l'application détecte leurs mots clés et leurs meilleurs réglages. Vous pouvez aussi entraîner vos propres adaptateurs sur votre Mac, avec un assistant qui décrit vos images, prépare l'entraînement et affiche sa progression en temps réel.
+
+La suppression d'arrière-plan isole votre sujet en un clic et l'exporte sur fond transparent.
+
+Tout fonctionne en local et reste privé. Aucun compte n'est requis. Aucune donnée envoyée dans le cloud.

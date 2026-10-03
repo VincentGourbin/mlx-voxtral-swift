@@ -1,0 +1,17 @@
+Fluxforge Studio turns your Mac into a complete AI creative studio. Generate high quality images and videos from text, train your own custom models, and manage your creative library, all locally on your Mac, with no cloud and no subscription.
+
+Forge your idea. Fluxforge is a full creative workshop for exploring your visual ideas. Describe your concept in a few words, import an image or a sound, then iterate freely. Try variations, change the style, or turn a still picture into a short animation. Every step is saved in a tree of branches, so nothing is ever lost and everything can be recovered. You can walk back through your history on an interactive timeline, explore an alternative branch, and resume any project from your library whenever you like.
+
+Image generation offers several models, from a fast one that runs on a modest laptop to a slower one that gives the best quality on a large workstation. You can adjust the resolution, the number of steps and the guidance, use reference images, and let the application improve your prompt for you.
+
+Video generation creates short clips from text or from a picture. A fast variant gives you a quick preview, and a high quality variant renders the final version. You can add a soundtrack, select a segment of a clip, and regenerate only that part with a new prompt.
+
+Animation brings any generated image to life in a single click. Choose a camera movement, an action, a natural effect or a facial expression, and combine them as you wish. Each animation appears directly in your creation tree, next to the image it came from.
+
+Canvas extension lets you push your pictures beyond their borders. Add space in any direction and let the model complete the scene in the same style.
+
+Custom adapters can be imported in one click, and the application detects their keywords and their best settings automatically. You can also train your own adapters directly on your Mac, with a guided assistant that describes your images, configures the training and shows its progress in real time.
+
+Background removal isolates your subject in one click and exports it with a transparent background.
+
+Everything runs locally and stays private. No account is required, and no data is sent to the cloud.

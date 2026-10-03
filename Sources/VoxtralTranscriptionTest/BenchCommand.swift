@@ -289,17 +289,18 @@ enum BenchJSON {
         value.map { (($0 * pow(10, Double(digits))).rounded()) / pow(10, Double(digits)) }
     }
 
-    static func emit(_ record: [String: Any], out: String) {
+    /// One `<tag> {json}` line on stdout, appended to `<out>/<file>` (`EVAL` lines of `voxtral eval` too, K-33)
+    static func emit(_ record: [String: Any], out: String, tag: String = "BENCH", file fileName: String = "bench.jsonl") {
         var full = BenchSystem.environment()
         full["date"] = ISO8601DateFormatter().string(from: Date())
         full["top_process"] = BenchSystem.topProcess()
         for (key, value) in record { full[key] = value }
         guard let data = try? JSONSerialization.data(withJSONObject: decimals(full), options: [.sortedKeys, .withoutEscapingSlashes]),
               let line = String(data: data, encoding: .utf8) else { return }
-        print("BENCH \(line)")
+        print("\(tag) \(line)")
         let dir = URL(fileURLWithPath: out)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let file = dir.appendingPathComponent("bench.jsonl")
+        let file = dir.appendingPathComponent(fileName)
         if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
         if let handle = try? FileHandle(forWritingTo: file) {
             handle.seekToEndOfFile()

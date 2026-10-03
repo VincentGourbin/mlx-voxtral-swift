@@ -32,7 +32,8 @@ struct VoxtralCLI: AsyncParsableCommand {
             Enroll.self,
             Realtime.self,
             Profile.self,
-            Bench.self
+            Bench.self,
+            Eval.self
         ],
         defaultSubcommand: Transcribe.self
     )
@@ -529,7 +530,7 @@ struct TTS: AsyncParsableCommand {
                 throw ValidationError("Voice embeddings not loaded for blend")
             }
             print("  Blend: \(voiceA.rawValue) + \(voiceB.rawValue) @ \(String(format: "%.2f", weight))")
-            result = try await pipeline.synthesize(text: text, voiceEmbedding: blended)
+            result = try await pipeline.synthesize(text: text, voiceEmbedding: blended, seed: seed)
 
         } else {
             // Standard preset voice mode
@@ -540,7 +541,7 @@ struct TTS: AsyncParsableCommand {
                 throw ValidationError("Unknown voice: \(voice)")
             }
             print("  Voice: \(voicePreset.displayName)")
-            result = try await pipeline.synthesize(text: text, voice: voicePreset)
+            result = try await pipeline.synthesize(text: text, voice: voicePreset, seed: seed)
         }
 
         // Save WAV
