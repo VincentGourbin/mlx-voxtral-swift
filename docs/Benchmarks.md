@@ -45,10 +45,15 @@ Source : PLAN.md §2 (tableaux de baseline).
 |---|---|---|---|
 | C-court EN / FR | `docs/examples/fluxforge_short_{en,fr}_6bit.wav` | 5,0 / 4,8 s | PLAN.md:313 |
 | C-moyen EN / FR | `docs/examples/fluxforge_long_{en,fr}_6bit.wav` | 167,0 / 173,8 s | PLAN.md:313 |
+| C-moyen exact EN / FR (qualité, K-33) | `docs/eval/clips/c_moyen_{en,fr}.wav`, texte `docs/eval/refs/` | 146,1 / 130,9 s | `docs/eval/README.md` |
+| 20 s EN / FR, ES × 3 (K-33) | `docs/eval/clips/` | 20,6 / 17,2 s ; 8–10 s | `docs/eval/corpus.json` |
+| C-long exact (K-33) | 2 × (C-moyen exact EN + FR), 16 kHz mono, hors dépôt | 9 min 14 s | `docs/eval/README.md` |
 | C-long | 2 × (C-moyen EN + FR), 16 kHz mono | ≈ 11 min 22 s | PLAN.md:318 |
 | C-xlong | 3 × (C-moyen EN + FR) | ≈ 17 min | PLAN.md:319 |
 | C-30min | C-long bouclé, tronqué | 30 min | PLAN.md:320 |
 
+- Les anciens C-moyen ont une référence condensée (163 / 202 mots pour 413 / 451 dits) : ils restent les témoins de
+  performance ; la qualité (WER) se mesure sur les clips à texte exact (K-33).
 - Parole synthétique (sorties TTS du dépôt) : biais à noter (audit-performance-realtime-instruments.md P-79).
 - Textes de référence : [`tts_benchmark.md`](tts_benchmark.md), section « Full test texts ». Ils font 163 mots EN et
   202 mots FR pour 167 et 174 s d'audio (« ~350 words » annoncés) : peut-être abrégés, à contrôler par K-33

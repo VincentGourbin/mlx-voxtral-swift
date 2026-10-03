@@ -1007,6 +1007,9 @@ Gabarits :
     Script (pour K-33) : `norm = NFKD → ASCII, minuscules, ponctuation → espace, NUL retirés ; jiwer.wer(ref, hyp)` (jiwer 3.0.4).
   - Texte identique sur C-moyen avec la fenêtre décodeur : `KVCacheSimple` contre `RotatingKVCache(8192)`, EN et FR
     identiques octet pour octet.
+  - **WER exact (K-33, 2026-10-03, décision de Vincent)** : `voxtral eval realtime` (`realtime-4b-4bit`, `4f566996`)
+    contre la référence mlx-audio figée `docs/eval/realtime-reference/` : **5,15 % EN / 2,44 % FR**, identique aux
+    valeurs provisoires (jiwer) ; il les remplace, K-36 le reprend. Sur les clips à texte exact : 1,05 % / 1,97 %.
   - `PEAK encode 3/6/12 min : 5272.9/5369.8/5563.4 Mo (±10 %)` → +5,5 % (`peak_mlx_mb_by_phase.encode`, 3 lignes `BENCH`).
   - C-xlong (1 022 s, 12 787 pas, `profile run --per-step-memory`) : MLX actif max pas 8 100–8 300 = 6 392,7 Mo, après
     8 300 = 6 392,7 Mo (0 %) ; ms/pas p50 7 800–8 000 = 33,71, 8 250–8 450 = 34,24 (+1,6 %).
@@ -1411,3 +1414,31 @@ Gabarits :
   - `FLUXFORGE` : non vérifié ici, à la charge de Vincent à la transmission (décision du 2026-10-02).
   - `** BUILD SUCCEEDED **` VoxtralCLI, VoxtralApp, VoxtralTTSStreamingDemo (Release).
   - Suite : `Executed 582 tests, with 36 tests skipped and 0 failures`.
+
+## K-33 — Éval reproductible (WER, juge, auto-détection) — 2026-10-03 — bloquée (2 critères de l'amendement du 2026-10-01)
+- Fait : `voxtral eval stt|realtime` (`EvalCommand.swift`, `WER.swift` vérifié par `Scripts/check-wer.sh`, 10 cas ;
+  même valeur que jiwer 3.0.4 sur la référence mlx-audio) ; corpus déclaré `docs/eval/corpus.json` (12 clips, SHA-256
+  de chaque audio et référence, refus sinon) ; `voxtral tts --seed` appliqué aux voix prédéfinies et au mélange.
+  Référence contrôlée : les textes « Full test texts » sont condensés (transcription bf16 complète des anciens C-moyen :
+  413 / 451 mots contre 163 / 202) → C-moyen régénéré depuis des textes exacts (`docs/eval/refs/`, 380 / 386 mots,
+  `tts-4b-6bit` graine 5 : 146,1 / 130,9 s), clips 20 s EN/FR (graine 7), 3 clips ES (graine 11), C-long exact
+  (2 × C-moyen EN + FR, 9 min 14 s, hors dépôt). Les anciens C-moyen restent les témoins et les clips de la référence
+  Realtime ; le corpus de `docs/Benchmarks.md` §3 est mis à jour.
+- Porte observée :
+  - Contrôle de départ : `WITNESS stt OK e407ba26 · chat OK bf1f5082 · realtime OK 318f6cc0 · tts OK 50803ebf`
+    (HEAD propre `5d206e04`).
+  - `REPRO run1 == run2 : 18/18 identical` (STT et Realtime, `4f566996`, arbre propre).
+  - Baseline `mini-3b-8bit` `.mlx` (langue imposée) : C-court EN/FR 9,09 / 8,33 % ; C-moyen EN/FR 1,84 / 2,22 % ;
+    20 s EN/FR 2,00 / 15,69 % ; ES 0 / 15,38 / 7,41 %.
+  - `JUDGE realtime-4b-4bit WER C-court/C-moyen/20s : EN 9.09/1.05/0.00 · FR 16.67/1.97/86.27` (version figée dans
+    `docs/zerovoice_benchmark.md` ; sur le 20 s FR le juge s'arrête après la première phrase).
+  - `AUTOLANG EN/FR/ES : WER(nil) − WER(explicit) = -0.91/-0.21/-1.27 pts (≤ 2)`.
+  - **Non tenu (amendement du 2026-10-01)** :
+    - C-moyen EN : dernière phrase présente à un mot près (« No account is required, no data is sent to the
+      cloud » : « and » manquant ; présent dans l'audio, le Realtime le transcrit) ; ratio 0,995. C-moyen FR : tenu.
+    - C-long exact en auto-détection : WER 53,69 %, ratio 0,635, dernière phrase et phrases exigées absentes : sur les
+      segments FR, le modèle **traduit en anglais télégraphique** au lieu de transcrire. Évaluation « par segment de
+      langue » (option de l'amendement) = les clips C-moyen EN/FR, ci-dessus.
+  - Constat annexe : sur le 20 s FR, le STT saute la première phrase (« Vos projets restent sur votre propre
+    ordinateur. ») ; le clip est sain (pauses normales).
+- Lignes `BENCH`/`EVAL` dans `BENCHMARKS.md` (section du 2026-10-03).

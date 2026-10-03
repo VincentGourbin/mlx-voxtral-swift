@@ -135,3 +135,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-02 — **K-31 : API 3.0** : surface publique 1 110 → 338 lignes (façades seulement), types génériques
   préfixés `Voxtral…` (alias dépréciés), code hérité supprimé ; FluxForge à migrer par Vincent (retirer
   `reconfigureHubApi()` et ses typealias de contournement).
+- 2026-10-03 — **K-33 : `voxtral eval`** (WER normalisé, corpus à SHA-256, reproductible 18/18). Les références
+  « Full test texts » étaient condensées (163 mots pour 413 dits) : C-moyen régénéré depuis des textes exacts. STT
+  `mini-3b-8bit` : 1,8 % EN / 2,2 % FR sur C-moyen ; l'auto-détection vaut la langue imposée. Deux limites du modèle :
+  sur un audio long EN/FR alterné il **traduit le français en anglais**, et sur un clip FR de 17 s il saute la 1ʳᵉ
+  phrase (le juge Realtime, lui, s'arrête après). Le juge Realtime n'est pas fiable sur du français court.

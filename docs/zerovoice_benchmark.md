@@ -4,6 +4,21 @@ Benchmark of ZeroVoice procedural voice blending quality across languages and bl
 All tests use intra-language blending (male+female of same language) with the Voxtral TTS 4B model,
 transcribed back using the Voxtral Realtime 4B-4bit STT model.
 
+## Judge (frozen by K-33, 2026-10-03)
+
+The transcription judge is `realtime-4b-4bit` (`mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit`, 3 133 798 126 bytes,
+delay 480 ms, greedy) at commit `4f566996`, measured with `voxtral eval realtime` on `docs/eval/corpus.json`
+(normalized WER, `docs/eval/README.md`):
+
+| Clip | EN | FR |
+|---|---|---|
+| C-court (5 s) | 9.09 % | 16.67 % |
+| 20 s | 0.00 % | **86.27 %** (stops after the first sentence) |
+| C-moyen exact text (146 / 131 s) | 1.05 % | 1.97 % |
+
+The judge is reliable on English and on the long French clip, **not** on short French clips: a ZeroVoice score
+below about 20 s of French is not interpretable. The results below predate this validation (in session).
+
 ## Setup
 
 - **TTS Model**: Voxtral 4B TTS (mlx-community, bfloat16)
