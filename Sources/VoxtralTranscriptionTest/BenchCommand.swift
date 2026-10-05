@@ -36,6 +36,8 @@ struct BenchCommonOptions: ParsableArguments {
     var cacheLimitMb: Int?
     @Flag(name: .long, help: "Afterwards, run one separate diagnostic pass (not a BENCH line) and export its Chrome trace to --out")
     var trace: Bool = false
+    @Flag(name: .long, help: "With --trace: also record a Metal System Trace of that pass and print GPU occupancy per phase (GPUPHASE lines)")
+    var metalTrace: Bool = false
     @Flag(name: .long, help: "Advertise activity to external monitors (SiliconScope)") var beacon: Bool = false
 
     var cacheLimitBytes: Int? { cacheLimitMb.map { $0 * 1_048_576 } }
@@ -83,22 +85,34 @@ struct PassMeasurement {
 
     /// Set for the `--trace` diagnostic pass: fine-grained session, Chrome trace written there (K-32b)
     @TaskLocal static var traceURL: URL?
+    /// With `--trace --metal-trace`: record a Metal System Trace of the diagnostic pass (K-34, K-36)
+    @TaskLocal static var metalTrace = false
 
     static func run(_ body: () async throws -> Void) async throws -> PassMeasurement {
         let session = traceURL == nil
             ? ProfilingSession(config: ProfilingConfig(
                 trackMemory: false, trackPerStepMemory: false, exportChromeTrace: false, printSummary: false,
                 enableSampling: false, trackSystemMemory: false, preventIdleSleep: true, recordPowerManagement: false))
+            // .fineGrained (IOReport residency, interval mean) for the per-phase GPU occupancy (K-36)
             : ProfilingSession(config: ProfilingConfig(
-                trackMemory: true, trackPerStepMemory: true, exportChromeTrace: true, printSummary: false))
+                trackMemory: true, trackPerStepMemory: true, exportChromeTrace: true, printSummary: false,
+                enableSampling: true, samplingIntervalMs: 16, snapshotAtPhaseBoundaries: false,
+                gpuBackend: .ioReportResidency))
         let profiler = MLXProfiler.shared
         profiler.enable()
         profiler.activeSession = session
         defer { profiler.activeSession = nil; profiler.disable() }
 
+        var recorder: MetalSystemTrace.Recorder?
+        if let traceURL, metalTrace {
+            let output = traceURL.deletingPathExtension().appendingPathExtension("trace")
+            recorder = try session.startMetalSystemTrace(output: output)
+            if recorder?.waitUntilRecording() != true { print("METAL_TRACE not recording: \(recorder?.log() ?? "")") }
+        }
         GPU.resetPeakMemory()  // the instrument resets the peak, never the library (P-77)
         let sampler = MemorySampler(clock: { session.currentTimestampUsPublic() })
         let startUs = session.currentTimestampUsPublic()
+        let startEpoch = Date().timeIntervalSince1970
         let start = CFAbsoluteTimeGetCurrent()
         try await body()
         var m = PassMeasurement()
@@ -108,10 +122,38 @@ struct PassMeasurement {
 
         m.peakMLXMB = Double(Memory.peakMemory) / 1_048_576
         m.peakFootprintMB = samples.map(\.footprintMB).max() ?? BenchSystem.footprintMB()
+        var kernels: [GPUKernelInterval] = []
+        if let recorder {
+            let bundle = try recorder.stop()
+            let summary = try session.mergeMetalSystemTrace(bundle)
+            kernels = session.mergedGPUKernelIntervals
+            print("METAL_TRACE \(bundle.path) intervals=\(summary.intervalCount) busy=\(String(format: "%.1f", summary.busyPercent))%")
+        }
         if let traceURL {
             try ChromeTraceExporter.export(session: session).write(to: traceURL)
         }
         let phases = session.phaseSummaries()
+        if traceURL != nil {
+            // GPU occupancy per phase by each instrument; epoch bounds let an external `ioreg` sampler be aligned
+            for phase in phases {
+                var record: [String: Any] = [
+                    "phase": phase.name, "duration_ms": BenchJSON.round(phase.durationMs) ?? 0,
+                    "start_epoch": startEpoch + Double(phase.startUs - startUs) / 1e6,
+                    "end_epoch": startEpoch + Double(phase.endUs - startUs) / 1e6,
+                ]
+                if let gpu = phase.gpu { record["profiler_gpu_mean"] = BenchJSON.round(gpu.mean) ?? 0 }
+                if !kernels.isEmpty, phase.endUs > phase.startUs {
+                    let clipped = kernels.compactMap { k -> (start: UInt64, end: UInt64)? in
+                        let a = max(k.startUs, phase.startUs), b = min(k.endUs, phase.endUs)
+                        return a < b ? (a, b) : nil
+                    }
+                    record["xctrace_busy_pct"] = BenchJSON.round(
+                        BenchJSON.unionLength(clipped) / Double(phase.endUs - phase.startUs) * 100) ?? 0
+                }
+                let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+                print("GPUPHASE \(String(decoding: data, as: UTF8.self))")
+            }
+        }
         let intervals = phases.map { (start: $0.startUs, end: $0.endUs) }
         for (index, phase) in phases.enumerated() {
             let key = BenchJSON.phaseKey(phase.name)
@@ -398,7 +440,9 @@ enum BenchRunner {
             let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
             let url = dir.appendingPathComponent("trace-\(base["pipeline"] ?? "bench")-\(stamp).json")
             try prepare(pass: 0, cooldown: common.cooldown)
-            _ = try await PassMeasurement.$traceURL.withValue(url) { try await body(0, false) }
+            _ = try await PassMeasurement.$metalTrace.withValue(common.metalTrace) {
+                try await PassMeasurement.$traceURL.withValue(url) { try await body(0, false) }
+            }
             print("TRACE \(url.path) (diagnostic pass, not a BENCH line; open in https://ui.perfetto.dev/)")
         }
     }
