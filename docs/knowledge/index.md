@@ -16,6 +16,10 @@ build, de test et de mesure : [`CLAUDE.md`](../../CLAUDE.md). Plan d'action en c
   C-court à C-30min, glossaire des métriques (RTF = génération ÷ audio ; TTFT-frame ≠ TTFA).
 
 ## Decisions
+- [Small 4 bits sur 32 Go](decisions/small-32gb.md) — supporté avec `--cache-limit-mb 2048` (19,0 Go sur 8 min),
+  non supporté sans (37,3 Go) ; K-34.
+- [Baseline STT M3 Max, 2026-10](benchmarks/m3max-stt-baseline-2026-10.md) — Mini 8/4 bits, bf16 et Small 4 bits ×
+  `.mlx`/`.auto` × 4 clips, WER, occupation GPU du préfill, chat ; K-34.
 - [Conclusions #23-#25 caduques](decisions/realtime-diagnostics-23-25.md) — « 0 % GPU », « 49 % systémique » et
   « 21 tok/s raisonnable » sont des artefacts d'instrument (phases imbriquées, lectures instantanées) ; re-mesure
   par K-36.

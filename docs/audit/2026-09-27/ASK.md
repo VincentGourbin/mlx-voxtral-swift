@@ -632,6 +632,16 @@ Décisions du planificateur du 2026-10-03 :
   - Les anciens clips restent témoins de performance hors baseline. Leurs chiffres ne se comparent pas à ces lignes
     (durée et texte différents).
   - Le chat (K-34, porte « C-moyen EN ») reste sur `fluxforge_long_en_6bit.wav`, comme l'écrit la fiche (étape 5 bis).
+- **K-34 (#587), 2026-10-05, décision de l'agent** : clause « A/A ≤ 3 % pour chaque ligne », cellule small-4bit
+  `.auto` × C-moyen EN. Six séries (9 passes, 2026-10-04 et 05), dont une précédée d'un processus d'amorçage :
+  `step_ms_p50` à 75,0–75,7 ms dans 6 passes, 80,7–85,4 dans 3. Dans chaque passe lente, `ANECompilerService` est
+  à 100 % pendant la mesure, et le processus d'amorçage décode à 190,7 ms : Core ML recompile l'encodeur de Small
+  pour le Neural Engine dans chaque nouveau processus, et le GPU en pâtit. Ce n'est pas un bruit de mesure, c'est un
+  comportement du produit.
+  - La cellule est consignée avec ses 9 passes et la plage 75,0–85,4 ms (`BENCHMARKS.md`, bloc dédié), sans valeur
+    de baseline. Ses WER (1,32 %) et pics (18 935 à 19 059 Mo) sont stables.
+  - Les 31 autres cellules et les 2 lignes de chat passent l'A/A.
+  - Fiche de suivi : cache de compilation Core ML de Small `.auto` (K-85, replanning #590).
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

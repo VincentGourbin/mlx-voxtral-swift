@@ -1696,3 +1696,25 @@ Statistics:
 - Réserves conservées : critère A/A fixé par l'agent après avoir vu les données (sans effet ici : les 8 cellules
   passent aussi le critère de K-32) ; baseline C-long valable pour le protocole « sans amorçage » ; `powermetrics`
   remplacé (pas de root).
+
+## K-34 — Baseline STT (Mini 8/4 bits, bf16, Small 4 bits × `.mlx`/`.auto`), occupation GPU du préfill, Small 32 Go — 2026-10-05 — rapportée
+- Porte observée (`BENCHMARKS.md` §« 2026-10-05 — K-34 », arbre propre `3a0cf13b` / `db8e19eb` / `9685d556`) :
+  - A/A : 31 cellules sur 32 et 2 lignes de chat sur 2 (critère de `ASK.md` §Dérogations).
+  - 32e cellule (small-4bit `.auto` × C-moyen EN) : A/A non atteignable, recompilation Core ML à chaque processus
+    (décision de l'agent, `ASK.md`).
+  - `BENCH {"pipeline":"stt","model":"mini-3b-8bit","backend":"mlx","input":"docs/eval/clips/c_moyen_en.wav",…,"step_ms_p50":21.32,"ttft_ms":3865.6,…}`
+    (× 32 cellules, 2 passes ; WER par cellule dans les EVAL).
+  - `GPU prefill Mini : xctrace 99,0 % · ioreg 99,2 % (profiler 99,9 %) ; Small : 99,8 % / 99,9 % (100 %)` (C-moyen EN
+    complet).
+  - `SMALL32 peak_footprint_mb=37312.6 (> 24 576) → non supporté sans plafond ; 19012.9 avec --cache-limit-mb 2048 →
+    supporté` (`docs/knowledge/decisions/small-32gb.md`).
+  - Chat mini-3b-8bit : `.mlx` TTFT 4 696 / 4 892 / 5 285 / 5 993 ms, `.auto` 6 315 / 6 310 / 6 317 / 6 401 ms ; 21,3
+    à 21,5 ms par pas (`tok_s` dans les lignes).
+- Note : `docs/knowledge/benchmarks/m3max-stt-baseline-2026-10.md`.
+- Constats :
+  - Mini bf16 décode 5,6 à 6,8 fois plus lentement que le 8 bits (K-38, K-46).
+  - Small `.auto` sur C-long : WER 27,2 % contre 1,72 % en `.mlx`, seul clip où les deux backends divergent (fiche
+    de suivi).
+  - `.auto` : + 35 % de TTFT sur Mini, pic plus bas de 0,2 à 2,8 Go.
+  - Le préfill sature le GPU : le « 49 % » de #13 et #14 était un artefact de lecture.
+- Écarts : clips exacts, protocole A/A et conditions de passe (`ASK.md` §Dérogations, 2026-10-05).

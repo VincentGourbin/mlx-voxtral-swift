@@ -168,3 +168,13 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
     - (3) 120 s de repos ne suffisent pas après une passe de 10 min.
   - Constat : l'invite Realtime remplit avec `<pad>` (id 11) au lieu de `[STREAMING_PAD]` (32), avec 1 jeton à gauche
     au lieu de 32 (mlx-audio). Le WER reste bon (1 à 2 % sur C-moyen) ; mesure de l'alignement : K-84.
+- 2026-10-05 — **K-34 : baseline STT**.
+  - Mini 8 bits : 19 à 27 ms par pas ; 4 bits : 13 à 21 ; bf16 : 132 à 150, soit 6 fois plus lent que le 8 bits
+    (même signature que le Realtime fp16).
+  - Small 4 bits : 70 à 84 ms par pas.
+  - Le préfill occupe le GPU à 99-100 % selon trois instruments.
+  - Small sur 32 Go : seulement avec un plafond de cache MLX (19,0 Go contre 37,3 Go sur 8 min d'audio).
+  - Piège : avec `.auto`, Small recompile son encodeur Core ML pour le Neural Engine dans chaque nouveau processus
+    (`ANECompilerService` à 100 %). Le décodage GPU ralentit de 8 à 14 % pendant ce temps, et jusqu'à 2,5 fois au
+    tout premier lancement. Une A/A entre processus n'est donc pas atteignable pour cette cellule.
+  - Small `.auto` perd la qualité sur l'audio long alterné (WER 27 % contre 1,7 % en `.mlx`).
