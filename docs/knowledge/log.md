@@ -155,3 +155,16 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   (`last_sentence_coverage`), C-long jugé par langue. À retenir pour les hôtes : Voxtral Mini **ne sait pas transcrire
   d'un bloc un audio long qui alterne anglais et français** (il traduit le français) et ne sera pas corrigé : découper
   par langue avant de transcrire.
+- 2026-10-05 — **K-36 : baseline Realtime**.
+  - 4 bits : 25 à 29 ms par pas de 80 ms (RTF 0,36 à 0,40).
+  - fp16 : 126 à 148 ms par pas (RTF 1,7 à 1,9), pas temps réel.
+  - GPU occupé pendant tout le décodage : 92 à 99 % selon l'instrument, écart ≤ 7 pts. Le « 49 % » de #24 était un
+    artefact de lecture.
+  - Pièges d'instrument :
+    - (1) une Metal System Trace sur 2 min d'audio écrit ≈ 20 Go dans le dossier temporaire du système, sans tenir
+      compte de `TMPDIR` : tracer un clip court, ou surveiller l'espace libre ;
+    - (2) sur une passe longue, le temps total suit la charge de fond et la chaleur : juger l'A/A sur la médiane par
+      pas (et le p90) ;
+    - (3) 120 s de repos ne suffisent pas après une passe de 10 min.
+  - Constat : l'invite Realtime remplit avec `<pad>` (id 11) au lieu de `[STREAMING_PAD]` (32), avec 1 jeton à gauche
+    au lieu de 32 (mlx-audio). Le WER reste bon (1 à 2 % sur C-moyen) ; mesure de l'alignement : K-84.

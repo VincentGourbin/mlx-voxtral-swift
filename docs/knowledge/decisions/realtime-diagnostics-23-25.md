@@ -36,15 +36,43 @@ Source : audit-performance-realtime-instruments.md §2 (F-R1, F-R2).
   ≤ 10 pts).
 - Le défaut principal est traité par les leviers K-38 (dtype du modèle) et K-46 (tête quantifiée).
 
-**Mesure** : aucune à ce jour. K-36 complète cette décision avec ses lignes de `BENCHMARKS.md`.
+**Mesure** (K-36, 2026-10-05, M3 Max 96 Go, `BENCHMARKS.md` §« 2026-10-05 — K-36 », A/A ≤ 3 % sur `step_ms_p50`
+pour les 8 cellules) :
+
+| Modèle | Clip | ms/pas p50 / p90 | TTFT ms | encodage ms par s d'audio | RTF | pic `phys_footprint` Mo | pas |
+|---|---|---|---|---|---|---|---|
+| realtime-4b-4bit | C-court EN | 25,45 / 25,53 | 193 | 23,19 | 0,40 | 6 206 | 72 |
+| realtime-4b-4bit | C-moyen EN | 27,25 / 28,37 | 2 958 | 19,58 | 0,36 | 10 590 | 1 835 |
+| realtime-4b-4bit | C-moyen FR | 27,22 / 28,74 | 2 689 | 19,76 | 0,37 | 10 431 | 1 645 |
+| realtime-4b-4bit | C-long | 29,26 / 33,53 | 14 521 | 20,85 | 0,40 | 7 908 | 6 933 |
+| realtime-4b-fp16 | C-court EN | 125,88 / 126,35 | 410 | 26,18 | 1,88 | 12 930 | 72 |
+| realtime-4b-fp16 | C-moyen EN | 135,97 / 141,79 | 3 438 | 21,38 | 1,74 | 16 538 | 1 835 |
+| realtime-4b-fp16 | C-moyen FR | 136,16 / 142,19 | 3 075 | 21,11 | 1,75 | 16 379 | 1 645 |
+| realtime-4b-fp16 | C-long | 148,29 / 161,11 | 13 038 | 22,74 | 1,92 | 14 296 | 6 933 |
+
+(passe p1 de chaque cellule ; C-long sans amorçage, `--cache-limit-mb 2048`.)
+
+- **Occupation GPU du décodage** (« Realtime Generation », `bench --trace --metal-trace` sur `c_20s_en`) : 4 bits
+  profiler 99,3 % · xctrace 92,3 % · `ioreg` 95,3 % (écart profiler/xctrace 7,0 pts) ; fp16 99,9 % · 98,4 % ·
+  98,5 % (1,5 pt). Le GPU est occupé pendant tout le décodage : le « 49 % » de #24 n'était pas une occupation.
+- **WER** (`voxtral eval realtime`, clips à texte exact) : C-court 9,09 %, C-moyen EN 1,05 %, C-moyen FR 1,97 % en
+  4 bits comme en fp16 ; C-long 1,15 % (4 bits) / 1,40 % (fp16). Contre la référence Realtime (`rt_ref_*`, K-33) :
+  EN 5,15 / 7,96 %, FR 2,44 / 4,07 % (dernière phrase couverte à 0,625 / 0,375 : le juge Realtime n'est pas fiable
+  sur du français, K-33).
+- **`pad_fraction`** (tout pas sans texte) : 0,82 / 0,76 / 0,69 / 0,72 ; **`[STREAMING_PAD]` seul**
+  (`streaming_pad_fraction`, entrée de K-73) : 0,70 / 0,60 / 0,52 / 0,56 (C-court, C-moyen EN, C-moyen FR, C-long).
+- **fp16 n'est pas temps réel** (RTF 1,7 à 1,9 ; 126 à 148 ms par pas de 80 ms) : 5 fois le 4 bits, cohérent avec la
+  tête liée recopiée en fp32 (piège ci-dessus), à traiter par K-38 et K-46.
+- **Invite** (constat, hors périmètre) : `streamingPadTokenId` vaut 11, `<pad>` dans `tekken.json` ; `[STREAMING_PAD]`
+  est 32 et la référence mlx-audio utilise 32 avec 32 jetons de remplissage à gauche (nous : 1). Fiche de suivi K-84.
 
 **Non retenu** :
 - Rouvrir #23-#25 : l'audit n'ouvre pas d'issue (P-73).
 - Garder le « 49 % » comme plafond systémique : il ne mesure pas l'occupation (voir le piège
   [même % GPU](../pitfalls/same-gpu-percent-instrument-artifact.md)).
 
-**Ouvert** : occupation GPU réelle de l'encodage et du décodage Realtime (À MESURER, K-36) ; même question pour le
-« 49 % » du préfill STT et de Core ML (#13, #14 ; K-34, K-42).
+**Ouvert** : « 49 % » du préfill STT et de Core ML (#13, #14 ; K-34, K-42). L'occupation du décodage Realtime est
+mesurée (K-36, ci-dessus).
 
 Source : [audit-performance-realtime-instruments.md](../../audit/2026-09-27/audit-performance-realtime-instruments.md)
 §2, §3 bis et P-73 ; [faits-et-actions.md](../../audit/2026-09-27/faits-et-actions.md) ACT-27.

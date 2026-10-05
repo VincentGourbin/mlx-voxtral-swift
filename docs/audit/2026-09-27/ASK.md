@@ -596,5 +596,38 @@ Décisions du planificateur du 2026-10-03 :
   requalifiée « dégénérée » que sur preuves recopiées dans #564 : transcriptions avant/après de ce cas et
   reproducteur #45 dans ses propres conditions.
 
+- **GPU et services de fond (2026-10-05, Vincent)** : « prends le GPU, peu importe qui d'autre l'utilise » ; les
+  processus de fond (`mediaanalysisd`, Time Machine, Spotlight) ne bloquent jamais une mesure. Les simulateurs iOS
+  sont arrêtés avant et pendant chaque passe ; une charge GPU d'une autre app MLX invalide toujours la mesure.
+- **Protocole A/A des baselines K-34 / K-36 (2026-10-05, décision de l'agent)**. Clause « A/A ≤ 3 % sur 2 passes »
+  jugée ainsi :
+  - `step_ms_p50` (`epoch_ms_p50` pour l'enrôlement) ≤ 3 % ;
+  - `step_ms_p90` ≤ 10 % ;
+  - `total_ms` ≤ 3 % pour les passes de moins de 60 s ;
+  - `out_sha256` identique ;
+  - au-delà de 60 s, le total et le TTFT sont consignés, sans faire échouer la cellule.
+
+  Raison : sur une passe longue, le total suit la charge de fond et la dérive thermique, pas le code ; la médiane par
+  pas, elle, reste stable. Données : la règle « pire de total, pas, TTFT ≤ 3 % » faisait échouer 10 cellules sur 42,
+  et toutes celles du fp16, même quand la médiane restait à moins de 3 %. Le p90 est ajouté après une cellule
+  (fp16 C-moyen EN) à médiane stable mais p90 136 → 233 ms ; elle a été refaite (p90 0,20 %).
+  Preuve : `.local-runs/tools/aa.py`, lignes `AA` de `BENCHMARKS.md` §2026-10-05.
+- **Conditions de passe des baselines (2026-10-05, décision de l'agent)** :
+  - Chaque passe tourne dans un processus séparé, avec un amorçage, `machine-check --cooldown 120` avant elle et les
+    simulateurs arrêtés.
+  - C-long passe sans amorçage : l'amorçage doublait les ≈ 10 min de GPU continu et ralentissait la passe mesurée
+    (`step_ms_p50` 11,9 % → 0,19 % pour mini-3b `.auto`).
+  - Les reprises ajoutent 180 s de repos, car 120 s ne suffisent pas après une passe C-long. Dans toutes les cellules
+    courtes en échec, p1 suivait une C-long et était seule lente : par exemple small-4bit C-court 77,5 contre 70,7 ms,
+    puis 0,09 % après repos.
+- **K-36 (#589), 2026-10-05, décision de l'agent** :
+  - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
+    xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le
+    disque s'est rempli deux fois (passes perdues, données brutes supprimées). Le décodage Realtime est un régime
+    stationnaire (un pas par trame de 80 ms) : 20 s suffisent pour son occupation.
+  - Les traces STT de K-34 (préfill Mini et Small) sont, elles, faites sur C-moyen EN complet.
+  - Clause « relevé powermetrics » : `powermetrics` exige root, non disponible pour l'agent ; `pmset -g therm` ne
+    rapporte rien sur cette machine. Remplacé par l'effet thermique mesuré (ralentissement de p1 après C-long,
+    ci-dessus) et `top_process` de chaque ligne.
 - **K-22, 2026-10-01** (Vincent, au planificateur) : la clause « FluxForge compile (si présent sur la machine) » est
   vérifiée à la fusion de la branche sur `main` (FluxForge suit `main`), pas sur la branche d'audit.

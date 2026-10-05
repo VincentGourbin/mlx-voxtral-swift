@@ -1661,3 +1661,27 @@ Statistics:
   travail : `docs/audit/2026-09-27/VERIFY.md`. `CLAUDE.md` §Rôles et `ASK.md` §Dérogations mis à jour ; décision K-14 du
   2026-10-03 (porte reformulée) inscrite. #590 (replanification des lots 4 à 6) passe à la session du Mac.
 
+## K-36 — Baseline Realtime, occupation GPU du décodage, #23-#25 chiffrées — 2026-10-05 — rapportée
+- Code :
+  - `db8e19eb` : `bench --trace --metal-trace` imprime, par phase, l'occupation GPU mesurée par le profiler
+    `.ioReportResidency` (16 ms) et par la Metal System Trace fusionnée ; `ioreg` est échantillonné à côté.
+  - `9685d556` et `f16f5974` : champ additif `streaming_pad_fraction` (`lastStreamingPadFraction`). La 1re version
+    comptait l'id 11, qui est `<pad>`, au lieu de 32 (`[STREAMING_PAD]`).
+- Porte observée (lignes dans `BENCHMARKS.md` §« 2026-10-05 — K-36 », arbre propre) :
+  - A/A : 8 cellules sur 8 (realtime-4b-4bit et fp16 × C-court, C-moyen EN/FR, C-long ; critère dans `ASK.md`
+    §Dérogations). `step_ms_p50` 0,04 à 2,71 %, `out_sha256` identique.
+  - `BENCH {"pipeline":"realtime","model":"realtime-4b-4bit","input":"docs/eval/clips/c_moyen_en.wav",…,"step_ms_p50":27.25,"pad_fraction":0.7599,…}`
+  - `GPU decode : profiler 99,3 % · xctrace 92,3 % (écart 7,0 pts)` (4 bits) ; fp16 `99,9 % · 98,4 % (1,5 pt)` ;
+    `ioreg` 95,3 / 98,5 % (`c_20s_en`, décision de l'agent).
+  - `EVAL` (K-33) : C-court 9,09 %, C-moyen EN 1,05 %, C-moyen FR 1,97 %, C-long 1,15 % (4 bits) / 1,40 % (fp16).
+  - `pad_fraction` 0,82 / 0,76 / 0,69 / 0,72 ; `[STREAMING_PAD]` seul 0,70 / 0,60 / 0,52 / 0,56 (entrée de K-73).
+- Décision « #23-#25 caducs » complétée par les chiffres (`docs/knowledge/decisions/realtime-diagnostics-23-25.md`).
+- Constats :
+  - fp16 n'est pas temps réel : RTF 1,7 à 1,9, 5 × le 4 bits (K-38, K-46).
+  - L'invite Realtime utilise `<pad>` (11) et 1 jeton à gauche, contre `[STREAMING_PAD]` (32) et 32 pour mlx-audio :
+    fiche de suivi K-84.
+  - Les 6 933 pas de C-long sont sous 9 000 : clause C-xlong sans objet.
+- Écarts (`ASK.md` §Dérogations) :
+  - trace Realtime sur `c_20s_en` : xctrace remplit le disque système sur C-moyen ;
+  - `powermetrics` exige root, non disponible ;
+  - protocole A/A et conditions de passe : décisions de l'agent.
