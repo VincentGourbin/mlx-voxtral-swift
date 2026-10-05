@@ -1669,7 +1669,7 @@ Statistics:
     comptait l'id 11, qui est `<pad>`, au lieu de 32 (`[STREAMING_PAD]`).
 - Porte observée (lignes dans `BENCHMARKS.md` §« 2026-10-05 — K-36 », arbre propre) :
   - A/A : 8 cellules sur 8 (realtime-4b-4bit et fp16 × C-court, C-moyen EN/FR, C-long ; critère dans `ASK.md`
-    §Dérogations). `step_ms_p50` 0,04 à 2,71 %, `out_sha256` identique.
+    §Dérogations). `step_ms_p50` 0,04 à 2,60 %, `out_sha256` identique.
   - `BENCH {"pipeline":"realtime","model":"realtime-4b-4bit","input":"docs/eval/clips/c_moyen_en.wav",…,"step_ms_p50":27.25,"pad_fraction":0.7599,…}`
   - `GPU decode : profiler 99,3 % · xctrace 92,3 % (écart 7,0 pts)` (4 bits) ; fp16 `99,9 % · 98,4 % (1,5 pt)` ;
     `ioreg` 95,3 / 98,5 % (`c_20s_en`, décision de l'agent).
@@ -1680,7 +1680,9 @@ Statistics:
   - fp16 n'est pas temps réel : RTF 1,7 à 1,9, 5 × le 4 bits (K-38, K-46).
   - L'invite Realtime utilise `<pad>` (11) et 1 jeton à gauche, contre `[STREAMING_PAD]` (32) et 32 pour mlx-audio :
     fiche de suivi K-84.
-  - Les 6 933 pas de C-long sont sous 9 000 : clause C-xlong sans objet.
+  - Clause C-xlong sans objet : 6 933 pas sur C-long exact (554 s), et ≈ 8 525 pas estimés sur le C-long du corpus
+    (682 s ÷ 80 ms), sous le seuil de 9 000.
+  - Clips : C-moyen exact et C-long exact (K-33) à la place des C-moyen et C-long du corpus (`ASK.md` §Dérogations).
 - Écarts (`ASK.md` §Dérogations) :
   - trace Realtime sur `c_20s_en` : xctrace remplit le disque système sur C-moyen ;
   - `powermetrics` exige root, non disponible ;

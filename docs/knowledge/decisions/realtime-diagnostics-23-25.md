@@ -50,7 +50,8 @@ pour les 8 cellules) :
 | realtime-4b-fp16 | C-moyen FR | 136,16 / 142,19 | 3 075 | 21,11 | 1,75 | 16 379 | 1 645 |
 | realtime-4b-fp16 | C-long | 148,29 / 161,11 | 13 038 | 22,74 | 1,92 | 14 296 | 6 933 |
 
-(passe p1 de chaque cellule ; C-long sans amorçage, `--cache-limit-mb 2048`.)
+(passe p1 de chaque cellule ; C-moyen = C-moyen exact, 146,1 / 130,9 s ; C-long = C-long exact, 9 min 14 s (K-33,
+`ASK.md` §Dérogations) ; C-long sans amorçage, `--cache-limit-mb 2048`.)
 
 - **Occupation GPU du décodage** (« Realtime Generation », `bench --trace --metal-trace` sur `c_20s_en`) : 4 bits
   profiler 99,3 % · xctrace 92,3 % · `ioreg` 95,3 % (écart profiler/xctrace 7,0 pts) ; fp16 99,9 % · 98,4 % ·
@@ -61,6 +62,7 @@ pour les 8 cellules) :
   sur du français, K-33).
 - **`pad_fraction`** (tout pas sans texte) : 0,82 / 0,76 / 0,69 / 0,72 ; **`[STREAMING_PAD]` seul**
   (`streaming_pad_fraction`, entrée de K-73) : 0,70 / 0,60 / 0,52 / 0,56 (C-court, C-moyen EN, C-moyen FR, C-long).
+  `[STREAMING_PAD]` est le rang 32 de `tekken.json` (`mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit`).
 - **fp16 n'est pas temps réel** (RTF 1,7 à 1,9 ; 126 à 148 ms par pas de 80 ms) : 5 fois le 4 bits, cohérent avec la
   tête liée recopiée en fp32 (piège ci-dessus), à traiter par K-38 et K-46.
 - **Invite** (constat, hors périmètre) : `streamingPadTokenId` vaut 11, `<pad>` dans `tekken.json` ; `[STREAMING_PAD]`

@@ -620,6 +620,18 @@ Décisions du planificateur du 2026-10-03 :
   - Les reprises ajoutent 180 s de repos, car 120 s ne suffisent pas après une passe C-long. Dans toutes les cellules
     courtes en échec, p1 suivait une C-long et était seule lente : par exemple small-4bit C-court 77,5 contre 70,7 ms,
     puis 0,09 % après repos.
+- **Clips des baselines K-34 et K-36 (2026-10-05, décision de l'agent)** : les cellules « C-moyen EN/FR » et
+  « C-long » sont mesurées sur C-moyen exact (`docs/eval/clips/c_moyen_{en,fr}.wav`, 146,1 / 130,9 s) et C-long exact
+  (`c_long_exact`, 9 min 14 s ; recette dans `docs/eval/README.md`). Les C-moyen et C-long du corpus sont
+  `fluxforge_long_*`, 167,0 / 173,8 s, et ≈ 11 min 22 s.
+  - Raison : la porte exige le WER (K-33) pour chaque ligne. Les anciens C-moyen n'ont qu'une référence condensée
+    (163 / 202 mots pour 413 / 451 dits), donc pas de WER juste. Les clips exacts mettent le WER et la performance
+    sur la même ligne : les EVAL ont le même `out_sha256` que les BENCH de chaque cellule.
+  - Le WER de la référence Realtime figée (`rt_ref_c_moyen_{en,fr}`, amendement du 2026-10-03) est porté par les
+    EVAL de ces mêmes lignes.
+  - Les anciens clips restent témoins de performance hors baseline. Leurs chiffres ne se comparent pas à ces lignes
+    (durée et texte différents).
+  - Le chat (K-34, porte « C-moyen EN ») reste sur `fluxforge_long_en_6bit.wav`, comme l'écrit la fiche (étape 5 bis).
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

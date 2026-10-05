@@ -247,7 +247,8 @@ Protocole (décisions de l'agent du 2026-10-05, `ASK.md` §Dérogations) : chaqu
 C-court, C-moyen EN, C-moyen FR, C-long. C-long passe sans amorçage (`--warmup 0`) et avec `--cache-limit-mb 2048`,
 les autres clips avec un amorçage. A/A (`.local-runs/tools/aa.py`) : `step_ms_p50` ≤ 3 %, `step_ms_p90` ≤ 10 %,
 `total_ms` ≤ 3 % pour les passes de moins de 60 s (au-delà, consigné), `ttft_ms` consigné, `out_sha256` identique.
-WER : `voxtral eval realtime` (K-33). Occupation GPU : `bench --trace --metal-trace` (profiler `.ioReportResidency`,
+Clips : C-moyen exact (`docs/eval/clips/c_moyen_{en,fr}.wav`) et C-long exact (`c_long_exact`, 9 min 14 s), pas les
+`fluxforge_long_*` du corpus (`ASK.md` §Dérogations). WER : `voxtral eval realtime` (K-33). Occupation GPU : `bench --trace --metal-trace` (profiler `.ioReportResidency`,
 Metal System Trace, `ioreg` échantillonné à côté) sur `c_20s_en`.
 
 ```
