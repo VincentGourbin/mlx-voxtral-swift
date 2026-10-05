@@ -657,6 +657,7 @@ struct BenchTTS: AsyncParsableCommand {
             record["text_tokens"] = pipeline.textTokenCount(text) ?? 0
             record["frame_cap"] = pipeline.frameCap(forText: text)
             if !streaming { record["truncated"] = pipeline.lastSynthesisTruncated }
+            if warmUp && !streaming { record["carrier_frames"] = pipeline.lastCarrierFrames }  // K-35: carrier / total frames
             if audioSeconds > 0 { record["rtf"] = BenchJSON.round(m.totalMs / 1000 / audioSeconds, 4) }
             return record
         }

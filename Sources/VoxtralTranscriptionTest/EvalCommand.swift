@@ -10,13 +10,14 @@
 
 import ArgumentParser
 import Foundation
+import MLX
 import VoxtralCore
 
 struct Eval: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "eval",
         abstract: "Measure transcription quality on a declared corpus: one EVAL JSON line per clip (normalized WER)",
-        subcommands: [EvalSTT.self, EvalRealtime.self]
+        subcommands: [EvalSTT.self, EvalRealtime.self, EvalTTSRoundtrip.self]
     )
 }
 
@@ -170,5 +171,79 @@ struct EvalRealtime: AsyncParsableCommand {
                               truncated: pipeline.lastTranscriptionTruncated, common: common)
         }
         pipeline.unload()
+    }
+}
+
+// MARK: - tts-roundtrip
+
+/// TTS batch synthesis transcribed back by the STT (K-35): normalized WER and coverage (share of the source words found,
+/// in order) of the text, one EVAL line per (pack × text × voice × seed). The audio is written next to eval.jsonl.
+struct EvalTTSRoundtrip: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "tts-roundtrip", abstract: "TTS batch → STT: WER and coverage of the source text")
+    @Option(name: .long) var model: String = "tts-4b-6bit"
+    @Option(name: .long) var textFile: String
+    @Option(name: .long, help: "Preset voice (e.g. neutral_female)") var voice: String?
+    @Option(name: .long, help: "Voice embedding .safetensors (key \"embedding\")") var voiceEmbedding: String?
+    @Option(name: .long) var seed: UInt64 = 1
+    @Flag(name: .long, help: "Use the recommended warm-up vocalise") var warmUp: Bool = false
+    @Option(name: .long, help: "Language of the text, given to the STT") var language: String = "en"
+    @Option(name: .long, help: "STT judge (backend .mlx)") var sttModel: String = "mini-3b-8bit"
+    @Option(name: .long, help: "Output directory for eval.jsonl and the audio") var out: String = ".local-runs/eval.noindex"
+    @Option(name: .long) var tag: String = "run1"
+    @Flag(name: .long, help: "Advertise activity to external monitors (SiliconScope)") var beacon: Bool = false
+
+    func run() async throws {
+        try BenchRunner.guardBuild()
+        guard let info = VoxtralTTSRegistry.model(withId: model) else { throw ValidationError("Unknown TTS model: \(model)") }
+        guard let judge = parseSTTModelID(sttModel) else { throw ValidationError("Unknown STT model: \(sttModel)") }
+        let textData = try Data(contentsOf: URL(fileURLWithPath: textFile))
+        let text = String(decoding: textData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        try BenchRunner.prepare(pass: 1, cooldown: 0)
+        if beacon { VoxtralRuntimeBeacon.isEnabled = true }
+
+        let tts = VoxtralTTSPipeline()
+        try await tts.loadModel(modelInfo: info)
+        let result: TTSSynthesisResult
+        let voiceName: String
+        if let path = voiceEmbedding {
+            guard let embedding = try MLX.loadArrays(url: URL(fileURLWithPath: path))["embedding"] else {
+                throw ValidationError("\(path) has no 'embedding' array")
+            }
+            voiceName = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+            result = try await tts.synthesize(text: text, voiceEmbedding: embedding, seed: seed,
+                                              warmUpText: warmUp ? VoxtralTTSPipeline.recommendedWarmUpVocalise : nil)
+        } else {
+            guard let preset = VoxtralVoice(rawValue: voice ?? "neutral_female") else { throw ValidationError("Unknown voice") }
+            voiceName = preset.rawValue
+            result = try await tts.synthesize(text: text, voice: preset, seed: seed)
+        }
+        let truncated = tts.lastSynthesisTruncated
+        tts.unload()
+
+        let base = URL(fileURLWithPath: textFile).deletingPathExtension().lastPathComponent
+        let audioDir = URL(fileURLWithPath: out).appendingPathComponent(tag)
+        try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
+        let audio = audioDir.appendingPathComponent("\(model)_\(base)_\(voiceName)_seed\(seed)\(warmUp ? "_warmup" : "").wav")
+        try WAVWriter.write(waveform: result.waveform, to: audio)
+
+        let stt = VoxtralPipeline(model: judge, backend: .mlx)
+        try await stt.loadModel()
+        let hypothesis = try await stt.transcribe(audio: audio, language: language)
+        stt.unload()
+        try? hypothesis.write(to: audio.deletingPathExtension().appendingPathExtension("txt"), atomically: true, encoding: .utf8)
+
+        let score = WER.score(reference: text, hypothesis: hypothesis)
+        let record: [String: Any] = [
+            "pipeline": "tts-roundtrip", "model": model, "text": base, "text_sha256": BenchJSON.sha256(textData),
+            "voice": voiceName, "seed": Int(seed), "warm_up": warmUp, "stt_model": sttModel, "stt_backend": "mlx",
+            "language": language, "wer": BenchJSON.round(score.wer * 100, 2) ?? 0,
+            "coverage": BenchJSON.round(WER.coverage(hypothesis, sentence: text), 3) ?? 0,
+            "ref_words": score.referenceWords, "hyp_words": score.hypothesisWords,
+            "frames": result.numFrames, "audio_s": BenchJSON.round(result.duration, 2) ?? 0, "truncated": truncated,
+            "out_sha256": BenchRunner.waveformSHA(result.waveform), "hyp_sha256": BenchJSON.sha256(Data(hypothesis.utf8)),
+            "tag": tag,
+        ]
+        BenchJSON.emit(record, out: out, tag: "EVAL", file: "eval.jsonl")
     }
 }

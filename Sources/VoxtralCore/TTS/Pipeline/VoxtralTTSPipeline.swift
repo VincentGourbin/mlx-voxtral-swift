@@ -96,6 +96,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// True when the last synthesis reached its frame cap without an end of audio (K-14)
     public private(set) var lastSynthesisTruncated = false
 
+    /// Frames (80 ms) of warm-up carrier cut from the last batch synthesis that used `warmUpText` (0 without one; K-35)
+    public private(set) var lastCarrierFrames = 0
+
     /// Text tokens the model reads for `text` (after sanitization when enabled)
     public func textTokenCount(_ text: String) -> Int? {
         guard let tokenizer else { return nil }
@@ -449,6 +452,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     ? trimLeadingCarrierAdaptive(rawWaveform, sampleRate: sampleRate,
                                                  leadInFrames: warmUpLeadInFrames)
                     : (rawWaveform, 0)
+                lastCarrierFrames = carrierCut  // already in 80 ms frames
                 let waveform: MLXArray
                 if carrierCut > 0 {
                     waveform = configuration.trimTail
