@@ -166,6 +166,9 @@ extension VoxtralRealtimeConfiguration {
     var eosTokenId: Int { 2 }
     /// Streaming pad token ID
     var streamingPadTokenId: Int { 11 }
+    /// [STREAMING_PAD] in tekken.json (rank 32; mlx-audio streaming_pad_token_id). The prompt above uses 11, which is
+    /// `<pad>` in tekken.json: kept as is, the prompt is the subject of a follow-up fiche (K-36 finding)
+    var tekkenStreamingPadTokenId: Int { 32 }
 
     /// Default number of left pad tokens
     var nLeftPadTokens: Int { 1 }

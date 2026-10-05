@@ -184,7 +184,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 // which `decode` skips (K-13)
                 let silent = Set(Set(tokens).filter { tokenizer.decode([$0]).isEmpty })
                 lastPadFraction = tokens.isEmpty ? nil : Double(tokens.filter { silent.contains($0) }.count) / Double(tokens.count)
-                let streamingPad = Int32(model.config.streamingPadTokenId)
+                let streamingPad = Int32(model.config.tekkenStreamingPadTokenId)
                 lastStreamingPadFraction = tokens.isEmpty
                     ? nil : Double(tokens.filter { $0 == streamingPad }.count) / Double(tokens.count)
 
