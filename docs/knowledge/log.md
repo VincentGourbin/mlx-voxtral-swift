@@ -174,7 +174,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   - Small 4 bits : 70 à 84 ms par pas.
   - Le préfill occupe le GPU à 99-100 % selon trois instruments.
   - Small sur 32 Go : seulement avec un plafond de cache MLX (19,0 Go contre 37,3 Go sur 8 min d'audio).
-  - Piège : avec `.auto`, Small recompile son encodeur Core ML pour le Neural Engine dans chaque nouveau processus
-    (`ANECompilerService` à 100 %). Le décodage GPU ralentit de 8 à 14 % pendant ce temps, et jusqu'à 2,5 fois au
-    tout premier lancement. Une A/A entre processus n'est donc pas atteignable pour cette cellule.
-  - Small `.auto` perd la qualité sur l'audio long alterné (WER 27 % contre 1,7 % en `.mlx`).
+  - Small `.auto` × C-moyen EN est bimodal d'un processus à l'autre (75 ou 81-85 ms par pas), cause non isolée, ASK-32.
+    Leçon : n'écrire une cause que si chaque passe lente la montre dans ses échantillons (la vérification a refusé une
+    cause « ANE » vue dans 1 passe sur 5).
+  - Mini en audio long EN/FR : traduit les segments français (WER FR 96-100 %, EN 9 %) ; jugé par langue.
+  - Small `.auto` traduit le dernier segment français de l'audio long alterné (WER FR 51 % contre 1,5 % en `.mlx`).

@@ -497,6 +497,35 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 
 ---
 
+### ASK-32 — K-34 : cellule small-4bit `.auto` × C-moyen EN sans A/A
+
+- **Contexte** : la porte de K-34 exige A/A ≤ 3 % pour chaque ligne. La fiche dit : « refaire, sinon `blocked` ».
+  31 cellules sur 32 et les 2 lignes de chat passent.
+- **Ce qui a été constaté** : 7 séries, 11 passes en processus séparés (2026-10-04 et 05), dont une écartée pour
+  charge le 2026-10-04. `step_ms_p50` vaut 74,99 à 75,72 ms dans 6 passes et 80,56 à 85,38 dans 5 ; `out_sha256`,
+  WER (1,32 %) et pic (≈ 19,0 Go) sont identiques partout.
+  - Les ralentissements ne suivent pas l'ordre des passes (p1 lente 3 fois, p2 lente 2 fois).
+  - Deux passes lentes avaient une charge visible : `ANECompilerService` 100 % (p1 de la 6e série), Time Machine
+    397 % (p2 de la 6e série).
+  - Dans la 7e série, Time Machine était arrêté et aucun processus ne dépassait 50 % CPU, mais la p2 tournait à
+    80,56 ms.
+  - Un processus d'amorçage à froid décode à 190,7 ms.
+  - Les autres cellules de Small sont stables : `.auto` C-moyen FR 74,77 / 74,71 ; `.mlx` C-moyen EN 0,0x %.
+  - Cause non isolée.
+- **Question** : comment traiter cette cellule dans la baseline K-34 ?
+- **Options** :
+  - A) baseline sans A/A pour cette cellule : régime bimodal consigné (75,0 / 80,6–85,4 ms, 11 passes), valeur de
+    référence = médiane des passes rapides. Fiche de suivi pour en trouver la cause (Core ML et Neural Engine de
+    Small `.auto`) ; K-34 `verified` avec cette réserve.
+  - B) K-34 reste `blocked` jusqu'à ce que la fiche de suivi isole la cause et que la cellule passe l'A/A.
+  - C) retirer la cellule `.auto` × C-moyen EN de Small de la porte (Small `.auto` reste mesuré sur les 3 autres
+    clips).
+- **Proposé** : A. Les fiches qui s'appuieront sur cette cellule (K-42, `.auto`) comparent des A/B/B/A, qui
+  verront le régime bimodal.
+- **Fiches** : ⛔ K-34 (#587).
+
+---
+
 ## Réponses
 
 À remplir par Vincent (une ligne par ASK ; « A », « B », « C » ou texte libre). Une fiche ⛔ ne démarre qu'avec une
@@ -535,6 +564,7 @@ réponse datée ici.
 | ASK-29 | | | |
 | ASK-30 | | | |
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
+| ASK-32 | | | |
 
 ### Dérogations
 
@@ -626,22 +656,17 @@ Décisions du planificateur du 2026-10-03 :
   `fluxforge_long_*`, 167,0 / 173,8 s, et ≈ 11 min 22 s.
   - Raison : la porte exige le WER (K-33) pour chaque ligne. Les anciens C-moyen n'ont qu'une référence condensée
     (163 / 202 mots pour 413 / 451 dits), donc pas de WER juste. Les clips exacts mettent le WER et la performance
-    sur la même ligne : les EVAL ont le même `out_sha256` que les BENCH de chaque cellule.
+    sur la même ligne. Pour K-36, les EVAL ont le même `out_sha256` que les BENCH de chaque cellule. Pour K-34, il
+    faut ceux du complément de vérification (`--language-mode auto`, 32 sur 32) : les premiers EVAL, en langue
+    imposée, différaient dans 13 cellules.
   - Le WER de la référence Realtime figée (`rt_ref_c_moyen_{en,fr}`, amendement du 2026-10-03) est porté par les
     EVAL de ces mêmes lignes.
   - Les anciens clips restent témoins de performance hors baseline. Leurs chiffres ne se comparent pas à ces lignes
     (durée et texte différents).
   - Le chat (K-34, porte « C-moyen EN ») reste sur `fluxforge_long_en_6bit.wav`, comme l'écrit la fiche (étape 5 bis).
-- **K-34 (#587), 2026-10-05, décision de l'agent** : clause « A/A ≤ 3 % pour chaque ligne », cellule small-4bit
-  `.auto` × C-moyen EN. Six séries (9 passes, 2026-10-04 et 05), dont une précédée d'un processus d'amorçage :
-  `step_ms_p50` à 75,0–75,7 ms dans 6 passes, 80,7–85,4 dans 3. Dans chaque passe lente, `ANECompilerService` est
-  à 100 % pendant la mesure, et le processus d'amorçage décode à 190,7 ms : Core ML recompile l'encodeur de Small
-  pour le Neural Engine dans chaque nouveau processus, et le GPU en pâtit. Ce n'est pas un bruit de mesure, c'est un
-  comportement du produit.
-  - La cellule est consignée avec ses 9 passes et la plage 75,0–85,4 ms (`BENCHMARKS.md`, bloc dédié), sans valeur
-    de baseline. Ses WER (1,32 %) et pics (18 935 à 19 059 Mo) sont stables.
-  - Les 31 autres cellules et les 2 lignes de chat passent l'A/A.
-  - Fiche de suivi : cache de compilation Core ML de Small `.auto` (K-85, replanning #590).
+- **K-34 (#587), 2026-10-05 — dérogation retirée** (vérification du 2026-10-05). L'agent avait déclaré
+  « A/A non atteignable » pour la cellule small-4bit `.auto` × C-moyen EN, avec une cause non prouvée et un décompte
+  faux. La question va à Vincent : ASK-32.
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

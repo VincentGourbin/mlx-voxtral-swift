@@ -1697,11 +1697,11 @@ Statistics:
   passent aussi le critère de K-32) ; baseline C-long valable pour le protocole « sans amorçage » ; `powermetrics`
   remplacé (pas de root).
 
-## K-34 — Baseline STT (Mini 8/4 bits, bf16, Small 4 bits × `.mlx`/`.auto`), occupation GPU du préfill, Small 32 Go — 2026-10-05 — rapportée
+## K-34 — Baseline STT (Mini 8/4 bits, bf16, Small 4 bits × `.mlx`/`.auto`), occupation GPU du préfill, Small 32 Go — 2026-10-05 — bloquée (ASK-32)
 - Porte observée (`BENCHMARKS.md` §« 2026-10-05 — K-34 », arbre propre `3a0cf13b` / `db8e19eb` / `9685d556`) :
   - A/A : 31 cellules sur 32 et 2 lignes de chat sur 2 (critère de `ASK.md` §Dérogations).
-  - 32e cellule (small-4bit `.auto` × C-moyen EN) : A/A non atteignable, recompilation Core ML à chaque processus
-    (décision de l'agent, `ASK.md`).
+  - 32e cellule (small-4bit `.auto` × C-moyen EN) : sans A/A en 7 séries (bimodal 75 / 81-85 ms, cause non isolée),
+    question à Vincent, ASK-32.
   - `BENCH {"pipeline":"stt","model":"mini-3b-8bit","backend":"mlx","input":"docs/eval/clips/c_moyen_en.wav",…,"step_ms_p50":21.32,"ttft_ms":3865.6,…}`
     (× 32 cellules, 2 passes ; WER par cellule dans les EVAL).
   - `GPU prefill Mini : xctrace 99,0 % · ioreg 99,2 % (profiler 99,9 %) ; Small : 99,8 % / 99,9 % (100 %)` (C-moyen EN
@@ -1718,3 +1718,14 @@ Statistics:
   - `.auto` : + 35 % de TTFT sur Mini, pic plus bas de 0,2 à 2,8 Go.
   - Le préfill sature le GPU : le « 49 % » de #13 et #14 était un artefact de lecture.
 - Écarts : clips exacts, protocole A/A et conditions de passe (`ASK.md` §Dérogations, 2026-10-05).
+
+## Vérification du 2026-10-05 — K-34 (#587) — non vérifiée, manques fournis, puis bloquée (ASK-32)
+- Vérificateur `not verified`, quatre manques :
+  - (1) C-long non jugé par langue : fourni, `SEGWER` des 8 cellules ;
+  - (2) EVAL en langue imposée, 13 sorties sur 32 différentes des BENCH : EVAL refaits en `--language-mode auto`, 32
+    sur 32 identiques ;
+  - (3) dérogation « A/A non atteignable » à cause non prouvée et décompte faux : retirée, 7e série (Time Machine
+    arrêté, machine sans charge) toujours en échec, ASK-32 ;
+  - (4) entrée de `log.md` : elle existait, ligne 171.
+- Constat de ces compléments : Small `.auto` traduit le dernier segment français de C-long (WER FR 50,7 % contre
+  1,5 % en `.mlx`).
