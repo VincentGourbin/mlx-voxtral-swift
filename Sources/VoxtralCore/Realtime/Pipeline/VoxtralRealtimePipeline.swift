@@ -184,6 +184,9 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 // which `decode` skips (K-13)
                 let silent = Set(Set(tokens).filter { tokenizer.decode([$0]).isEmpty })
                 lastPadFraction = tokens.isEmpty ? nil : Double(tokens.filter { silent.contains($0) }.count) / Double(tokens.count)
+                let streamingPad = Int32(model.config.streamingPadTokenId)
+                lastStreamingPadFraction = tokens.isEmpty
+                    ? nil : Double(tokens.filter { $0 == streamingPad }.count) / Double(tokens.count)
 
                 session?.beginPhase("Token Decoding", category: .decoding)
                 let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -244,6 +247,9 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
     /// Share of the last transcription's decode steps whose token carries no text: control tokens, [STREAMING_PAD]
     /// and [STREAMING_WORD] included (`docs/bench.schema.json`; bench, K-36)
     public private(set) var lastPadFraction: Double?
+
+    /// Share of the last transcription's decode steps whose token is [STREAMING_PAD] alone (K-36, input of K-73)
+    public private(set) var lastStreamingPadFraction: Double?
 
     // MARK: - Audio Preparation
 

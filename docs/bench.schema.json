@@ -48,6 +48,7 @@
     "truncated": {"type": "boolean"},
     "encode_ms_per_audio_s": {"type": "number"},
     "pad_fraction": {"type": "number", "minimum": 0, "maximum": 1, "description": "realtime: share of decode steps whose token carries no text (control tokens: [STREAMING_PAD], [STREAMING_WORD]…) (K-36, K-73)"},
+    "streaming_pad_fraction": {"type": "number", "minimum": 0, "maximum": 1, "description": "realtime: share of decode steps whose token is [STREAMING_PAD] alone (K-36, input of K-73)"},
     "delay_ms": {"type": "integer"},
     "frames": {"type": "integer"},
     "audio_s": {"type": "number"},

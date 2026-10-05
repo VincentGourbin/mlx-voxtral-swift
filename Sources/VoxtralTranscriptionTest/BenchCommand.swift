@@ -570,6 +570,7 @@ struct BenchRealtime: AsyncParsableCommand {
             record["chars"] = text.count
             record["truncated"] = pipeline.lastTranscriptionTruncated
             if let pad = pipeline.lastPadFraction { record["pad_fraction"] = BenchJSON.round(pad, 4) }
+            if let pad = pipeline.lastStreamingPadFraction { record["streaming_pad_fraction"] = BenchJSON.round(pad, 4) }
             if let encode = m.phases["encode"], let seconds, seconds > 0 {
                 record["encode_ms_per_audio_s"] = BenchJSON.round(encode / seconds, 2)
             }
