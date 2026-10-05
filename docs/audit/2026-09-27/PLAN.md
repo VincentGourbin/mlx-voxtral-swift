@@ -1687,3 +1687,12 @@ Statistics:
   - trace Realtime sur `c_20s_en` : xctrace remplit le disque système sur C-moyen ;
   - `powermetrics` exige root, non disponible ;
   - protocole A/A et conditions de passe : décisions de l'agent.
+
+## Vérification du 2026-10-05 — K-36 (#589) — vérifiée
+- Vérificateur (1re passe) `not verified` : 4 manques (clips exacts non inscrits, WER rt_ref non rattaché, « 2,71 % »,
+  clause C-xlong). Corrigés dans `8bd4a8ba`. 2e passe `verified` ; contradicteur `verified`, réserves traitées dans
+  le commit suivant : équivalence 20 s / C-moyen montrée sur la trace C-moyen 4 bits (93,0 % contre 92,3 %),
+  dispersion de l'encodage C-long 4 bits (+26 %) consignée, `streaming_pad_fraction` 0 de `9685d556` annoté.
+- Réserves conservées : critère A/A fixé par l'agent après avoir vu les données (sans effet ici : les 8 cellules
+  passent aussi le critère de K-32) ; baseline C-long valable pour le protocole « sans amorçage » ; `powermetrics`
+  remplacé (pas de root).

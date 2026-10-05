@@ -637,6 +637,11 @@ Décisions du planificateur du 2026-10-03 :
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le
     disque s'est rempli deux fois (passes perdues, données brutes supprimées). Le décodage Realtime est un régime
     stationnaire (un pas par trame de 80 ms) : 20 s suffisent pour son occupation.
+    Équivalence vérifiée en 4 bits : la trace sur C-moyen EN de la 1re série (`trace-realtime-2026-10-05T135409Z`,
+    complète, les GPUPHASE perdus avec le disque plein) donne 93,0 % d'occupation (union des intervalles GPU de
+    VoxtralCLI, profondeur 0, 4 premières secondes d'encodage et de préfill exclues ; 93,3 % sur toute la passe),
+    contre 92,3 % sur `c_20s_en`. La trace fp16 sur C-moyen a échoué : verrou `NSDistributedLock` de xctrace pendant
+    que le disque se remplissait. Outil : `.local-runs/tools/xct_busy.py` (calcul en ligne dans le rapport).
   - Les traces STT de K-34 (préfill Mini et Small) sont, elles, faites sur C-moyen EN complet.
   - Clause « relevé powermetrics » : `powermetrics` exige root, non disponible pour l'agent ; `pmset -g therm` ne
     rapporte rien sur cette machine. Remplacé par l'effet thermique mesuré (ralentissement de p1 après C-long,

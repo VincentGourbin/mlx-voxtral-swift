@@ -249,7 +249,9 @@ les autres clips avec un amorçage. A/A (`.local-runs/tools/aa.py`) : `step_ms_p
 `total_ms` ≤ 3 % pour les passes de moins de 60 s (au-delà, consigné), `ttft_ms` consigné, `out_sha256` identique.
 Clips : C-moyen exact (`docs/eval/clips/c_moyen_{en,fr}.wav`) et C-long exact (`c_long_exact`, 9 min 14 s), pas les
 `fluxforge_long_*` du corpus (`ASK.md` §Dérogations). WER : `voxtral eval realtime` (K-33). Occupation GPU : `bench --trace --metal-trace` (profiler `.ioReportResidency`,
-Metal System Trace, `ioreg` échantillonné à côté) sur `c_20s_en`.
+Metal System Trace, `ioreg` échantillonné à côté) sur `c_20s_en`. `streaming_pad_fraction` des lignes au commit
+`9685d556` est invalide (0 : il comptait l'id 11, `<pad>`) ; les valeurs justes sont celles du bloc `f16f5974`
+ci-dessous.
 
 ```
 # BASE-realtime-4b-4bit-c_court_en

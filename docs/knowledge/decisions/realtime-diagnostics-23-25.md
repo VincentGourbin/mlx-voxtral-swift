@@ -56,6 +56,12 @@ pour les 8 cellules) :
 - **Occupation GPU du décodage** (« Realtime Generation », `bench --trace --metal-trace` sur `c_20s_en`) : 4 bits
   profiler 99,3 % · xctrace 92,3 % · `ioreg` 95,3 % (écart profiler/xctrace 7,0 pts) ; fp16 99,9 % · 98,4 % ·
   98,5 % (1,5 pt). Le GPU est occupé pendant tout le décodage : le « 49 % » de #24 n'était pas une occupation.
+  Recoupement sur C-moyen EN complet (4 bits, trace de la 1re série) : xctrace 93,0 %, hors encodage et préfill.
+- **Coût d'encodage** (amendement du 2026-10-03, remesuré à froid) : 19,6 à 23,2 ms par seconde d'audio (4 bits) et
+  21,1 à 26,2 (fp16) en p1. Dispersion p1/p2 notable sur C-long 4 bits : 20,85 → 27,16 (+26 %), alors que
+  `step_ms_p50` ne varie que de 2,6 %. La valeur haute de K-13 (27,76 sur 12 min) se reproduit donc d'une passe à
+  l'autre sur l'audio long. L'encodage C-long n'est pas une référence stable, à remesurer par K-38 et K-46 avant
+  tout gain annoncé.
 - **WER** (`voxtral eval realtime`, clips à texte exact) : C-court 9,09 %, C-moyen EN 1,05 %, C-moyen FR 1,97 % en
   4 bits comme en fp16 ; C-long 1,15 % (4 bits) / 1,40 % (fp16). Contre la référence Realtime (`rt_ref_*`, K-33) :
   EN 5,15 / 7,96 %, FR 2,44 / 4,07 % (dernière phrase couverte à 0,625 / 0,375 : le juge Realtime n'est pas fiable
