@@ -1732,7 +1732,11 @@ Statistics:
 
 ## K-37 — complément du 2026-10-05 — séries A4 refaites
 - Raison : la vérification du 2026-10-03 avait relevé Spotlight et le Simulateur pendant les séries A2.
-- Conditions : garde de charge pendant chaque passe, simulateurs arrêtés, machine-check sans `KO` avant chaque passe.
+- Conditions : garde de charge pendant chaque passe, simulateurs arrêtés. Trois séries en deux processus avec un
+  machine-check sans `KO` avant chaque passe ; `A4-6bit-after_synthesis` en une invocation `--passes 2 --warmup 0
+  --cooldown 120`, un machine-check avant l'invocation. Raison : sa p1 séparée a été prise sous charge 4 fois
+  (Xcode et `xcodebuild` d'une autre session, `runningboardd`). Toutes les passes écartées, et la série A3, sont dans
+  `BENCHMARKS.md` §« 2026-10-06 ».
 - A/A `epoch_ms_p50` : 6 bits cli 0,26 %, 6 bits after_synthesis 0,03 %, bf16 cli 0,03 %, bf16 after_synthesis
   0,10 %.
 - Pics (i) → (ii) : 6 bits 2633.0 → 6096.5 Mo (+131.5 %), bf16 2601.2 → 11564.3 Mo (+344.6 %). Décision « garder »
@@ -1747,3 +1751,17 @@ Statistics:
 - Incident K-35 : `enroll` exigeait 16 s de référence par défaut (`--duration`), alors que `clone_fr.wav` dure 8,6 s.
   La voix de test n'avait pas été créée, et les cellules « voix clonée » ont échoué dès le départ (erreur sur
   stderr). Elle est enrôlée avec `--duration 8` (la valeur de `bench enroll`), puis les cellules sont refaites.
+
+## Vérification du 2026-10-06 — K-34 (#587) et K-37 (#586)
+- K-34 : vérificateur `verified` (ASK-32 = A respectée). Contradicteur `verified` avec réserves, traitées dans le
+  commit suivant :
+  - chiffres de la note corrigés (+ 6 à + 37 % en audio long, rapport bf16/8 bits par backend, plages ¹ sur les 11
+    passes) ;
+  - chat `.auto` refait (Teams 603 %), tableau du chat avec TTFT, A/A du TTFT et tok/s ;
+  - réserve de sélection mini-3b `.auto` consignée ; K-85 étendue à `.mlx` ;
+  - commentaire `BENCHMARKS.md` corrigé (la cause « ANE » retirée).
+- K-37 : vérificateur `verified`. Contradicteur `not verified` : passes écartées (A3, `A4-*-loaded*`) non recopiées,
+  et clause « machine-check avant chaque passe » fausse pour la série `-full`. Corrigé dans le commit suivant : bloc
+  « passes écartées » pour K-34, K-36 et K-37, et clause de PLAN corrigée.
+- Fiches de suivi écrites : K-83 (`voxtral eval chat`), K-84 (invite Realtime), K-85 (régime bimodal et traduction
+  de Small). Elles seront dispatchées par #590.

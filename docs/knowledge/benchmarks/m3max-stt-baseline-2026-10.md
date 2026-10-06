@@ -38,12 +38,13 @@ que la passe (`out_sha256` égal, 32 sur 32).
 | small-4bit | .mlx | C-moyen FR | 75,41 | 19 857 | 0,445 | 20 022 | 1,23 |
 | small-4bit | .mlx | C-long | 84,19 | 67 912 | 0,402 | 19 593 | 1,72 |
 | small-4bit | .auto | C-court EN | 71,53 | 3 020 | 0,823 | 15 035 | 9,09 |
-| small-4bit | .auto | C-moyen EN | 75,0 à 85,4 ¹ | 17 057 à 19 576 | 0,335 à 0,383 | 18 935 à 19 059 | 1,32 |
+| small-4bit | .auto | C-moyen EN | 75,0 à 85,4 ¹ | 17 051 à 19 575 | 0,335 à 0,383 | 18 862 à 19 059 | 1,32 |
 | small-4bit | .auto | C-moyen FR | 74,77 | 18 624 | 0,433 | 19 045 | 1,23 |
 | small-4bit | .auto | C-long | 83,03 | 65 950 | 0,316 | 19 387 | 27,23 |
 
 
-¹ Pas d'A/A : régime bimodal sur 11 passes (6 à 75,0–75,7 ms, 5 à 80,6–85,4), cause non isolée. Décision de Vincent
+¹ Pas d'A/A : régime bimodal sur 11 passes (6 à 75,0–75,7 ms, 5 à 80,6–85,4 ; plages sur les 11 passes), cause non
+isolée. Décision de Vincent
 (ASK-32 = A, 2026-10-06) : la cellule est gardée sans A/A, avec pour référence la médiane des passes rapides,
 **75,13 ms**. Une comparaison sur cette cellule doit montrer les deux régimes (A/B/B/A). Cause : fiche K-85.
 
@@ -53,7 +54,8 @@ que la passe (`out_sha256` égal, 32 sur 32).
   (encodeur sur le GPU) décodent au même rythme (écarts ≤ 1,5 %, sauf Mini 4 bits C-long 3,4 % et Small C-moyen
   EN ¹). `.auto` coûte en TTFT sur Mini (+ 35 % sur C-moyen : 5,2 s contre 3,9 s) et économise de la mémoire (pic
   − 0,2 à − 2,8 Go selon le modèle et le clip).
-- **Mini bf16 (`mini-3b`) est 5,6 à 6,8 fois plus lent que le 8 bits** (132 à 150 ms par pas, contre 19,5 à 26,8) : au-delà
+- **Mini bf16 (`mini-3b`) est 5,5 à 6,9 fois plus lent que le 8 bits** (`.mlx` 5,6 à 6,8 ; `.auto` 5,5 à 6,9 ; 132 à
+  150 ms par pas, contre 19,3 à 27,1) : au-delà
   de ce que pèsent les poids (× 2). Même signature que le Realtime fp16 (K-36) : à traiter par K-38 et K-46.
 - **C-long (EN/FR alterné), jugé par langue** (K-33, `SEGWER` dans `BENCHMARKS.md`) :
 
@@ -68,8 +70,13 @@ que la passe (`out_sha256` égal, 32 sur 32).
   Mini traduit les segments français en anglais, une limite du modèle (K-33) ; en bf16, il dérive aussi sur le 2e
   segment anglais. Small `.mlx` transcrit tout. Small `.auto` traduit le dernier segment français : seul écart entre
   backends du corpus, propre à l'encodeur Core ML de Small sur l'audio long (fiche de suivi).
-- **Pas plus lent en audio long** : + 25 % (Mini 8 bits, 21,3 → 26,8 ms) à + 9 % (Mini bf16) entre C-moyen et C-long :
-  le contexte grandit.
+- **Pas plus lent en audio long** : de + 6 % (Small `.mlx`) à + 37 % (Mini 4 bits `.mlx`, 15,43 → 21,17 ms) entre
+  C-moyen EN et C-long : le contexte grandit.
+- **Réserve de sélection (contradicteur, 2026-10-06)** : sur mini-3b `.auto` × C-moyen EN, les 8 passes des
+  journaux vont de 136,0 à 144,9 ms par pas ; la paire retenue (136,65 / 137,14) est en bas de la plage. Pour le bf16,
+  la dispersion réelle d'un processus à l'autre (≈ 6 %) dépasse l'A/A retenu (0,36 %). Small `.mlx` × C-moyen se
+  place aussi entre les deux régimes de `.auto` (77,95 / 79,19 EN ; 75,41 / 77,68 FR) : K-85 couvre les deux
+  backends.
 
 ## Occupation GPU du préfill (C-moyen EN complet, `bench --trace --metal-trace`)
 
@@ -86,10 +93,14 @@ sur-estime légèrement le décodage, où des trous de quelques µs séparent le
 
 ## Chat (mini-3b-8bit, `fluxforge_long_en_6bit.wav`, 4 questions, greedy)
 
-| Backend | TTFT q1 / q2 / q3 / q4 (ms) | ms/pas p50 | A/A |
-|---|---|---|---|
-| `.mlx` | 4 696 / 4 892 / 5 285 / 5 993 | 21,4 | pas ≤ 0,23 %, total ≤ 2,81 % |
-| `.auto` | 6 315 / 6 310 / 6 317 / 6 401 | 21,3 à 21,5 | pas ≤ 0,23 %, total ≤ 0,43 % |
+| Backend | TTFT q1 / q2 / q3 / q4 (ms), p1 | A/A du TTFT | tok/s | ms/pas p50 | A/A pas / total |
+|---|---|---|---|---|---|
+| `.mlx` | 4 696 / 4 892 / 5 285 / 5 993 | 0,41 / 0,92 / 3,98 / 3,18 % | 45,8 à 46,3 | 21,4 | ≤ 0,23 % / ≤ 2,81 % |
+| `.auto` (refait le 2026-10-06) | 6 364 / 6 318 / 6 320 / 6 348 | ≤ 0,82 % | 45,7 à 46,2 | 21,45 | ≤ 0,70 % / ≤ 0,70 % |
+
+Le TTFT est consigné, pas jugé (dérogation A/A). Sur `.mlx`, il dépasse 3 % entre passes pour q3 et q4 : pour K-49
+et K-70, comparer le TTFT du chat `.mlx` en A/B/B/A sur plusieurs passes. Le chat `.auto` a été refait : sa 1re paire
+avait tourné avec Microsoft Teams à 603 % de CPU.
 
 Chaque question réencode l'audio : le TTFT est payé à chaque tour (référence de K-49 et K-70).
 
