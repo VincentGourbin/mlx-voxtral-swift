@@ -627,13 +627,21 @@ struct BenchTTS: AsyncParsableCommand {
             var frames = 0
             var audioSeconds = 0.0
             var ttfaMs: Double?
+            var frameMs: [Double] = []  // streaming: interval between chunks per frame they carry (K-35)
             let start = CFAbsoluteTimeGetCurrent()
             let m = try await PassMeasurement.run {
                 if streaming {
                     var chunks: [MLXArray] = []
+                    var lastChunk = start
                     for try await chunk in pipeline.synthesizeStreaming(
                         text: text, voiceEmbedding: embedding, seed: seed, warmUpText: warmUpText) {
-                        if ttfaMs == nil { ttfaMs = (CFAbsoluteTimeGetCurrent() - start) * 1000 }
+                        let now = CFAbsoluteTimeGetCurrent()
+                        if ttfaMs == nil {
+                            ttfaMs = (now - start) * 1000
+                        } else if chunk.totalFrames > frames {
+                            frameMs.append((now - lastChunk) * 1000 / Double(chunk.totalFrames - frames))
+                        }
+                        lastChunk = now
                         chunks.append(chunk.waveform)
                         frames = chunk.totalFrames
                     }
@@ -658,6 +666,11 @@ struct BenchTTS: AsyncParsableCommand {
             record["text_tokens"] = pipeline.textTokenCount(text) ?? 0
             record["frame_cap"] = pipeline.frameCap(forText: text)
             if !streaming { record["truncated"] = pipeline.lastSynthesisTruncated }
+            if streaming, !frameMs.isEmpty {  // per-frame rate after the first chunk: the streaming A/A metric (K-35)
+                let sorted = frameMs.sorted()
+                record["stream_frame_ms_p50"] = BenchJSON.round(sorted[sorted.count / 2], 2)
+                record["stream_frame_ms_p90"] = BenchJSON.round(sorted[min(sorted.count - 1, sorted.count * 9 / 10)], 2)
+            }
             if warmUp && !streaming { record["carrier_frames"] = pipeline.lastCarrierFrames }  // K-35: carrier / total frames
             if audioSeconds > 0 { record["rtf"] = BenchJSON.round(m.totalMs / 1000 / audioSeconds, 4) }
             return record

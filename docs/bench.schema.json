@@ -49,6 +49,8 @@
     "encode_ms_per_audio_s": {"type": "number"},
     "pad_fraction": {"type": "number", "minimum": 0, "maximum": 1, "description": "realtime: share of decode steps whose token carries no text (control tokens: [STREAMING_PAD], [STREAMING_WORD]…) (K-36, K-73)"},
     "streaming_pad_fraction": {"type": "number", "minimum": 0, "maximum": 1, "description": "realtime: share of decode steps whose token is [STREAMING_PAD] alone (K-36, input of K-73)"},
+    "stream_frame_ms_p50": {"type": "number", "description": "tts --streaming: median of (interval between two chunks) / (frames in the later chunk), first chunk excluded (K-35)"},
+    "stream_frame_ms_p90": {"type": "number", "description": "tts --streaming: p90 of the same per-frame intervals (K-35)"},
     "delay_ms": {"type": "integer"},
     "frames": {"type": "integer"},
     "audio_s": {"type": "number"},
