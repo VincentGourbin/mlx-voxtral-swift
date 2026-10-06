@@ -526,6 +526,17 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 
 ---
 
+### ASK-33 — Plafond de cache par défaut pour Small sur un Mac de 32 Go ou moins
+
+- **Contexte** : K-34 (`docs/knowledge/decisions/small-32gb.md`) : small-4bit sur 8 min d'audio, pic 37 313 Mo sans
+  plafond, 19 013 Mo avec `--cache-limit-mb 2048`.
+- **Question** : faut-il un plafond de cache MLX par défaut pour `small-*` sur les machines de 32 Go ou moins ?
+- **Options** : A) oui, Small seulement, sur ≤ 32 Go ; B) non, documenter et avertir ; C) plafond pour tous.
+- **Proposé** : A, si K-52 confirme un temps à ± 5 %.
+- **Fiches** : K-52.
+
+---
+
 ## Réponses
 
 À remplir par Vincent (une ligne par ASK ; « A », « B », « C » ou texte libre). Une fiche ⛔ ne démarre qu'avec une
@@ -536,27 +547,27 @@ réponse datée ici.
 | ASK-1 | | | |
 | ASK-2 | | | |
 | ASK-3 | | | |
-| ASK-4 | | | |
-| ASK-5 | | | |
-| ASK-6 | | | |
+| ASK-4 | A | 2026-10-06 | Vincent, session Mac : matrice complète. |
+| ASK-5 | A | 2026-10-06 | Vincent, session Mac : le défaut TTS passe au 6 bits si la porte de K-79 le justifie. |
+| ASK-6 | A | 2026-10-06 | Vincent, session Mac : la règle de K-42 décide ; `.mlx` par défaut si `.auto` ne gagne pas (CHANGELOG, FluxForge prévenu). Chiffres K-34 : `.auto` + 35 % de TTFT sur Mini, même décodage et même WER ; Small `.auto` traduit le dernier segment FR. |
 | ASK-7 | A | 2026-10-01 | Donnée par Vincent au planificateur, 2026-10-01 : contexte complet ; le profil lean borne la durée d'audio acceptée (erreur typée au-delà) ; le seuil de 12 Go se lit avec le plafond de cache MLX (10,99 Go de pic avec K-52, pour 8,6 Go de mémoire MLX active). |
 | ASK-8 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : défaut `nil`, budget proportionnel à la durée (STT), boucle bornée par l'audio (Realtime) ; valeur explicite = plafond de jetons texte signalé `truncated` (K-5). |
 | ASK-9 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : un défaut public change quand la porte l'emporte (version mineure, CHANGELOG, FluxForge prévenu) ; A pour K-5 et K-14, fiche par fiche pour K-51, K-61, K-64. K-5 et K-14 partent dans la 3.0.0. |
 | ASK-10 | | | |
 | ASK-11 | A | 2026-10-01 | Donnée par Vincent dans la session Mac : texte identique sur C-court et WER normalisé ≤ référence +0,2 pt sur C-moyen EN/FR (16 et 8 bits ; +0,5 pt pour la tête 4 bits de K-46). |
 | ASK-12 | A, sous condition | 2026-10-01 | Donnée par Vincent dans la session Mac : mlx-audio accepté **comme référence seulement** — sortie capturée une fois (environnement Python temporaire hors du dépôt, commit épinglé) et figée en fichier texte ; **aucune dépendance** du code, des tests ou du build à un backend Python. |
-| ASK-13 | | | |
+| ASK-13 | A | 2026-10-06 | Vincent, session Mac : écoute à l'aveugle pour toutes les fiches (K-39, K-48, K-58, K-79, K-80). |
 | ASK-14 | | | |
 | ASK-15 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `small-24b-8bit` = `VincentGOURBIN/voxtral-small-8bit` (registre et README) ; l'enum `VoxtralPipeline.Model.small24b8bit` s'aligne dessus (K-10). |
-| ASK-16 | | | |
+| ASK-16 | A | 2026-10-06 | Vincent, session Mac : pointer vers les dépôts tiers quand c'est possible, épinglés par révision et SHA-256. |
 | ASK-17 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : corriger `realtime-4b` (liste de fichiers fixée, config lue depuis `params.json`, id strict) (K-9). |
 | ASK-18 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : « FluxForge est gratuit et le restera » ; usage non commercial, les profils TTS peuvent être recommandés et PK-2 publié (dérivé CC BY-NC 4.0 : attribution, licence reprise, mention « non commercial » sur chaque page TTS). À rouvrir si FluxForge devient payant (prix, achat intégré, publicité). |
 | ASK-19 | | | |
-| ASK-20 | | | |
+| ASK-20 | A | 2026-10-06 | Vincent, session Mac : apprendre à lire le format voxmlx ; l'agent ajoute un refus explicite de tout pack mal lu (fini le chargement silencieux en poids aléatoires). |
 | ASK-21 | B | 2026-10-02 | Donnée par Vincent dans la session Mac : les modes non affines (mxfp4, mxfp8, nvfp4) sont acceptés au chargement en **expérimental**, sans profil ni garantie de qualité (K-8 : décodage correct du mode, avertissement, hors profils). |
-| ASK-22 | | | |
+| ASK-22 | autre | 2026-10-06 | Vincent, session Mac : publier sur Hugging Face (jeton disponible) tout ce qui n'est pas trouvable ailleurs, en dépôt complet comme pour yue2 et gemma4 ; le reste par référence (ASK-16). |
 | ASK-23 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : dépréciation annotée en 2.3 (additif, K-30), suppression en 3.0. 3.0.0 directe, sans 2.3 publiée (décision de Vincent du 2026-10-03, donnée au planificateur). |
-| ASK-24 | | | |
+| ASK-24 | A | 2026-10-06 | Vincent, session Mac : la conformance `LanguageModel` est retirée. |
 | ASK-25 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : revue 3.0 sur une liste proposée par K-31, relue et amendée par Vincent avant application. |
 | ASK-26 | B | 2026-09-30 | Donnée par Vincent dans la session Mac : `VoxtralBenchmark` retiré du `Package.swift`, remplacé par `VoxtralCLI bench` (K-32). |
 | ASK-27 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `VoxtralEncoderFull.mlmodelc` n'est plus embarqué ; VoxtralApp le télécharge à l'exécution (ligne `.copy` retirée, K-28). |
@@ -565,6 +576,7 @@ réponse datée ici.
 | ASK-30 | | | |
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
 | ASK-32 | A | 2026-10-06 | Vincent, session Mac (« À » en réponse à la question fermée) : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A, régime bimodal consigné, référence = médiane des passes rapides (75,13 ms), fiche de suivi K-85. |
+| ASK-33 | A, désactivable | 2026-10-06 | Vincent, session Mac : plafond par défaut pour Small sur ≤ 32 Go, que l'hôte peut désactiver. |
 
 ### Dérogations
 
