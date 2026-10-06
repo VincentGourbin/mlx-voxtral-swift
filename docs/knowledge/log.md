@@ -179,3 +179,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
     cause « ANE » vue dans 1 passe sur 5).
   - Mini en audio long EN/FR : traduit les segments français (WER FR 96-100 %, EN 9 %) ; jugé par langue.
   - Small `.auto` traduit le dernier segment français de l'audio long alterné (WER FR 51 % contre 1,5 % en `.mlx`).
+- 2026-10-06 — **ASK-32 = A** (Vincent) : K-34 garde la cellule Small `.auto` × C-moyen EN sans A/A (référence 75,13 ms,
+  médiane des passes rapides). **K-35** réduite (3 graines sur le texte court, 1 sur moyen et long). Piège : `voxtral
+  enroll` exige 16 s de référence par défaut et l'erreur part sur stderr ; une file qui ne journalise que stdout ne
+  la voit pas (toujours `2>&1` et vérifier le fichier produit).

@@ -43,8 +43,9 @@ que la passe (`out_sha256` égal, 32 sur 32).
 | small-4bit | .auto | C-long | 83,03 | 65 950 | 0,316 | 19 387 | 27,23 |
 
 
-¹ Pas d'A/A : régime bimodal sur 11 passes (6 à 75,0–75,7 ms, 5 à 80,6–85,4), cause non isolée ; décision à Vincent
-(ASK-32). Non retenue comme baseline.
+¹ Pas d'A/A : régime bimodal sur 11 passes (6 à 75,0–75,7 ms, 5 à 80,6–85,4), cause non isolée. Décision de Vincent
+(ASK-32 = A, 2026-10-06) : la cellule est gardée sans A/A, avec pour référence la médiane des passes rapides,
+**75,13 ms**. Une comparaison sur cette cellule doit montrer les deux régimes (A/B/B/A). Cause : fiche K-85.
 
 ## Lecture
 

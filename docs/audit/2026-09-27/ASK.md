@@ -564,7 +564,7 @@ réponse datée ici.
 | ASK-29 | | | |
 | ASK-30 | | | |
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
-| ASK-32 | | | |
+| ASK-32 | A | 2026-10-06 | Vincent, session Mac (« À » en réponse à la question fermée) : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A, régime bimodal consigné, référence = médiane des passes rapides (75,13 ms), fiche de suivi K-85. |
 
 ### Dérogations
 
@@ -667,6 +667,8 @@ Décisions du planificateur du 2026-10-03 :
 - **K-34 (#587), 2026-10-05 — dérogation retirée** (vérification du 2026-10-05). L'agent avait déclaré
   « A/A non atteignable » pour la cellule small-4bit `.auto` × C-moyen EN, avec une cause non prouvée et un décompte
   faux. La question va à Vincent : ASK-32.
+- **K-35 (#588), 2026-10-06 (Vincent)** : matrice réduite pour la durée. Le texte court garde 3 graines (1 à 3),
+  les textes moyen et long une seule (graine 1) ; les 3 packs, 2 voix, 2 modes et l'aller-retour ASR sont inchangés.
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

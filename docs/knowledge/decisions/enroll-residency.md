@@ -31,3 +31,12 @@ Décision reconfirmée : (ii) − (i) ≥ 5 % → **garder** le volet résidence
 tableau ci-dessus (dont la série `mlx cli` écartée : 2 674 Mo et « 64.5 (redo) » étaient inexacts).
 Réserve : Spotlight (`CoreSpotlight`, 87–110 %) tournait en fin de 5 des 8 passes (`top_process`), sans effet visible
 sur la dispersion.
+
+## Séries refaites le 2026-10-05 (tags `A4-*`, garde de charge pendant chaque passe, simulateurs arrêtés)
+
+| Pack | (i) seul : pic (moyenne des 2 passes) | (ii) après synthèse : pic | (ii) − (i) | `epoch_ms_p50` (i) / (ii) | A/A `epoch_ms_p50` (i) / (ii) |
+|---|---|---|---|---|---|
+| `tts-4b-6bit` | 2633.0 Mo | 6096.5 Mo | **+131.5 %** | 62.17 / 61.66 ms | 0,26 / 0,03 % |
+| `tts-4b-mlx` (bf16) | 2601.2 Mo | 11564.3 Mo | **+344.6 %** | 61.44 / 61.46 ms | 0,03 / 0,10 % |
+
+Décision « garder » reconfirmée ((ii) − (i) ≥ 5 %). Voix identique dans les 8 passes (`f18162fc…`).

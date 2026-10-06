@@ -1697,7 +1697,7 @@ Statistics:
   passent aussi le critère de K-32) ; baseline C-long valable pour le protocole « sans amorçage » ; `powermetrics`
   remplacé (pas de root).
 
-## K-34 — Baseline STT (Mini 8/4 bits, bf16, Small 4 bits × `.mlx`/`.auto`), occupation GPU du préfill, Small 32 Go — 2026-10-05 — bloquée (ASK-32)
+## K-34 — Baseline STT (Mini 8/4 bits, bf16, Small 4 bits × `.mlx`/`.auto`), occupation GPU du préfill, Small 32 Go — 2026-10-05 — rapportée (ASK-32 = A, Vincent, 2026-10-06)
 - Porte observée (`BENCHMARKS.md` §« 2026-10-05 — K-34 », arbre propre `3a0cf13b` / `db8e19eb` / `9685d556`) :
   - A/A : 31 cellules sur 32 et 2 lignes de chat sur 2 (critère de `ASK.md` §Dérogations).
   - 32e cellule (small-4bit `.auto` × C-moyen EN) : sans A/A en 7 séries (bimodal 75 / 81-85 ms, cause non isolée),
@@ -1729,3 +1729,21 @@ Statistics:
   - (4) entrée de `log.md` : elle existait, ligne 171.
 - Constat de ces compléments : Small `.auto` traduit le dernier segment français de C-long (WER FR 50,7 % contre
   1,5 % en `.mlx`).
+
+## K-37 — complément du 2026-10-05 — séries A4 refaites
+- Raison : la vérification du 2026-10-03 avait relevé Spotlight et le Simulateur pendant les séries A2.
+- Conditions : garde de charge pendant chaque passe, simulateurs arrêtés, machine-check sans `KO` avant chaque passe.
+- A/A `epoch_ms_p50` : 6 bits cli 0,26 %, 6 bits after_synthesis 0,03 %, bf16 cli 0,03 %, bf16 after_synthesis
+  0,10 %.
+- Pics (i) → (ii) : 6 bits 2633.0 → 6096.5 Mo (+131.5 %), bf16 2601.2 → 11564.3 Mo (+344.6 %). Décision « garder »
+  reconfirmée.
+- Lignes dans `BENCHMARKS.md` ; `enroll-residency.md` mis à jour.
+
+## Décisions de Vincent du 2026-10-06
+- ASK-32 = A : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A. Régime bimodal
+  consigné ; référence = médiane des 6 passes rapides, 75,13 ms par pas ; fiche de suivi sur la cause (K-85).
+- K-35 : matrice réduite. Le texte court garde les graines 1 à 3, les textes moyen et long passent à la graine 1.
+  La raison est la durée : la matrice complète demandait encore ≈ 9 h de GPU.
+- Incident K-35 : `enroll` exigeait 16 s de référence par défaut (`--duration`), alors que `clone_fr.wav` dure 8,6 s.
+  La voix de test n'avait pas été créée, et les cellules « voix clonée » ont échoué dès le départ (erreur sur
+  stderr). Elle est enrôlée avec `--duration 8` (la valeur de `bench enroll`), puis les cellules sont refaites.
