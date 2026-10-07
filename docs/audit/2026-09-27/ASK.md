@@ -537,6 +537,21 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 
 ---
 
+### ASK-34 — K-35 : cellules streaming moyen et long sans A/A
+
+- **Contexte** : le streaming TTS re-décode tout l'accumulé à chaque morceau (`VoxtralTTSPipeline.swift`,
+  `decodeToWaveform(chunk.accumulatedCodes)`), donc le coût par frame croît avec la longueur. Mesures : 41 ms par
+  frame (texte court), environ 80 (moyen), 140 à 166 (long), contre 38 à 39 ms par pas en batch.
+- **Ce qui a été constaté** : 4 cellules streaming moyen ou long varient de 3 à 25 % d'un processus à l'autre, même
+  sur la médiane par frame (`stream_frame_ms_p50`).
+- **Question** : comment traiter ces cellules dans la baseline K-35 ?
+- **Options** : A) les garder sans A/A, cause consignée, référence « avant » de K-43 ; B) K-35 bloquée jusqu'à K-43 ;
+  C) les retirer de la porte.
+- **Proposé** : A.
+- **Fiches** : ⛔ K-35 (#588) ; K-43.
+
+---
+
 ## Réponses
 
 À remplir par Vincent (une ligne par ASK ; « A », « B », « C » ou texte libre). Une fiche ⛔ ne démarre qu'avec une
@@ -553,7 +568,7 @@ réponse datée ici.
 | ASK-7 | A | 2026-10-01 | Donnée par Vincent au planificateur, 2026-10-01 : contexte complet ; le profil lean borne la durée d'audio acceptée (erreur typée au-delà) ; le seuil de 12 Go se lit avec le plafond de cache MLX (10,99 Go de pic avec K-52, pour 8,6 Go de mémoire MLX active). |
 | ASK-8 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : défaut `nil`, budget proportionnel à la durée (STT), boucle bornée par l'audio (Realtime) ; valeur explicite = plafond de jetons texte signalé `truncated` (K-5). |
 | ASK-9 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : un défaut public change quand la porte l'emporte (version mineure, CHANGELOG, FluxForge prévenu) ; A pour K-5 et K-14, fiche par fiche pour K-51, K-61, K-64. K-5 et K-14 partent dans la 3.0.0. |
-| ASK-10 | | | |
+| ASK-10 | A | 2026-10-07 | Vincent, session Mac : la porte de K-68 décide (TTFA des voix clonées −30 % au moins, 0 fuite sur 10 prises, écoute ASK-13). |
 | ASK-11 | A | 2026-10-01 | Donnée par Vincent dans la session Mac : texte identique sur C-court et WER normalisé ≤ référence +0,2 pt sur C-moyen EN/FR (16 et 8 bits ; +0,5 pt pour la tête 4 bits de K-46). |
 | ASK-12 | A, sous condition | 2026-10-01 | Donnée par Vincent dans la session Mac : mlx-audio accepté **comme référence seulement** — sortie capturée une fois (environnement Python temporaire hors du dépôt, commit épinglé) et figée en fichier texte ; **aucune dépendance** du code, des tests ou du build à un backend Python. |
 | ASK-13 | A | 2026-10-06 | Vincent, session Mac : écoute à l'aveugle pour toutes les fiches (K-39, K-48, K-58, K-79, K-80). |
@@ -562,7 +577,7 @@ réponse datée ici.
 | ASK-16 | A | 2026-10-06 | Vincent, session Mac : pointer vers les dépôts tiers quand c'est possible, épinglés par révision et SHA-256. |
 | ASK-17 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : corriger `realtime-4b` (liste de fichiers fixée, config lue depuis `params.json`, id strict) (K-9). |
 | ASK-18 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : « FluxForge est gratuit et le restera » ; usage non commercial, les profils TTS peuvent être recommandés et PK-2 publié (dérivé CC BY-NC 4.0 : attribution, licence reprise, mention « non commercial » sur chaque page TTS). À rouvrir si FluxForge devient payant (prix, achat intégré, publicité). |
-| ASK-19 | | | |
+| ASK-19 | A | 2026-10-07 | Vincent, session Mac : fabriquer un pack TTS 8 bits pré-quantifié et l'ajouter aux benchs (même matrice que K-35) ; publié s'il n'existe pas ailleurs (ASK-22). |
 | ASK-20 | A | 2026-10-06 | Vincent, session Mac : apprendre à lire le format voxmlx ; l'agent ajoute un refus explicite de tout pack mal lu (fini le chargement silencieux en poids aléatoires). |
 | ASK-21 | B | 2026-10-02 | Donnée par Vincent dans la session Mac : les modes non affines (mxfp4, mxfp8, nvfp4) sont acceptés au chargement en **expérimental**, sans profil ni garantie de qualité (K-8 : décodage correct du mode, avertissement, hors profils). |
 | ASK-22 | autre | 2026-10-06 | Vincent, session Mac : publier sur Hugging Face (jeton disponible) tout ce qui n'est pas trouvable ailleurs, en dépôt complet comme pour yue2 et gemma4 ; le reste par référence (ASK-16). |
@@ -577,6 +592,7 @@ réponse datée ici.
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
 | ASK-32 | A | 2026-10-06 | Vincent, session Mac (« À » en réponse à la question fermée) : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A, régime bimodal consigné, référence = médiane des passes rapides (75,13 ms), fiche de suivi K-85. |
 | ASK-33 | A, désactivable | 2026-10-06 | Vincent, session Mac : plafond par défaut pour Small sur ≤ 32 Go, que l'hôte peut désactiver. |
+| ASK-34 | A | 2026-10-07 | Vincent, session Mac : les cellules streaming moyen et long sans A/A restent dans la baseline K-35, cause consignée (re-décodage complet), référence « avant » de K-43. |
 
 ### Dérogations
 
