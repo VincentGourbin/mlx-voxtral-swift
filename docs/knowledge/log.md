@@ -183,3 +183,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   médiane des passes rapides). **K-35** réduite (3 graines sur le texte court, 1 sur moyen et long). Piège : `voxtral
   enroll` exige 16 s de référence par défaut et l'erreur part sur stderr ; une file qui ne journalise que stdout ne
   la voit pas (toujours `2>&1` et vérifier le fichier produit).
+- 2026-10-08 — **K-92** : le streaming TTS ré-émettait tout l'audio quand l'EOA tombait juste après une frontière de
+  morceau (morceau final sans frame nouvelle), environ une synthèse sur six, toujours pour les mêmes graines. Vu dans
+  K-35 par `audio_s` = 2 × frames × 80 ms. Corrigé dans `synthesizeStreaming` ; test gardé qui échoue avant (2,00 ×)
+  et passe après. Leçon : un champ dérivé (`audio_s` / frames) qui vaut exactement un multiple entier signale un
+  défaut de découpage, pas du bruit.

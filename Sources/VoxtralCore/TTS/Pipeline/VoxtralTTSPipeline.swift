@@ -116,6 +116,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         guard let perToken = configuration.framesPerTextToken else { return configuration.maxFrames }
         return min(configuration.maxFrames, configuration.framesCapBase + Int((perToken * Float(textTokens)).rounded(.up)))
     }
+
+    /// Offset, within the content, of the slice a streaming chunk emits: what was not emitted yet, empty when the
+    /// chunk adds no sample (K-92)
+    static func newContentStart(previous: Int, contentTotal: Int) -> Int {
+        min(max(previous, 0), contentTotal)
+    }
     public let sampleRate: Int = 24000
 
     /// State, running operation and generation token, changed atomically
@@ -747,13 +753,17 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         }
 
                         // Content samples generated so far, and the new slice.
+                        // A chunk that adds no sample — EOA right after a chunk
+                        // boundary yields a final chunk with no new frame — emits
+                        // an empty slice, never the whole content again (K-92).
                         let contentTotal = totalSamples - start
-                        let newWaveform: MLXArray
-                        if previousContentSamples > 0 && previousContentSamples < contentTotal {
-                            newWaveform = fullWaveform[(start + previousContentSamples)...]
-                        } else {
-                            newWaveform = fullWaveform[start...]
+                        let sliceStart = VoxtralTTSPipeline.newContentStart(
+                            previous: previousContentSamples, contentTotal: contentTotal)
+                        if sliceStart == contentTotal && !chunk.isFinal {
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            continue
                         }
+                        let newWaveform = fullWaveform[(start + sliceStart)...]
 
                         let elapsed = Date().timeIntervalSince(startTime)
 

@@ -1765,3 +1765,16 @@ Statistics:
   « passes écartées » pour K-34, K-36 et K-37, et clause de PLAN corrigée.
 - Fiches de suivi écrites : K-83 (`voxtral eval chat`), K-84 (invite Realtime), K-85 (régime bimodal et traduction
   de Small). Elles seront dispatchées par #590.
+
+## K-92 — Streaming TTS : le morceau final sans frame nouvelle ne ré-émet plus tout l'audio — 2026-10-08 — validée
+- Constat de K-35 : 5 cellules streaming sur 29 portent 2 × l'audio (`audio_s` = 2 × frames × 80 ms). Quand l'EOA
+  tombe juste après une frontière de morceau, `generateStreaming` émet un morceau final sans frame nouvelle ;
+  `synthesizeStreaming` retombait alors sur la tranche « tout le contenu ». Introduit par `ae0f5a98` (K-12).
+- Correctif : la tranche part toujours de ce qui a déjà été émis (`newContentStart`) ; un morceau qui n'ajoute rien
+  n'émet rien, sauf le final, qui émet une tranche vide pour marquer la fin. Signature publique inchangée.
+- Porte : `TTSStreamingFinalChunkTests` (2 tests unitaires, 1 test gardé `TEST_RUNNER_VOXTRAL_TTS_STREAM_FINAL=1`,
+  tts-4b-mlx, `short_en`, `neutral_female`, graine 3, sans warm-up : 73 frames). Avant le correctif : 280 320
+  échantillons (2,00 × frames), échec ; après : 140 160 (1,00 ×), succès. Suite complète en Debug, sans
+  parallélisme, avec les tests de streaming gardés (`VOXTRAL_TTS_STREAM`, `VOXTRAL_TTS_STREAM_SEED`) : 587 tests, 32 ignorés, 0 échec (`** TEST SUCCEEDED **`).
+- Mesure de contrôle `bench tts --streaming` (Release) sur la même cellule : dans la file K-35 du 2026-10-08
+  (`K92-mlx-short_en-s3-preset-streaming`), consignée avec K-35.
