@@ -188,3 +188,14 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   K-35 par `audio_s` = 2 × frames × 80 ms. Corrigé dans `synthesizeStreaming` ; test gardé qui échoue avant (2,00 ×)
   et passe après. Leçon : un champ dérivé (`audio_s` / frames) qui vaut exactement un multiple entier signale un
   défaut de découpage, pas du bruit.
+- 2026-10-09 — **K-35 : baseline TTS**.
+  - Par pas : 4 bits 25 à 30 ms, 6 bits 38 à 46, bf16 129 à 138. Le bf16 est plus lent que le temps réel même en
+    batch (RTF 1,7 à 1,8).
+  - Le streaming re-décode tout l'accumulé : 55 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,1 (K-43).
+  - Le codec décode d'un bloc : sur le texte long, 21 à 29 Go de pic MLX. Le plafond de cache retire 9 à 12 Go de
+    `phys_footprint` sans changer la vitesse.
+  - Aller-retour ASR : couverture 0,91 (court) à 0,98.
+  - Leçon (1) : un premier relevé donnait au plafond un coût de 8 à 19 % ; il comparait deux protocoles et deux macOS.
+    Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
+  - Leçon (2) : 5 cellules sur 14 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
+    lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite.

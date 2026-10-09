@@ -697,6 +697,25 @@ Décisions du planificateur du 2026-10-03 :
   faux. La question va à Vincent : ASK-32.
 - **K-35 (#588), 2026-10-06 (Vincent)** : matrice réduite pour la durée. Le texte court garde 3 graines (1 à 3),
   les textes moyen et long une seule (graine 1) ; les 3 packs, 2 voix, 2 modes et l'aller-retour ASR sont inchangés.
+- **K-35 (#588), 2026-10-09, décisions de l'agent** (conditions de la baseline TTS, en plus du protocole du
+  2026-10-05) :
+  - **Texte court** : les 36 cellules gardent leurs deux passes dans un même processus (`--passes 2`, matrice du
+    2026-10-03/06), A/A 0,00 à 0,74 %. Ce régime ne montre pas l'écart d'un processus à l'autre. Contrôle : 4
+    cellules courtes refaites un processus par passe, sous macOS 27.0.1 (écart − 0,6 à + 0,3 %, sortie identique bit à bit, `BENCHMARKS.md` §K-35 « Contrôle macOS »).
+  - **macOS** : cellules courtes sous 27.0.0, moyen et long sous 27.0.1 (mise à jour du système pendant la
+    campagne) ; le même contrôle couvre l'écart.
+  - **Streaming moyen et long avec `--cache-limit-mb 2048`** : sans plafond, le `phys_footprint` atteint 74 à 75,9
+    Go sur 96 (swap non exclu). Ce plafond est une condition de mesure : le défaut public reste sans plafond.
+  - **Batch moyen et long et ligne consommateur en profil par défaut** (sans plafond, chemin de FluxForge). Le profil
+    plafonné, mesuré aussi, ne change pas `step_ms_p50` au-delà du seuil de bruit (− 5,0 à + 4,1 %, dans les deux
+    sens) ; ses lignes sont consignées comme comparaison.
+  - **Streaming court jugé sur `total_ms`** (passe de moins de 60 s) : il a été mesuré avant `stream_frame_ms_p50`
+    (`0e7588a9`). Le streaming moyen et long est jugé sur `stream_frame_ms_p50` / `p90`.
+  - **Reprises** : une cellule en échec d'A/A est refaite (`-r2`, `-r3`, `-default-r2`) sur machine calme. La cause
+    n'est écrite que si l'échantillonneur de charge la montre dans la passe lente ; sinon « cause non isolée »
+    (régime de K-85). Les passes écartées restent dans `BENCHMARKS.md`, chacune avec son fichier et sa cause.
+  - **Cellules à audio doublé (K-92)** : 4 cellules streaming retenues gardent leur temps par frame ; leurs
+    `audio_s`, `rtf` et `out_sha256` sont marqués faux, et un contrôle après correctif est consigné.
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

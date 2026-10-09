@@ -20,6 +20,8 @@ build, de test et de mesure : [`CLAUDE.md`](../../CLAUDE.md). Plan d'action en c
   non supporté sans (37,3 Go) ; K-34.
 - [Baseline STT M3 Max, 2026-10](benchmarks/m3max-stt-baseline-2026-10.md) — Mini 8/4 bits, bf16 et Small 4 bits ×
   `.mlx`/`.auto` × 4 clips, WER, occupation GPU du préfill, chat ; K-34.
+- [Baseline TTS M3 Max, 2026-10](benchmarks/m3max-tts-baseline-2026-10.md) — 4 / 6 bits et bf16 × 3 textes ×
+  voix prédéfinie / clonée × batch / streaming, ligne consommateur, aller-retour ASR, plafond de cache ; K-35.
 - [Conclusions #23-#25 caduques](decisions/realtime-diagnostics-23-25.md) — « 0 % GPU », « 49 % systémique » et
   « 21 tok/s raisonnable » sont des artefacts d'instrument (phases imbriquées, lectures instantanées) ; re-mesure
   par K-36.

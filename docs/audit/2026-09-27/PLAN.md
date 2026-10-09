@@ -1778,3 +1778,27 @@ Statistics:
   parallélisme, avec les tests de streaming gardés (`VOXTRAL_TTS_STREAM`, `VOXTRAL_TTS_STREAM_SEED`) : 587 tests, 32 ignorés, 0 échec (`** TEST SUCCEEDED **`).
 - Mesure de contrôle `bench tts --streaming` (Release) sur la même cellule : dans la file K-35 du 2026-10-08
   (`K92-mlx-short_en-s3-preset-streaming`), consignée avec K-35.
+
+## K-35 — Baseline TTS (4 / 6 bits, bf16 × court / moyen / long × prédéfinie / clonée × batch / streaming), ligne consommateur, aller-retour ASR — 2026-10-09 — rapportée
+- Porte observée (`BENCHMARKS.md` §« 2026-10-09 — K-35 », arbre propre, 60 cellules sur 60 `"dirty":false`) :
+  - A/A : 51 cellules sur 60 et la ligne consommateur (critère de `ASK.md` §Dérogations, 2026-10-05 et 2026-10-09).
+  - 9 cellules streaming moyen ou long sans A/A (3,1 à 8,6 % sur `stream_frame_ms_p50`, ou p90 jusqu'à 34 %) :
+    gardées, cause consignée (re-décodage de tout l'accumulé), référence « avant » de K-43 (ASK-34 = A).
+  - `BENCH {"pipeline":"tts","model":"tts-4b-6bit","voice":"…/clone_fr.safetensors","streaming":false,"warm_up":true,…,"carrier_frames":7,"frames":931,"step_ms_p50":43.7,"ttfa_ms":334.5,"rtf":0.5819,…}`
+    (ligne consommateur, A/A 0,97 %).
+  - `EVAL {"pipeline":"tts-roundtrip",…,"coverage":…}` × 21 (pack × texte × graine, batch) : couverture 0,909 sur le
+    court (10 mots sur 11), 0,940 à 0,976 sur le moyen et le long.
+- Note : `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`.
+- Constats :
+  - 4 bits 1,5 fois plus rapide que le 6 bits par pas ; bf16 3,4 fois plus lent, RTF 1,67 à 1,83 en batch (K-38,
+    K-46).
+  - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43).
+  - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 32 à 42 Go sans plafond. Le
+    plafond de cache retire 9 à 12 Go sans changer la vitesse (− 5,0 à + 4,1 %).
+  - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) ; 4 bits
+    cloné, 60 % de frames en plus sur le moyen (1 806 contre 1 123).
+  - K-92 trouvé ici (audio doublé dans 5 cellules streaming), corrigé par `599d622a`.
+- Écarts : `ASK.md` §Dérogations (2026-10-09) : texte court en un processus, macOS 27.0.0 / 27.0.1, plafond de cache
+  du streaming moyen et long, profil par défaut du batch, reprises.
+- ASK-35 (cellules batch sans A/A), préparée le 2026-10-08, n'a pas été posée : les reprises du 2026-10-09 passent
+  toutes.
