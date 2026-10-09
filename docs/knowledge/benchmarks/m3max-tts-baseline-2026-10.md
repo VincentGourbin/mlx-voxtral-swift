@@ -4,8 +4,9 @@ Machine : M3 Max (GPU 40 cœurs), 96 Go, secteur. Dépendances résolues : mlx-s
 `main@604fae7`, swift-mlx-profiler 1.5.1 (`bfe71d8`). Binaires Release, arbre propre (60 cellules sur 60
 `"dirty":false`). Lignes brutes : `BENCHMARKS.md` §« 2026-10-09 — K-35 ». Protocole : `ASK.md` §Dérogations
 (2026-10-05 et 2026-10-09). Textes : `docs/eval/tts/` (court 11 mots, moyen 163, long 326 ; SHA-256 dans le
-README). Voix : `neutral_female` (prédéfinie) et `clone_fr` (enrôlée sur `docs/examples/clone_fr.wav`, 2 000
-époques, graine 7). Matrice réduite (Vincent, 2026-10-06) : graines 1 à 3 sur le texte court, graine 1 sur le moyen
+README). Voix : `neutral_female` (prédéfinie) et `clone_fr` (`enroll docs/examples/clone_fr.wav -m tts-4b-6bit
+--epochs 2000 --duration 8 --seed 7`, SHA-256 `43ff457c…645b` ; `--duration 8` car le clip dure 8,6 s, `ASK.md`
+§Dérogations). Go = Mo ÷ 1024 (champs `*_mb` des lignes). Matrice réduite (Vincent, 2026-10-06) : graines 1 à 3 sur le texte court, graine 1 sur le moyen
 et le long.
 
 Sources des lignes, par cellule :
@@ -15,10 +16,14 @@ Sources des lignes, par cellule :
 - **Batch moyen et long (12 cellules) et ligne consommateur** : profil par défaut (sans plafond de cache, le chemin
   de FluxForge), un processus par passe, commit `599d622a`, macOS 27.0.1.
 - **Streaming moyen et long (12 cellules)** : `--cache-limit-mb 2048`, un processus par passe, commit `097fd145`,
-  macOS 27.0.1. Sans plafond, le pic `phys_footprint` atteignait 74 à 75,9 Go sur 96 (swap non exclu).
+  macOS 27.0.1, sauf 6 bits prédéfinie moyen (macOS 27.0.0, 2026-10-07). Sans plafond, le pic `phys_footprint`
+  plafonnait à 74,1 Go (75 899 Mo) sur 96 dans 10 cellules streaming moyen ou long (swap non exclu).
 
-Le TTFT est consigné, pas jugé. Sur le texte long, mesuré sans amorçage, il est erratique : 5 768 ms pour mlx
-prédéfinie en batch contre 619 en clonée, 3 995 ms de TTFA pour 6 bits clonée en streaming.
+Le TTFT (batch) et le TTFA (streaming) sont consignés, pas jugés. Ils ne servent de référence que dans les 42
+cellules où leurs deux passes sont à 3 % ou moins ; les 18 autres sont listées dans `BENCHMARKS.md` (complément
+de vérification). Sur le texte long, mesuré sans amorçage, ils sont erratiques : 619 puis 6 096 ms pour bf16
+clonée en batch, 3 995 puis 647 ms de TTFA pour 6 bits clonée en streaming. K-66 (porte TTFT) refait sa propre
+référence en A/B/B/A.
 
 | Pack | Texte | Voix | Mode | ms/pas ou ms/frame p50 | TTFT ou TTFA ms | RTF | frames | pic MLX Go | A/A |
 |---|---|---|---|---|---|---|---|---|---|
@@ -68,12 +73,15 @@ est une copie du waveform déjà décodé.
 
 Ligne consommateur (FluxForge : tts-4b-6bit, `clone_fr`, `--warm-up`, batch, texte moyen) : **43,70 ms/pas**
 (p90 47,11), TTFT 336 ms, RTF 0,582, 931 frames dont **7 frames de porteur** (dernière synthèse d'amorçage), pic
-MLX 8,0 Go, `phys_footprint` 13,1 Go ; A/A 0,97 %.
+MLX 8,0 Go, `phys_footprint` 12,8 Go ; A/A 0,97 %. D'un processus à l'autre, cette ligne va de 40,4 à 46,6 ms/pas
+sur 4 paires (plafonné : 40,44 / 43,27 en échec, 45,87 / 46,50 ; par défaut : 43,47 / 46,61 en échec, sans charge
+relevée, 43,70 / 43,28 retenue) : écart de ≈ 15 %, régime de K-85. Une comparaison sur cette ligne se fait en
+A/B/B/A sur plusieurs processus.
 
 ## Lecture
 
-- **Le 4 bits décode 1,5 fois plus vite que le 6 bits** (24,8 à 26,5 contre 38,0 à 46,2 ms/pas), le bf16 (`mlx`)
-  3,4 fois plus lentement (129 à 138 ms) : RTF 0,36 à 0,41 (4 bits), 0,52 à 0,61 (6 bits), 1,67 à 1,83 (bf16, plus lent que
+- **Le 4 bits décode 1,5 à 1,7 fois plus vite que le 6 bits** (24,8 à 29,9 contre 38,0 à 46,2 ms/pas), le bf16
+  (`mlx`) 3,0 à 3,5 fois plus lentement (129 à 138 ms) : RTF 0,36 à 0,41 (4 bits), 0,52 à 0,61 (6 bits), 1,67 à 1,83 (bf16, plus lent que
   le temps réel en batch). Même signature bf16 que le STT et le Realtime (K-34, K-36) : K-38, K-46.
 - **La voix clonée démarre plus vite** : TTFT court 139 à 160 ms contre 232 à 258 (4 et 6 bits), 282 à 287 contre 366
   à 373 (bf16). Cause non vérifiée.
@@ -82,13 +90,16 @@ MLX 8,0 Go, `phys_footprint` 13,1 Go ; A/A 0,97 %.
   réel pour les trois packs. Cause : chaque morceau re-décode tout l'accumulé (ASK-34). Référence « avant » de K-43.
 - **TTFA du streaming court** : 210 à 303 ms (4 bits), 246 à 346 (6 bits), 555 à 649 (bf16).
 - **Le pic mémoire suit la longueur, par le codec** : le codec décode toute la séquence d'un bloc. Pic MLX de la phase
-  `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 32 à 42 Go), contre 2,6 à 3,8 Go pour le décodage
-  LLM en 4 et 6 bits (8,8 Go en bf16). Même plafonné, le texte long garde 21 à 29 Go de `phys_footprint` : sur
+  `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 31 à 41 Go), contre 2,5 à 3,7 Go pour le décodage
+  LLM en 4 et 6 bits (8,6 Go en bf16). Même plafonné, le texte long garde 21 à 29 Go de `phys_footprint` : sur
   un appareil de 32 Go, la phase codec fixe la limite.
-- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas la vitesse du batch et économise 3 à 12 Go** : sur
-  les 12 cellules batch moyen et long, l'écart de `step_ms_p50` entre profil par défaut et profil plafonné va de
-  − 5,0 % à + 4,1 %, dans les deux sens, sous le seuil de 5 %. Le `phys_footprint` baisse de 3,0 à 4,9 Go sur le
-  moyen et de 9,3 à 12,3 Go sur le long (41,3 → 29,0 Go pour bf16 prédéfinie). Le bloc de comparaison est dans
+- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas la vitesse du batch de façon mesurable et économise
+  3 à 12 Go** : sur la moyenne des deux passes, et pour les paires plafonnées qui passent l'A/A, l'écart de
+  `step_ms_p50` entre profil par défaut et profil plafonné va de − 3,9 % à + 4,8 % sur 11 cellules batch moyen et
+  long, dans les deux sens. La 12e (4 bits cloné moyen) n'a aucune paire plafonnée valide (3 essais : 4,97, 8,41 et
+  7,80 %). La ligne consommateur est à − 5,8 % (par défaut plus rapide), dans sa propre dispersion d'un processus à
+  l'autre (≈ 15 %, ci-dessus). Le `phys_footprint` baisse de 3,0 à 8,7 Go sur le moyen et de 9,3 à 12,3 Go sur le
+  long (41,3 → 29,0 Go pour bf16 prédéfinie). Le bloc de comparaison est dans
   `BENCHMARKS.md`. Le défaut public (pas de plafond) est une décision de Vincent. Un premier relevé, avec 8 à 19 %
   de surcoût, comparait aux cellules de la matrice d'origine, mesurées avec un autre protocole et un autre macOS :
   il ne tient pas.
@@ -105,14 +116,19 @@ MLX 8,0 Go, `phys_footprint` 13,1 Go ; A/A 0,97 %.
 |---|---|---|---|
 | tts-4b-6bit | 0,909 / 0,909 / 0,909 | 0,940 / 0,946 / 0,964 | 0,952 / 0,958 / 0,946 |
 | tts-4b-4bit | 0,909 / 0,909 / 0,909 | 0,976 / 0,952 / 0,952 | 0,955 (graine 1) |
-| tts-4b-mlx | 0,909 / 0,909 / 0,909 | 0,952 (graine 1) | 0,949 (graine 1) |
+| tts-4b-mlx ³ | 0,909 / 0,909 / 0,909 | 0,952 (graine 1) | 0,955 (graine 1) |
 
 Couverture = part des mots du texte retrouvés dans l'ordre. Sur le court, 10 mots sur 11 pour tous les packs et
 toutes les graines. Référence des portes qualité de K-39, K-48, K-58 et K-79.
 
+³ EVAL bf16 refaits le 2026-10-09 par `--voice-embedding`, le chemin des BENCH (même `out_sha256`, 5 sur 5). Par
+`synthesize(voice:)`, le bf16 sort un autre audio à même graine (4 textes sur 5 ; long 0,949) ; les 4 et 6 bits
+sont identiques par les deux chemins. Fiche de suite.
+
 ## Variance d'un processus à l'autre
 
-Le 2026-10-08 au soir, 5 cellules batch sur 14 du profil par défaut ont échoué l'A/A (3,8 à 69,8 % sur
+Le 2026-10-08 au soir, 5 cellules sur 13 du profil par défaut (12 batch moyen et long et la ligne consommateur)
+ont échoué l'A/A (3,8 à 69,8 % sur
 `step_ms_p50`). Pour 3 d'entre elles, l'échantillonneur a relevé de la charge pendant la passe lente : compilations
 Xcode et Podcasts. Les 2 autres n'en montrent aucune. Refaites le 2026-10-09 après-midi, machine calme : 5 sur 5 à
 0,03 à 0,97 %. Même régime que K-85 (bimodalité par processus, cause non isolée) : une cellule qui échoue sans
@@ -121,7 +137,7 @@ charge relevée se refait, sans cause écrite.
 ## Contrôle macOS
 
 Les 36 cellules courtes ont tourné sous macOS 27.0.0, deux passes dans un processus ; les autres sous 27.0.1, un
-processus par passe. Quatre cellules courtes (graine 1, voix prédéfinie : 6 bits, 4 bits et bf16 en batch, 6 bits en
+processus par passe, sauf 6 bits prédéfinie moyen en streaming (27.0.0). Quatre cellules courtes (graine 1, voix prédéfinie : 6 bits, 4 bits et bf16 en batch, 6 bits en
 streaming) ont été remesurées sous 27.0.1, un processus par passe. Écart à la matrice : − 0,2 %, − 0,2 %, + 0,3 % sur
 `step_ms_p50` et − 0,6 % sur `total_ms` (streaming), A/A 0,08 à 0,19 %, sortie identique bit à bit dans les quatre
 cas. Ni la mise à jour du système ni le régime à un processus ne déplacent les cellules courtes.

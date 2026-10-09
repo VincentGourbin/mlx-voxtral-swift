@@ -1790,11 +1790,11 @@ Statistics:
     court (10 mots sur 11), 0,940 à 0,976 sur le moyen et le long.
 - Note : `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`.
 - Constats :
-  - 4 bits 1,5 fois plus rapide que le 6 bits par pas ; bf16 3,4 fois plus lent, RTF 1,67 à 1,83 en batch (K-38,
-    K-46).
+  - 4 bits 1,5 à 1,7 fois plus rapide que le 6 bits par pas ; bf16 3,0 à 3,5 fois plus lent, RTF 1,67 à 1,83 en
+    batch (K-38, K-46).
   - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43).
-  - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 32 à 42 Go sans plafond. Le
-    plafond de cache retire 9 à 12 Go sans changer la vitesse (− 5,0 à + 4,1 %).
+  - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 31 à 41 Go sans plafond. Le
+    plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 %).
   - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) ; 4 bits
     cloné, 60 % de frames en plus sur le moyen (1 806 contre 1 123).
   - K-92 trouvé ici (audio doublé dans 5 cellules streaming), corrigé par `599d622a`.
@@ -1802,3 +1802,27 @@ Statistics:
   du streaming moyen et long, profil par défaut du batch, reprises.
 - ASK-35 (cellules batch sans A/A), préparée le 2026-10-08, n'a pas été posée : les reprises du 2026-10-09 passent
   toutes.
+
+## Vérification du 2026-10-09 — K-35 (#588) — non vérifiée, manques fournis
+- Vérificateur `not verified` : matrice, A/A (51 sur 60 et la ligne consommateur, recalculé), EVAL et lignes recopiées
+  prouvés ; manques :
+  - (1) `KO indexation/sauvegarde` avant 7 passes retenues, non consignés ;
+  - (2) 7 chiffres faux dans la note et les dérogations (plage du 4 bits, rapport bf16, économie du plafond, unités,
+    macOS d'une cellule, « 5 sur 14 », bornes − 5,0 / + 4,1 %) ;
+  - (3) préalables de l'amendement du 2026-10-03 sans verdict écrit ;
+  - (4) EVAL bf16 sur un autre audio que les BENCH.
+- Contradicteur `not verified` : en plus, run de diagnostic `--trace` absent, 3 passes de `bench.jsonl` absentes de
+  `BENCHMARKS.md` (journaux écrasés), dispersion de la ligne consommateur non montrée (40,4 à 46,6 ms), TTFT jamais
+  jugé alors que la fiche le demande, enrôlement `--duration 8` hors `ASK.md`.
+- Fournis (`BENCHMARKS.md` §« 2026-10-09 — K-35, complément de vérification », `ASK.md` §Dérogations K-35) :
+  - préalables : A/A 0,16 % (6 bits court) et 1,20 % (4 bits long), A/B/B/A − 0,26 % à sortie identique, pas de
+    régression ;
+  - les 11 `KO` listés, couverts par la décision de Vincent du 2026-10-05 ;
+  - TTFT/TTFA référence dans 42 cellules sur 60, les 18 autres listées ;
+  - 3 passes recopiées de `bench.jsonl`, plage de la ligne consommateur ;
+  - deux runs `--trace` : l'instrument ne sépare pas LLM et flow matching (dérogation, fiche de suite) ;
+  - 5 EVAL bf16 refaits par `--voice-embedding` : même `out_sha256` que les BENCH, 5 sur 5 ; long 0,955 (0,949
+    avant) ;
+  - chiffres corrigés.
+- Constat : en bf16, `synthesize(voice:)` et `synthesize(voiceEmbedding:)` donnent un autre audio à même graine ;
+  4 et 6 bits identiques (fiche de suite).

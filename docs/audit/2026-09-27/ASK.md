@@ -702,13 +702,14 @@ Décisions du planificateur du 2026-10-03 :
   - **Texte court** : les 36 cellules gardent leurs deux passes dans un même processus (`--passes 2`, matrice du
     2026-10-03/06), A/A 0,00 à 0,74 %. Ce régime ne montre pas l'écart d'un processus à l'autre. Contrôle : 4
     cellules courtes refaites un processus par passe, sous macOS 27.0.1 (écart − 0,6 à + 0,3 %, sortie identique bit à bit, `BENCHMARKS.md` §K-35 « Contrôle macOS »).
-  - **macOS** : cellules courtes sous 27.0.0, moyen et long sous 27.0.1 (mise à jour du système pendant la
-    campagne) ; le même contrôle couvre l'écart.
-  - **Streaming moyen et long avec `--cache-limit-mb 2048`** : sans plafond, le `phys_footprint` atteint 74 à 75,9
-    Go sur 96 (swap non exclu). Ce plafond est une condition de mesure : le défaut public reste sans plafond.
+  - **macOS** : cellules courtes et 6 bits prédéfinie moyen en streaming sous 27.0.0, le reste sous 27.0.1 (mise à
+    jour du système pendant la campagne) ; le même contrôle couvre l'écart.
+  - **Streaming moyen et long avec `--cache-limit-mb 2048`** : sans plafond, le `phys_footprint` plafonne à 74,1
+    Go (75 899 Mo) sur 96 (swap non exclu). Ce plafond est une condition de mesure : le défaut public reste sans plafond.
   - **Batch moyen et long et ligne consommateur en profil par défaut** (sans plafond, chemin de FluxForge). Le profil
-    plafonné, mesuré aussi, ne change pas `step_ms_p50` au-delà du seuil de bruit (− 5,0 à + 4,1 %, dans les deux
-    sens) ; ses lignes sont consignées comme comparaison.
+    plafonné, mesuré aussi, ne change pas `step_ms_p50` de façon mesurable (− 3,9 à + 4,8 % sur 11 cellules, moyenne
+    des deux passes ; la 12e sans paire plafonnée valide ; ligne consommateur − 5,8 %, dans sa dispersion de ≈ 15 %
+    d'un processus à l'autre) ; ses lignes sont consignées comme comparaison.
   - **Streaming court jugé sur `total_ms`** (passe de moins de 60 s) : il a été mesuré avant `stream_frame_ms_p50`
     (`0e7588a9`). Le streaming moyen et long est jugé sur `stream_frame_ms_p50` / `p90`.
   - **Reprises** : une cellule en échec d'A/A est refaite (`-r2`, `-r3`, `-default-r2`) sur machine calme. La cause
@@ -716,6 +717,35 @@ Décisions du planificateur du 2026-10-03 :
     (régime de K-85). Les passes écartées restent dans `BENCHMARKS.md`, chacune avec son fichier et sa cause.
   - **Cellules à audio doublé (K-92)** : 4 cellules streaming retenues gardent leur temps par frame ; leurs
     `audio_s`, `rtf` et `out_sha256` sont marqués faux, et un contrôle après correctif est consigné.
+  - **Machine-check** : 7 cellules retenues ont une ligne `KO indexation/sauvegarde en cours` avant une passe
+    (liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 2 EVAL et 2 passes du contrôle macOS.
+    Décision de Vincent du 2026-10-05 : les services de fond ne bloquent jamais une mesure ; `quiet.sh` n'attend que
+    pour les autres `KO` (autre inférence MLX, binaire Debug, batterie).
+  - **TTFT et TTFA** : consignés, pas jugés (protocole du 2026-10-05). Clause de la fiche « AA ≤ 3 % (fps, ttft) »
+    reformulée : le TTFT ou TTFA d'une cellule ne sert de référence que si ses deux passes sont à 3 % ou moins
+    (42 cellules sur 60) ; les 18 autres sont listées. `fps` n'est pas écrit par l'instrument :
+    fps = 1 000 / `step_ms_p50` (l'audio en demande 12,5). K-66 (porte TTFT) refait sa référence en A/B/B/A.
+  - **« ms par frame LLM et FM (run de diagnostic `--trace`) »** : deux runs `bench tts --trace` faits le
+    2026-10-09 (ligne consommateur ; 6 bits prédéfinie moyen en streaming). L'instrument ne sépare pas LLM et flow
+    matching : `recordStep` enveloppe le pas entier (un span « Step i/n » par frame), et le chemin streaming n'émet
+    aucune phase. Ce qui est mesuré : ms par frame (LLM + FM, `step_ms_p50`), phases du batch (préfill 344 ms,
+    génération 43,05 s à 99,9 % de GPU, décodage codec 465 ms à 98,8 %). Séparer LLM et FM demande un span par
+    sous-étape dans `VoxtralTTSModeling.swift` : fiche de suite à la replanification (#590).
+  - **Enrôlement de la voix de test** : `--duration 8` ajouté à la commande de la fiche
+    (`enroll docs/examples/clone_fr.wav -m tts-4b-6bit --epochs 2000 --duration 8 --seed 7`). Raison : `clone_fr.wav`
+    dure 8,6 s et `enroll` exige 16 s par défaut (`Reference too short: 8.6s < 16.0s`,
+    `.local-runs/voices/enroll.log`). 8 s est la valeur de `bench enroll`. SHA-256 de la voix :
+    `43ff457c1077be9929e5f8d03428c05403129ec02e7d8c451a22defc1362645b`.
+  - **Aller-retour ASR du bf16** : les EVAL bf16 de la matrice (`eval tts-roundtrip --voice
+    neutral_female`) passaient par `synthesize(voice:)` (cache de préfixe de la voix prédéfinie), les BENCH par
+    `synthesize(voiceEmbedding:)` ; en bf16 seulement, les deux chemins donnent un autre audio à même graine (4 textes
+    sur 5 ; 4 et 6 bits identiques). Les 5 EVAL bf16 sont refaits avec `--voice-embedding` (fichier
+    `neutral_female.safetensors` du pack) : même `out_sha256` et mêmes frames que les BENCH, 5 sur 5. Couvertures
+    retenues : 0,909 / 0,909 / 0,909 (court), 0,952 (moyen), 0,955 (long ; 0,949 par l'ancien chemin). L'écart entre
+    les deux chemins en bf16 va à une fiche de suite.
+  - **ASK-34** : la question décrivait 4 cellules ; 9 cellules streaming moyen ou long restent sans A/A. La réponse
+    de Vincent (« les cellules streaming moyen et long sans A/A restent dans la baseline ») porte sur la classe
+    entière.
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

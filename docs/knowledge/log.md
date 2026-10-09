@@ -199,3 +199,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
     Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
   - Leçon (2) : 5 cellules sur 14 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
     lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite.
+- 2026-10-09 — **K-35, vérification** : en bf16, `synthesize(voice:)` (préfixe de voix en cache) et
+  `synthesize(voiceEmbedding:)` donnent un autre audio à même graine, alors que les 4 et 6 bits sont identiques.
+  Les EVAL bf16 sont refaits par le chemin des BENCH. Leçon : un EVAL qui sert de référence de qualité pour une
+  ligne BENCH doit avoir le même `out_sha256`, à vérifier pour chaque pack. Autre leçon : une file qui reprend une
+  cellule écrase son `.log` ; la ligne reste dans `bench.jsonl`, à comparer aux journaux avant de clore.
