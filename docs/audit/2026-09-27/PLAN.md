@@ -1794,7 +1794,8 @@ Statistics:
 - Constats :
   - 4 bits 1,5 à 1,7 fois plus rapide que le 6 bits par pas ; bf16 3,0 à 3,5 fois plus lent, RTF 1,67 à 1,83 en
     batch (K-38, K-46) (corrigé le 2026-10-10 : 1,5 fois et 3,4 à 3,5 fois, voir la reprise).
-  - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43).
+  - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43) (1,45 à 3,0 après les
+    reprises du 2026-10-10).
   - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 31 à 41 Go sans plafond. Le
     plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 % ; corrigé le
     2026-10-10 : − 1,0 à + 2,9 % sur le seul texte long).
@@ -1822,7 +1823,7 @@ Statistics:
   - préalables : A/A 0,16 % (6 bits court) et 1,20 % (4 bits long), A/B/B/A − 0,26 % à sortie identique, pas de
     régression ;
   - les 11 `KO` listés, couverts par la décision de Vincent du 2026-10-05 ;
-  - TTFT/TTFA référence dans 42 cellules sur 60, les 18 autres listées ;
+  - TTFT/TTFA référence dans 42 cellules sur 60, les 18 autres listées (47 et 13 après les reprises du 2026-10-10) ;
   - 3 passes recopiées de `bench.jsonl`, plage de la ligne consommateur ;
   - deux runs `--trace` : l'instrument ne sépare pas LLM et flow matching (dérogation, fiche de suite) ;
   - 5 EVAL bf16 refaits par `--voice-embedding` : même `out_sha256` que les BENCH, 5 sur 5 ; long 0,955 (0,949
@@ -1841,6 +1842,7 @@ Statistics:
   - bf16 prédéfinie batch retenue à la 3e paire (deux paires en échec sans charge bloquante relevée).
   - 4 bits et bf16 clonée en streaming moyen restent sans A/A (ASK-34) : 7 cellules streaming sans A/A au total.
   - Baseline : 53 cellules sur 60 et la ligne consommateur à l'A/A ; TTFT/TTFA référence dans 47 cellules sur 60.
+  - (7 et 53 remplacés par la reprise des deux cellules streaming long, même jour : 6 cellules sans A/A, 54 sur 60.)
 - Constats corrigés :
   - Paire chaude contre paire reposée (moyenne des deux passes) : − 2,9 à − 17,0 % ; les cellules reposées retrouvent la matrice d'origine.
   - 6 bits à 38,0 à 39,0 ms/pas sur les trois textes ; le constat « plus lent sur le moyen » est retiré. Par pas, 4 bits

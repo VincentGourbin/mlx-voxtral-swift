@@ -1991,9 +1991,13 @@ Bilan de la baseline : A/A sur 54 cellules sur 60 et la ligne consommateur. 6 ce
 Le compte des cellules hors référence reste 13 ; les écarts de ces deux cellules sont à jour dans la liste TTFT
 ci-dessus (²).
 
-Charge non bloquante : l'échantillonneur relève, dans 20 passes retenues, des pointes isolées d'un échantillon de
-Microsoft Teams (WebView) jusqu'à 657 % de CPU, dont 490 % dans la p1 (la plus lente) de bf16 clonée long en
-streaming. Ni compilation, ni simulateur, ni autre travail MLX : selon la décision du 2026-10-05, elles ne bloquent
+Charge non bloquante : l'échantillonneur relève, dans 22 passes retenues (21 de cellules et la p1 consommateur),
+des pointes de Microsoft Teams (WebView) jusqu'à 657 % de CPU, d'un échantillon sauf dans trois passes
+(`capped/M-4bit-long_en-s1-preset-streaming-p1` ×2, `capped/M-4bit-long_en-s1-clone-streaming-p2` ×2,
+`capped/M-mlx-long_en-s1-preset-streaming-p2` ×4), dont 490 % dans la p1 (la plus lente) de bf16 clonée long en
+streaming. Deux autres processus de fond sont relevés : `ANECompilerService` (78,9 %, un échantillon) dans
+`default/M-mlx-long_en-s1-clone-batch-default-p1` (A/A 1,39 %), `IntelligencePlatformComputeService` (99 %, 49
+échantillons sur 88) dans `cd120/M-4bit-medium_en-s1-preset-batch-cd120-p1` (A/A 0,12 %). Ni compilation, ni simulateur, ni autre travail MLX : selon la décision du 2026-10-05, elles ne bloquent
 pas la mesure ; elles sont notées ici.
 
 ```

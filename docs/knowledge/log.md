@@ -197,7 +197,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   - Aller-retour ASR : couverture 0,91 (court) à 0,98.
   - Leçon (1) : un premier relevé donnait au plafond un coût de 8 à 19 % ; il comparait deux protocoles et deux macOS.
     Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
-  - Leçon (2) : 5 cellules sur 9 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
+  - Leçon (2) : 5 cellules sur 9 ont échoué l'A/A un soir de compilations Xcode (charge relevée dans 3 des 5), puis 5 sur 5 sont passées le
     lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite. (Une partie de ces échecs
     touchait le texte moyen, alors mesuré sans repos après l'amorçage : entrée du 2026-10-10.)
 - 2026-10-09 — **K-35, vérification** : en bf16, `synthesize(voice:)` (préfixe de voix en cache) et
