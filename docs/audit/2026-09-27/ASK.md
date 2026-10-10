@@ -760,7 +760,8 @@ Décisions du planificateur du 2026-10-03 :
   ont été refaits (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; leurs anciennes lignes sont écartées. Les
   autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
   vérifier à la replanification (#590). Vérifié le 2026-10-10 (#590, corrigé après le vérificateur) : K-34 et K-36 ont passé
-  `--warmup 1 --cooldown 0` en un processus par passe (`.local-runs/queue2b.sh`, `queue4.sh` à `queue16.sh`), y compris
+  `--warmup 1 --cooldown 0` en un processus par passe (`.local-runs/queue2b.sh`, `queue4.sh` à `queue16.sh` ; `queue2.sh`
+  pour mini-3b-8bit `.mlx` C-moyen EN et FR, p1 avec amorçage et p2 sans), y compris
   5 des 10 cellules C-long retenues (mini-3b-8bit et mini-3b-4bit en `.mlx` et `.auto`, realtime-4b-fp16 : journaux
   « warm-up 1/1 done (excluded) ») ; C-long sans amorçage seulement à partir de `queue7.sh`. K-37 : la p1 des séries
   `A4-6bit-cli`, `A4-mlx-cli` et `A4-mlx-after_synthesis` a tourné avec amorçage puis `--cooldown 0` (`queue2.sh:30`),
@@ -794,15 +795,21 @@ Décisions du planificateur du 2026-10-03 :
     pas le maximum) ;
   - K-54 : « 5 min » remplacé par C-moyen EN et C-long exact (clips existants) ; K-53, K-55, K-56 : « 20 / 30 min »
     construits par concaténation de C-long exact, versionnés par SHA-256 ;
-  - K-72 : variante `.mlx` retirée sans code (en `.mlx`, encodeur et préfill se partagent un GPU déjà à 99 % au
-    préfill, K-34) ; K-40 : tolérance de parité
+  - K-72 : variante `.mlx` retirée le 2026-10-06, rétablie le 2026-10-10 (contradicteur : l'encodeur `.mlx` n'est
+    pas mesuré et K-42 peut faire de `.mlx` le défaut) ; variante du défaut retenu par K-42 obligatoire ; K-40 : tolérance de parité
     alignée sur ASK-11 (+ 0,2 pt) ;
-  - retirées par la mesure : K-69 (phase audio 0,11 % du total, K-34), K-67 (post-traitement au plus 0,05 % du total,
+  - K-69 : volet vitesse retiré (phase audio 0,06 à 0,11 % du total, K-34), volet mémoire gardé (tampon d'un fichier
+    stéréo 48 kHz de 30 min non mesuré ; retrait sans code si l'extraction pèse moins de 5 % du pic) ;
+  - retirées par la mesure : K-67 (post-traitement au plus 0,05 % du total,
     K-35), K-71 (codec 0,2 à 4,4 % du total en batch, gain attendu ≤ 10 % de la phase, K-35 ; rouverte si K-43 mesure
     le codec au-dessus de 30 % du temps par frame en streaming) ;
-  - K-44 : gardée sous condition d'une mesure xctrace de l'occupation de la génération TTS (≥ 97 % → retirée sans code),
+  - K-44 : gardée sous condition d'une mesure xctrace de l'occupation de la génération TTS (≥ 95 % → retirée sans code),
     le 99,9 % de K-35 venant du profileur ;
-  - K-41 et K-58 : portes recentrées sur le pic et la phase du codec ; K-50 ← K-94 ; K-77, K-78 ← K-96 ; K-79 ← K-95 ;
+  - K-41 : porte recentrée sur le pic du codec ; K-58 : porte d'origine (codec − 20 %) gardée et complétée par
+    `stream_frame_ms_p50` − 5 % sur le long après K-43 ; K-56 : valeur de départ mesurée par la fiche (le champ
+    `audio` cité était la phase mel) ; K-53, K-55, K-56 : « 20 / 30 min » = C-long exact × 2 / × 3 (18,5 / 27,7 min) ;
+    K-87 : repli `.auto` → `.mlx` hors ligne gardé et annoncé par un log, au lieu d'une erreur qui changerait un
+    comportement public ; K-94 scindée (qualité de la voix clonée en 4 bits → K-97) ; K-43 ← K-93 ; K-50 ← K-94 ; K-77, K-78 ← K-96 ; K-79 ← K-95 ;
   - le relevé « `--cache-limit-mb 2048` coûte ≈ + 15 % au TTS 6 bits moyen » (2026-10-07), passe chaude, est retiré de
     K-52 et K-79 ; le défaut TTS du plafond est mesuré par K-95 et reste à Vincent ;
-  - fiches de suite : K-93 à K-96 (lot 4).
+  - fiches de suite : K-93 à K-97 (lot 4).
