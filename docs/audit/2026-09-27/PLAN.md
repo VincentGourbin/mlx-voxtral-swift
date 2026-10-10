@@ -1880,3 +1880,16 @@ Statistics:
   long ») ; 6 bits prédéfinie passe (2,20 %), bf16 clonée reste hors A/A (p90 15,29 %). Baseline : 54 cellules sur 60
   et la ligne consommateur à l'A/A, 6 cellules streaming sans A/A (ASK-34), 1 cellule à audio doublé. Détails
   corrigés.
+
+## Vérification du 2026-10-10 (3e passage) — K-35 (#588) — vérifiée
+- Vérificateur `verified` (5e contexte neuf, HEAD `7b031732`) : 54 cellules sur 60 et la ligne consommateur à l'A/A,
+  6 cellules streaming sans A/A (ASK-34), 122 lignes retenues recopiées telles quelles, `dirty:false`, 4 `KO` couverts,
+  aucune charge bloquante dans les passes retenues, chiffres recalculés.
+- Contradicteur `not verified` : préalables et contrôle macOS sans repos après l'amorçage, non consignés ; cellule
+  bf16 prédéfinie batch retenue à la 3e paire (décision de Vincent ?) ; comparaison du plafond paire à paire présentée
+  comme durable ; `ANECompilerService` classé hors liste bloquante.
+- Arbitre (question disputée : la cellule bf16) : A, dans le champ de l'agent (paire retenue passant dans le même
+  protocole, règle des reprises consignée ; ASK-32 portait sur une cellule sans paire valide).
+- Fournis : dérogation pour les préalables et le contrôle macOS (amorçage court de 4 s, valeurs recoupant la matrice
+  reposée), comparaison du plafond requalifiée (pas un A/B/B/A, à faire avant toute décision de défaut), classement
+  d'`ANECompilerService`, formulation K-85 corrigée, détails de la vérification.

@@ -26,7 +26,7 @@ Sources des lignes, par cellule :
   moyen et long de la matrice réduite, et dans 18 cellules en comptant les graines 2 et 3 (swap non exclu).
 
 **Repos après l'amorçage.** Les mesures du texte moyen faites jusqu'au 2026-10-09 enchaînaient la passe mesurée
-juste après l'amorçage (`--cooldown 0`). Le GPU encore chaud les ralentissait de 3 à 17 % (moyenne des deux passes). A/B/B/A sur 6 bits
+juste après l'amorçage (`--cooldown 0`). Le GPU encore chaud les ralentissait de 2,9 à 17 % (moyenne des deux passes). A/B/B/A sur 6 bits
 moyen : 41,40 / 44,70 ms/pas sans repos, 38,52 / 38,50 avec 120 s, même sortie. Toutes ces cellules ont été
 refaites avec 120 s de repos.
 
@@ -100,15 +100,16 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
   à 373 (bf16). Cause non vérifiée.
 - **Le streaming coûte cher dès le texte moyen** : ms/frame 49 à 80 (4 bits), 55 à 58 (6 bits), 158 à 160 (bf16)
   sur le moyen ; 85 à 109, 96 à 101 et 202 à 214 sur le long. RTF du streaming : 0,72 à 2,09 sur le moyen, 1,45 à
-  3,0 sur le long, plus lent que le temps réel dès le moyen pour le bf16 et le 4 bits cloné, sur le long pour les trois packs.
+  3,0 sur le long (première passe ; 3,25 dans la p2 de bf16 prédéfinie long, cellule sans A/A), plus lent que le temps réel dès le moyen pour le bf16 et le 4 bits cloné, sur le long pour les trois packs.
   Cause : chaque morceau re-décode tout l'accumulé (ASK-34). Référence « avant » de K-43.
 - **TTFA du streaming court** : 210 à 303 ms (4 bits), 247 à 346 (6 bits), 555 à 649 (bf16).
 - **Le pic mémoire suit la longueur, par le codec** : le codec décode toute la séquence d'un bloc. Pic MLX de la phase
-  `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 31 à 41 Go), contre 2,5 à 3,7 Go pour le décodage
+  `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 31 à 41 Go), contre 2,5 à 3,7 Go (tous textes ; 2,5 à 3,4 sur le long) pour le décodage
   LLM en 4 et 6 bits (8,6 Go en bf16). Même plafonné, le texte long garde 21 à 29 Go de `phys_footprint` : sur
   un appareil de 32 Go, la phase codec fixe la limite.
-- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas la vitesse du batch long de façon mesurable et
-  retire 9 à 12 Go** : sur les 6 cellules batch long, mesurées sans amorçage dans les deux profils, l'écart de
+- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas la vitesse du batch long au-delà du seuil de 5 % et
+  retire 9 à 12 Go** (comparaison paire à paire, jours et binaires différents, pas un A/B/B/A ; le 6 bits plafonné
+  est 2,6 à 2,9 % plus lent dans les deux cellules, à confirmer en A/B/B/A avant toute décision de défaut) : sur les 6 cellules batch long, mesurées sans amorçage dans les deux profils, l'écart de
   `step_ms_p50` va de − 1,0 % à + 2,9 % (moyenne des deux passes, paire plafonnée qui passe l'A/A), sous le seuil de
   5 %. Le `phys_footprint` baisse de 9,3 à 12,3 Go (41,3 → 29,0 Go pour bf16 prédéfinie). Le texte moyen et la
   ligne consommateur ne sont pas comparés : leurs paires plafonnées ont été mesurées sans repos après l'amorçage.
@@ -146,9 +147,10 @@ l'échantillonneur a relevé de la charge pendant la passe lente : compilations 
 repos après l'amorçage.
 
 Avec 120 s de repos (2026-10-10), 2 des 6 passes de la cellule bf16 prédéfinie batch tournent 12 et 25 % plus
-lentement (147,80 et 165,95 contre 131,5 à 132,4 ms/pas), sans charge bloquante relevée, et deux cellules streaming moyen restent hors A/A (4 bits et bf16 clonée).
-Même régime que K-85 (bimodalité par processus, cause non isolée) : une cellule qui échoue sans charge relevée se
-refait, sans cause écrite.
+lentement (147,80 et 165,95 contre 131,5 à 132,4 ms/pas), sans charge bloquante relevée, et deux cellules streaming moyen restent hors A/A (4 bits et bf16 clonée). Cause
+non isolée ; même symptôme que K-85 (passes lentes d'un processus à l'autre), sans lien établi. Une cellule qui
+échoue sans charge relevée se refait, sans cause écrite ; sur la cellule bf16, une comparaison d'un processus à
+l'autre passe par un A/B/B/A.
 
 ## Contrôle macOS
 

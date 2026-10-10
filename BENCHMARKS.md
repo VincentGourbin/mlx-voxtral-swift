@@ -1792,7 +1792,10 @@ passes retenues.
 - bf16 prédéfinie batch : deux paires en échec sans charge bloquante relevée (147,80 / 131,67 puis 132,43 / 165,95
   ms/pas ; `KO indexation/sauvegarde` avant les deux passes de la 1re paire), la troisième paire passe (131,51 /
   132,20, 0,52 %) et est retenue. Sur les 8 passes bf16 batch moyen de la reprise (deux cellules), 2 tournent 12 et
-  25 % plus lentement, sans charge bloquante relevée (régime de K-85).
+  25 % plus lentement, sans charge bloquante relevée ; cause non isolée, même symptôme que K-85 (passes lentes d'un
+  processus à l'autre), sans lien établi. Dispersion d'un processus à l'autre sur les 6 passes de la cellule : 131,51
+  à 165,95 ms/pas ; l'A/A porte sur la paire retenue ; une comparaison d'un processus à l'autre sur cette cellule
+  passe par un A/B/B/A.
 - Deux cellules streaming restent sans A/A : 4 bits clonée (17,24 % puis 5,39 % ; la 1re paire pendant des
   compilations Xcode et un simulateur démarré) et bf16 clonée (3,19 % puis 25,97 %). Elles rejoignent la classe
   d'ASK-34 ; la paire retenue est celle dont l'écart est le plus faible.
@@ -1940,7 +1943,7 @@ après la reprise. Les 13 autres :
 | M-4bit-short_en-s2-clone-batch | `ttft_ms` | 146 / 141 | 3,2 % |
 | M-4bit-short_en-s3-preset-streaming | `ttfa_ms` | 303 / 294 | 3,1 % |
 | M-4bit-short_en-s3-clone-streaming | `ttfa_ms` | 210 / 202 | 4,2 % |
-| M-4bit-medium_en-s1-clone-streaming | `ttfa_ms` | 380 / 367 | 3,5 % |
+| M-4bit-medium_en-s1-clone-streaming | `ttfa_ms` | 380 / 367 | 3,55 % |
 | M-4bit-long_en-s1-preset-batch | `ttft_ms` | 586 / 563 | 4,0 % |
 | M-mlx-short_en-s1-clone-batch | `ttft_ms` | 282 / 274 | 3,03 % |
 | M-mlx-long_en-s1-preset-batch | `ttft_ms` | 5768 / 6111 | 5,9 % |
@@ -1995,10 +1998,13 @@ Charge non bloquante : l'échantillonneur relève, dans 22 passes retenues (21 d
 des pointes de Microsoft Teams (WebView) jusqu'à 657 % de CPU, d'un échantillon sauf dans trois passes
 (`capped/M-4bit-long_en-s1-preset-streaming-p1` ×2, `capped/M-4bit-long_en-s1-clone-streaming-p2` ×2,
 `capped/M-mlx-long_en-s1-preset-streaming-p2` ×4), dont 490 % dans la p1 (la plus lente) de bf16 clonée long en
-streaming. Deux autres processus de fond sont relevés : `ANECompilerService` (78,9 %, un échantillon) dans
+streaming. D'autres services de fond apparaissent (liste non exhaustive : `spotlightknowledged`, `knowledgeconstructiond`,
+`FPCKService`, remédiateurs XProtect, Téléphone, l'application Xcode, `TGOnDeviceInferenceProviderService`), aucun
+n'est une compilation, un simulateur ou un travail MLX. Deux sont notés à part : `ANECompilerService` (compilateur
+du Neural Engine, dans la liste bloquante de `quiet.sh` ; 78,9 %, un échantillon sur 117) dans
 `default/M-mlx-long_en-s1-clone-batch-default-p1` (A/A 1,39 %), `IntelligencePlatformComputeService` (99 %, 49
-échantillons sur 88) dans `cd120/M-4bit-medium_en-s1-preset-batch-cd120-p1` (A/A 0,12 %). Ni compilation, ni simulateur, ni autre travail MLX : selon la décision du 2026-10-05, elles ne bloquent
-pas la mesure ; elles sont notées ici.
+échantillons sur 88) dans `cd120/M-4bit-medium_en-s1-preset-batch-cd120-p1` (A/A 0,12 %). Teams n'est ni une compilation, ni un simulateur, ni un travail MLX : selon la décision du 2026-10-05, ces pointes
+ne bloquent pas la mesure ; elles sont notées ici.
 
 ```
 # k35/cd120/M-6bit-long_en-s1-preset-streaming-cd120 (cd120)
@@ -2010,3 +2016,16 @@ BENCH {"audio_s":138.8,"build":"Release","chip":"Apple M3 Max","commit":"eed131b
 BENCH {"audio_s":138.8,"build":"Release","chip":"Apple M3 Max","commit":"eed131bcd","date":"2026-10-10T02:02:06Z","dirty":false,"frame_cap":2500,"frames":1735,"input":"docs/eval/tts/long_en.txt","load_ms":63.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"8148b59aaace624112e1d2bc97630b0fd33251a28a752e859d7075c0a095891d","pack_sha256":"9ca4678b1cf29894","pass":1,"peak_footprint_mb":25695.8,"peak_mlx_mb":24731.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":2.7883,"seed":1,"steps":0,"stream_frame_ms_p50":203.82,"stream_frame_ms_p90":338.48,"streaming":true,"tag":"M-mlx-long_en-s1-clone-streaming-cd120","text_tokens":444,"top_process":"31,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":387014.3,"ttfa_ms":4327.5,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
 AA FAIL out_sha256=identical stream_frame_ms_p50=1.09% stream_frame_ms_p90=15.29%(≤10) total_ms=7.55%(long, reported)
 ```
+
+### Complément du 2026-10-10 (contradicteur)
+
+- **Préalables de l'amendement du 2026-10-03 et contrôle macOS sans repos après l'amorçage.** Le préalable 1
+  (`AA-tts-6bit-court`), l'A/B/B/A du préalable 2 (`ABBA-*`) et le contrôle macOS (`k35/os/OS-*`) ont tourné en un
+  processus par passe, `--warmup 1` sans `--cooldown` : la passe mesurée suit l'amorçage. L'amendement demandait
+  pour le préalable 1 une invocation `--passes 2 --warmup 1 --cooldown 120`, et « mêmes paramètres » (complément du
+  2026-10-09) ne dit pas que le repos manquait. Effet nul mesuré sur le texte court : son amorçage dure environ 4 s
+  (passe de 4,0 à 4,3 s) contre 45 s sur le moyen, et les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 %
+  près) recoupent la matrice reposée (38,15 à 38,20). Décision de l'agent consignée dans `ASK.md` §Dérogations.
+- **Comparaison du plafond de cache** : paire à paire, sur des jours et des binaires différents (`097fd145` plafonné,
+  `599d622a` par défaut), pas un A/B/B/A. Le 6 bits plafonné est 2,6 à 2,9 % plus lent dans ses deux cellules ;
+  avant toute décision sur le défaut public, un A/B/B/A est à faire.

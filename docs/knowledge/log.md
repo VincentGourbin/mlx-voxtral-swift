@@ -191,9 +191,9 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-09 — **K-35 : baseline TTS**.
   - Par pas : 4 bits 25 à 26 ms, 6 bits 38 à 39, bf16 129 à 137 (après la reprise du 2026-10-10). Le bf16 est plus lent que le temps réel même en
     batch (RTF 1,7 à 1,8).
-  - Le streaming re-décode tout l'accumulé : 49 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,0 (K-43).
+  - Le streaming re-décode tout l'accumulé : 49 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,0 en première passe, 3,25 en seconde (K-43).
   - Le codec décode d'un bloc : sur le texte long, 21 à 29 Go de pic MLX. Le plafond de cache retire 9 à 12 Go de
-    `phys_footprint` sans changer la vitesse.
+    `phys_footprint`, écart de vitesse sous 5 % en comparaison paire à paire (pas un A/B/B/A).
   - Aller-retour ASR : couverture 0,91 (court) à 0,98.
   - Leçon (1) : un premier relevé donnait au plafond un coût de 8 à 19 % ; il comparait deux protocoles et deux macOS.
     Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
@@ -206,7 +206,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   ligne BENCH doit avoir le même `out_sha256`, à vérifier pour chaque pack. Autre leçon : une file qui reprend une
   cellule écrase son `.log` ; la ligne reste dans `bench.jsonl`, à comparer aux journaux avant de clore.
 - 2026-10-10 — **K-35, repos après l'amorçage** : `bench --cooldown 0` lance la passe mesurée juste après
-  l'amorçage, sur un GPU chaud. Les cellules du texte moyen mesurées ainsi étaient 3 à 17 % plus lentes (A/B/B/A
+  l'amorçage, sur un GPU chaud. Les cellules du texte moyen mesurées ainsi étaient 2,9 à 17 % plus lentes (A/B/B/A
   6 bits : 41,4 / 44,7 contre 38,52 / 38,50 ms/pas, même sortie). Elles faisaient croire à un 6 bits plus lent sur
   le moyen et à une ligne consommateur dispersée de 15 %. Leçon : en un processus par passe, toujours
   `--warmup 1 --cooldown 120`. Une valeur qui s'écarte de la matrice d'origine se compare d'abord au protocole

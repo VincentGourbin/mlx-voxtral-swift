@@ -760,6 +760,11 @@ Décisions du planificateur du 2026-10-03 :
   ont été refaits (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; leurs anciennes lignes sont écartées. Les
   autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
   vérifier à la replanification (#590).
+- **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
+  gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
+  d'une invocation `--passes 2 --warmup 1 --cooldown 120`). Raison : sur le texte court, l'amorçage dure environ 4 s
+  (contre 45 s sur le moyen) ; les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 % près) recoupent la matrice
+  reposée (38,15 à 38,20). Preuve : `BENCHMARKS.md` §« Complément du 2026-10-10 (contradicteur) ».
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le
