@@ -2052,3 +2052,5 @@ Statistics:
   tâches, chiffres recalculés, essai à blanc sans erreur), contradicteur `verified` ; réserves mineures corrigées au
   commit suivant (K-94 parité contre le A, porte du volet streaming de K-44, chat nommé dans K-96, note de K-42).
 
+- Dispatch (`dispatch.py --create --issue-map map.json --depends-on-status verified`) : 56 issues créées, action-plans
+  #609 à #664, aucune `blocked` ; carte dans `map.json` : K-38 #609 ; K-39 #610 ; K-40 #611 ; K-41 #612 ; K-42 #638 ; K-43 #639 ; K-44 #640 ; K-45 #641 ; K-46 #642 ; K-47 #652 ; K-48 #653 ; K-49 #613 ; K-50 #643 ; K-51 #654 ; K-52 #614 ; K-53 #644 ; K-54 #645 ; K-55 #646 ; K-56 #647 ; K-57 #655 ; K-58 #656 ; K-59 #615 ; K-60 #648 ; K-61 #657 ; K-62 #658 ; K-63 #649 ; K-64 #616 ; K-65 #650 ; K-66 #617 ; K-68 #618 ; K-69 #619 ; K-70 #620 ; K-72 #659 ; K-73 #662 ; K-74 #621 ; K-75 #622 ; K-76 #623 ; K-77 #660 ; K-78 #661 ; K-79 #651 ; K-80 #663 ; K-82 #664 ; K-83 #624 ; K-84 #625 ; K-85 #626 ; K-86 #627 ; K-87 #628 ; K-88 #629 ; K-89 #630 ; K-90 #631 ; K-91 #632 ; K-93 #633 ; K-94 #634 ; K-95 #635 ; K-96 #636 ; K-97 #637. #590 fermée.
