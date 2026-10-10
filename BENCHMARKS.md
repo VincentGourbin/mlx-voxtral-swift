@@ -2032,7 +2032,7 @@ AA FAIL out_sha256=identical stream_frame_ms_p50=1.09% stream_frame_ms_p90=15.29
 
 ## 2026-10-11 — K-93 : temps du LLM et du flow matching par frame TTS (`--trace`), phases du streaming
 
-Binaire B = `794d9eb1` (Release, `-onlyUsePackageVersionsFromResolvedFile` ; mlx-swift 0.31.6@0bb916c, mlx-swift-lm
+Binaire B = `794d9eb1` (code du commit `a02db97e` ; Release, `-onlyUsePackageVersionsFromResolvedFile` ; mlx-swift 0.31.6@0bb916c, mlx-swift-lm
 main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8) ; A = commit parent `16dd4088`, construit dans un worktree.
 Les champs `commit` et `dirty` sont lus dans le dossier courant au lancement, pas dans le binaire : les quatre passes
 portent `794d9eb14` et `dirty:true` (l'arbre contenait déjà les modifications non construites de K-39) ; le chemin
