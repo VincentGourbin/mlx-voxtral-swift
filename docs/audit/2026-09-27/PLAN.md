@@ -1795,8 +1795,9 @@ Statistics:
   - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43).
   - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 31 à 41 Go sans plafond. Le
     plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 %).
-  - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) ; 4 bits
-    cloné, 60 % de frames en plus sur le moyen (1 806 contre 1 123).
+  - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) (retiré le
+    2026-10-10 : GPU chaud, voir la reprise) ; 4 bits cloné, 60 % de frames en plus sur le moyen (1 806 contre
+    1 123).
   - K-92 trouvé ici (audio doublé dans 5 cellules streaming), corrigé par `599d622a`.
 - Écarts : `ASK.md` §Dérogations (2026-10-09) : texte court en un processus, macOS 27.0.0 / 27.0.1, plafond de cache
   du streaming moyen et long, profil par défaut du batch, reprises.
@@ -1826,3 +1827,23 @@ Statistics:
   - chiffres corrigés.
 - Constat : en bf16, `synthesize(voice:)` et `synthesize(voiceEmbedding:)` donnent un autre audio à même graine ;
   4 et 6 bits identiques (fiche de suite).
+
+## K-35 — reprise du texte moyen et de la ligne consommateur avec 120 s de repos après l'amorçage — 2026-10-10 — rapportée
+- Cause trouvée en préparant la vérification : `bench --cooldown 0` lance la passe mesurée juste après l'amorçage,
+  sur un GPU chaud. Toutes les mesures du texte moyen en un processus par passe (2026-10-07 au 2026-10-09) l'avaient.
+  A/B/B/A (6 bits moyen prédéfinie batch) : 41,40 / 44,70 ms/pas sans repos, 38,52 / 38,50 avec 120 s, même sortie.
+- Porte observée (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise », 39 lignes sur 39 `"dirty":false`) :
+  - 11 des 13 cellules refaites passent l'A/A (0,04 à 1,81 %), dont la ligne consommateur : 38,47 / 38,49 ms/pas
+    (0,05 %), 7 frames de porteur.
+  - bf16 prédéfinie batch retenue à la 3e paire (deux paires en échec sans charge bloquante relevée).
+  - 4 bits et bf16 clonée en streaming moyen restent sans A/A (ASK-34) : 7 cellules streaming sans A/A au total.
+  - Baseline : 53 cellules sur 60 et la ligne consommateur à l'A/A ; TTFT/TTFA référence dans 47 cellules sur 60.
+- Constats corrigés :
+  - Passe chaude contre passe reposée : − 2,0 à − 19,1 % ; les cellules reposées retrouvent la matrice d'origine.
+  - 6 bits à 38,0 à 39,0 ms/pas sur les trois textes ; le constat « plus lent sur le moyen » est retiré.
+  - Plafond de cache : comparé sur le seul texte long (sans amorçage), − 1,0 à + 2,9 %, 9,3 à 12,3 Go retirés.
+  - La dispersion de ≈ 15 % de la ligne consommateur venait de la chaleur.
+- Erratum des sections du 2026-10-09 (`BENCHMARKS.md`, fin de la reprise) : cause « 75,9 Go » sur les cellules batch
+  de la matrice, comptes, TTFT, `KO` d'une paire de comparaison.
+- Écart : `ASK.md` §Dérogations K-35 du 2026-10-10 (repos de 120 s après l'amorçage). Les baselines K-34, K-36 et
+  K-37 faites en un processus par passe avec amorçage et `--cooldown 0` sont à vérifier à la replanification (#590).

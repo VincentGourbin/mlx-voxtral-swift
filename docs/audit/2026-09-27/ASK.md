@@ -702,28 +702,32 @@ Décisions du planificateur du 2026-10-03 :
   - **Texte court** : les 36 cellules gardent leurs deux passes dans un même processus (`--passes 2`, matrice du
     2026-10-03/06), A/A 0,00 à 0,74 %. Ce régime ne montre pas l'écart d'un processus à l'autre. Contrôle : 4
     cellules courtes refaites un processus par passe, sous macOS 27.0.1 (écart − 0,6 à + 0,3 %, sortie identique bit à bit, `BENCHMARKS.md` §K-35 « Contrôle macOS »).
-  - **macOS** : cellules courtes et 6 bits prédéfinie moyen en streaming sous 27.0.0, le reste sous 27.0.1 (mise à
-    jour du système pendant la campagne) ; le même contrôle couvre l'écart.
+  - **macOS** : cellules courtes sous 27.0.0, le reste sous 27.0.1 (mise à jour du système pendant la campagne ; la
+    6 bits prédéfinie moyen en streaming, d'abord sous 27.0.0, a été refaite le 2026-10-10) ; le même contrôle
+    couvre l'écart.
   - **Streaming moyen et long avec `--cache-limit-mb 2048`** : sans plafond, le `phys_footprint` plafonne à 74,1
     Go (75 899 Mo) sur 96 (swap non exclu). Ce plafond est une condition de mesure : le défaut public reste sans plafond.
   - **Batch moyen et long et ligne consommateur en profil par défaut** (sans plafond, chemin de FluxForge). Le profil
-    plafonné, mesuré aussi, ne change pas `step_ms_p50` de façon mesurable (− 3,9 à + 4,8 % sur 11 cellules, moyenne
-    des deux passes ; la 12e sans paire plafonnée valide ; ligne consommateur − 5,8 %, dans sa dispersion de ≈ 15 %
-    d'un processus à l'autre) ; ses lignes sont consignées comme comparaison.
+    plafonné, mesuré aussi, ne change pas `step_ms_p50` de façon mesurable sur les 6 cellules batch long (− 1,0 à
+    + 2,9 %, moyenne des deux passes) et retire 9,3 à 12,3 Go ; ses lignes sont consignées comme comparaison. Le
+    texte moyen n'est pas comparé (paires plafonnées mesurées sans repos après l'amorçage, 2026-10-10).
   - **Streaming court jugé sur `total_ms`** (passe de moins de 60 s) : il a été mesuré avant `stream_frame_ms_p50`
     (`0e7588a9`). Le streaming moyen et long est jugé sur `stream_frame_ms_p50` / `p90`.
-  - **Reprises** : une cellule en échec d'A/A est refaite (`-r2`, `-r3`, `-default-r2`) sur machine calme. La cause
+  - **Reprises** : une cellule en échec d'A/A est refaite (`-r2`, `-r3`, `-default-r2`, `-cd120-r2`, `-cd120-r3`) sur
+    machine calme. Pour une cellule streaming qui reste hors A/A, la paire retenue est celle dont l'écart est le plus
+    faible. La cause
     n'est écrite que si l'échantillonneur de charge la montre dans la passe lente ; sinon « cause non isolée »
     (régime de K-85). Les passes écartées restent dans `BENCHMARKS.md`, chacune avec son fichier et sa cause.
-  - **Cellules à audio doublé (K-92)** : 4 cellules streaming retenues gardent leur temps par frame ; leurs
+  - **Cellules à audio doublé (K-92)** : 2 cellules streaming retenues (4 avant la reprise du texte moyen) gardent leur temps par frame ; leurs
     `audio_s`, `rtf` et `out_sha256` sont marqués faux, et un contrôle après correctif est consigné.
-  - **Machine-check** : 7 cellules retenues ont une ligne `KO indexation/sauvegarde en cours` avant une passe
-    (liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 2 EVAL et 2 passes du contrôle macOS.
+  - **Machine-check** : 4 cellules retenues ont une ligne `KO indexation/sauvegarde en cours` avant une passe (7
+    avant la reprise du texte moyen ; liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 2 EVAL,
+    2 passes du contrôle macOS et la p2 plafonnée de bf16 clonée long batch (comparaison).
     Décision de Vincent du 2026-10-05 : les services de fond ne bloquent jamais une mesure ; `quiet.sh` n'attend que
     pour les autres `KO` (autre inférence MLX, binaire Debug, batterie).
   - **TTFT et TTFA** : consignés, pas jugés (protocole du 2026-10-05). Clause de la fiche « AA ≤ 3 % (fps, ttft) »
     reformulée : le TTFT ou TTFA d'une cellule ne sert de référence que si ses deux passes sont à 3 % ou moins
-    (42 cellules sur 60) ; les 18 autres sont listées. `fps` n'est pas écrit par l'instrument :
+    (47 cellules sur 60 après la reprise du 2026-10-10) ; les 13 autres sont listées. `fps` n'est pas écrit par l'instrument :
     fps = 1 000 / `step_ms_p50` (l'audio en demande 12,5). K-66 (porte TTFT) refait sa référence en A/B/B/A.
   - **« ms par frame LLM et FM (run de diagnostic `--trace`) »** : deux runs `bench tts --trace` faits le
     2026-10-09 (ligne consommateur ; 6 bits prédéfinie moyen en streaming). L'instrument ne sépare pas LLM et flow
@@ -743,9 +747,17 @@ Décisions du planificateur du 2026-10-03 :
     `neutral_female.safetensors` du pack) : même `out_sha256` et mêmes frames que les BENCH, 5 sur 5. Couvertures
     retenues : 0,909 / 0,909 / 0,909 (court), 0,952 (moyen), 0,955 (long ; 0,949 par l'ancien chemin). L'écart entre
     les deux chemins en bf16 va à une fiche de suite.
-  - **ASK-34** : la question décrivait 4 cellules ; 9 cellules streaming moyen ou long restent sans A/A. La réponse
+  - **ASK-34** : la question décrivait 4 cellules ; 7 cellules streaming moyen ou long restent sans A/A après la
+    reprise du 2026-10-10 (9 avant). La réponse
     de Vincent (« les cellules streaming moyen et long sans A/A restent dans la baseline ») porte sur la classe
     entière.
+- **K-35 (#588), 2026-10-10, décision de l'agent** — **repos de 120 s après l'amorçage** dans toute mesure en un
+  processus par passe (`--warmup 1 --cooldown 120`). Raison : avec `--cooldown 0`, la passe mesurée démarre sur un
+  GPU chaud, juste après l'amorçage. A/B/B/A sur tts-4b-6bit moyen : 41,40 / 44,70 ms/pas sans repos, 38,52 / 38,50
+  avec, même `out_sha256`. Le texte moyen et la ligne consommateur, mesurés sans repos du 2026-10-07 au 2026-10-09,
+  ont été refaits (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; leurs anciennes lignes sont écartées. Les
+  autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
+  vérifier à la replanification (#590).
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,
     xctrace écrit ≈ 20 Go de données brutes dans le dossier temporaire du système, sans tenir compte de `TMPDIR`. Le

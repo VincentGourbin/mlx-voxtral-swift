@@ -189,7 +189,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   et passe après. Leçon : un champ dérivé (`audio_s` / frames) qui vaut exactement un multiple entier signale un
   défaut de découpage, pas du bruit.
 - 2026-10-09 — **K-35 : baseline TTS**.
-  - Par pas : 4 bits 25 à 30 ms, 6 bits 38 à 46, bf16 129 à 138. Le bf16 est plus lent que le temps réel même en
+  - Par pas : 4 bits 25 à 26 ms, 6 bits 38 à 39, bf16 129 à 137 (après la reprise du 2026-10-10). Le bf16 est plus lent que le temps réel même en
     batch (RTF 1,7 à 1,8).
   - Le streaming re-décode tout l'accumulé : 55 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,1 (K-43).
   - Le codec décode d'un bloc : sur le texte long, 21 à 29 Go de pic MLX. Le plafond de cache retire 9 à 12 Go de
@@ -197,10 +197,16 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   - Aller-retour ASR : couverture 0,91 (court) à 0,98.
   - Leçon (1) : un premier relevé donnait au plafond un coût de 8 à 19 % ; il comparait deux protocoles et deux macOS.
     Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
-  - Leçon (2) : 5 cellules sur 14 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
+  - Leçon (2) : 5 cellules sur 9 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
     lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite.
 - 2026-10-09 — **K-35, vérification** : en bf16, `synthesize(voice:)` (préfixe de voix en cache) et
   `synthesize(voiceEmbedding:)` donnent un autre audio à même graine, alors que les 4 et 6 bits sont identiques.
   Les EVAL bf16 sont refaits par le chemin des BENCH. Leçon : un EVAL qui sert de référence de qualité pour une
   ligne BENCH doit avoir le même `out_sha256`, à vérifier pour chaque pack. Autre leçon : une file qui reprend une
   cellule écrase son `.log` ; la ligne reste dans `bench.jsonl`, à comparer aux journaux avant de clore.
+- 2026-10-10 — **K-35, repos après l'amorçage** : `bench --cooldown 0` lance la passe mesurée juste après
+  l'amorçage, sur un GPU chaud. Les cellules du texte moyen mesurées ainsi étaient 2 à 19 % plus lentes (A/B/B/A
+  6 bits : 41,4 / 44,7 contre 38,52 / 38,50 ms/pas, même sortie). Elles faisaient croire à un 6 bits plus lent sur
+  le moyen et à une ligne consommateur dispersée de 15 %. Leçon : en un processus par passe, toujours
+  `--warmup 1 --cooldown 120`. Une valeur qui s'écarte de la matrice d'origine se compare d'abord au protocole
+  (repos, amorçage, processus) avant de chercher une cause dans le code.
