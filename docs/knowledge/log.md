@@ -211,3 +211,9 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   le moyen et à une ligne consommateur dispersée de 15 %. Leçon : en un processus par passe, toujours
   `--warmup 1 --cooldown 120`. Une valeur qui s'écarte de la matrice d'origine se compare d'abord au protocole
   (repos, amorçage, processus) avant de chercher une cause dans le code.
+- 2026-10-10 — **Replanification des lots 4 à 6 (#590)** : 44 fiches tranchées (41 gardées, 3 retirées : K-67,
+  K-69, K-71), 4 fiches de suite (K-93 à K-96), 54 tâches dispatchables. Leçon : avant de garder un levier, rapporter
+  sa phase au temps total de la baseline. Sur le TTS, le post-traitement pèse au plus 0,05 % et le codec 0,2 à 4,4 %
+  du batch : un levier sur ces phases ne peut pas atteindre 5 % du total. Autre leçon : l'occupation GPU du
+  profileur (99,9 % sur la génération TTS) surestime de 2 à 7 points celle d'xctrace ; elle ne suffit pas à borner un
+  levier de recouvrement.

@@ -617,7 +617,7 @@ tasks:
     notes: "ASK-11 = A (2026-10-01)"
     task:
       goal: "Realtime en dtype du modèle (plus de copie fp32 de la tête par pas)"
-      gate: "audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11)."
+      gate: "audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; A/B/B/A sur C-moyen EN exact : realtime-4b-4bit `step_ms_p50` 27,25 → ≤ 19,08 ms (−30 %), pic `phys_footprint` 10 590 → ≤ 9 590 Mo, `phases_ms.encode` 2 860 → ≤ 2 574 ms (−10 %) ; realtime-4b-fp16 `step_ms_p50` 135,97 → ≤ 81,6 ms (−40 % ; attendu < 80 ms, temps réel) ; parité (ASK-11 = A) : `out_sha256` C-court identique (`933a5a2e…`) ou texte identique, WER C-moyen EN/FR ≤ 1,05 / 1,97 % + 0,2 pt en 4 bits et en fp16 ; références : `BENCHMARKS.md` §« 2026-10-05 — K-36 », `BASE-realtime-4b-4bit-c_moyen_en` (l. 262), `BASE-realtime-4b-fp16-c_moyen_en` (l. 278), `EVAL-realtime-4b-4bit` (l. 289)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -625,29 +625,33 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-11 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; pack 4 bits, C-moyen EN : `step_ms_p50` ≥ −30 % et pic `phys_footprint` −≥ 1 Go (A/B/B/A) ; encodage ≥ −10 % ; `realtime-4b-fp16` : `step_ms_p50` ≥ −40 % ; parité : texte identique sur C-court ou WER ≤ réf + 0,2 pt sur C-moyen EN/FR (ASK-11).
+        Porte (recalée le 2026-10-06, #590) : audit de dtype (`VOXTRAL_DTYPE_AUDIT=1`) : embedding, cache KV couche 0 et logits = dtype du modèle ; A/B/B/A sur C-moyen EN exact : realtime-4b-4bit `step_ms_p50` 27,25 → ≤ 19,08 ms (−30 %), pic `phys_footprint` 10 590 → ≤ 9 590 Mo, `phases_ms.encode` 2 860 → ≤ 2 574 ms (−10 %) ; realtime-4b-fp16 `step_ms_p50` 135,97 → ≤ 81,6 ms (−40 % ; attendu < 80 ms, temps réel) ; parité (ASK-11 = A) : `out_sha256` C-court identique (`933a5a2e…`) ou texte identique, WER C-moyen EN/FR ≤ 1,05 / 1,97 % + 0,2 pt en 4 bits et en fp16 ; références : `BENCHMARKS.md` §« 2026-10-05 — K-36 », `BASE-realtime-4b-4bit-c_moyen_en` (l. 262), `BASE-realtime-4b-fp16-c_moyen_en` (l. 278), `EVAL-realtime-4b-4bit` (l. 289).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-36, K-13]
+      depends_on_status: verified
   - id: K-39
     subject: "[voxtral K-39] FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
     severity: high
-    notes: "⛔ oui — ASK-13 (écoute à l'aveugle ou porte objective seule) avant de conclure"
+    notes: "ASK-13 = A (2026-10-06) : écoute à l'aveugle par Vincent dans la porte"
     task:
-      needs_decision: [ASK-13]
       goal: "FM TTS dans le dtype des poids (bf16 ÷2-2,8 attendu)"
-      gate: "pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige."
+      gate: "tts-4b-mlx (bf16) court `neutral_female` batch : `step_ms_p50` −40 % au moins (valeur de départ K-35 : 129,18 à 129,38 ms, `M-mlx-short_en-s*-preset-batch`, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; tts-4b-4bit court : −5 % au moins (24,80 à 24,95 ms) ; tts-4b-6bit consigné (38,15 à 38,18 ms) ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), graine fixée ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval tts-roundtrip`, 3 textes × 5 graines ; bf16 par `--voice-embedding`, chemin des BENCH) ≥ référence K-35 − 0,5 pt (bf16 0,909 / 0,952 / 0,955, 4 bits 0,909 / 0,976 / 0,955 à la graine 1, `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) ; 0 `maxFrames` atteint ; écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-39.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-11, ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-11 = A (2026-10-01), ASK-13 = A (2026-10-06) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : pas bf16 −40 % au moins et pas 4 bits −5 % au moins (A/B/B/A, graine fixée, Release) ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval`, 3 textes × 5 graines) ≥ référence −0,5 pt ; 0 `maxFrames` atteint ; écoute à l'aveugle non inférieure si ASK-13 l'exige.
+        Porte (recalée le 2026-10-10, #590) : tts-4b-mlx (bf16) court `neutral_female` batch : `step_ms_p50` −40 % au moins (valeur de départ K-35 : 129,18 à 129,38 ms, `M-mlx-short_en-s*-preset-batch`, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; tts-4b-4bit court : −5 % au moins (24,80 à 24,95 ms) ; tts-4b-6bit consigné (38,15 à 38,18 ms) ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), graine fixée ; parité forcée par l'enseignant (mêmes états cachés du LLM passés aux deux variantes du FM) : codes acoustiques identiques ≥ 99 % avec écart ≤ 1 niveau, codes sémantiques identiques 100 % ; couverture ASR (`eval tts-roundtrip`, 3 textes × 5 graines ; bf16 par `--voice-embedding`, chemin des BENCH) ≥ référence K-35 − 0,5 pt (bf16 0,909 / 0,952 / 0,955, 4 bits 0,909 / 0,976 / 0,955 à la graine 1, `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) ; 0 `maxFrames` atteint ; écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-35]
   - id: K-40
@@ -655,300 +659,346 @@ tasks:
     severity: high
     task:
       goal: "STT bf16 de bout en bout (KV bf16, plus de promotion fp32)"
-      gate: "test : dtype du cache KV après préfill = bf16 (rouge avant) ; encodage + préfill ≥ 5 % plus rapides **ou** pic MLX −≥ 10 % (A/B/B/A, Mini 8 bits et 4 bits mixte, `.mlx` et `.auto`, C-moyen et C-long) ; `mini-3b` bf16 : décodage ≥ +5 % et pic process −≥ 1 Go ; parité : greedy identique sur ≥ 90 % des clips et WER ≤ réf + 0,3 pt (FR et EN), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée."
+      gate: "test : dtype du cache KV après préfill = bf16 (rouge avant) ; mini-3b (bf16) `.mlx` C-moyen EN : `step_ms_p50` 137,56 → ≤ 68,8 ms (−50 % au moins ; attendu ≈ 2 × le 8 bits, 21,32 ms) et pic `phys_footprint` 15 496 → −≥ 1 Go ; Mini 8 bits et 4 bits, `.mlx` et `.auto`, C-moyen EN et C-long exact : `ttft_ms` −5 % au moins (8 bits : `.mlx` 3 866 / 18 612 ms, `.auto` 5 208 / 22 971 ms) **ou** `peak_mlx_mb` −10 % au moins (8 bits : 6 403 / 7 625 ; 5 742 / 7 026 Mo), A/B/B/A, A = commit parent ; parité (ASK-11 = A) : `out_sha256` identique sur C-court et WER C-moyen EN/FR ≤ réf + 0,2 pt (EVALA : 8 bits 0,79 / 1,97 ; 4 bits 2,11 / 2,22 ; bf16 1,05 / 1,97), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-mlx-c_moyen_en` (l. 409), `BASE-mini-3b-8bit-mlx-c_moyen_en` (l. 345) et `-c_long` (l. 353), `BASE-mini-3b-8bit-auto-c_moyen_en` (l. 361) et `-c_long` (l. 369), lignes 4 bits l. 377-401 ; `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification », EVALA (l. 579-614)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-40.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : test : dtype du cache KV après préfill = bf16 (rouge avant) ; encodage + préfill ≥ 5 % plus rapides **ou** pic MLX −≥ 10 % (A/B/B/A, Mini 8 bits et 4 bits mixte, `.mlx` et `.auto`, C-moyen et C-long) ; `mini-3b` bf16 : décodage ≥ +5 % et pic process −≥ 1 Go ; parité : greedy identique sur ≥ 90 % des clips et WER ≤ réf + 0,3 pt (FR et EN), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée.
+        Porte (recalée le 2026-10-06, #590) : test : dtype du cache KV après préfill = bf16 (rouge avant) ; mini-3b (bf16) `.mlx` C-moyen EN : `step_ms_p50` 137,56 → ≤ 68,8 ms (−50 % au moins ; attendu ≈ 2 × le 8 bits, 21,32 ms) et pic `phys_footprint` 15 496 → −≥ 1 Go ; Mini 8 bits et 4 bits, `.mlx` et `.auto`, C-moyen EN et C-long exact : `ttft_ms` −5 % au moins (8 bits : `.mlx` 3 866 / 18 612 ms, `.auto` 5 208 / 22 971 ms) **ou** `peak_mlx_mb` −10 % au moins (8 bits : 6 403 / 7 625 ; 5 742 / 7 026 Mo), A/B/B/A, A = commit parent ; parité (ASK-11 = A) : `out_sha256` identique sur C-court et WER C-moyen EN/FR ≤ réf + 0,2 pt (EVALA : 8 bits 0,79 / 1,97 ; 4 bits 2,11 / 2,22 ; bf16 1,05 / 1,97), sinon politique mixte (encodeur fp32, décodeur bf16) documentée et mesurée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-mlx-c_moyen_en` (l. 409), `BASE-mini-3b-8bit-mlx-c_moyen_en` (l. 345) et `-c_long` (l. 353), `BASE-mini-3b-8bit-auto-c_moyen_en` (l. 361) et `-c_long` (l. 369), lignes 4 bits l. 377-401 ; `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification », EVALA (l. 579-614).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-3, K-34]
+      depends_on_status: verified
   - id: K-41
     subject: "[voxtral K-41] Attention du codec par bandes (pic du décodage long borné)"
     severity: high
     task:
       goal: "Attention du codec par bandes (pic du décodage long borné)"
-      gate: "forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, 60 s, long) ; pic `phys_footprint` du décodage long ≤ poids + 1 Go (contre ≥ 10 Go attendus aujourd'hui) ; décodage court ±5 % (A/B/B/A)."
+      gate: "forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, moyen, long ; mêmes codes en entrée) ; tts-4b-6bit long `neutral_female` batch : `peak_mlx_mb_by_phase.codec` ≤ `peak_mlx_mb_by_phase.decode` + 1 024 Mo (valeurs de départ K-35 : 22 017 et 3 506 Mo, `M-6bit-long_en-s1-preset-batch`, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») et pic `phys_footprint` − 10 Go au moins (33 301 Mo) ; mêmes conditions en tts-4b-4bit cloné long (26 104 Mo de pic codec, 39 084 Mo de `phys_footprint`) ; `phases_ms.codec` du long ≤ + 5 % (2 216 ms) ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-41.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, 60 s, long) ; pic `phys_footprint` du décodage long ≤ poids + 1 Go (contre ≥ 10 Go attendus aujourd'hui) ; décodage court ±5 % (A/B/B/A).
+        Porte (recalée le 2026-10-10, #590) : forme d'onde |Δ|max ≤ 1e-4 contre l'actuel sur 3 textes (court, moyen, long ; mêmes codes en entrée) ; tts-4b-6bit long `neutral_female` batch : `peak_mlx_mb_by_phase.codec` ≤ `peak_mlx_mb_by_phase.decode` + 1 024 Mo (valeurs de départ K-35 : 22 017 et 3 506 Mo, `M-6bit-long_en-s1-preset-batch`, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») et pic `phys_footprint` − 10 Go au moins (33 301 Mo) ; mêmes conditions en tts-4b-4bit cloné long (26 104 Mo de pic codec, 39 084 Mo de `phys_footprint`) ; `phases_ms.codec` du long ≤ + 5 % (2 216 ms) ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-35]
   - id: K-42
     subject: "[voxtral K-42] Décider backend et précision d'encodeur STT par une matrice mesurée"
-    notes: "⛔ oui — ASK-6 (changer le défaut `.auto` → `.mlx` si la règle le dicte : impact FluxForge)"
+    notes: "ASK-6 = A (2026-10-06) : la règle de K-42 décide du défaut"
     task:
-      needs_decision: [ASK-6]
       goal: "Décider backend et précision d'encodeur STT par une matrice mesurée"
-      gate: "règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout."
+      gate: "les cellules Mini 8 / 4 / 16 bits × `.mlx` / `.auto` de K-34 tiennent lieu de matrice pour Core ML `.cpuAndNeuralEngine` (préréglage depuis K-32b) : `ttft_ms` `.auto` / `.mlx` = 5 208 / 3 866 ms (Mini 8 bits C-moyen EN : Core ML à 0,74 × la vitesse), décodage identique (écart ≤ 1,5 %), WER identiques sur Mini ; Small C-long : WER 27,23 % en `.auto` contre 1,72 % en `.mlx` (cause : K-85) ; restent à mesurer, une ligne `BENCHMARKS.md` chacune : Core ML `.cpuAndGPU` et `.all`, encodeur MLX des packs 8 bits / bf16, mise en place à froid (téléchargement et compilation séparés) ; règle inchangée : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide en `ttft_ms` **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6 = A, 2026-10-06 : la règle décide ; version mineure, entrée CHANGELOG, FluxForge prévenu) ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345, 361, 449, 461 ; `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification », `EVALA-small-4bit-auto` (l. 621)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-42.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-6 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-6 = A (2026-10-06) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : règle : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6) ; chaque cellule a une ligne `BENCHMARKS.md` ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision écrite dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée de bout en bout.
+        Porte (complétée le 2026-10-07, #590) : les cellules Mini 8 / 4 / 16 bits × `.mlx` / `.auto` de K-34 tiennent lieu de matrice pour Core ML `.cpuAndNeuralEngine` (préréglage depuis K-32b) : `ttft_ms` `.auto` / `.mlx` = 5 208 / 3 866 ms (Mini 8 bits C-moyen EN : Core ML à 0,74 × la vitesse), décodage identique (écart ≤ 1,5 %), WER identiques sur Mini ; Small C-long : WER 27,23 % en `.auto` contre 1,72 % en `.mlx` (cause : K-85) ; restent à mesurer, une ligne `BENCHMARKS.md` chacune : Core ML `.cpuAndGPU` et `.all`, encodeur MLX des packs 8 bits / bf16, mise en place à froid (téléchargement et compilation séparés) ; règle inchangée : Core ML reste le défaut `.auto` seulement s'il est ≥ 1,2× plus rapide en `ttft_ms` **et** WER ≤ +0,3 pt **et** parité (L2 relative des embeddings ≤ 1e-2, transcriptions greedy identiques sur 5 fichiers), sinon `.mlx` par défaut (ASK-6 = A, 2026-10-06 : la règle décide ; version mineure, entrée CHANGELOG, FluxForge prévenu) ; pour chaque largeur, le pack retenu a un WER ≤ bf16 + 0,3 pt ; décision dans `docs/knowledge/decisions/reference-profiles.md` ; si Core ML est gardé : reconversion `convert.sh` (K-19) rejouée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345, 361, 449, 461 ; `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification », `EVALA-small-4bit-auto` (l. 621).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-40, K-33, K-25]
+      depends_on: [K-40, K-33, K-25, K-85]
+      depends_on_status: verified
   - id: K-43
     subject: "[voxtral K-43] Décodage codec incrémental en streaming (÷33 attendu)"
     task:
       goal: "Décodage codec incrémental en streaming (÷33 attendu)"
-      gate: "forme d'onde concaténée du streaming = batch (|Δ|max ≤ 1e-4) sur 3 textes × 3 graines ; temps de décodage par chunk constant ±20 % du chunk 1 au chunk 200 ; RTF streaming du texte long ≤ RTF batch + 5 %."
+      gate: "valeurs « avant » = cellules streaming de K-35 (ASK-34 = A ; cause = re-décodage de tout l'accumulé, `decodeToWaveform(chunk.accumulatedCodes)` ; `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) : `stream_frame_ms_p50` moyen 54,60 à 58,09 ms (6 bits), 49,14 à 79,81 (4 bits), 157,89 à 160,10 (bf16) ; long 95,86 à 100,56, 84,72 à 108,66, 201,61 à 213,57 ; contre 38,0 à 39,0 ms par pas en batch 6 bits (le court n'a pas ce champ : la fiche le mesure dans son A) ; pic du streaming sans plafond de cache jusqu'à 75 899 Mo (K-35) et 75 880 Mo (K-12, `BENCHMARKS.md` §« 2026-10-01 — K-12 ») ; après : parité streaming = batch (|Δ|max ≤ 1e-4, audio brut `trimLeadIn=false` / `trimTail=false`, 3 textes × 3 graines) ; coût par frame constant avec la position, lu sur `stream_frame_ms_p50/p90` de `bench tts --streaming` : `stream_frame_ms_p50` moyen et long ≤ 1,2 × court (3 graines), `stream_frame_ms_p90` / `stream_frame_ms_p50` ≤ 1,3 sur le long ; RTF streaming du long ≤ RTF batch + 5 % ; pic du streaming long ≤ pic batch + 10 % ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; le gain n'est lu qu'au-delà de la dispersion consignée par K-35 sur ces cellules (6 cellules sans A/A : `stream_frame_ms_p50` jusqu'à 7,2 %, `stream_frame_ms_p90` jusqu'à 28 % d'un processus à l'autre)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-43.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-34 = A (2026-10-07) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : forme d'onde concaténée du streaming = batch (|Δ|max ≤ 1e-4) sur 3 textes × 3 graines ; temps de décodage par chunk constant ±20 % du chunk 1 au chunk 200 ; RTF streaming du texte long ≤ RTF batch + 5 %.
+        Porte (recalée le 2026-10-10, #590) : valeurs « avant » = cellules streaming de K-35 (ASK-34 = A ; cause = re-décodage de tout l'accumulé, `decodeToWaveform(chunk.accumulatedCodes)` ; `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) : `stream_frame_ms_p50` moyen 54,60 à 58,09 ms (6 bits), 49,14 à 79,81 (4 bits), 157,89 à 160,10 (bf16) ; long 95,86 à 100,56, 84,72 à 108,66, 201,61 à 213,57 ; contre 38,0 à 39,0 ms par pas en batch 6 bits (le court n'a pas ce champ : la fiche le mesure dans son A) ; pic du streaming sans plafond de cache jusqu'à 75 899 Mo (K-35) et 75 880 Mo (K-12, `BENCHMARKS.md` §« 2026-10-01 — K-12 ») ; après : parité streaming = batch (|Δ|max ≤ 1e-4, audio brut `trimLeadIn=false` / `trimTail=false`, 3 textes × 3 graines) ; coût par frame constant avec la position, lu sur `stream_frame_ms_p50/p90` de `bench tts --streaming` : `stream_frame_ms_p50` moyen et long ≤ 1,2 × court (3 graines), `stream_frame_ms_p90` / `stream_frame_ms_p50` ≤ 1,3 sur le long ; RTF streaming du long ≤ RTF batch + 5 % ; pic du streaming long ≤ pic batch + 10 % ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; le gain n'est lu qu'au-delà de la dispersion consignée par K-35 sur ces cellules (6 cellules sans A/A : `stream_frame_ms_p50` jusqu'à 7,2 %, `stream_frame_ms_p90` jusqu'à 28 % d'un processus à l'autre).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-12, K-41]
+      depends_on: [K-12, K-35]
   - id: K-44
     subject: "[voxtral K-44] Pipelining asyncEval de la boucle AR TTS"
     severity: high
     task:
       goal: "Pipelining asyncEval de la boucle AR TTS"
-      gate: "fr/s +5 % au moins en 4 et en 6 bits (A/B/B/A) ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (GPU % par frame en hausse, trace) ; streaming ≥ batch −3 %."
+      gate: "étape 0, sans code : `bench tts --trace --metal-trace` sur tts-4b-4bit et tts-4b-6bit moyen `neutral_female` batch → `xctrace_busy_pct` de la phase « Semantic Code Generation » ; s'il est ≥ 97 %, la borne du gain est < 3 % : fiche « retirée » sans code, mesure consignée ; sinon : fr/s + 5 % au moins en 4 et en 6 bits (`step_ms_p50`, A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), A après K-39 ; valeurs de départ K-35 avant K-39 : 25,15 et 38,50 ms/pas, moyen `neutral_female`, `BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (`xctrace_busy_pct` en hausse) ; streaming ≥ batch − 3 %."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-44.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : fr/s +5 % au moins en 4 et en 6 bits (A/B/B/A) ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (GPU % par frame en hausse, trace) ; streaming ≥ batch −3 %.
+        Porte (recalée le 2026-10-10, #590) : étape 0, sans code : `bench tts --trace --metal-trace` sur tts-4b-4bit et tts-4b-6bit moyen `neutral_female` batch → `xctrace_busy_pct` de la phase « Semantic Code Generation » ; s'il est ≥ 97 %, la borne du gain est < 3 % : fiche « retirée » sans code, mesure consignée ; sinon : fr/s + 5 % au moins en 4 et en 6 bits (`step_ms_p50`, A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), A après K-39 ; valeurs de départ K-35 avant K-39 : 25,15 et 38,50 ms/pas, moyen `neutral_female`, `BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; codes identiques bit à bit à graine fixe (batch et streaming) ; preuve que la branche asynchrone s'exécute (`xctrace_busy_pct` en hausse) ; streaming ≥ batch − 3 %.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-39]
   - id: K-45
     subject: "[voxtral K-45] Pipelining asyncEval du décodage STT"
     task:
       goal: "Pipelining asyncEval du décodage STT"
-      gate: "`step_ms_p50` −5 % au moins (Mini 8 bits, C-moyen, A/B/B/A) ; sortie greedy identique 100 % ; preuve que la branche asynchrone est prise."
+      gate: "mini-3b-8bit `.mlx` C-moyen EN : `step_ms_p50` −5 % au moins (A/B/B/A, A = commit parent après K-40 ; valeur de départ K-34 : 21,32 ms) ; borne : le décodage occupe déjà le GPU 92,8 % du temps (xctrace ; `ioreg` 94,4 %), le gain maximal est ≈ 7 % ; preuve que la branche asynchrone est prise : occupation xctrace du décodage en hausse (≥ 95 %) ; sortie greedy identique 100 % (`out_sha256`) ; Small non visé (occupation 96,6 %) ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-mlx-c_moyen_en` (l. 345), `prefill-mini-3b-8bit` et `prefill-small-4bit` (l. 524-536)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-45.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : `step_ms_p50` −5 % au moins (Mini 8 bits, C-moyen, A/B/B/A) ; sortie greedy identique 100 % ; preuve que la branche asynchrone est prise.
+        Porte (recalée le 2026-10-06, #590) : mini-3b-8bit `.mlx` C-moyen EN : `step_ms_p50` −5 % au moins (A/B/B/A, A = commit parent après K-40 ; valeur de départ K-34 : 21,32 ms) ; borne : le décodage occupe déjà le GPU 92,8 % du temps (xctrace ; `ioreg` 94,4 %), le gain maximal est ≈ 7 % ; preuve que la branche asynchrone est prise : occupation xctrace du décodage en hausse (≥ 95 %) ; sortie greedy identique 100 % (`out_sha256`) ; Small non visé (occupation 96,6 %) ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-mlx-c_moyen_en` (l. 345), `prefill-mini-3b-8bit` et `prefill-small-4bit` (l. 524-536).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-40]
+      depends_on_status: verified
   - id: K-46
     subject: "[voxtral K-46] Tête liée Realtime quantifiée (asLinear)"
     task:
       goal: "Tête liée Realtime quantifiée (asLinear)"
-      gate: "baseline = après K-38 : `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER ≤ réf + 0,2 pt (8 bits) et ≤ réf + 0,5 pt (4 bits), sinon la tête 4 bits est rejetée et documentée."
+      gate: "baseline = après K-38 (A = commit parent ; avant K-38 : realtime-4b-4bit 27,25 ms par pas, fp16 135,97, `BENCHMARKS.md` §« 2026-10-05 — K-36 », l. 262 et 278) : C-moyen EN, `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER C-moyen EN/FR ≤ réf + 0,2 pt (tête 8 bits) et ≤ réf + 0,5 pt (tête 4 bits) (réf. 1,05 / 1,97, `EVAL-realtime-4b-4bit` l. 289 ; ASK-11 = A), sinon la tête 4 bits est rejetée et documentée."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-46.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : baseline = après K-38 : `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER ≤ réf + 0,2 pt (8 bits) et ≤ réf + 0,5 pt (4 bits), sinon la tête 4 bits est rejetée et documentée.
+        Porte (recalée le 2026-10-06, #590) : baseline = après K-38 (A = commit parent ; avant K-38 : realtime-4b-4bit 27,25 ms par pas, fp16 135,97, `BENCHMARKS.md` §« 2026-10-05 — K-36 », l. 262 et 278) : C-moyen EN, `step_ms_p50` −8 % au moins (tête 8 bits), `activeMemory` après chargement −≥ 300 Mo ; WER C-moyen EN/FR ≤ réf + 0,2 pt (tête 8 bits) et ≤ réf + 0,5 pt (tête 4 bits) (réf. 1,05 / 1,97, `EVAL-realtime-4b-4bit` l. 289 ; ASK-11 = A), sinon la tête 4 bits est rejetée et documentée.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-38]
+      depends_on_status: verified
   - id: K-47
     subject: "[voxtral K-47] Pipelining asyncEval du décodage Realtime"
     task:
       goal: "Pipelining asyncEval du décodage Realtime"
-      gate: "`step_ms_p50` −5 % au moins (A/B/B/A, après K-46) ; texte identique sur C-court et C-moyen ; branche asynchrone prouvée."
+      gate: "`step_ms_p50` −5 % au moins sur C-moyen EN (A/B/B/A, A = après K-46) ; borne : occupation xctrace du décodage realtime-4b-4bit 92,3 % avant K-38 (`BENCHMARKS.md` §« 2026-10-05 — K-36 », `decode-realtime-4b-4bit` l. 303) ; texte identique (`out_sha256`) sur C-court et C-moyen EN/FR ; branche asynchrone prouvée (occupation du décodage en hausse)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-47.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : `step_ms_p50` −5 % au moins (A/B/B/A, après K-46) ; texte identique sur C-court et C-moyen ; branche asynchrone prouvée.
+        Porte (recalée le 2026-10-06, #590) : `step_ms_p50` −5 % au moins sur C-moyen EN (A/B/B/A, A = après K-46) ; borne : occupation xctrace du décodage realtime-4b-4bit 92,3 % avant K-38 (`BENCHMARKS.md` §« 2026-10-05 — K-36 », `decode-realtime-4b-4bit` l. 303) ; texte identique (`out_sha256`) sur C-court et C-moyen EN/FR ; branche asynchrone prouvée (occupation du décodage en hausse).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-46]
+      depends_on_status: verified
   - id: K-48
     subject: "[voxtral K-48] Rendre flowSteps/cfgAlpha effectifs et balayer T21"
-    notes: "⛔ oui — ASK-13 pour retenir une valeur < 8 (écoute)"
+    notes: "ASK-13 = A (2026-10-06) : écoute à l'aveugle par Vincent dans la porte"
     task:
-      needs_decision: [ASK-13]
       goal: "Rendre flowSteps/cfgAlpha effectifs et balayer T21"
-      gate: "câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté."
+      gate: "câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s + 10 % au moins (`step_ms_p50` ≤ 0,909 × A ; valeurs de départ K-35 : tts-4b-4bit 24,80 à 24,95 ms court, 25,15 moyen, `BENCHMARKS.md` §« 2026-10-09 — K-35 »), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; couverture ASR ≥ réf − 0,5 pt (12 textes × 3 graines ; réf. K-35 4 bits : 0,909 court, 0,952 à 0,976 moyen, `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`), 0 `maxFrames` et écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut) ; sinon rejet documenté."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-48.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-13 = A (2026-10-06) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s +10 % au moins, couverture ASR ≥ réf −0,5 pt (12 textes × 3 graines), 0 `maxFrames`, écoute à l'aveugle non inférieure (ASK-13) ; sinon rejet documenté.
+        Porte (recalée le 2026-10-10, #590) : câblage : défaut 8 bit-exact à graine fixe ; valeur < 8 retenue seulement si fr/s + 10 % au moins (`step_ms_p50` ≤ 0,909 × A ; valeurs de départ K-35 : tts-4b-4bit 24,80 à 24,95 ms court, 25,15 moyen, `BENCHMARKS.md` §« 2026-10-09 — K-35 »), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; couverture ASR ≥ réf − 0,5 pt (12 textes × 3 graines ; réf. K-35 4 bits : 0,909 court, 0,952 à 0,976 moyen, `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`), 0 `maxFrames` et écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut) ; sinon rejet documenté.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-44]
   - id: K-49
     subject: "[voxtral K-49] Session de chat audio réutilisable"
     task:
       goal: "Session de chat audio réutilisable"
-      gate: "2ᵉ question : latence au premier jeton −50 % au moins ; réponses greedy identiques à un démarrage à froid sur 4 questions ; mémoire de la session consignée."
+      gate: "chat mini-3b-8bit `.mlx`, `fluxforge_long_en_6bit.wav`, 4 questions fixes (`docs/eval/chat-questions.json`, greedy) : `ttft_ms` de la 2ᵉ question 4 892 → ≤ 2 446 ms (−50 %), A/B/B/A sur plusieurs passes (A/A du TTFT jusqu'à 3,98 % en q3) ; q3 / q4 consignés (5 285 / 5 993 ms) ; `.auto` consigné (6 318 ms en q2) ; réponses greedy identiques à un démarrage à froid (4/4) ; mémoire de la session consignée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `CHAT-mlx` (l. 464) ; `BENCHMARKS.md` §« 2026-10-06 — K-34 / K-36 / K-37 », `CHAT-auto` (l. 663)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-49.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 2ᵉ question : latence au premier jeton −50 % au moins ; réponses greedy identiques à un démarrage à froid sur 4 questions ; mémoire de la session consignée.
+        Porte (recalée le 2026-10-06, #590) : chat mini-3b-8bit `.mlx`, `fluxforge_long_en_6bit.wav`, 4 questions fixes (`docs/eval/chat-questions.json`, greedy) : `ttft_ms` de la 2ᵉ question 4 892 → ≤ 2 446 ms (−50 %), A/B/B/A sur plusieurs passes (A/A du TTFT jusqu'à 3,98 % en q3) ; q3 / q4 consignés (5 285 / 5 993 ms) ; `.auto` consigné (6 318 ms en q2) ; réponses greedy identiques à un démarrage à froid (4/4) ; mémoire de la session consignée ; références : `BENCHMARKS.md` §« 2026-10-05 — K-34 », `CHAT-mlx` (l. 464) ; `BENCHMARKS.md` §« 2026-10-06 — K-34 / K-36 / K-37 », `CHAT-auto` (l. 663).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-45]
+      depends_on: [K-34]
+      depends_on_status: verified
   - id: K-50
     subject: "[voxtral K-50] Cache de préfixe TTS pour les voix clonées"
     task:
       goal: "Cache de préfixe TTS pour les voix clonées"
-      gate: "2ᵉ synthèse d'une voix clonée : préfill −30 % au moins (graine fixée, A/B/B/A) ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif."
+      gate: "2ᵉ synthèse d'une voix clonée (`clone_fr`, `voiceEmbedding`) : `phases_ms.prefill` − 30 % au moins (valeurs de départ K-35 : 123 ms en 6 bits court, 118 en 4 bits, 295 en 6 bits moyen ; voix prédéfinie, déjà en cache : 220 / 363 ms ; `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), graine fixée ; le TTFT des cellules clonées courtes est hors référence (K-35, ⁴) : la porte se lit sur le préfill ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif ; en bf16, sortie conforme à la conclusion de K-94."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-50.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 2ᵉ synthèse d'une voix clonée : préfill −30 % au moins (graine fixée, A/B/B/A) ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif.
+        Porte (recalée le 2026-10-10, #590) : 2ᵉ synthèse d'une voix clonée (`clone_fr`, `voiceEmbedding`) : `phases_ms.prefill` − 30 % au moins (valeurs de départ K-35 : 123 ms en 6 bits court, 118 en 4 bits, 295 en 6 bits moyen ; voix prédéfinie, déjà en cache : 220 / 363 ms ; `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), graine fixée ; le TTFT des cellules clonées courtes est hors référence (K-35, ⁴) : la porte se lit sur le préfill ; mêmes transcriptions ASR sur 3 textes × 3 graines ; test « clé réutilisée avec un autre embedding → détectée » rouge sans le correctif ; en bf16, sortie conforme à la conclusion de K-94.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-11, K-35]
+      depends_on: [K-11, K-35, K-94]
   - id: K-51
     subject: "[voxtral K-51] Sortir clearCache/eval/resetPeak de la boucle STT"
     task:
       goal: "Sortir clearCache/eval/resetPeak de la boucle STT"
-      gate: "`recommended(forRAMGB: 16)` sur le Mac de mesure : décodage +5 % au moins (A/B/B/A), pic `phys_footprint` ≤ +10 %, greedy identique."
+      gate: "mini-3b-8bit `.mlx` C-moyen EN avec `memoryOptimization = .recommended(forRAMGB: 16)` (= `.aggressive`, imposé au bench par une option à ajouter si absente) : `step_ms_p50` −5 % au moins, pic `phys_footprint` ≤ +10 %, `out_sha256` identique (A/B/B/A, A = commit parent) ; la baseline K-34 au préréglage par défaut sur 96 Go (`.light` : 21,32 ms, 9 587 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) est consignée à côté de A : l'écart `.aggressive` − `.light` dit ce que coûte le nettoyage dans la boucle ; changement de sémantique d'un préréglage public : ASK-9 (« fiche par fiche »)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-51.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : `recommended(forRAMGB: 16)` sur le Mac de mesure : décodage +5 % au moins (A/B/B/A), pic `phys_footprint` ≤ +10 %, greedy identique.
+        Porte (recalée le 2026-10-06, #590) : mini-3b-8bit `.mlx` C-moyen EN avec `memoryOptimization = .recommended(forRAMGB: 16)` (= `.aggressive`, imposé au bench par une option à ajouter si absente) : `step_ms_p50` −5 % au moins, pic `phys_footprint` ≤ +10 %, `out_sha256` identique (A/B/B/A, A = commit parent) ; la baseline K-34 au préréglage par défaut sur 96 Go (`.light` : 21,32 ms, 9 587 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) est consignée à côté de A : l'écart `.aggressive` − `.light` dit ce que coûte le nettoyage dans la boucle ; changement de sémantique d'un préréglage public : ASK-9 (« fiche par fiche »).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-45]
+      depends_on_status: verified
   - id: K-52
     subject: "[voxtral K-52] Politique mémoire MLX opt-in (cacheLimit, clearCache, unload) sur les 3 pipelines"
     task:
       goal: "Politique mémoire MLX opt-in (cacheLimit, clearCache, unload) sur les 3 pipelines"
-      gate: "STT à 10 min d'audio : pic `phys_footprint` ≤ pic actif MLX + `cacheLimit` + empreinte Core ML (+5 %) ; temps fast ±5 % ; TTS : après `unload()`, footprint ≤ référence du process + 200 Mo, lean ≤ +5 % de temps pour un pic −20 % au moins sur le texte long ; Realtime : après `unload()`, footprint = avant chargement ±200 Mo, `step_ms_p50` ±3 %, max/médiane des pas ≤ 1,3."
+      gate: "reste de la porte (plafond opt-in `cacheLimitBytes` livré et mesuré à 10 994 Mo de pic sur C-long, PLAN §7 « K-52 ») : STT, temps du profil fast : mini-3b-8bit `.mlx` C-moyen EN avec et sans `--cache-limit-mb 2048`, A/B/B/A : `step_ms_p50` et `total_ms` ±5 % (réf. 21,32 ms et 12 865 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) ; Realtime : realtime-4b-4bit C-moyen EN avec et sans plafond : `step_ms_p50` ±3 % (réf. 27,25 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262) et `step_ms_p90` / `step_ms_p50` ≤ 1,3 (réf. 1,04 ; remplace « max/médiane », que l'instrument ne rapporte pas) ; le vidage aveugle tous les 256 pas n'est gardé que s'il tient ces seuils mieux que sans ; défaut Small (ASK-33 = A désactivable, 2026-10-06) : plafond de 2 048 Mo posé par défaut pour `small-*` sur un Mac de 32 Go ou moins (mémoire physique simulable en test), aucun plafond par défaut ailleurs ; l'hôte le désactive par un réglage explicite (test : désactivé → `Memory.cacheLimit` inchangé) ; small-4bit sur 8 min avec et sans plafond : pic ≤ 19 013 Mo + 5 % (contre 37 313 sans plafond) et `total_ms` ±5 % (`SMALL32`, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 565-567), sinon pas de défaut et `blocked` avec les chiffres ; nouveau défaut public : version mineure, entrée CHANGELOG, FluxForge prévenu (ASK-9 = A) ; TTS : aucun défaut changé par cette fiche (plafond TTS mesuré en A/B/B/A par K-95, défaut public décidé par Vincent ; K-35 : batch long − 1,0 à + 2,9 % pour − 9,3 à − 12,3 Go, comparaison paire à paire) ; volet lean TTS (pic −20 % pour ≤ +5 % de temps) : transféré à K-79."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-52.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-33 = A désactivable (2026-10-06), ASK-9 = A (2026-09-30) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : STT à 10 min d'audio : pic `phys_footprint` ≤ pic actif MLX + `cacheLimit` + empreinte Core ML (+5 %) ; temps fast ±5 % ; TTS : après `unload()`, footprint ≤ référence du process + 200 Mo, lean ≤ +5 % de temps pour un pic −20 % au moins sur le texte long ; Realtime : après `unload()`, footprint = avant chargement ±200 Mo, `step_ms_p50` ±3 %, max/médiane des pas ≤ 1,3.
+        Porte (recalée le 2026-10-10, #590) : reste de la porte (plafond opt-in `cacheLimitBytes` livré et mesuré à 10 994 Mo de pic sur C-long, PLAN §7 « K-52 ») : STT, temps du profil fast : mini-3b-8bit `.mlx` C-moyen EN avec et sans `--cache-limit-mb 2048`, A/B/B/A : `step_ms_p50` et `total_ms` ±5 % (réf. 21,32 ms et 12 865 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) ; Realtime : realtime-4b-4bit C-moyen EN avec et sans plafond : `step_ms_p50` ±3 % (réf. 27,25 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262) et `step_ms_p90` / `step_ms_p50` ≤ 1,3 (réf. 1,04 ; remplace « max/médiane », que l'instrument ne rapporte pas) ; le vidage aveugle tous les 256 pas n'est gardé que s'il tient ces seuils mieux que sans ; défaut Small (ASK-33 = A désactivable, 2026-10-06) : plafond de 2 048 Mo posé par défaut pour `small-*` sur un Mac de 32 Go ou moins (mémoire physique simulable en test), aucun plafond par défaut ailleurs ; l'hôte le désactive par un réglage explicite (test : désactivé → `Memory.cacheLimit` inchangé) ; small-4bit sur 8 min avec et sans plafond : pic ≤ 19 013 Mo + 5 % (contre 37 313 sans plafond) et `total_ms` ±5 % (`SMALL32`, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 565-567), sinon pas de défaut et `blocked` avec les chiffres ; nouveau défaut public : version mineure, entrée CHANGELOG, FluxForge prévenu (ASK-9 = A) ; TTS : aucun défaut changé par cette fiche (plafond TTS mesuré en A/B/B/A par K-95, défaut public décidé par Vincent ; K-35 : batch long − 1,0 à + 2,9 % pour − 9,3 à − 12,3 Go, comparaison paire à paire) ; volet lean TTS (pic −20 % pour ≤ +5 % de temps) : transféré à K-79.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-51]
+      depends_on: [K-34, K-36]
+      depends_on_status: verified
   - id: K-53
     subject: "[voxtral K-53] KV STT pré-dimensionné"
     task:
       goal: "KV STT pré-dimensionné"
-      gate: "30 min d'audio : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A) ; 10 min consigné ; sortie bit-exacte."
+      gate: "30 min d'audio (C-long exact × 3, construit et versionné par SHA-256 comme les clips de K-33) : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A, mini-3b-8bit `.mlx`, `--cache-limit-mb 2048`, A = commit parent) ; C-long exact consigné (valeur de départ K-34 : `phases_ms.prefill` 11 115 ms, pic 9 811 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-mlx-c_long` l. 353) ; sortie bit-exacte (`out_sha256`)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-53.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 30 min d'audio : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A) ; 10 min consigné ; sortie bit-exacte.
+        Porte (recalée le 2026-10-06, #590) : 30 min d'audio (C-long exact × 3, construit et versionné par SHA-256 comme les clips de K-33) : préfill −5 % **ou** pic `phys_footprint` −10 % au moins (A/B/B/A, mini-3b-8bit `.mlx`, `--cache-limit-mb 2048`, A = commit parent) ; C-long exact consigné (valeur de départ K-34 : `phases_ms.prefill` 11 115 ms, pic 9 811 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-mlx-c_long` l. 353) ; sortie bit-exacte (`out_sha256`).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-40]
+      depends_on_status: verified
   - id: K-54
     subject: "[voxtral K-54] Dernier logit seulement au préfill STT"
     task:
       goal: "Dernier logit seulement au préfill STT"
-      gate: "préfill Mini −5 % **ou** pic −128 Mio au moins à 5 min d'audio (A/B/B/A) ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %."
+      gate: "mini-3b-8bit `.mlx`, C-moyen EN et C-long exact (à la place de « 5 min », clips existants) : `phases_ms.prefill` −5 % **ou** `peak_mlx_mb` −128 Mio au moins (A/B/B/A, A = commit parent ; valeur de départ K-34 : 2 117 / 11 115 ms, 6 403 / 7 625 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345 et 353) ; le préfill sature le GPU (99 %, `prefill-mini-3b-8bit` l. 524) : le gain attendu vient du calcul retiré ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-54.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : préfill Mini −5 % **ou** pic −128 Mio au moins à 5 min d'audio (A/B/B/A) ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %.
+        Porte (recalée le 2026-10-06, #590) : mini-3b-8bit `.mlx`, C-moyen EN et C-long exact (à la place de « 5 min », clips existants) : `phases_ms.prefill` −5 % **ou** `peak_mlx_mb` −128 Mio au moins (A/B/B/A, A = commit parent ; valeur de départ K-34 : 2 117 / 11 115 ms, 6 403 / 7 625 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345 et 353) ; le préfill sature le GPU (99 %, `prefill-mini-3b-8bit` l. 524) : le gain attendu vient du calcul retiré ; logits du dernier jeton : L2 relative ≤ 1e-5 (fp32) / ≤ 1e-3 (bf16) ; greedy identique 100 %.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-40]
+      depends_on_status: verified
   - id: K-55
     subject: "[voxtral K-55] KV 8 bits en lean STT"
     task:
       goal: "KV 8 bits en lean STT"
-      gate: "Small 4 bits, 20 min : pic −1 Go au moins ; WER ≤ +0,3 pt ; décodage au pire −5 % (sinon réservé au lean)."
+      gate: "small-4bit `.mlx`, C-long exact (9 min 14 s) et 20 min (C-long exact × 2), `--cache-limit-mb 2048` : pic `phys_footprint` −1 Go au moins (valeur de départ K-34 sur C-long : 19 593 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-small-4bit-mlx-c_long` l. 449) ; WER par langue ≤ réf + 0,3 pt (SEGWER EN 1,97 / FR 1,48 %) ; `step_ms_p50` au pire +5 % (réf. 84,19 ms), sinon réservé au profil lean."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-55.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : Small 4 bits, 20 min : pic −1 Go au moins ; WER ≤ +0,3 pt ; décodage au pire −5 % (sinon réservé au lean).
+        Porte (recalée le 2026-10-06, #590) : small-4bit `.mlx`, C-long exact (9 min 14 s) et 20 min (C-long exact × 2), `--cache-limit-mb 2048` : pic `phys_footprint` −1 Go au moins (valeur de départ K-34 sur C-long : 19 593 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-small-4bit-mlx-c_long` l. 449) ; WER par langue ≤ réf + 0,3 pt (SEGWER EN 1,97 / FR 1,48 %) ; `step_ms_p50` au pire +5 % (réf. 84,19 ms), sinon réservé au profil lean.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-3, K-2, K-40]
+      depends_on_status: verified
   - id: K-56
     subject: "[voxtral K-56] Encodeur STT par lots bornés"
     task:
       goal: "Encodeur STT par lots bornés"
-      gate: "30 min : pic MLX de l'encodage −30 % au moins ; temps d'encodage ±5 % ; embeddings bit-exacts attendus, à défaut L2 relative ≤ 1e-5 et greedy identique."
+      gate: "30 min (C-long exact × 3) : pic MLX de l'encodage −30 % au moins (mini-3b-8bit `.mlx` ; phase `encode` livrée par K-89 ; valeur de départ K-34 sur C-long : `peak_mlx_mb_by_phase.audio` 4 840 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 353) ; temps d'encodage ±5 % ; embeddings bit-exacts, à défaut L2 relative ≤ 1e-5 et greedy identique."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-56.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 30 min : pic MLX de l'encodage −30 % au moins ; temps d'encodage ±5 % ; embeddings bit-exacts attendus, à défaut L2 relative ≤ 1e-5 et greedy identique.
+        Porte (recalée le 2026-10-06, #590) : 30 min (C-long exact × 3) : pic MLX de l'encodage −30 % au moins (mini-3b-8bit `.mlx` ; phase `encode` livrée par K-89 ; valeur de départ K-34 sur C-long : `peak_mlx_mb_by_phase.audio` 4 840 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 353) ; temps d'encodage ±5 % ; embeddings bit-exacts, à défaut L2 relative ≤ 1e-5 et greedy identique.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-40]
+      depends_on: [K-40, K-89]
+      depends_on_status: verified
   - id: K-57
     subject: "[voxtral K-57] Surcoût hôte du FM TTS"
     task:
       goal: "Surcoût hôte du FM TTS"
-      gate: "fr/s +5 % au moins en 4 bits (A/B/B/A) ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait."
+      gate: "fr/s + 5 % au moins en 4 bits (`step_ms_p50`, A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), A après K-44 ; valeurs de départ K-35 avant K-39 : 24,80 à 24,95 ms court, 25,15 moyen, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-57.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : fr/s +5 % au moins en 4 bits (A/B/B/A) ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait.
+        Porte (recalée le 2026-10-10, #590) : fr/s + 5 % au moins en 4 bits (`step_ms_p50`, A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage), A après K-44 ; valeurs de départ K-35 avant K-39 : 24,80 à 24,95 ms court, 25,15 moyen, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») ; codes acoustiques forcés par l'enseignant identiques ≥ 99,9 % ; sinon retrait.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-44]
   - id: K-58
     subject: "[voxtral K-58] Codec TTS bf16 + invariants"
     severity: low
-    notes: "⛔ oui — ASK-13 (écoute A/B) pour garder le bf16"
+    notes: "ASK-13 = A (2026-10-06) : écoute à l'aveugle par Vincent dans la porte"
     task:
-      needs_decision: [ASK-13]
       goal: "Codec TTS bf16 + invariants"
-      gate: "décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39)."
+      gate: "`phases_ms.codec` − 20 % au moins **ou** `peak_mlx_mb_by_phase.codec` − 30 % au moins sur le texte long (tts-4b-6bit `neutral_female` batch ; valeurs de départ K-35 avant K-41 : 2 216 ms et 22 017 Mo, `BENCHMARKS.md` §« 2026-10-09 — K-35 » ; A après K-41), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-58.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-13 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-13 = A (2026-10-06) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : décodage −20 % au moins (A/B/B/A) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** A/B à l'aveugle non inférieur (ASK-13) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39).
+        Porte (recalée le 2026-10-10, #590) : `phases_ms.codec` − 20 % au moins **ou** `peak_mlx_mb_by_phase.codec` − 30 % au moins sur le texte long (tts-4b-6bit `neutral_female` batch ; valeurs de départ K-35 avant K-41 : 2 216 ms et 22 017 Mo, `BENCHMARKS.md` §« 2026-10-09 — K-35 » ; A après K-41), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; SNR ≥ 40 dB contre fp32 **et** couverture ASR identique **et** écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut) ; test : sortie de chaque étage dans le dtype des poids ; sinon ne garder que les invariants (P-39).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-41]
   - id: K-59
@@ -956,15 +1006,16 @@ tasks:
     severity: low
     task:
       goal: "Matérialiser les poids résidents par voie, neutraliser les modules factices"
-      gate: "1er préfill = préfill à chaud ±5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ±5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %."
+      gate: "1er préfill = préfill à chaud ± 5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ± 5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie ; K-35 ne mesure que des passes chaudes, TTFT 6 bits court 252 ms prédéfinie : la fiche mesure la 1re synthèse dans son A) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-59.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 1er préfill = préfill à chaud ±5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ±5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %.
+        Porte (recalée le 2026-10-10, #590) : 1er préfill = préfill à chaud ± 5 % (A/A sur 2 requêtes) sur STT et Realtime ; `activeMemory` après chargement = poids résidents ± 5 % ; en `.auto`, tour audio MLX non matérialisée ; aucun tenseur aléatoire dans `parameters()` du wrapper (test) ; TTS : temps jusqu'au 1er frame préfixe inclus de la 1re synthèse ≤ 1,1 × celui d'une 2e avec une autre voix (clonée et prédéfinie ; K-35 ne mesure que des passes chaudes, TTFT 6 bits court 252 ms prédéfinie : la fiche mesure la 1re synthèse dans son A) ; Realtime `.encoderOnly` : `activeMemory` ≤ encodeur + 10 %.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-34, K-35, K-36]
   - id: K-60
@@ -972,24 +1023,25 @@ tasks:
     severity: low
     task:
       goal: "Encodeurs dé-quantifiés en fast (STT, Realtime)"
-      gate: "STT : encodage −5 % au moins, pic ≤ +0,8 Go, WER ≤ +0,1 pt ; Realtime : encodage −5 % au moins sur C-moyen (A/B/B/A), WER identique ; sinon retrait."
+      gate: "STT (mini-3b-8bit `.mlx`, C-moyen EN) : `phases_ms.encode` (K-89) −5 % au moins (valeur de départ K-34 : `ttft_ms` − audio − prefill ≈ 3 866 − 14 − 2 117 = 1 735 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345), pic ≤ +0,8 Go (réf. 9 587 Mo), WER ≤ +0,1 pt (0,79 / 1,97) ; Realtime (realtime-4b-4bit, C-moyen EN) : `phases_ms.encode` −5 % au moins (réf. avant K-38 : 2 860 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262 ; C-long exclu, dispersion +26 %), WER identique (1,05 / 1,97) ; A/B/B/A, A = commit parent ; sinon retrait."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-60.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : STT : encodage −5 % au moins, pic ≤ +0,8 Go, WER ≤ +0,1 pt ; Realtime : encodage −5 % au moins sur C-moyen (A/B/B/A), WER identique ; sinon retrait.
+        Porte (recalée le 2026-10-06, #590) : STT (mini-3b-8bit `.mlx`, C-moyen EN) : `phases_ms.encode` (K-89) −5 % au moins (valeur de départ K-34 : `ttft_ms` − audio − prefill ≈ 3 866 − 14 − 2 117 = 1 735 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345), pic ≤ +0,8 Go (réf. 9 587 Mo), WER ≤ +0,1 pt (0,79 / 1,97) ; Realtime (realtime-4b-4bit, C-moyen EN) : `phases_ms.encode` −5 % au moins (réf. avant K-38 : 2 860 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262 ; C-long exclu, dispersion +26 %), WER identique (1,05 / 1,97) ; A/B/B/A, A = commit parent ; sinon retrait.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-40, K-38, K-13]
+      depends_on: [K-40, K-38, K-13, K-89]
+      depends_on_status: verified
   - id: K-61
     subject: "[voxtral K-61] Pénalité de répétition décidée par le WER"
-    notes: "⛔ oui — ASK-9 (changer un défaut public quand la porte l'emporte)"
     task:
-      needs_decision: [ASK-9]
       goal: "Pénalité de répétition décidée par le WER"
-      gate: "valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue."
+      gate: "WER (`voxtral eval stt --language-mode auto`, mini-3b-8bit `.mlx` ; C-court, C-moyen EN/FR, 20 s EN/FR, ES) à pénalité 1,0 contre 1,2 : la valeur au WER le plus bas est retenue si l'écart ≥ 0,3 pt (réf. EVALA à 1,2 : 9,09 / 0,79 / 1,97 %, `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification » l. 579), sinon statu quo ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins (réf. 21,32 ms, A = commit parent), sinon non retenue ; changement du défaut public : décision de Vincent (ASK-9, « fiche par fiche »)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -997,214 +1049,192 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-9 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : valeur au WER le plus bas retenue si l'écart ≥ 0,3 pt (sinon statu quo) ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins, sinon non retenue.
+        Porte (recalée le 2026-10-06, #590) : WER (`voxtral eval stt --language-mode auto`, mini-3b-8bit `.mlx` ; C-court, C-moyen EN/FR, 20 s EN/FR, ES) à pénalité 1,0 contre 1,2 : la valeur au WER le plus bas est retenue si l'écart ≥ 0,3 pt (réf. EVALA à 1,2 : 9,09 / 0,79 / 1,97 %, `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification » l. 579), sinon statu quo ; version vectorisée : logits bit-exacts et `step_ms_p50` −5 % au moins (réf. 21,32 ms, A = commit parent), sinon non retenue ; changement du défaut public : décision de Vincent (ASK-9, « fiche par fiche »).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-33, K-45]
+      depends_on_status: verified
   - id: K-62
     subject: "[voxtral K-62] Tranche de préfill STT exposée et balayée"
     severity: low
     task:
       goal: "Tranche de préfill STT exposée et balayée"
-      gate: "A/B/B/A 256/512/1 024/2 048 à 5 et 30 min ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; sortie bit-exacte après factorisation des deux boucles."
+      gate: "A/B/B/A 256 / 512 / 1 024 / 2 048 sur C-moyen EN et C-long exact (mini-3b-8bit `.mlx` ; valeur de départ K-34 : préfill 2 117 / 11 115 ms, pic 9 587 / 9 811 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345 et 353) ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; le préfill sature le GPU (99 %) : un écart de vitesse < 5 % est du bruit et seule la mémoire départage ; sortie bit-exacte après factorisation des deux boucles."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-62.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : A/B/B/A 256/512/1 024/2 048 à 5 et 30 min ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; sortie bit-exacte après factorisation des deux boucles.
+        Porte (recalée le 2026-10-06, #590) : A/B/B/A 256 / 512 / 1 024 / 2 048 sur C-moyen EN et C-long exact (mini-3b-8bit `.mlx` ; valeur de départ K-34 : préfill 2 117 / 11 115 ms, pic 9 587 / 9 811 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345 et 353) ; retenir la plus rapide dont le pic ≤ pic(512) + 5 % ; le préfill sature le GPU (99 %) : un écart de vitesse < 5 % est du bruit et seule la mémoire départage ; sortie bit-exacte après factorisation des deux boucles.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-54, K-53]
+      depends_on_status: verified
   - id: K-63
     subject: "[voxtral K-63] Libérer la tour audio après encodage (lean STT)"
     severity: low
     task:
       goal: "Libérer la tour audio après encodage (lean STT)"
-      gate: "pic de décodage −0,5 Go au moins (Mini 8 bits) ; temps par requête ≤ +5 % ; sortie identique."
+      gate: "profil lean `.mlx`, mini-3b-8bit, C-moyen EN : `peak_mlx_mb_by_phase.decode` −0,5 Go au moins (valeur de départ K-34 : 6 280 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) ; `total_ms` ≤ +5 % (réf. 12 865 ms) ; `out_sha256` identique ; A/B/B/A, A = commit parent."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-63.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : pic de décodage −0,5 Go au moins (Mini 8 bits) ; temps par requête ≤ +5 % ; sortie identique.
+        Porte (recalée le 2026-10-06, #590) : profil lean `.mlx`, mini-3b-8bit, C-moyen EN : `peak_mlx_mb_by_phase.decode` −0,5 Go au moins (valeur de départ K-34 : 6 280 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345) ; `total_ms` ≤ +5 % (réf. 12 865 ms) ; `out_sha256` identique ; A/B/B/A, A = commit parent.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-59]
+      depends_on_status: verified
   - id: K-64
     subject: "[voxtral K-64] enroll-lean (mémoire, résidence) et profils d'enrôlement mesurés"
     severity: low
     task:
       goal: "enroll-lean (mémoire, résidence) et profils d'enrôlement mesurés"
-      gate: "scénario synthèse → enrôlement : `enroll-lean` −40 % de pic au moins contre `enroll-fast` (si le volet résidence est gardé), temps/époque ±5 % (A/B/B/A), codes identiques à graine fixe ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table."
+      gate: "scénario synthèse → enrôlement (`bench enroll --scenario after_synthesis --epochs 200 --seed 7`) : `enroll-lean` pic ≤ 3 658 Mo en 6 bits (−40 % contre 6 096,5) et ≤ 6 939 Mo en bf16 (−40 % contre 11 564,3) ; le scénario `cli` (2 633 / 2 601 Mo) montre la cible atteignable ; `epoch_ms_p50` ±5 % (réf. 61,66 / 61,46 ms), A/B/B/A ; voix identique à graine fixe (`out_sha256` `f18162fc…`) ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table ; références : `BENCHMARKS.md` §« 2026-10-05 — K-37 : séries refaites (A4-*) », `A4-6bit-cli` (l. 640), `A4-mlx-cli` (l. 644), `A4-mlx-after_synthesis` (l. 648), `A4-6bit-after_synthesis` (l. 652) ; `docs/knowledge/decisions/enroll-residency.md`."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-64.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : scénario synthèse → enrôlement : `enroll-lean` −40 % de pic au moins contre `enroll-fast` (si le volet résidence est gardé), temps/époque ±5 % (A/B/B/A), codes identiques à graine fixe ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table.
+        Porte (recalée le 2026-10-06, #590) : scénario synthèse → enrôlement (`bench enroll --scenario after_synthesis --epochs 200 --seed 7`) : `enroll-lean` pic ≤ 3 658 Mo en 6 bits (−40 % contre 6 096,5) et ≤ 6 939 Mo en bf16 (−40 % contre 11 564,3) ; le scénario `cli` (2 633 / 2 601 Mo) montre la cible atteignable ; `epoch_ms_p50` ±5 % (réf. 61,66 / 61,46 ms), A/B/B/A ; voix identique à graine fixe (`out_sha256` `f18162fc…`) ou perte finale ±1 % ; A-10 retiré si < 5 % ; table des deux profils (temps, pic, similarité ECAPA) consignée ; CLI, démo et bibliothèque lisent la même table ; références : `BENCHMARKS.md` §« 2026-10-05 — K-37 : séries refaites (A4-*) », `A4-6bit-cli` (l. 640), `A4-mlx-cli` (l. 644), `A4-mlx-after_synthesis` (l. 648), `A4-6bit-after_synthesis` (l. 652) ; `docs/knowledge/decisions/enroll-residency.md`.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-37, K-52]
+      depends_on: [K-37]
+      depends_on_status: verified
   - id: K-65
     subject: "[voxtral K-65] RoPE fusionnée dans l'encodeur Realtime"
     severity: low
     task:
       goal: "RoPE fusionnée dans l'encodeur Realtime"
-      gate: "embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER identique sur C-moyen ; encodage −5 % au moins (A/B/B/A)."
+      gate: "embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER C-moyen EN/FR identique (1,05 / 1,97 %, `EVAL-realtime-4b-4bit` l. 289) ; `phases_ms.encode` C-moyen EN −5 % au moins (A/B/B/A, A = commit parent après K-38 ; avant K-38 : 2 860 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262 ; C-long exclu, dispersion +26 %) ; sinon retrait."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-65.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER identique sur C-moyen ; encodage −5 % au moins (A/B/B/A).
+        Porte (recalée le 2026-10-06, #590) : embeddings L2 relative < 1e-2 contre l'actuel au même dtype ; WER C-moyen EN/FR identique (1,05 / 1,97 %, `EVAL-realtime-4b-4bit` l. 289) ; `phases_ms.encode` C-moyen EN −5 % au moins (A/B/B/A, A = commit parent après K-38 ; avant K-38 : 2 860 ms, `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262 ; C-long exclu, dispersion +26 %) ; sinon retrait.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-13, K-36]
+      depends_on: [K-13, K-36, K-38]
+      depends_on_status: verified
   - id: K-66
     subject: "[voxtral K-66] Une passe LLM avant le premier frame TTS"
     severity: low
     task:
       goal: "Une passe LLM avant le premier frame TTS"
-      gate: "TTFT −5 % au moins (A/B/B/A) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait."
+      gate: "TTFT − 5 % au moins (tts-4b-6bit et tts-4b-4bit court `neutral_female` batch, graines 1 à 3 ; valeurs de départ K-35 : 252 à 258 et 232 à 236 ms, TTFT de référence sur ces cellules, `BENCHMARKS.md` §« 2026-10-09 — K-35 » ; les cellules clonées courtes ont un TTFT hors référence, ⁴), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-66.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : TTFT −5 % au moins (A/B/B/A) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait.
-      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-35]
-  - id: K-67
-    subject: "[voxtral K-67] Coupes TTS vectorisées"
-    severity: low
-    task:
-      goal: "Coupes TTS vectorisées"
-      gate: "indices de coupe identiques sur `TrimSilenceTests`, `TrimLeadingCarrierTests`, `TTSWarmUpCarrierTrimTests` ; phase « Audio Post-processing » ÷ 5 au moins."
-      instructions: |
-        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
-          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
-        Lire docs/audit/2026-09-27/fiches/K-67.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
-        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
-        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : indices de coupe identiques sur `TrimSilenceTests`, `TrimLeadingCarrierTests`, `TTSWarmUpCarrierTrimTests` ; phase « Audio Post-processing » ÷ 5 au moins.
+        Porte (recalée le 2026-10-10, #590) : TTFT − 5 % au moins (tts-4b-6bit et tts-4b-4bit court `neutral_female` batch, graines 1 à 3 ; valeurs de départ K-35 : 252 à 258 et 232 à 236 ms, TTFT de référence sur ces cellules, `BENCHMARKS.md` §« 2026-10-09 — K-35 » ; les cellules clonées courtes ont un TTFT hors référence, ⁴), A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; 20 premiers codes sémantiques identiques à graine fixe ; sinon retrait.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-35]
   - id: K-68
     subject: "[voxtral K-68] Réduire le coût du porteur de warm-up (décision mesurée)"
     severity: low
-    notes: "⛔ oui — ASK-10 (compromis qualité / latence)"
+    notes: "ASK-10 = A (2026-10-07), ASK-13 = A : la porte décide, 10 prises écoutées"
     task:
-      needs_decision: [ASK-10]
       goal: "Réduire le coût du porteur de warm-up (décision mesurée)"
-      gate: "TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée."
+      gate: "ASK-10 = A (2026-10-07) : la porte décide — TTFA streaming des voix clonées avec porteur (`--warm-up`) − 30 % au moins (A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; K-35 ne mesure pas le streaming avec porteur : la fiche mesure sa référence dans son A ; TTFA streaming cloné sans porteur, K-35 : 247 à 256 ms en 6 bits court, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») avec fuites du porteur ≤ la référence (0/10) sur 10 prises, les 10 prises écoutées à l'aveugle par Vincent (ASK-13 = A : paires anonymisées et grille préparées par la fiche, `blocked` jusqu'à l'écoute) ; en batch, frames du porteur / frames totales rapportées (K-35 : 7 / 931, 0,75 %, ligne consommateur, `BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; sinon porteur inchangé et mesure consignée."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-68.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-10 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-10 = A (2026-10-07), ASK-13 = A (2026-10-06) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : TTFA streaming des voix clonées −30 % au moins avec fuites du porteur ≤ la référence (0/10) sur 10 prises ; frames du porteur / frames totales rapportées en batch ; décision ASK-10 consignée.
+        Porte (recalée le 2026-10-10, #590) : ASK-10 = A (2026-10-07) : la porte décide — TTFA streaming des voix clonées avec porteur (`--warm-up`) − 30 % au moins (A/B/B/A, A = commit parent, un processus par passe, `--warmup 1 --cooldown 120` (texte long sans amorçage) ; K-35 ne mesure pas le streaming avec porteur : la fiche mesure sa référence dans son A ; TTFA streaming cloné sans porteur, K-35 : 247 à 256 ms en 6 bits court, `BENCHMARKS.md` §« 2026-10-09 — K-35 ») avec fuites du porteur ≤ la référence (0/10) sur 10 prises, les 10 prises écoutées à l'aveugle par Vincent (ASK-13 = A : paires anonymisées et grille préparées par la fiche, `blocked` jusqu'à l'écoute) ; en batch, frames du porteur / frames totales rapportées (K-35 : 7 / 931, 0,75 %, ligne consommateur, `BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; sinon porteur inchangé et mesure consignée.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-12, K-35]
-  - id: K-69
-    subject: "[voxtral K-69] Extraction audio : mel une passe, décodage par blocs"
-    severity: low
-    task:
-      goal: "Extraction audio : mel une passe, décodage par blocs"
-      gate: "phase mel −5 % au moins, features bit-exactes ; pic mémoire de l'extraction −50 % au moins (30 min, stéréo 48 kHz), échantillons : écart max ≤ 1e-6 hors des 20 dernières ms, mel ≤ 1e-5, greedy identique ; temps ±5 %."
-      instructions: |
-        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
-          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
-        Lire docs/audit/2026-09-27/fiches/K-69.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
-        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
-        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : phase mel −5 % au moins, features bit-exactes ; pic mémoire de l'extraction −50 % au moins (30 min, stéréo 48 kHz), échantillons : écart max ≤ 1e-6 hors des 20 dernières ms, mel ≤ 1e-5, greedy identique ; temps ±5 %.
-      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-34]
   - id: K-70
     subject: "[voxtral K-70] Top-p exact en chat"
     severity: low
     task:
       goal: "Top-p exact en chat"
-      gate: "chat tok/s ≥ actuel −5 % ; test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3)."
+      gate: "test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3), rouge avec le filtre actuel (un top-k 1 000, `nucleusMask`, `VoxtralModeling.swift:1311-1330`) ; chat mini-3b-8bit `.mlx` à `temperature > 0` : tok/s ≥ actuel −5 % (A/B/B/A, A = commit parent ; en greedy, référence 45,8 à 46,3 tok/s, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `CHAT-mlx` l. 464)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-70.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : chat tok/s ≥ actuel −5 % ; test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3).
+        Porte (recalée le 2026-10-06, #590) : test de distribution sur logits synthétiques (masse retenue = `topP` ± 1e-3), rouge avec le filtre actuel (un top-k 1 000, `nucleusMask`, `VoxtralModeling.swift:1311-1330`) ; chat mini-3b-8bit `.mlx` à `temperature > 0` : tok/s ≥ actuel −5 % (A/B/B/A, A = commit parent ; en greedy, référence 45,8 à 46,3 tok/s, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `CHAT-mlx` l. 464).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-45]
-  - id: K-71
-    subject: "[voxtral K-71] Compile ciblé du codec (coupe-circuit)"
-    severity: low
-    task:
-      goal: "Compile ciblé du codec (coupe-circuit)"
-      gate: "décodage −5 % au moins, bit-exact, 0 blocage sur 20 exécutions « enrôlement + synthèse » (test de K-11) ; sinon retrait."
-      instructions: |
-        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
-          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
-        Lire docs/audit/2026-09-27/fiches/K-71.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
-        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
-        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : décodage −5 % au moins, bit-exact, 0 blocage sur 20 exécutions « enrôlement + synthèse » (test de K-11) ; sinon retrait.
-      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-41, K-43, K-11]
+      depends_on: [K-34]
+      depends_on_status: verified
   - id: K-72
     subject: "[voxtral K-72] Préfill STT en flux par fenêtre"
     severity: low
     task:
       goal: "Préfill STT en flux par fenêtre"
-      gate: "TTFT −10 % au moins à 10 min (A/B/B/A) ; greedy identique."
+      gate: "`.auto` seulement : mini-3b-8bit `.auto` C-long exact, `ttft_ms` 22 971 → ≤ 20 674 ms (−10 %, A/B/B/A ; encodage Core ML 11 626 ms puis préfill 11 303 ms en série aujourd'hui, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-auto-c_long` l. 369) ; greedy identique (`out_sha256`) ; fiche abandonnée sans code si K-42 retire Core ML du défaut."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-72.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : TTFT −10 % au moins à 10 min (A/B/B/A) ; greedy identique.
+        Porte (recalée le 2026-10-06, #590) : `.auto` seulement : mini-3b-8bit `.auto` C-long exact, `ttft_ms` 22 971 → ≤ 20 674 ms (−10 %, A/B/B/A ; encodage Core ML 11 626 ms puis préfill 11 303 ms en série aujourd'hui, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `BASE-mini-3b-8bit-auto-c_long` l. 369) ; greedy identique (`out_sha256`) ; fiche abandonnée sans code si K-42 retire Core ML du défaut.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-42, K-56]
+      depends_on: [K-42]
+      depends_on_status: verified
   - id: K-73
     subject: "[voxtral K-73] R et D : pas spéculatifs de remplissage (Realtime)"
     severity: low
     task:
       goal: "R&D : pas spéculatifs de remplissage (Realtime)"
-      gate: "étape 1 : part de remplissage (`pad_fraction` de K-36) ≥ 50 % sur C-moyen, sinon abandon documenté ; étape 2 : passes de décodage −25 % au moins et texte identique sur C-court, C-moyen et C-long."
+      gate: "étape 1, tenue par K-36 : part de `[STREAMING_PAD]` seul 0,601 (C-moyen EN) / 0,520 (C-moyen FR) ≥ 50 % (`pad_fraction` 0,76 / 0,69 ; `BENCHMARKS.md` §« 2026-10-05 — K-36 », bloc `[STREAMING_PAD] share` l. 319-327), à revérifier après K-84 (l'invite change la part de remplissage) : si elle tombe sous 50 % sur C-moyen EN ou FR, abandon documenté ; étape 2 : passes de décodage −25 % au moins (réf. 1 835 / 1 645 pas) et `out_sha256` identique sur C-court, C-moyen EN/FR et C-long exact."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-73.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : étape 1 : part de remplissage (`pad_fraction` de K-36) ≥ 50 % sur C-moyen, sinon abandon documenté ; étape 2 : passes de décodage −25 % au moins et texte identique sur C-court, C-moyen et C-long.
+        Porte (recalée le 2026-10-06, #590) : étape 1, tenue par K-36 : part de `[STREAMING_PAD]` seul 0,601 (C-moyen EN) / 0,520 (C-moyen FR) ≥ 50 % (`pad_fraction` 0,76 / 0,69 ; `BENCHMARKS.md` §« 2026-10-05 — K-36 », bloc `[STREAMING_PAD] share` l. 319-327), à revérifier après K-84 (l'invite change la part de remplissage) : si elle tombe sous 50 % sur C-moyen EN ou FR, abandon documenté ; étape 2 : passes de décodage −25 % au moins (réf. 1 835 / 1 645 pas) et `out_sha256` identique sur C-court, C-moyen EN/FR et C-long exact.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-47, K-36]
+      depends_on: [K-47, K-36, K-84]
+      depends_on_status: verified
   - id: K-74
     subject: "[voxtral K-74] Un seul LLM typé, chargeur amont"
     severity: low
     notes: "ASK-23 = A (2026-10-02)"
     task:
       goal: "Un seul LLM typé, chargeur amont"
-      gate: "parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`)."
+      gate: "parité greedy 32/32 jetons sur 6 audios × 3 quantisations (mini-3b-4bit, mini-3b-8bit, mini-3b) ; `load_ms` ≤ baseline (`.mlx`, C-moyen EN : 117,3 / 117,8 / 97,7 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 377, 345, 409 ; A/B/B/A, A = commit parent) ; 0 `fatalError` de dispatch (`grep`) ; base 3.0 (`loadQuantizedVoxtral` interne, `VoxtralStandardLoader.swift:1164` ; LlamaModelWrapper supprimé)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
@@ -1212,119 +1242,134 @@ tasks:
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Avant de commencer : lire la réponse à ASK-23 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
         Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : parité greedy 32/32 jetons sur 6 audios × 3 quantisations ; temps de chargement ≤ baseline ; 0 `fatalError` de dispatch (`grep`).
+        Porte (recalée le 2026-10-06, #590) : parité greedy 32/32 jetons sur 6 audios × 3 quantisations (mini-3b-4bit, mini-3b-8bit, mini-3b) ; `load_ms` ≤ baseline (`.mlx`, C-moyen EN : 117,3 / 117,8 / 97,7 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 377, 345, 409 ; A/B/B/A, A = commit parent) ; 0 `fatalError` de dispatch (`grep`) ; base 3.0 (`loadQuantizedVoxtral` interne, `VoxtralStandardLoader.swift:1164` ; LlamaModelWrapper supprimé).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-7, K-8, K-30, K-34]
+      depends_on_status: verified
   - id: K-75
     subject: "[voxtral K-75] Conformance LanguageModel: retrait ou TokenIterator"
     severity: low
-    notes: "⛔ oui — ASK-24 (retrait = cassant théorique ; migration = L)"
+    notes: "ASK-24 = A (2026-10-06) : retrait de la conformance"
     task:
-      needs_decision: [ASK-24]
       goal: "Conformance LanguageModel: retrait ou TokenIterator"
-      gate: "(A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton."
+      gate: "ASK-24 = A (2026-10-06) : conformances `LanguageModel` et `KVCacheDimensionProvider` retirées des deux classes de modèle STT (`grep -rn 'LanguageModel\\|KVCacheDimensionProvider' Sources/VoxtralCore` : 0 conformance) ; build vert contre mlx-swift-lm `main` résolu (`Package.resolved`) et contre le tag 3.31.4 ; suite de tests verte ; `bench stt` mini-3b-8bit `.mlx` C-court : `out_sha256` identique avant / après ; entrée CHANGELOG (retrait, cassant théorique, 0 consommateur connu) ; si une 3.0.0 est déjà taguée : `blocked` (un retrait passe alors par une dépréciation publiée, `CLAUDE.md` §API publique) ; option B (génération par `TokenIterator`) abandonnée."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-75.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-24 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-24 = A (2026-10-06) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : (A) build vert contre mlx-swift-lm `main` courant et contre le tag 3.31.4, tests verts ; (B) greedy identique 100 % au code maison corrigé, tok/s ≥ boucle maison, build vert contre `main` et le prochain tag, prompt de 2 000 positions : `cache.offset` = 1 999 et `.tokens` d'un jeton.
+        Porte (complétée le 2026-10-07, #590) : ASK-24 = A (2026-10-06) : conformances `LanguageModel` et `KVCacheDimensionProvider` retirées des deux classes de modèle STT (`grep -rn 'LanguageModel\|KVCacheDimensionProvider' Sources/VoxtralCore` : 0 conformance) ; build vert contre mlx-swift-lm `main` résolu (`Package.resolved`) et contre le tag 3.31.4 ; suite de tests verte ; `bench stt` mini-3b-8bit `.mlx` C-court : `out_sha256` identique avant / après ; entrée CHANGELOG (retrait, cassant théorique, 0 consommateur connu) ; si une 3.0.0 est déjà taguée : `blocked` (un retrait passe alors par une dépréciation publiée, `CLAUDE.md` §API publique) ; option B (génération par `TokenIterator`) abandonnée.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-45, K-54, K-55]
+      depends_on: [K-22, K-31]
+      depends_on_status: verified
   - id: K-76
     subject: "[voxtral K-76] Types de profils de référence par pipeline + CLI references/--reference"
-    notes: "⛔ oui — ASK-4 (périmètre de la matrice : modèles, largeur 6 bits TTS)"
+    notes: "ASK-4 = A (2026-10-06) : matrice complète"
     task:
-      needs_decision: [ASK-4]
       goal: "Types de profils de référence par pipeline + CLI references/--reference"
-      gate: "`$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test)."
+      gate: "ASK-4 = A (2026-10-06, matrice complète) : `$CLI references` liste 6 profils STT Mini, 6 STT Small (8 et 16 bits « non mesurés » sous 48 Go), 4 Realtime (4/16 × fast/lean ; `8bit-*` et `6bit-*` ajoutés par K-78 avec les packs voxmlx lus par K-91, ASK-20 = A), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard, ASK-19 = A ; `8bit-*` ajoutés par K-79 avec le pack de K-90) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; chaque profil Small pose `cacheLimitBytes` = 2 048 Mo (`docs/knowledge/decisions/small-32gb.md` : 37 313 Mo de pic sans plafond, 19 013 avec, `SMALL32` l. 565 ; défaut ≤ 32 Go de K-52, ASK-33) ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-76.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-4 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-4 = A (2026-10-06), ASK-19 = A (2026-10-07), ASK-20 = A (2026-10-06), ASK-33 = A désactivable (2026-10-06) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : `$CLI references` liste 6 profils STT Mini, 6 STT Small, 4 Realtime (4/16 × fast/lean), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test).
+        Porte (complétée le 2026-10-07, #590) : ASK-4 = A (2026-10-06, matrice complète) : `$CLI references` liste 6 profils STT Mini, 6 STT Small (8 et 16 bits « non mesurés » sous 48 Go), 4 Realtime (4/16 × fast/lean ; `8bit-*` et `6bit-*` ajoutés par K-78 avec les packs voxmlx lus par K-91, ASK-20 = A), 6 TTS (4/6/16 × fast/lean, 6 bits déclaré hors standard, ASK-19 = A ; `8bit-*` ajoutés par K-79 avec le pack de K-90) et 2 enrôlement, avec pour chacun `weights: <repo> (<octets>)` ; chaque profil Small pose `cacheLimitBytes` = 2 048 Mo (`docs/knowledge/decisions/small-32gb.md` : 37 313 Mo de pic sans plafond, 19 013 avec, `SMALL32` l. 565 ; défaut ≤ 32 Go de K-52, ASK-33) ; test : appliquer un profil produit exactement la configuration explicite équivalente (égalité des `Configuration`) ; `$CLI transcribe C-court EN --reference 8bit-fast` = même sortie greedy que les options explicites ; aucun profil v0 n'utilise un préréglage à fenêtre KV ; `VoxtralTTSSynthesisManager` charge le modèle demandé (test).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-2, K-5, K-10, K-24]
+      depends_on_status: verified
   - id: K-77
     subject: "[voxtral K-77] Mesurer la matrice de profils STT et écrire la décision"
     task:
       goal: "Mesurer la matrice de profils STT et écrire la décision"
-      gate: "6 profils × 2 modèles mesurés (A/A ≤ 3 %, une ligne `BENCHMARKS.md` chacun) avec WER ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, valeur ASK-7) ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md`."
+      gate: "ASK-4 = A : 6 profils × 2 modèles mesurés (A/A ≤ 3 % selon le protocole de `ASK.md` §Dérogations du 2026-10-05, une ligne `BENCHMARKS.md` chacun) avec WER ; une cellule de K-34 sert de ligne de profil si la configuration est identique (pas de remesure) ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, ASK-7 ; réf. 8 min : 37 313 Mo sans plafond, 19 013 Mo avec 2 048 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `SMALL32` l. 565-567 ; plafond par défaut ≤ 32 Go de K-52, ASK-33) ; Small 8 et 16 bits mesurés sur la machine de référence (96 Go), notés « non mesurés » sous 48 Go ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md` ; `docs/Profiles.md` provisoire remplacé."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-77.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-4 = A (2026-10-06), ASK-7 = A (2026-10-01), ASK-33 = A désactivable (2026-10-06) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : 6 profils × 2 modèles mesurés (A/A ≤ 3 %, une ligne `BENCHMARKS.md` chacun) avec WER ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, valeur ASK-7) ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md`.
+        Porte (complétée le 2026-10-07, #590) : ASK-4 = A : 6 profils × 2 modèles mesurés (A/A ≤ 3 % selon le protocole de `ASK.md` §Dérogations du 2026-10-05, une ligne `BENCHMARKS.md` chacun) avec WER ; une cellule de K-34 sert de ligne de profil si la configuration est identique (pas de remesure) ; `16bit-*` ≥ WER de référence ; chaque profil `lean` a un pic ≤ son budget (Small 4 bits lean à 10 min d'audio ≤ 24 Go, ASK-7 ; réf. 8 min : 37 313 Mo sans plafond, 19 013 Mo avec 2 048 Mo, `BENCHMARKS.md` §« 2026-10-05 — K-34 », `SMALL32` l. 565-567 ; plafond par défaut ≤ 32 Go de K-52, ASK-33) ; Small 8 et 16 bits mesurés sur la machine de référence (96 Go), notés « non mesurés » sous 48 Go ; décision et points ouverts dans `docs/knowledge/decisions/reference-profiles.md` ; `docs/Profiles.md` provisoire remplacé.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-76, K-42, K-34]
+      depends_on: [K-76, K-42, K-34, K-52, K-96]
+      depends_on_status: verified
   - id: K-78
     subject: "[voxtral K-78] Mesurer la matrice de profils Realtime"
     task:
       goal: "Mesurer la matrice de profils Realtime"
-      gate: "profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82)."
+      gate: "profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms pour chaque profil `fast` (avant K-38 : 4 bits 28,37 ms sur C-moyen EN et 33,53 sur C-long, tenu ; fp16 141,79 ms, non tenu ; `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262, 270, 278) ; 8 bits (ASK-20 = A) : `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` lu par K-91 (révision et SHA-256 épinglés, référencé sans republication, ASK-16 / ASK-22), profils `8bit-fast|lean` mesurés, WER 8 bits ≤ WER 4 bits sur C-moyen EN/FR (1,05 / 1,97 %), sinon « non disponible » documenté ; 6 bits (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`) déclaré largeur intermédiaire hors standard et mesuré de même ; une ligne `References.md` par profil (K-82)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-78.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-4 = A, ASK-16 = A, ASK-20 = A (2026-10-06) ; aucune attente de décision.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms sur la machine de référence pour chaque profil `fast` ; 8 bits : pack chargé avec `verify: [.all]` (0 clé en écart) et WER 8 bits ≤ WER 4 bits sur C-moyen, sinon « non disponible » documenté ; une ligne `References.md` par profil (K-82).
+        Porte (complétée le 2026-10-07, #590) : profils `4bit-fast|lean`, `16bit-fast|lean` mesurés (A/A ≤ 3 %, WER) ; `step_ms_p90` < 80 ms pour chaque profil `fast` (avant K-38 : 4 bits 28,37 ms sur C-moyen EN et 33,53 sur C-long, tenu ; fp16 141,79 ms, non tenu ; `BENCHMARKS.md` §« 2026-10-05 — K-36 » l. 262, 270, 278) ; 8 bits (ASK-20 = A) : `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` lu par K-91 (révision et SHA-256 épinglés, référencé sans republication, ASK-16 / ASK-22), profils `8bit-fast|lean` mesurés, WER 8 bits ≤ WER 4 bits sur C-moyen EN/FR (1,05 / 1,97 %), sinon « non disponible » documenté ; 6 bits (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`) déclaré largeur intermédiaire hors standard et mesuré de même ; une ligne `References.md` par profil (K-82).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-76, K-38, K-46, K-9]
+      depends_on: [K-76, K-38, K-46, K-9, K-91, K-96]
+      depends_on_status: verified
   - id: K-79
     subject: "[voxtral K-79] Décider le défaut TTS par la mesure et mesurer la matrice TTS"
-    notes: "⛔ oui — ASK-5 (politique de défaut) ; ASK-18 (licence) avant toute recommandation commerciale"
+    notes: "ASK-5 = A, ASK-13 = A (2026-10-06), ASK-19 = A (2026-10-07)"
     task:
-      needs_decision: [ASK-5, ASK-13]
       goal: "Décider le défaut TTS par la mesure et mesurer la matrice TTS"
-      gate: "`TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun."
+      gate: "`TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 **et** écoute à l'aveugle q6 contre bf16 non inférieure (Vincent, ASK-13 = A : paires anonymisées et grille préparées, `blocked` jusqu'à l'écoute) → q6 par défaut sur les 4 surfaces (ASK-5 = A, 2026-10-06 : version mineure, CHANGELOG, FluxForge prévenu ; mention « non commercial », ASK-18), sinon bf16 documenté partout ; valeurs de départ K-35 : RTF batch q6 0,507 à 0,559 contre bf16 1,674 à 1,833 (rapport 0,30 à 0,31 : la condition RTF est déjà tenue) ; couverture à la graine 1 : court 0,909 / 0,909, moyen 0,940 contre 0,952 (− 1,2 pt), long 0,952 contre 0,955 (`docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) : la condition de couverture se juge sur 3 graines au moins pour les deux packs (6 bits moyen : 0,940 / 0,946 / 0,964) ; contrôle ASR des 108 sorties de la campagne K-14 et option `bench tts --no-sanitize` (cas tts-4b-4bit, en01, graine 2 : 11 frames) ; test du détecteur : « là, là » détecté (rouge avant) ; 8 profils TTS mesurés (4/6/8/16 × fast/lean ; 8 bits = pack de K-90, ASK-19 = A ; fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun ; plafond de cache d'un profil `lean` : selon les mesures de K-95 et la réponse de Vincent à l'ASK qu'elle pose (pic − 20 % pour ≤ + 5 % de temps au moins)."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-79.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-5, ASK-13, ASK-18 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-5 = A (2026-10-06), ASK-13 = A (2026-10-06), ASK-18 = A (2026-10-02), ASK-19 = A (2026-10-07) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : `TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 → q6 par défaut sur les 4 surfaces, sinon bf16 documenté partout (selon ASK-5) ; test du détecteur : « là, là » détecté (rouge avant) ; 6 profils TTS mesurés (fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun.
+        Porte (recalée le 2026-10-10, #590) : `TTSQuantizationCampaignTests` étendue, lancée en Release : si couverture ASR q6 ≥ bf16 − 1 pt **et** RTF (génération/audio) q6 ≤ 0,5 × bf16 **et** écoute à l'aveugle q6 contre bf16 non inférieure (Vincent, ASK-13 = A : paires anonymisées et grille préparées, `blocked` jusqu'à l'écoute) → q6 par défaut sur les 4 surfaces (ASK-5 = A, 2026-10-06 : version mineure, CHANGELOG, FluxForge prévenu ; mention « non commercial », ASK-18), sinon bf16 documenté partout ; valeurs de départ K-35 : RTF batch q6 0,507 à 0,559 contre bf16 1,674 à 1,833 (rapport 0,30 à 0,31 : la condition RTF est déjà tenue) ; couverture à la graine 1 : court 0,909 / 0,909, moyen 0,940 contre 0,952 (− 1,2 pt), long 0,952 contre 0,955 (`docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`) : la condition de couverture se juge sur 3 graines au moins pour les deux packs (6 bits moyen : 0,940 / 0,946 / 0,964) ; contrôle ASR des 108 sorties de la campagne K-14 et option `bench tts --no-sanitize` (cas tts-4b-4bit, en01, graine 2 : 11 frames) ; test du détecteur : « là, là » détecté (rouge avant) ; 8 profils TTS mesurés (4/6/8/16 × fast/lean ; 8 bits = pack de K-90, ASK-19 = A ; fps, TTFA, pic, couverture), une ligne `BENCHMARKS.md` chacun ; plafond de cache d'un profil `lean` : selon les mesures de K-95 et la réponse de Vincent à l'ASK qu'elle pose (pic − 20 % pour ≤ + 5 % de temps au moins).
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-76, K-35, K-33, K-39]
+      depends_on: [K-76, K-35, K-33, K-39, K-90, K-95]
   - id: K-80
     subject: "[voxtral K-80] Produire et publier les packs décidés (SHA-256, cartes)"
     severity: low
-    notes: "⛔ oui — ASK-22 (quels packs, quel compte) ; ASK-18 = A (2026-10-02, usage non commercial)"
+    notes: "ASK-16, ASK-20, ASK-22 (2026-10-06), ASK-19 (2026-10-07) répondues"
     task:
-      needs_decision: [ASK-16, ASK-19, ASK-20, ASK-22]
       goal: "Produire et publier les packs décidés (SHA-256, cartes)"
-      gate: "pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour."
+      gate: "ASK-16 = A, ASK-19 = A, ASK-20 = A, ASK-22 (2026-10-06 / 07) : un pack n'est publié que s'il n'existe pas ailleurs, en dépôt Hugging Face complet sous `VincentGOURBIN` (carte de modèle comme yue2 et gemma4 : licence, recette, révision source, SHA-256, mesures), carte relue par Vincent avant envoi (`blocked` jusqu'à sa relecture) ; le reste par référence épinglée (révision + SHA-256 vérifiés au téléchargement, K-6) : PK-4 (dépôts Markus), Realtime 6 / 8 bits voxmlx (lus par K-91) ; TTS 8 bits (PK-2) : K-90 ; PK-1 abandonné (le Realtime 8 bits existe ailleurs) ; PK-3 seulement si K-42 retient `.mlx` ; pour chaque pack publié : SHA-256 publiés et vérifiés au téléchargement (test), WER ≤ bf16 + 0,3 pt ; campagne de packs mixtes TTS (P-48) : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits et écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut), sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour."
       instructions: |
         Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
           git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
         Lire docs/audit/2026-09-27/fiches/K-80.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
-        Avant de commencer : lire la réponse à ASK-16, ASK-18, ASK-19, ASK-20, ASK-22 dans docs/audit/2026-09-27/ASK.md (section « Réponses »).
-        Sans réponse : report-task.py --status blocked avec la question fermée de l'ASK, rien d'autre.
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-13 = A, ASK-16 = A, ASK-20 = A, ASK-22 (2026-10-06), ASK-18 = A (2026-10-02), ASK-19 = A (2026-10-07) ; aucune attente de décision.
+        Complément du 2026-10-07 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (décisions de Vincent intégrées à la porte ci-dessous ; A = commit parent).
+        Recalage après K-35 (2026-10-10, #590) — prime sur la fiche : section « Replanification #590 » de la fiche.
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
-        Porte : pour chaque pack : SHA-256 publiés et vérifiés au téléchargement (test) ; parité : WER ≤ bf16 + 0,3 pt (STT, Realtime) ; TTS : couverture ASR ≥ 99 % et écoute contre bf16 (ASK-13) ; campagne de packs mixtes TTS : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits, sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour.
+        Porte (complétée le 2026-10-07, #590) : ASK-16 = A, ASK-19 = A, ASK-20 = A, ASK-22 (2026-10-06 / 07) : un pack n'est publié que s'il n'existe pas ailleurs, en dépôt Hugging Face complet sous `VincentGOURBIN` (carte de modèle comme yue2 et gemma4 : licence, recette, révision source, SHA-256, mesures), carte relue par Vincent avant envoi (`blocked` jusqu'à sa relecture) ; le reste par référence épinglée (révision + SHA-256 vérifiés au téléchargement, K-6) : PK-4 (dépôts Markus), Realtime 6 / 8 bits voxmlx (lus par K-91) ; TTS 8 bits (PK-2) : K-90 ; PK-1 abandonné (le Realtime 8 bits existe ailleurs) ; PK-3 seulement si K-42 retient `.mlx` ; pour chaque pack publié : SHA-256 publiés et vérifiés au téléchargement (test), WER ≤ bf16 + 0,3 pt ; campagne de packs mixtes TTS (P-48) : couverture ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines), fr/s ≥ 0,9 × le 4 bits et écoute à l'aveugle par Vincent non inférieure (ASK-13 = A, 2026-10-06 : la fiche prépare les paires anonymisées et la grille, passe `blocked` jusqu'à l'écoute, puis conclut), sinon non publiée ; carte sans exemple `transformers` erroné ; `docs/Weights.md` à jour.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
-      depends_on: [K-8, K-77, K-78, K-79]
+      depends_on: [K-8, K-77, K-78, K-79, K-90, K-91]
   - id: K-82
     subject: "[voxtral K-82] Remplir References.md / Weights.md avec les mesures et SHA-256"
     severity: low
@@ -1337,8 +1382,232 @@ tasks:
         Lire docs/audit/2026-09-27/fiches/K-82.md (cahier des charges complet : à lire, fichiers, étapes, validation, pièges),
         puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
         Prérequis hors tracker (cloud) à vérifier livrés sur la branche : K-81.
+        Recalage du 2026-10-06 (#590) — prime sur la fiche : section « Replanification #590 » de la fiche
+        (porte recalée sur la baseline mesurée, valeurs de départ et lignes BENCHMARKS.md citées ; A = commit parent).
         Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
         dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
         Porte : 0 « à mesurer » restant dans la table de `References.md` pour les profils de `.all` (sauf largeur non disponible, marquée) ; chaque valeur cite sa ligne `BENCHMARKS.md` ; `Weights.md` : SHA-256 relevé par `curl -s https://huggingface.co/api/models/<repo>/tree/<rev>?recursive=true` pour chaque fichier de poids retenu, révision notée ; `docs/knowledge/index.md` à jour.
       deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
       depends_on: [K-77, K-78, K-79, K-64]
+      depends_on_status: verified
+  - id: K-83
+    subject: "[voxtral K-83] Mesurer la compréhension audio du mode chat (faits attendus, EN/FR)"
+    task:
+      goal: "Mesurer la compréhension audio du mode chat (faits attendus, EN/FR)"
+      gate: "`docs/eval/chat.json` versionné (questions, faits attendus, SHA-256 des clips ; ≥ 6 questions par clip, EN et FR) ; `$CLI eval chat --model <m> --backend mlx` émet une ligne `EVAL {\"pipeline\":\"chat\",…,\"facts_found\",\"facts_total\",\"score\"}` par question et une ligne de synthèse par clip ; deux exécutions donnent des `out_sha256` identiques ; une ligne `BENCHMARKS.md` par modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} (`.mlx`) ; score de référence consigné dans `docs/knowledge/benchmarks/`."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-83.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `docs/eval/chat.json` versionné (questions, faits attendus, SHA-256 des clips ; ≥ 6 questions par clip, EN et FR) ; `$CLI eval chat --model <m> --backend mlx` émet une ligne `EVAL {"pipeline":"chat",…,"facts_found","facts_total","score"}` par question et une ligne de synthèse par clip ; deux exécutions donnent des `out_sha256` identiques ; une ligne `BENCHMARKS.md` par modèle ∈ {mini-3b-4bit, mini-3b-8bit, mini-3b, small-4bit} (`.mlx`) ; score de référence consigné dans `docs/knowledge/benchmarks/`.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-33, K-34]
+      depends_on_status: verified
+  - id: K-84
+    subject: "[voxtral K-84] Aligner l'invite Realtime sur la référence si la mesure le justifie"
+    task:
+      goal: "Aligner l'invite Realtime sur la référence si la mesure le justifie"
+      gate: "`voxtral eval realtime` (K-33) sur C-court, C-moyen EN/FR, C-long, avant/après, pour realtime-4b-4bit et realtime-4b-fp16 : WER après ≤ WER avant par clip (réf. 9,09 / 1,05 / 1,97 / 1,15 % en 4 bits, `BENCHMARKS.md` §« 2026-10-05 — K-36 », `EVAL-realtime-4b-4bit` l. 289) ; `bench realtime` A/B/B/A sur C-moyen EN (ms/pas, TTFT, `pad_fraction`, `streaming_pad_fraction` ; réf. 27,25 ms, 0,7599 / 0,601) ; parité de sortie consignée (`out_sha256` avant/après) ; test unitaire qui fixe l'invite (ids et longueur) d'après la référence ; si le WER se dégrade sur un clip : variante gardée derrière la valeur actuelle, `blocked` avec les chiffres."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-84.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `voxtral eval realtime` (K-33) sur C-court, C-moyen EN/FR, C-long, avant/après, pour realtime-4b-4bit et realtime-4b-fp16 : WER après ≤ WER avant par clip (réf. 9,09 / 1,05 / 1,97 / 1,15 % en 4 bits, `BENCHMARKS.md` §« 2026-10-05 — K-36 », `EVAL-realtime-4b-4bit` l. 289) ; `bench realtime` A/B/B/A sur C-moyen EN (ms/pas, TTFT, `pad_fraction`, `streaming_pad_fraction` ; réf. 27,25 ms, 0,7599 / 0,601) ; parité de sortie consignée (`out_sha256` avant/après) ; test unitaire qui fixe l'invite (ids et longueur) d'après la référence ; si le WER se dégrade sur un clip : variante gardée derrière la valeur actuelle, `blocked` avec les chiffres.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-36]
+      depends_on_status: verified
+  - id: K-85
+    subject: "[voxtral K-85] Expliquer le régime bimodal et la traduction de Small `.auto`"
+    task:
+      goal: "Expliquer le régime bimodal et la traduction de Small `.auto`"
+      gate: "bimodal : sur 20 processus successifs (small-4bit `.auto`, C-moyen EN, `bench stt --passes 1`), le régime de chaque passe (≈ 75 ou 81-85 ms par pas ; réf. 75,13 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification » l. 540-559) est expliqué par un indicateur relevé dans la même passe, **ou** un réglage supprime la passe lente avec 10/10 passes à ≤ 3 % de la médiane ; traduction : sur C-long exact découpé aux frontières de segment, embeddings Core ML et MLX comparés (cosinus par segment), segment et fenêtre fautifs identifiés (réf. WER FR2 99,75 % en `.auto` contre 1,48 % en `.mlx`) ; conclusion dans `docs/knowledge/decisions/small-auto-bimodal.md`."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-85.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : bimodal : sur 20 processus successifs (small-4bit `.auto`, C-moyen EN, `bench stt --passes 1`), le régime de chaque passe (≈ 75 ou 81-85 ms par pas ; réf. 75,13 ms, `BENCHMARKS.md` §« 2026-10-05 — K-34, complément de vérification » l. 540-559) est expliqué par un indicateur relevé dans la même passe, **ou** un réglage supprime la passe lente avec 10/10 passes à ≤ 3 % de la médiane ; traduction : sur C-long exact découpé aux frontières de segment, embeddings Core ML et MLX comparés (cosinus par segment), segment et fenêtre fautifs identifiés (réf. WER FR2 99,75 % en `.auto` contre 1,48 % en `.mlx`) ; conclusion dans `docs/knowledge/decisions/small-auto-bimodal.md`.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-34]
+      depends_on_status: verified
+  - id: K-86
+    subject: "[voxtral K-86] Charger les voix .pt de tts-4b, appliquer la graine partout, signaler la troncature en streaming"
+    task:
+      goal: "Charger les voix .pt de tts-4b, appliquer la graine partout, signaler la troncature en streaming"
+      gate: "`tts -m tts-4b -v neutral_female` : « N voices loaded » avec N ≥ 1 et audio produit, ou erreur typée nommant le format `.pt` (rouge avant) ; `--voice-xyz 50,50,50 --seed 3` deux fois → `out_sha256` identiques, `--seed 3` contre `--seed 4` → différents (rouge avant) ; test : `synthesizeStreaming` au plafond → `lastSynthesisTruncated == true` (rouge avant) et chemin streaming frame par frame testé ; fixture « 3 shards sans index » → chargement complet, 0 clé manquante (rouge avant)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-86.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `tts -m tts-4b -v neutral_female` : « N voices loaded » avec N ≥ 1 et audio produit, ou erreur typée nommant le format `.pt` (rouge avant) ; `--voice-xyz 50,50,50 --seed 3` deux fois → `out_sha256` identiques, `--seed 3` contre `--seed 4` → différents (rouge avant) ; test : `synthesizeStreaming` au plafond → `lastSynthesisTruncated == true` (rouge avant) et chemin streaming frame par frame testé ; fixture « 3 shards sans index » → chargement complet, 0 clé manquante (rouge avant).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+  - id: K-87
+    subject: "[voxtral K-87] Exercer le défaut .auto depuis le CLI et ne plus avaler les erreurs de configuration"
+    task:
+      goal: "Exercer le défaut .auto depuis le CLI et ne plus avaler les erreurs de configuration"
+      gate: "`transcribe -b auto` et `chat -b auto` acceptés, `out_sha256` C-court EN égal à `bench stt --backend auto` (mini-3b-8bit) ; hors ligne avec modèle et encodeur Core ML en cache : `transcribe -b auto` réussit, 0 octet réseau (`nettop`), encodeur absent → erreur typée ; fixture Realtime « `config.json` illisible + `params.json` » → erreur typée (rouge avant) ; `profile run --output <dossier inexistant>/x.json` crée le dossier (rouge avant)."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-87.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `transcribe -b auto` et `chat -b auto` acceptés, `out_sha256` C-court EN égal à `bench stt --backend auto` (mini-3b-8bit) ; hors ligne avec modèle et encodeur Core ML en cache : `transcribe -b auto` réussit, 0 octet réseau (`nettop`), encodeur absent → erreur typée ; fixture Realtime « `config.json` illisible + `params.json` » → erreur typée (rouge avant) ; `profile run --output <dossier inexistant>/x.json` crée le dossier (rouge avant).
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-10, K-25]
+      depends_on_status: verified
+  - id: K-88
+    subject: "[voxtral K-88] Vérifier toutes les clés au chargement, retirer le code mort interne, ajouter les tests manquants"
+    task:
+      goal: "Vérifier toutes les clés au chargement, retirer le code mort interne, ajouter les tests manquants"
+      gate: "chargeurs STT, TTS, Realtime en `verify: [.all]` : les 9 packs de K-7 se chargent (0 clé manquante ou en trop), fixture « clé en trop » → erreur nommant la clé (rouge avant) ; `grep -rn 'loadWeights(_:strict:)|loadTekkenTokenizerFromFile' Sources` = 0 ; tests rouges sur mutation : ids Tekken (20 phrases, vrai `tekken.json`), points d'appel de téléchargement, conversions `fatalError` → `throw` de K-27, quantification mal formée, `eos_token_id` en liste par pack, reprise d'enrôlement avec une autre référence → `EnrollmentCheckpointError` ; 0 octet sur stdout avec `VoxtralDebug.enabled = false` (chargement + synthèse) ; suite complète verte."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-88.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : chargeurs STT, TTS, Realtime en `verify: [.all]` : les 9 packs de K-7 se chargent (0 clé manquante ou en trop), fixture « clé en trop » → erreur nommant la clé (rouge avant) ; `grep -rn 'loadWeights(_:strict:)|loadTekkenTokenizerFromFile' Sources` = 0 ; tests rouges sur mutation : ids Tekken (20 phrases, vrai `tekken.json`), points d'appel de téléchargement, conversions `fatalError` → `throw` de K-27, quantification mal formée, `eos_token_id` en liste par pack, reprise d'enrôlement avec une autre référence → `EnrollmentCheckpointError` ; 0 octet sur stdout avec `VoxtralDebug.enabled = false` (chargement + synthèse) ; suite complète verte.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-7, K-8, K-23, K-26, K-27]
+      depends_on_status: verified
+  - id: K-89
+    subject: "[voxtral K-89] CI qui construit les exécutables, instrument bench testé, encodage .mlx attribué"
+    task:
+      goal: "CI qui construit les exécutables, instrument bench testé, encodage .mlx attribué"
+      gate: "CI : trois schémas construits en Release (`** BUILD SUCCEEDED **` × 3), sans `|| true`, actions sur Node ≥ 24, lignes `[K-` conservées, `check-demo-ffmpeg.sh` lancé, `warning:` comparés à une base ; un échec volontaire fait échouer la CI ; tests de `unionLength`, somme des phases ≤ total, `lastPadFraction` / `streaming_pad_fraction` (rouges sur mutation) ; `bench stt --backend mlx` (mini-3b-8bit, C-moyen EN) : `phases_ms.encode` présent et `audio + encode + prefill` = `ttft_ms` ± 5 % (aujourd'hui ≈ 1 735 ms non attribués sur 3 866, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345), `out_sha256` inchangé et `step_ms_p50` 21,32 ± 3 % ; `Scripts/run-guarded-tests.sh` (40 tests gardés) lancé et recopié."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-89.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche de suite écrite au replanning #590 (2026-10-06).
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : CI : trois schémas construits en Release (`** BUILD SUCCEEDED **` × 3), sans `|| true`, actions sur Node ≥ 24, lignes `[K-` conservées, `check-demo-ffmpeg.sh` lancé, `warning:` comparés à une base ; un échec volontaire fait échouer la CI ; tests de `unionLength`, somme des phases ≤ total, `lastPadFraction` / `streaming_pad_fraction` (rouges sur mutation) ; `bench stt --backend mlx` (mini-3b-8bit, C-moyen EN) : `phases_ms.encode` présent et `audio + encode + prefill` = `ttft_ms` ± 5 % (aujourd'hui ≈ 1 735 ms non attribués sur 3 866, `BENCHMARKS.md` §« 2026-10-05 — K-34 » l. 345), `out_sha256` inchangé et `step_ms_p50` 21,32 ± 3 % ; `Scripts/run-guarded-tests.sh` (40 tests gardés) lancé et recopié.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-29, K-32]
+      depends_on_status: verified
+  - id: K-90
+    subject: "[voxtral K-90] Pack TTS 8 bits pré-quantifié : export, parité, matrice K-35, publication"
+    notes: "ASK-19 = A (2026-10-07), ASK-13 = A, ASK-22 (2026-10-06), ASK-18 = A (2026-10-02) ; fiche écrite au complément #590 (2026-10-07)"
+    task:
+      goal: "Pack TTS 8 bits pré-quantifié : export, parité, matrice K-35, publication"
+      gate: "recherche Hugging Face datée : aucun pack TTS 8 bits valable ailleurs (sinon référence épinglée, ASK-16, et pas d'export) ; pack `tts-4b-8bit` exporté par une recette reproductible (LLM et FM 8 bits g64 `affine`, codec bf16 comme les packs 4 / 6 bits ; révision source épinglée ; aucune dépendance Python du code, des tests ni du build, ASK-12), taille consignée (estimation PK-2 : 4,37 Go) ; chargé avec 0 clé manquante ou en trop, entrée de registre additive ; qualité : couverture ASR (outil K-33, 3 textes × 5 graines) ≥ 99 % et ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines) ; écoute à l'aveugle 8 bits contre bf16 et contre 6 bits non inférieure (Vincent, ASK-13 = A : paires anonymisées et grille, `blocked` jusqu'à l'écoute) ; mesures : même matrice que K-35 (court / moyen / long × graines 1-3 × `neutral_female` et voix clonée × batch / streaming ; A/A ≤ 3 % sauf streaming moyen et long, ASK-34), une ligne `BENCH` par cellule dans `BENCHMARKS.md` ; publication (ASK-22) : dépôt complet sous `VincentGOURBIN` (carte comme yue2 et gemma4 : licence CC BY-NC 4.0 reprise, attribution, mention « non commercial », ASK-18 ; recette, SHA-256, mesures), carte relue par Vincent avant envoi (`blocked` jusqu'à sa relecture), SHA-256 vérifiés au téléchargement (test, K-6) ; `docs/Weights.md` à jour."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-90.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au complément du replanning #590 (2026-10-07).
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-19 = A (2026-10-07), ASK-13 = A, ASK-22 (2026-10-06), ASK-18 = A (2026-10-02) ; aucune attente de décision.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : recherche Hugging Face datée : aucun pack TTS 8 bits valable ailleurs (sinon référence épinglée, ASK-16, et pas d'export) ; pack `tts-4b-8bit` exporté par une recette reproductible (LLM et FM 8 bits g64 `affine`, codec bf16 comme les packs 4 / 6 bits ; révision source épinglée ; aucune dépendance Python du code, des tests ni du build, ASK-12), taille consignée (estimation PK-2 : 4,37 Go) ; chargé avec 0 clé manquante ou en trop, entrée de registre additive ; qualité : couverture ASR (outil K-33, 3 textes × 5 graines) ≥ 99 % et ≥ 6 bits − 0,5 pt, 0 `maxFrames` sur le long FR (3 graines) ; écoute à l'aveugle 8 bits contre bf16 et contre 6 bits non inférieure (Vincent, ASK-13 = A : paires anonymisées et grille, `blocked` jusqu'à l'écoute) ; mesures : même matrice que K-35 (court / moyen / long × graines 1-3 × `neutral_female` et voix clonée × batch / streaming ; A/A ≤ 3 % sauf streaming moyen et long, ASK-34), une ligne `BENCH` par cellule dans `BENCHMARKS.md` ; publication (ASK-22) : dépôt complet sous `VincentGOURBIN` (carte comme yue2 et gemma4 : licence CC BY-NC 4.0 reprise, attribution, mention « non commercial », ASK-18 ; recette, SHA-256, mesures), carte relue par Vincent avant envoi (`blocked` jusqu'à sa relecture), SHA-256 vérifiés au téléchargement (test, K-6) ; `docs/Weights.md` à jour.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35, K-33, K-6, K-8]
+  - id: K-91
+    subject: "[voxtral K-91] Lecture des packs voxmlx (Realtime 6/8 bits) et refus explicite d'un pack mal lu"
+    notes: "ASK-20 = A (2026-10-06), ASK-16 = A (2026-10-06), ASK-11 = A (2026-10-01) ; fiche écrite au complément #590 (2026-10-07)"
+    task:
+      goal: "Lecture des packs voxmlx (Realtime 6/8 bits) et refus explicite d'un pack mal lu"
+      gate: "format voxmlx détecté (config au format `params.json` avec `quantization` ; clés `adapter.w_in.*`, `encoder.layers.N.attention.q_proj.*`, `language_model.layers.N.*`), clés mises en correspondance avec les noms internes, quantification lue depuis `params.json` ; `mlx-community/Voxtral-Mini-4B-Realtime-6bit` (3 609 304 614 o) et `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` (4 714 618 595 o) chargés avec 0 paramètre non couvert et 0 clé en trop, révisions et SHA-256 épinglés (référencés, pas republiés : ASK-16, ASK-22), entrées de registre additives ; refus explicite : un pack dont les clés ne couvrent pas tous les paramètres du modèle lève une erreur typée nommant le format détecté et les premières clés manquantes (test rouge avant : aujourd'hui, un pack voxmlx se charge en poids aléatoires sans erreur ; fixtures « voxmlx tronqué » et « format inconnu ») ; qualité (`voxtral eval realtime`, K-33) : WER C-moyen EN/FR 8 bits ≤ 4 bits + 0,2 pt et 6 bits ≤ 4 bits + 0,5 pt (réf. 1,05 / 1,97 %, `EVAL-realtime-4b-4bit` l. 289 ; ASK-11) ; une ligne `bench realtime` C-moyen EN par pack (`step_ms_p50`, pic), la matrice restant à K-78."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-91.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au complément du replanning #590 (2026-10-07).
+        Décisions de Vincent (ASK.md §Réponses, déjà données) : ASK-20 = A (2026-10-06), ASK-16 = A (2026-10-06), ASK-11 = A (2026-10-01) ; aucune attente de décision.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : format voxmlx détecté (config au format `params.json` avec `quantization` ; clés `adapter.w_in.*`, `encoder.layers.N.attention.q_proj.*`, `language_model.layers.N.*`), clés mises en correspondance avec les noms internes, quantification lue depuis `params.json` ; `mlx-community/Voxtral-Mini-4B-Realtime-6bit` (3 609 304 614 o) et `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` (4 714 618 595 o) chargés avec 0 paramètre non couvert et 0 clé en trop, révisions et SHA-256 épinglés (référencés, pas republiés : ASK-16, ASK-22), entrées de registre additives ; refus explicite : un pack dont les clés ne couvrent pas tous les paramètres du modèle lève une erreur typée nommant le format détecté et les premières clés manquantes (test rouge avant : aujourd'hui, un pack voxmlx se charge en poids aléatoires sans erreur ; fixtures « voxmlx tronqué » et « format inconnu ») ; qualité (`voxtral eval realtime`, K-33) : WER C-moyen EN/FR 8 bits ≤ 4 bits + 0,2 pt et 6 bits ≤ 4 bits + 0,5 pt (réf. 1,05 / 1,97 %, `EVAL-realtime-4b-4bit` l. 289 ; ASK-11) ; une ligne `bench realtime` C-moyen EN par pack (`step_ms_p50`, pic), la matrice restant à K-78.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-9, K-33, K-36]
+  - id: K-93
+    subject: "[voxtral K-93] Instrument TTS : temps LLM et FM séparés par frame, phases du streaming"
+    notes: "fiche de suite de K-35, écrite au replanning #590 (2026-10-10)"
+    task:
+      goal: "Instrument TTS : temps LLM et FM séparés par frame, phases du streaming"
+      gate: "`bench tts --trace` sur tts-4b-4bit, tts-4b-6bit et tts-4b-mlx, texte court, `neutral_female`, graine 1, batch : deux spans par frame, et une ligne `GPUPHASE` (ou champ de la ligne de diagnostic) par sous-étape avec sa durée totale ; somme LLM + FM = durée des pas ±2 % ; parts LLM / FM consignées pour les trois packs dans `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md` ; `bench tts --streaming --trace` émet les phases « Semantic Code Generation » et « Codec Decode » (aucune aujourd'hui) ; hors `--trace` : `out_sha256` identique et `step_ms_p50` ±3 % (A/B/B/A, A = commit parent, tts-4b-6bit court, un processus par passe, `--warmup 1 --cooldown 120`) ; les sections « Gain attendu » de K-39, K-44, K-48 et K-57 notent la part mesurée du FM."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-93.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au replanning #590 (2026-10-10), après la vérification de K-35.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : `bench tts --trace` sur tts-4b-4bit, tts-4b-6bit et tts-4b-mlx, texte court, `neutral_female`, graine 1, batch : deux spans par frame, et une ligne `GPUPHASE` (ou champ de la ligne de diagnostic) par sous-étape avec sa durée totale ; somme LLM + FM = durée des pas ±2 % ; parts LLM / FM consignées pour les trois packs dans `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md` ; `bench tts --streaming --trace` émet les phases « Semantic Code Generation » et « Codec Decode » (aucune aujourd'hui) ; hors `--trace` : `out_sha256` identique et `step_ms_p50` ±3 % (A/B/B/A, A = commit parent, tts-4b-6bit court, un processus par passe, `--warmup 1 --cooldown 120`) ; les sections « Gain attendu » de K-39, K-44, K-48 et K-57 notent la part mesurée du FM.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-94
+    subject: "[voxtral K-94] TTS : écart des deux chemins de voix en bf16, voix clonée en 4 bits"
+    notes: "fiche de suite de K-35, écrite au replanning #590 (2026-10-10)"
+    task:
+      goal: "TTS : écart des deux chemins de voix en bf16, voix clonée en 4 bits"
+      gate: "(a) bf16 : cause de l'écart identifiée par test (mêmes codes sémantiques jusqu'à la première frame divergente, position et sous-étape relevées) ; si c'est un défaut : correctif et test « mêmes codes par les deux chemins en bf16 à graine fixe » (rouge avant) ; sinon : différence documentée (cause, doc de `synthesize`, `docs/knowledge/`) et couverture ASR des deux chemins consignée (K-35 : 0,955 par `voiceEmbedding`, 0,949 par `voice` sur le long) ; (b) voix clonée : `eval tts-roundtrip --voice-embedding <clone_fr>` pour tts-4b-4bit, tts-4b-6bit et tts-4b-mlx (court graines 1 à 3, moyen et long graine 1), une ligne `EVAL` chacun ; 4 bits cloné : couverture, durée audio et frames rapportées contre le 6 bits cloné ; si la couverture du 4 bits cloné est inférieure de plus de 2 pt à celle du 6 bits cloné sur le moyen ou le long, ou si l'audio contient une boucle ou un silence long (écoute du rapport), fiche `blocked` avec la question et les chiffres ; aucune ligne `BENCH` de K-35 n'est modifiée."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-94.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au replanning #590 (2026-10-10), après la vérification de K-35.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : (a) bf16 : cause de l'écart identifiée par test (mêmes codes sémantiques jusqu'à la première frame divergente, position et sous-étape relevées) ; si c'est un défaut : correctif et test « mêmes codes par les deux chemins en bf16 à graine fixe » (rouge avant) ; sinon : différence documentée (cause, doc de `synthesize`, `docs/knowledge/`) et couverture ASR des deux chemins consignée (K-35 : 0,955 par `voiceEmbedding`, 0,949 par `voice` sur le long) ; (b) voix clonée : `eval tts-roundtrip --voice-embedding <clone_fr>` pour tts-4b-4bit, tts-4b-6bit et tts-4b-mlx (court graines 1 à 3, moyen et long graine 1), une ligne `EVAL` chacun ; 4 bits cloné : couverture, durée audio et frames rapportées contre le 6 bits cloné ; si la couverture du 4 bits cloné est inférieure de plus de 2 pt à celle du 6 bits cloné sur le moyen ou le long, ou si l'audio contient une boucle ou un silence long (écoute du rapport), fiche `blocked` avec la question et les chiffres ; aucune ligne `BENCH` de K-35 n'est modifiée.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-95
+    subject: "[voxtral K-95] Plafond de cache TTS mesuré en A/B/B/A (défaut public à Vincent)"
+    notes: "fiche de suite de K-35, écrite au replanning #590 (2026-10-10)"
+    task:
+      goal: "Plafond de cache TTS mesuré en A/B/B/A (défaut public à Vincent)"
+      gate: "A/B/B/A par cellule (A = profil par défaut, B = `--cache-limit-mb 2048`), un processus par passe, 180 s de repos et `machine-check` avant chacune ; texte moyen avec `--warmup 1 --cooldown 120`, texte long sans amorçage ; cellules : tts-4b-6bit et tts-4b-4bit, `neutral_female`, batch, moyen et long, plus la ligne consommateur (tts-4b-6bit, `clone_fr`, `--warm-up`, moyen) ; par cellule : A/A de A et de B ≤ 3 % sur `step_ms_p50`, écart B − A de `step_ms_p50` (moyenne des passes) lu au-delà de la dispersion A/A, écart de pic `phys_footprint` et `out_sha256` identique ; une ligne `BENCH` par passe dans `BENCHMARKS.md` ; livrable : une ASK fermée dans `ASK.md` (défaut public du plafond en TTS : options chiffrées, recommandation), la fiche passe `blocked` sur cette ASK jusqu'à la réponse, puis consigne la réponse (son application relève de K-79) ; aucun défaut changé par la fiche."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-95.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au replanning #590 (2026-10-10), après la vérification de K-35.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/B/B/A par cellule (A = profil par défaut, B = `--cache-limit-mb 2048`), un processus par passe, 180 s de repos et `machine-check` avant chacune ; texte moyen avec `--warmup 1 --cooldown 120`, texte long sans amorçage ; cellules : tts-4b-6bit et tts-4b-4bit, `neutral_female`, batch, moyen et long, plus la ligne consommateur (tts-4b-6bit, `clone_fr`, `--warm-up`, moyen) ; par cellule : A/A de A et de B ≤ 3 % sur `step_ms_p50`, écart B − A de `step_ms_p50` (moyenne des passes) lu au-delà de la dispersion A/A, écart de pic `phys_footprint` et `out_sha256` identique ; une ligne `BENCH` par passe dans `BENCHMARKS.md` ; livrable : une ASK fermée dans `ASK.md` (défaut public du plafond en TTS : options chiffrées, recommandation), la fiche passe `blocked` sur cette ASK jusqu'à la réponse, puis consigne la réponse (son application relève de K-79) ; aucun défaut changé par la fiche.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-35]
+  - id: K-96
+    subject: "[voxtral K-96] Repos après l'amorçage : contrôle des baselines STT et Realtime (K-34, K-36)"
+    notes: "fiche de suite de K-35, écrite au replanning #590 (2026-10-10)"
+    task:
+      goal: "Repos après l'amorçage : contrôle des baselines STT et Realtime (K-34, K-36)"
+      gate: "A/B/B/A (A = `--warmup 1 --cooldown 0`, le protocole de K-34 / K-36 ; B = `--warmup 1 --cooldown 120`), un processus par passe, 180 s de repos et `machine-check` avant chacune, sur C-moyen EN : mini-3b (bf16) `.mlx`, small-4bit `.mlx`, small-4bit `.auto`, realtime-4b-fp16, et mini-3b-8bit `.mlx` (amorçage court, contrôle) ; par cellule, écart B − A de `step_ms_p50` et de `total_ms` (moyenne des passes) contre la dispersion A/A ; si l'écart dépasse 3 % et la dispersion pour un pack, ses cellules C-court et C-moyen de K-34 / K-36 sont remesurées avec repos (même commande, même corpus ; A/A selon `ASK.md` §Dérogations du 2026-10-05), lignes `BENCHMARKS.md` ajoutées, anciennes lignes écartées par une note (jamais éditées), notes `docs/knowledge/benchmarks/` et valeurs de départ des fiches gardées qui les citent mises à jour (au moins K-38, K-40, K-45, K-46, K-47, K-52, K-60, K-62, K-63, K-65 ; la porte en pourcentage reste jugée sur le A de chaque fiche) ; sinon constat « sans effet mesurable » consigné ; `ASK.md` §Dérogations K-35 (2026-10-10) complété."
+      instructions: |
+        Dépôt VincentGourbin/mlx-voxtral-swift, branche claude/action-plan-skills-beta-wifgmu :
+          git fetch origin && git checkout claude/action-plan-skills-beta-wifgmu && git pull --ff-only
+        Lire docs/audit/2026-09-27/fiches/K-96.md (cahier des charges complet : objectif, porte, étapes, pièges),
+        puis docs/audit/2026-09-27/PLAN.md §0 et §5 (règles de mesure, corpus, commandes) et les rapports cités par la fiche.
+        Fiche écrite au replanning #590 (2026-10-10), après la vérification de K-35.
+        Exécuter la fiche telle qu'écrite (skill task-runner) : un commit par fiche, porte recopiée telle quelle
+        dans le rapport, entrée de journal dans docs/audit/2026-09-27/PLAN.md §7 et docs/knowledge/log.md.
+        Porte : A/B/B/A (A = `--warmup 1 --cooldown 0`, le protocole de K-34 / K-36 ; B = `--warmup 1 --cooldown 120`), un processus par passe, 180 s de repos et `machine-check` avant chacune, sur C-moyen EN : mini-3b (bf16) `.mlx`, small-4bit `.mlx`, small-4bit `.auto`, realtime-4b-fp16, et mini-3b-8bit `.mlx` (amorçage court, contrôle) ; par cellule, écart B − A de `step_ms_p50` et de `total_ms` (moyenne des passes) contre la dispersion A/A ; si l'écart dépasse 3 % et la dispersion pour un pack, ses cellules C-court et C-moyen de K-34 / K-36 sont remesurées avec repos (même commande, même corpus ; A/A selon `ASK.md` §Dérogations du 2026-10-05), lignes `BENCHMARKS.md` ajoutées, anciennes lignes écartées par une note (jamais éditées), notes `docs/knowledge/benchmarks/` et valeurs de départ des fiches gardées qui les citent mises à jour (au moins K-38, K-40, K-45, K-46, K-47, K-52, K-60, K-62, K-63, K-65 ; la porte en pourcentage reste jugée sur le A de chaque fiche) ; sinon constat « sans effet mesurable » consigné ; `ASK.md` §Dérogations K-35 (2026-10-10) complété.
+      deliverables: ["commit(s) sur la branche", "porte observée recopiée dans le rapport", "entrée de journal PLAN.md §7"]
+      depends_on: [K-34, K-36]

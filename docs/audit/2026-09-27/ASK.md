@@ -759,7 +759,10 @@ Décisions du planificateur du 2026-10-03 :
   avec, même `out_sha256`. Le texte moyen et la ligne consommateur, mesurés sans repos du 2026-10-07 au 2026-10-09,
   ont été refaits (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; leurs anciennes lignes sont écartées. Les
   autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
-  vérifier à la replanification (#590).
+  vérifier à la replanification (#590). Vérifié le 2026-10-10 (#590) : K-34 et K-36 ont passé `--warmup 1 --cooldown 0`
+  (`.local-runs/queue4.sh` à `queue16.sh`, sauf C-long sans amorçage) ; K-37 n'a pas d'amorçage (`--warmup 0
+  --cooldown 120`). Le contrôle des cellules K-34 / K-36 est confié à K-96 ; d'ici là, une porte en pourcentage se juge
+  contre le A de chaque fiche, mesuré avec repos.
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
   gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
   d'une invocation `--passes 2 --warmup 1 --cooldown 120`). Raison : sur le texte court, l'amorçage dure environ 3 à 12 s
@@ -781,3 +784,21 @@ Décisions du planificateur du 2026-10-03 :
     ci-dessus) et `top_process` de chaque ligne.
 - **K-22, 2026-10-01** (Vincent, au planificateur) : la clause « FluxForge compile (si présent sur la machine) » est
   vérifiée à la fusion de la branche sur `main` (FluxForge suit `main`), pas sur la branche d'audit.
+- **#590 (replanification des lots 4 à 6), 2026-10-06 au 2026-10-10, décisions de l'agent** (`VERIFY.md` §2 ; détail
+  dans la section « Replanification #590 » de chaque fiche) :
+  - K-52 : clause « max/médiane des pas » remplacée par `step_ms_p90` / `step_ms_p50` ≤ 1,3 (l'instrument ne rapporte
+    pas le maximum) ;
+  - K-54 : « 5 min » remplacé par C-moyen EN et C-long exact (clips existants) ; K-53, K-55, K-56 : « 20 / 30 min »
+    construits par concaténation de C-long exact, versionnés par SHA-256 ;
+  - K-72 : variante `.mlx` retirée sans code (en `.mlx`, encodeur et préfill se partagent un GPU déjà à 99 % au
+    préfill, K-34) ; K-40 : tolérance de parité
+    alignée sur ASK-11 (+ 0,2 pt) ;
+  - retirées par la mesure : K-69 (phase audio 0,11 % du total, K-34), K-67 (post-traitement au plus 0,05 % du total,
+    K-35), K-71 (codec 0,2 à 4,4 % du total en batch, gain attendu ≤ 10 % de la phase, K-35 ; rouverte si K-43 mesure
+    le codec au-dessus de 30 % du temps par frame en streaming) ;
+  - K-44 : gardée sous condition d'une mesure xctrace de l'occupation de la génération TTS (≥ 97 % → retirée sans code),
+    le 99,9 % de K-35 venant du profileur ;
+  - K-41 et K-58 : portes recentrées sur le pic et la phase du codec ; K-50 ← K-94 ; K-77, K-78 ← K-96 ; K-79 ← K-95 ;
+  - le relevé « `--cache-limit-mb 2048` coûte ≈ + 15 % au TTS 6 bits moyen » (2026-10-07), passe chaude, est retiré de
+    K-52 et K-79 ; le défaut TTS du plafond est mesuré par K-95 et reste à Vincent ;
+  - fiches de suite : K-93 à K-96 (lot 4).
