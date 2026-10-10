@@ -2054,3 +2054,20 @@ Statistics:
 
 - Dispatch (`dispatch.py --create --issue-map map.json --depends-on-status verified`) : 56 issues créées, action-plans
   #609 à #664, aucune `blocked` ; carte dans `map.json` : K-38 #609 ; K-39 #610 ; K-40 #611 ; K-41 #612 ; K-42 #638 ; K-43 #639 ; K-44 #640 ; K-45 #641 ; K-46 #642 ; K-47 #652 ; K-48 #653 ; K-49 #613 ; K-50 #643 ; K-51 #654 ; K-52 #614 ; K-53 #644 ; K-54 #645 ; K-55 #646 ; K-56 #647 ; K-57 #655 ; K-58 #656 ; K-59 #615 ; K-60 #648 ; K-61 #657 ; K-62 #658 ; K-63 #649 ; K-64 #616 ; K-65 #650 ; K-66 #617 ; K-68 #618 ; K-69 #619 ; K-70 #620 ; K-72 #659 ; K-73 #662 ; K-74 #621 ; K-75 #622 ; K-76 #623 ; K-77 #660 ; K-78 #661 ; K-79 #651 ; K-80 #663 ; K-82 #664 ; K-83 #624 ; K-84 #625 ; K-85 #626 ; K-86 #627 ; K-87 #628 ; K-88 #629 ; K-89 #630 ; K-90 #631 ; K-91 #632 ; K-93 #633 ; K-94 #634 ; K-95 #635 ; K-96 #636 ; K-97 #637. #590 fermée.
+
+## K-93 — Instrument TTS : temps du LLM et du flow matching séparés par frame, phases du streaming — 2026-10-11 — rapportée
+- Fait (code `794d9eb1`) : en mode `--trace` seulement (session qui exporte une trace Chrome,
+  `VoxtralTTSModel.splitTrace`), une barrière `eval` après chaque moitié de la frame batch ; spans « FM i/n »
+  (catégorie `flowMatching`) et « LLM i/n » (catégorie `decoding`, hors du filtre des pas de `bench`), le span
+  « Step i/n » couvre alors l'itération entière ; `bench --trace` imprime deux lignes `GPUPHASE` (« TTS frame LLM »,
+  « TTS frame FM » : somme, nombre de spans, part du pas). Streaming, en trace seulement : une phase « Semantic Code
+  Generation » côté producteur, une phase « Codec Decode » par bloc côté consommateur. Hors trace, aucun changement.
+- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-93 », `machine-check` sans `KO` et `quiet.sh` avant chaque passe,
+  simulateurs arrêtés) :
+  - `TRACE LLM/FM tts-4b-4bit 31,86 % / 68,00 % ; tts-4b-6bit 28,32 % / 71,60 % ; tts-4b-mlx 17,70 % / 82,26 % (somme = pas ±2 % : 99,86 / 99,92 / 99,96 %)`
+  - `STREAMING phases Semantic Code Generation + Codec Decode émises` (1 et 10, tts-4b-6bit)
+  - `BENCH A/B/B/A hors --trace : out_sha256 identique, step_ms_p50 ±0,98 % (≤ 3)` (A/A 2,28 %, B/B 0,05 %)
+- Parts consignées dans `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md` ; « Gain attendu » de K-39, K-44,
+  K-48 et K-57 complétés. Constat : le FM fait 68 à 82 % du pas ; la barrière ajoute 2,6 % au pas en 6 bits.
+- Note : les champs `commit` / `dirty` de `bench` sont lus dans le dossier courant au lancement, pas dans le binaire
+  (le A porte donc `794d9eb14`) ; à corriger dans l'instrument (K-89).

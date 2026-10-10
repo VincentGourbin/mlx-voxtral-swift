@@ -697,8 +697,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     for try await chunk in codeStream {
                         try Task.checkCancellation()
                         // Decode all accumulated codes to get full waveform
+                        // `bench --trace` only: one "Codec Decode" phase per chunk, as in batch (K-93)
+                        let session = MLXProfiler.shared.activeSession
+                        let tracePhases = VoxtralTTSModel.splitTrace(session)
+                        if tracePhases { session?.beginPhase("Codec Decode", category: .codecDecode) }
                         let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
                         MLX.eval(fullWaveform)
+                        if tracePhases { session?.endPhase("Codec Decode", category: .codecDecode) }
                         try errors.check()
 
                         let totalSamples = fullWaveform.dim(0)

@@ -508,6 +508,10 @@ class VoxtralTTSModel: Module {
         var allCodes: [MLXArray] = []
         var ttft: TimeInterval = 0
         var eoaReached = false
+        // `bench --trace` only (K-93): an eval barrier after each half of the frame splits its time into an
+        // "FM i/n" span (flow matching + acoustic head) and an "LLM i/n" span (code embedding + LLM forward);
+        // the "Step i/n" span then covers the whole iteration. Outside trace mode nothing changes.
+        let splitTrace = Self.splitTrace(session)
 
         for i in 0..<maxTokens {
             // A cancelled caller stops within one frame; the pipeline then throws CancellationError (K-15)
@@ -517,6 +521,11 @@ class VoxtralTTSModel: Module {
 
             // Generate one frame: semantic + acoustic codes
             let codes = acousticTransformer.decodeOneFrame(h)  // (1, 37)
+            if splitTrace {
+                MLX.eval(codes)
+                session?.recordComplete("FM \(i + 1)/\(maxTokens)", category: .flowMatching,
+                                        durationUs: Self.elapsedUs(since: stepStart))
+            }
             if i == 0 {
                 MLX.eval(codes)
                 ttft = Date().timeIntervalSince(genStart)
@@ -526,8 +535,10 @@ class VoxtralTTSModel: Module {
             onFrame?(i, codes)
 
             // Record per-frame step timing
-            let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
-            session?.recordStep(index: i + 1, total: maxTokens, durationUs: stepDurationUs, category: .semanticCodeGen)
+            if !splitTrace {
+                let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
+                session?.recordStep(index: i + 1, total: maxTokens, durationUs: stepDurationUs, category: .semanticCodeGen)
+            }
 
             // Periodic EOA check — sync GPU only every N frames
             if Self.shouldCheckEOA(frame: i, interval: eoaCheckInterval) {
@@ -539,11 +550,16 @@ class VoxtralTTSModel: Module {
                     allCodes = Array(allCodes.prefix(j))
                     VoxtralDebug.log("  [GEN] EOA at frame \(j)")
                     eoaReached = true
+                    if splitTrace {
+                        session?.recordStep(index: i + 1, total: maxTokens, durationUs: Self.elapsedUs(since: stepStart),
+                                            category: .semanticCodeGen)
+                    }
                     break
                 }
             }
 
             // Embed codes back as LLM input for next step
+            let llmStart = CFAbsoluteTimeGetCurrent()
             let globalCodes = codesToGlobalIndices(codes)  // (1, 37)
             let codeEmbeddings = mmAudioEmbeddings.audioCodebookEmbeddings(globalCodes)  // (1, 37, dim)
             let nextEmbedding = codeEmbeddings.sum(axis: 1, keepDims: true)  // (1, 1, dim)
@@ -551,10 +567,19 @@ class VoxtralTTSModel: Module {
             // Feed through LLM. Lazy here, but the next frame's decodeOneFrame
             // evaluates it (`MLX.eval(xt)`), so each frame still syncs once.
             hidden = llmForward(inputEmbeds: nextEmbedding, cache: cache)
+            if splitTrace {
+                MLX.eval(hidden)
+                session?.recordComplete("LLM \(i + 1)/\(maxTokens)", category: .decoding,
+                                        durationUs: Self.elapsedUs(since: llmStart))
+            }
 
             // Sync GPU periodically to prevent unbounded compute graph growth
             if (i + 1) % eoaCheckInterval == 0 {
                 MLX.eval(hidden)
+            }
+            if splitTrace {
+                session?.recordStep(index: i + 1, total: maxTokens, durationUs: Self.elapsedUs(since: stepStart),
+                                    category: .semanticCodeGen)
             }
         }
 
@@ -565,6 +590,15 @@ class VoxtralTTSModel: Module {
         // Stack all codes: (1, N_frames, 37)
         let audioCodes = MLX.stacked(allCodes, axis: 1)
         return (audioCodes, allCodes.count, ttft)
+    }
+
+    /// Fine-grained TTS spans (K-93): only for a session that exports a Chrome trace (`bench --trace`)
+    static func splitTrace(_ session: ProfilingSession?) -> Bool {
+        session?.config.exportChromeTrace == true
+    }
+
+    static func elapsedUs(since start: CFAbsoluteTime) -> UInt64 {
+        UInt64(max(0, CFAbsoluteTimeGetCurrent() - start) * 1_000_000)
     }
 
     /// Decode audio codes to waveform.
@@ -686,7 +720,12 @@ class VoxtralTTSModel: Module {
             hidden = llmForward(inputEmbeds: audioTokEmb, cache: cache)
             MLX.eval(hidden)
 
-            // 5. Autoregressive generation with streaming
+            // 5. Autoregressive generation with streaming. Under `bench --trace` the generation is one
+            // "Semantic Code Generation" phase, as in batch (K-93); the consumer's chunk decodes nest in it.
+            let session = MLXProfiler.shared.activeSession
+            let tracePhases = Self.splitTrace(session)
+            if tracePhases { session?.beginPhase("Semantic Code Generation", category: .semanticCodeGen) }
+            defer { if tracePhases { session?.endPhase("Semantic Code Generation", category: .semanticCodeGen) } }
             var allCodes: [MLXArray] = []
             var chunkFrameCount = 0
             // Emit the first audio chunk early (fewer frames) to minimize

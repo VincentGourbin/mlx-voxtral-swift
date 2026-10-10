@@ -123,6 +123,23 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
 - **Retiré le 2026-10-10** : « le 6 bits est plus lent sur le texte moyen » (44,3 et 46,2 ms/pas). Reposées, ces
   cellules sont à 38,45 et 38,50, comme le court et le long ; l'écart venait de la chaleur.
 
+## Part du LLM et du flow matching dans le pas (K-93, 2026-10-11)
+
+`bench tts --trace`, court `neutral_female` graine 1, batch : en mode trace seulement, une barrière `eval` sépare
+chaque frame en un span « FM » (tête sémantique, 7 pas d'Euler du flow matching avec CFG, quantification FSQ) et un
+span « LLM » (plongement des codes et passe du transformeur). Lignes dans `BENCHMARKS.md` §« 2026-10-11 — K-93 ».
+
+| Pack | ms/pas (trace) | LLM | FM |
+|---|---|---|---|
+| tts-4b-4bit | 25,97 | 31,9 % (8,3 ms) | 68,0 % (17,7 ms) |
+| tts-4b-6bit | 39,12 | 28,3 % (11,1 ms) | 71,6 % (28,0 ms) |
+| tts-4b-mlx (bf16) | 130,78 | 17,7 % (23,2 ms) | 82,3 % (107,6 ms) |
+
+Le flow matching domine le pas dans les trois packs, et d'autant plus que les poids sont larges : en bf16 il coûte
+107,6 ms par frame contre 23,2 pour le LLM. C'est la borne haute des leviers qui ne touchent que le FM (K-39, K-48,
+K-57) : un FM deux fois plus rapide retirerait 34 % du pas en 4 bits, 36 % en 6 bits, 41 % en bf16. La barrière
+ajoute 2,6 % au pas en 6 bits (39,12 contre 38,1 ms hors trace), à garder en tête en lisant les parts.
+
 ## Aller-retour ASR (TTS → STT, `voxtral eval tts-roundtrip`, batch, `neutral_female`, mini-3b-8bit `.mlx`)
 
 | Pack | court (graines 1 / 2 / 3) | moyen | long |

@@ -217,3 +217,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   du batch : un levier sur ces phases ne peut pas atteindre 5 % du total. Autre leçon : l'occupation GPU du
   profileur (99,9 % sur la génération TTS) surestime de 2 à 7 points celle d'xctrace ; elle ne suffit pas à borner un
   levier de recouvrement.
+- 2026-10-11 — **K-93 : part du flow matching dans le pas TTS** : en `--trace`, le FM (tête sémantique, 7 pas
+  d'Euler avec CFG, FSQ) fait 68,0 % du pas en 4 bits, 71,6 % en 6 bits, 82,3 % en bf16 (107,6 ms par frame contre
+  23,2 pour le LLM) ; LLM + FM = 99,86 à 99,96 % du pas. Hors trace, sortie et `step_ms_p50` inchangés (+ 0,98 %,
+  A/B/B/A). Le streaming émet ses phases en trace. Borne des leviers FM (K-39, K-48, K-57) ; note
+  [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.

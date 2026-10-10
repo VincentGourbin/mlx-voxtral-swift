@@ -153,6 +153,26 @@ struct PassMeasurement {
                 let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
                 print("GPUPHASE \(String(decoding: data, as: UTF8.self))")
             }
+            // TTS frames split into "LLM i/n" and "FM i/n" spans (K-93): one line per sub-step, summed over
+            // the frames, beside the sum of the "Step i/n" spans that contain them
+            let events = session.getEvents()
+            func sum(_ prefix: String, _ category: ProfilingCategory) -> (ms: Double, count: Int) {
+                let spans = events.filter { $0.category == category && $0.name.hasPrefix(prefix) }
+                return (spans.compactMap(\.durationUs).reduce(0) { $0 + Double($1) } / 1000, spans.count)
+            }
+            let steps = sum("Step ", .semanticCodeGen)
+            if steps.count > 0 {
+                for (name, part) in [("TTS frame LLM", sum("LLM ", .decoding)), ("TTS frame FM", sum("FM ", .flowMatching))]
+                where part.count > 0 {
+                    let record: [String: Any] = [
+                        "phase": name, "duration_ms": BenchJSON.round(part.ms) ?? 0, "spans": part.count,
+                        "steps_ms": BenchJSON.round(steps.ms) ?? 0, "steps": steps.count,
+                        "share_of_steps_pct": BenchJSON.round(part.ms / steps.ms * 100, 2) ?? 0,
+                    ]
+                    let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+                    print("GPUPHASE \(String(decoding: data, as: UTF8.self))")
+                }
+            }
         }
         let intervals = phases.map { (start: $0.startUs, end: $0.endUs) }
         for (index, phase) in phases.enumerated() {
