@@ -1893,3 +1893,4 @@ Statistics:
 - Fournis : dérogation pour les préalables et le contrôle macOS (amorçage court de 4 s, valeurs recoupant la matrice
   reposée), comparaison du plafond requalifiée (pas un A/B/B/A, à faire avant toute décision de défaut), classement
   d'`ANECompilerService`, formulation K-85 corrigée, détails de la vérification.
+- Contradicteur relancé sur les corrections : `verified` à `16ef0ffb` (durée d'amorçage par pack corrigée). « Porte vérifiée » postée sur #588, `status: verified`, fermée.
