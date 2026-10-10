@@ -1781,7 +1781,7 @@ Statistics:
 
 ## K-35 — Baseline TTS (4 / 6 bits, bf16 × court / moyen / long × prédéfinie / clonée × batch / streaming), ligne consommateur, aller-retour ASR — 2026-10-09 — rapportée
 - Porte observée (`BENCHMARKS.md` §« 2026-10-09 — K-35 », arbre propre, 60 cellules sur 60 `"dirty":false`) :
-  - (Les trois points suivants sont remplacés par la reprise du 2026-10-10 : 53 sur 60, 7 cellules, ligne
+  - (Les trois points suivants sont remplacés par les reprises du 2026-10-10 : 54 sur 60, 6 cellules, ligne
     consommateur 38,47 / 38,49 ms/pas, A/A 0,05 %.)
   - A/A : 51 cellules sur 60 et la ligne consommateur (critère de `ASK.md` §Dérogations, 2026-10-05 et 2026-10-09).
   - 9 cellules streaming moyen ou long sans A/A (3,1 à 8,6 % sur `stream_frame_ms_p50`, ou p90 jusqu'à 34 %) :

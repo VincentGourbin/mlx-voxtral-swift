@@ -1935,7 +1935,7 @@ après la reprise. Les 13 autres :
 |---|---|---|---|
 | M-6bit-short_en-s1-clone-batch | `ttft_ms` | 154 / 163 | 5,6 % |
 | M-6bit-short_en-s3-clone-batch | `ttft_ms` | 160 / 155 | 3,2 % |
-| M-6bit-long_en-s1-preset-streaming | `ttfa_ms` | 740 / 888 | 20,0 % |
+| M-6bit-long_en-s1-preset-streaming | `ttfa_ms` | 3997 / 713 | 460,5 % ² |
 | M-6bit-long_en-s1-clone-streaming | `ttfa_ms` | 3995 / 647 | 517,3 % |
 | M-4bit-short_en-s2-clone-batch | `ttft_ms` | 146 / 141 | 3,2 % |
 | M-4bit-short_en-s3-preset-streaming | `ttfa_ms` | 303 / 294 | 3,1 % |
@@ -1945,7 +1945,9 @@ après la reprise. Les 13 autres :
 | M-mlx-short_en-s1-clone-batch | `ttft_ms` | 282 / 274 | 3,03 % |
 | M-mlx-long_en-s1-preset-batch | `ttft_ms` | 5768 / 6111 | 5,9 % |
 | M-mlx-long_en-s1-clone-batch | `ttft_ms` | 619 / 6096 | 885,3 % |
-| M-mlx-long_en-s1-clone-streaming | `ttfa_ms` | 908 / 9187 | 912,1 % |
+| M-mlx-long_en-s1-clone-streaming | `ttfa_ms` | 7840 / 4328 | 81,2 % ² |
+
+² Paire refaite le 2026-10-10 dans la nuit (sous-section « Reprise de deux cellules streaming long »).
 
 **Erratum des sections du 2026-10-09** (les lignes `BENCH` ne changent pas, seules les annotations sont fausses) :
 
@@ -1954,10 +1956,10 @@ après la reprise. Les 13 autres :
   12,0 à 41,6 Go. Le pic de 74,1 Go (75 899 Mo) ne concerne que le streaming moyen et long. Ces cellules batch
   sont écartées parce qu'elles ont été mesurées en deux passes dans un processus (protocole antérieur). La paire
   consommateur de la matrice (38,47 / 38,47, même `out_sha256`) était saine : elle concorde avec la reprise.
-- « Les 9 cellules streaming moyen ou long marquées `AA FAIL` » : après la reprise, 7 cellules (5 long, 2 moyen).
+- « Les 9 cellules streaming moyen ou long marquées `AA FAIL` » : après les reprises, 6 cellules (4 long, 2 moyen).
 - « Quatre cellules streaming portent deux fois l'audio » : les deux cellules moyennes concernées sont remplacées par
-  des lignes postérieures au correctif. Il en reste deux : `M-mlx-short_en-s3-preset-streaming` et
-  `M-6bit-long_en-s1-preset-streaming`.
+  des lignes postérieures au correctif, comme `M-6bit-long_en-s1-preset-streaming` (sous-section ci-dessous). Il en
+  reste une : `M-mlx-short_en-s3-preset-streaming`.
 - Complément de vérification, liste TTFT : l'écart de `M-mlx-short_en-s1-clone-batch` est de 3,03 %, pas 3,0 % ;
   la liste à jour est ci-dessus.
 - Complément de vérification : « La ligne consommateur va donc de 40,4 à 46,6 ms/pas sur 4 paires de processus
@@ -1985,8 +1987,14 @@ simulateur relevé.
 - bf16 clonée : `stream_frame_ms_p50` 1,09 %, mais p90 15,29 % : la cellule reste sans A/A (ASK-34).
 
 Bilan de la baseline : A/A sur 54 cellules sur 60 et la ligne consommateur. 6 cellules streaming restent sans A/A
-(4 long, 2 moyen). Le TTFA de ces deux cellules reste hors référence : 3 996 / 713 ms et 7 840 / 4 328 ms.
-L'écart des 13 cellules hors référence est inchangé.
+(4 long, 2 moyen). Le TTFA de ces deux cellules reste hors référence : 3 997 / 713 ms et 7 840 / 4 328 ms.
+Le compte des cellules hors référence reste 13 ; les écarts de ces deux cellules sont à jour dans la liste TTFT
+ci-dessus (²).
+
+Charge non bloquante : l'échantillonneur relève, dans 20 passes retenues, des pointes isolées d'un échantillon de
+Microsoft Teams (WebView) jusqu'à 657 % de CPU, dont 490 % dans la p1 (la plus lente) de bf16 clonée long en
+streaming. Ni compilation, ni simulateur, ni autre travail MLX : selon la décision du 2026-10-05, elles ne bloquent
+pas la mesure ; elles sont notées ici.
 
 ```
 # k35/cd120/M-6bit-long_en-s1-preset-streaming-cd120 (cd120)

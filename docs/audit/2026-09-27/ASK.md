@@ -718,7 +718,7 @@ Décisions du planificateur du 2026-10-03 :
     faible. La cause
     n'est écrite que si l'échantillonneur de charge la montre dans la passe lente ; sinon « cause non isolée »
     (régime de K-85). Les passes écartées restent dans `BENCHMARKS.md`, chacune avec son fichier et sa cause.
-  - **Cellules à audio doublé (K-92)** : 1 cellule streaming retenue (4 avant les reprises du 2026-10-10) gardent leur temps par frame ; leurs
+  - **Cellules à audio doublé (K-92)** : 1 cellule streaming retenue (4 avant les reprises du 2026-10-10) garde son temps par frame ; ses
     `audio_s`, `rtf` et `out_sha256` sont marqués faux, et un contrôle après correctif est consigné.
   - **Machine-check** : 4 cellules retenues ont une ligne `KO indexation/sauvegarde en cours` avant une passe (7
     avant la reprise du texte moyen ; liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 1 EVAL retenu (`RT-4bit-medium_en-s1`),
