@@ -762,8 +762,8 @@ Décisions du planificateur du 2026-10-03 :
   vérifier à la replanification (#590).
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
   gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
-  d'une invocation `--passes 2 --warmup 1 --cooldown 120`). Raison : sur le texte court, l'amorçage dure environ 4 s
-  (contre 45 s sur le moyen) ; les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 % près) recoupent la matrice
+  d'une invocation `--passes 2 --warmup 1 --cooldown 120`). Raison : sur le texte court, l'amorçage dure environ 3 à 12 s
+  selon le pack (4 s en 6 bits), contre 45 s sur le moyen ; les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 % près) recoupent la matrice
   reposée (38,15 à 38,20). Preuve : `BENCHMARKS.md` §« Complément du 2026-10-10 (contradicteur) ».
 - **K-36 (#589), 2026-10-05, décision de l'agent** :
   - Clause « Metal System Trace sur C-moyen complet » : la trace Realtime est faite sur `c_20s_en`. Sur C-moyen,

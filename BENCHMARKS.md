@@ -2023,8 +2023,8 @@ AA FAIL out_sha256=identical stream_frame_ms_p50=1.09% stream_frame_ms_p90=15.29
   (`AA-tts-6bit-court`), l'A/B/B/A du préalable 2 (`ABBA-*`) et le contrôle macOS (`k35/os/OS-*`) ont tourné en un
   processus par passe, `--warmup 1` sans `--cooldown` : la passe mesurée suit l'amorçage. L'amendement demandait
   pour le préalable 1 une invocation `--passes 2 --warmup 1 --cooldown 120`, et « mêmes paramètres » (complément du
-  2026-10-09) ne dit pas que le repos manquait. Effet nul mesuré sur le texte court : son amorçage dure environ 4 s
-  (passe de 4,0 à 4,3 s) contre 45 s sur le moyen, et les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 %
+  2026-10-09) ne dit pas que le repos manquait. Effet nul mesuré sur le texte court : son amorçage dure environ 3 à 12 s
+  selon le pack (4 s en 6 bits, passes de 3,1 à 11,7 s) contre 45 s sur le moyen (bf16 du contrôle macOS : + 0,3 %), et les valeurs (38,04 à 38,22 ms/pas, contrôle macOS à 0,6 %
   près) recoupent la matrice reposée (38,15 à 38,20). Décision de l'agent consignée dans `ASK.md` §Dérogations.
 - **Comparaison du plafond de cache** : paire à paire, sur des jours et des binaires différents (`097fd145` plafonné,
   `599d622a` par défaut), pas un A/B/B/A. Le 6 bits plafonné est 2,6 à 2,9 % plus lent dans ses deux cellules ;
