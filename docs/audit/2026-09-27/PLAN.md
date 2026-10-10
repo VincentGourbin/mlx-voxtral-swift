@@ -2074,8 +2074,9 @@ Statistics:
 - Vérification du 2026-10-11 (vérificateur `not verified`, contradicteur `verified` avec réserves ; aucune mesure à
   refaire) : (1) le détecteur `exportChromeTrace` valait aussi pour `voxtral profile` et tout profileur à la
   configuration par défaut (`ProfilingConfig()` l'active) : remplacé par la variable `VOXTRAL_TTS_SPLIT_TRACE`, posée
-  par `bench --trace` pour sa seule passe de diagnostic (contrôle : mêmes spans et phases, `out_sha256` `e64d2131…`) ;
+  par `bench --trace` pour sa seule passe de diagnostic (contrôle sur un binaire `dirty` : mêmes spans et phases, `out_sha256` `e64d2131…`, celui d'avant K-39) ;
   (2) preuve indirecte des binaires (`dirty:true`, `commit` lu dans le dossier courant) inscrite dans `ASK.md`
   §Dérogations ; (3) K-48 : raisonnement corrigé (−42 % des appels du FM, au plus −29 % du pas) ; K-39 : FM 1,95 fois
   plus rapide au moins ; (4) `BENCHMARKS.md` : champ `top_process` (pas `cli`), 9 « Codec Decode » sur 10 imbriquées ;
   note de baseline : surcoût de la barrière en ordre de grandeur.
+- Second passage du vérificateur (2026-10-11, `b9ebc5dd`) : `verified` ; réserve de documentation sur le binaire du contrôle, consignée ci-dessus et dans `ASK.md`. K-93 vérifiée, #633 fermée.

@@ -826,4 +826,4 @@ Décisions du planificateur du 2026-10-03 :
   indirecte acceptée : A construit dans un worktree propre à `16dd4088` (chemin dans `top_process`), compilation de B à
   23:20:24 sans source recompilée, modification de K-39 datée de 23:21:42, `out_sha256` identique A/B. Le détecteur du
   mode trace a été remplacé après les mesures (`exportChromeTrace` → `VOXTRAL_TTS_SPLIT_TRACE`), chemin identique sous
-  `bench --trace`, mesures non refaites. Correctif de l'instrument (`commit` du binaire, pas du dossier) : note pour K-89.
+  `bench --trace`, mesures non refaites ; contrôle après correctif sur un binaire `dirty` (arbre avec K-39 en cours) : il prouve la présence des spans et des phases ; son `out_sha256` `e64d2131…`, celui d'avant K-39, montre que le FM de K-39 n'y était pas (K-39 change les codes du 6 bits : parité acoustique 98,17 %). Correctif de l'instrument (`commit` du binaire, pas du dossier) : note pour K-89.
