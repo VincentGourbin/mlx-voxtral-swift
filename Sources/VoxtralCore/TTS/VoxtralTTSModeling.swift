@@ -592,9 +592,12 @@ class VoxtralTTSModel: Module {
         return (audioCodes, allCodes.count, ttft)
     }
 
-    /// Fine-grained TTS spans (K-93): only for a session that exports a Chrome trace (`bench --trace`)
+    /// Fine-grained TTS spans (K-93): only under `bench --trace`, which sets `VOXTRAL_TTS_SPLIT_TRACE` for its
+    /// diagnostic pass. Not tied to the profiler's config: a consumer profiling with the defaults keeps the normal loop.
+    static let splitTraceEnvironmentKey = "VOXTRAL_TTS_SPLIT_TRACE"
+
     static func splitTrace(_ session: ProfilingSession?) -> Bool {
-        session?.config.exportChromeTrace == true
+        session != nil && getenv(splitTraceEnvironmentKey) != nil
     }
 
     static func elapsedUs(since start: CFAbsoluteTime) -> UInt64 {

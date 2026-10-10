@@ -820,3 +820,10 @@ Décisions du planificateur du 2026-10-03 :
     K-56, K-60 ← + K-89 ; 2026-10-07 : K-77 ← + K-52 ; K-78 ← + K-91 ; K-79 ← + K-90 ; K-80 ← + K-90, K-91 ; K-75 ←
     K-22, K-31 ; K-43 ← K-12, K-35 ; 2026-10-10 : K-43, K-44 ← + K-93 ; K-50 ← + K-94 ; K-58 ← + K-43 ; K-72 ← + K-89 ;
     K-77, K-78 ← + K-96 ; K-79 ← + K-95 ; K-89 ← #604 (K-32b) au lieu de K-32.
+- **K-93 (#633), 2026-10-11, décision de l'agent** (`VERIFY.md` §1 et §2) : les huit lignes `BENCH` portent
+  `"commit":"794d9eb14","dirty":true` (champs lus dans le dossier courant au lancement, l'arbre contenant les
+  modifications non construites de K-39 ; `794d9eb1` amendé en `a02db97e` avant le push, sources identiques). Preuve
+  indirecte acceptée : A construit dans un worktree propre à `16dd4088` (chemin dans `top_process`), compilation de B à
+  23:20:24 sans source recompilée, modification de K-39 datée de 23:21:42, `out_sha256` identique A/B. Le détecteur du
+  mode trace a été remplacé après les mesures (`exportChromeTrace` → `VOXTRAL_TTS_SPLIT_TRACE`), chemin identique sous
+  `bench --trace`, mesures non refaites. Correctif de l'instrument (`commit` du binaire, pas du dossier) : note pour K-89.

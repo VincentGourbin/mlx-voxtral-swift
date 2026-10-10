@@ -461,7 +461,10 @@ enum BenchRunner {
             let url = dir.appendingPathComponent("trace-\(base["pipeline"] ?? "bench")-\(stamp).json")
             try prepare(pass: 0, cooldown: common.cooldown)
             _ = try await PassMeasurement.$metalTrace.withValue(common.metalTrace) {
-                try await PassMeasurement.$traceURL.withValue(url) { try await body(0, false) }
+                // TTS frames split into LLM / FM spans for this pass only (K-93)
+                setenv("VOXTRAL_TTS_SPLIT_TRACE", "1", 1)
+                defer { unsetenv("VOXTRAL_TTS_SPLIT_TRACE") }
+                return try await PassMeasurement.$traceURL.withValue(url) { try await body(0, false) }
             }
             print("TRACE \(url.path) (diagnostic pass, not a BENCH line; open in https://ui.perfetto.dev/)")
         }

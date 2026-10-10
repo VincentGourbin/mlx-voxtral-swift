@@ -138,7 +138,9 @@ span « LLM » (plongement des codes et passe du transformeur). Lignes dans `BEN
 Le flow matching domine le pas dans les trois packs, et d'autant plus que les poids sont larges : en bf16 il coûte
 107,6 ms par frame contre 23,2 pour le LLM. C'est la borne haute des leviers qui ne touchent que le FM (K-39, K-48,
 K-57) : un FM deux fois plus rapide retirerait 34 % du pas en 4 bits, 36 % en 6 bits, 41 % en bf16. La barrière
-ajoute 2,6 % au pas en 6 bits (39,12 contre 38,1 ms hors trace), à garder en tête en lisant les parts.
+coûte de l'ordre de 3 % au pas en 6 bits (moyenne en trace 39,12 ms, pas 1 compris, contre `step_ms_p50` hors trace
+38,1 : statistiques différentes, ordre de grandeur seulement), à garder en tête en lisant les parts. La somme LLM + FM
+≈ 100 % prouve la cohérence de l'instrument (les deux spans découpent le pas), pas la justesse de la frontière.
 
 ## Aller-retour ASR (TTS → STT, `voxtral eval tts-roundtrip`, batch, `neutral_female`, mini-3b-8bit `.mlx`)
 

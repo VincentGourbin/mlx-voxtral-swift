@@ -2035,8 +2035,10 @@ AA FAIL out_sha256=identical stream_frame_ms_p50=1.09% stream_frame_ms_p90=15.29
 Binaire B = `794d9eb1` (code du commit `a02db97e` ; Release, `-onlyUsePackageVersionsFromResolvedFile` ; mlx-swift 0.31.6@0bb916c, mlx-swift-lm
 main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8) ; A = commit parent `16dd4088`, construit dans un worktree.
 Les champs `commit` et `dirty` sont lus dans le dossier courant au lancement, pas dans le binaire : les quatre passes
-portent `794d9eb14` et `dirty:true` (l'arbre contenait déjà les modifications non construites de K-39) ; le chemin
-du binaire (`cli`) distingue A et B. Un processus par passe, `--warmup 1 --cooldown 120`, `machine-check` sans `KO`
+portent `794d9eb14` et `dirty:true` (l'arbre contenait déjà les modifications non construites de K-39). La preuve que
+A et B sont les bons binaires est indirecte : chemin dans `top_process` (passes 1, 2 et 4 ; passe 3 : `geod`), journal
+de compilation de B sans source recompilée, `out_sha256` identique à A (le changement de K-39 l'aurait modifié) ;
+dérogation dans `ASK.md` §Dérogations (K-93). Un processus par passe, `--warmup 1 --cooldown 120`, `machine-check` sans `KO`
 et `quiet.sh` avant chaque passe (toutes `QUIET`), simulateurs arrêtés. tts-4b-6bit court `neutral_female` graine 1.
 
 - **Hors `--trace` (A/B/B/A)** : `out_sha256` identique (`e64d2131…`, 92 frames) ; `step_ms_p50` A 37,31 / 38,17,
@@ -2052,7 +2054,13 @@ et `quiet.sh` avant chaque passe (toutes `QUIET`), simulateurs arrêtés. tts-4b
   Un span LLM de moins que de pas : la dernière frame (EOA) ne relance pas le LLM. Le reste du pas (< 0,15 %) est le
   test d'EOA et le rappel `onFrame`.
 - **`--trace --streaming`** (tts-4b-6bit) : une phase « Semantic Code Generation » et 10 phases « Codec Decode »
-  (une par bloc décodé, imbriquées dans la génération : leur temps est retiré du temps exclusif de la génération).
+  (une par bloc décodé ; 9 sur 10 imbriquées dans la génération, dont le temps exclusif les exclut ; la dernière suit
+  la fin de la génération). Passe de diagnostic avec `mediaanalysisd` à 100 % (`top_process`) : sans effet sur la
+  présence des phases, durées non interprétées.
+- **Détection du mode trace corrigée après vérification (2026-10-11)** : mesuré avec `exportChromeTrace` comme
+  détecteur, qui valait aussi pour `voxtral profile` et tout profileur à la configuration par défaut ; remplacé par une
+  variable posée par `bench --trace` pour sa seule passe de diagnostic (`VOXTRAL_TTS_SPLIT_TRACE`). Chemin identique
+  sous `bench --trace` (contrôle : mêmes spans et phases, même `out_sha256`) ; mesures non refaites.
 
 ```
 # k93/ABBA-1-A
