@@ -759,9 +759,13 @@ Décisions du planificateur du 2026-10-03 :
   avec, même `out_sha256`. Le texte moyen et la ligne consommateur, mesurés sans repos du 2026-10-07 au 2026-10-09,
   ont été refaits (`BENCHMARKS.md` §« 2026-10-10 — K-35, reprise ») ; leurs anciennes lignes sont écartées. Les
   autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
-  vérifier à la replanification (#590). Vérifié le 2026-10-10 (#590) : K-34 et K-36 ont passé `--warmup 1 --cooldown 0`
-  (`.local-runs/queue4.sh` à `queue16.sh`, sauf C-long sans amorçage) ; K-37 n'a pas d'amorçage (`--warmup 0
-  --cooldown 120`). Le contrôle des cellules K-34 / K-36 est confié à K-96 ; d'ici là, une porte en pourcentage se juge
+  vérifier à la replanification (#590). Vérifié le 2026-10-10 (#590, corrigé après le vérificateur) : K-34 et K-36 ont passé
+  `--warmup 1 --cooldown 0` en un processus par passe (`.local-runs/queue2b.sh`, `queue4.sh` à `queue16.sh`), y compris
+  5 des 10 cellules C-long retenues (mini-3b-8bit et mini-3b-4bit en `.mlx` et `.auto`, realtime-4b-fp16 : journaux
+  « warm-up 1/1 done (excluded) ») ; C-long sans amorçage seulement à partir de `queue7.sh`. K-37 : la p1 des séries
+  `A4-6bit-cli`, `A4-mlx-cli` et `A4-mlx-after_synthesis` a tourné avec amorçage puis `--cooldown 0` (`queue2.sh:30`),
+  la p2 sans amorçage ; leur A/A p1 / p2 de 0,03 à 0,26 % montre un effet non mesurable sur l'enrôlement : K-37 n'est
+  pas reprise. Le contrôle des cellules K-34 / K-36 est confié à K-96 ; d'ici là, une porte en pourcentage se juge
   contre le A de chaque fiche, mesuré avec repos.
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
   gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
