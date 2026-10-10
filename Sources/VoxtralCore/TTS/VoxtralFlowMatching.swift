@@ -61,7 +61,8 @@ class BidirectionalAttention: Module {
         }
 
         // Full bidirectional attention (no causal mask)
-        let scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * MLXArray(scale)
+        // Swift scalar: a Float32 MLXArray would promote bf16 scores to fp32 (K-39)
+        let scores = MLX.matmul(q, k.transposed(0, 1, 3, 2)) * scale
         let weights = MLX.softmax(scores, axis: -1)
         var out = MLX.matmul(weights, v)
         out = out.transposed(0, 2, 1, 3).reshaped(B, T, -1)
@@ -170,6 +171,9 @@ class FlowMatchingAudioTransformer: Module {
     let cfgAlpha: Float
     let sigmaMax: Float
 
+    /// false: the whole frame in fp32, the path before K-39 (teacher-forced parity reference)
+    var computeInWeightDType = true
+
     // Input projections
     @ModuleInfo(key: "input_projection") var inputProjection: Linear   // acoustic x_t → dim
     @ModuleInfo(key: "llm_projection") var llmProjection: Linear       // LLM hidden → dim
@@ -216,6 +220,16 @@ class FlowMatchingAudioTransformer: Module {
         super.init()
     }
 
+    /// dtype of the transformer layers (K-39): the weights' dtype for an unquantized head (bf16 pack), float32
+    /// for a quantized one. Measured with teacher forcing: quantized layers in bf16 (from `scales`) changed 1.4 to
+    /// 1.9 % of the acoustic codes by up to 2 levels (gate: < 1 %, one level), for no gain in 4 bits.
+    var layerComputeDType: DType {
+        guard computeInWeightDType, let wq = layers.first?.attention.wq, !(wq is QuantizedLinear) else {
+            return .float32
+        }
+        return wq.weight.dtype
+    }
+
     /// Run input through all transformer layers + norm.
     private func runTransformer(_ x: MLXArray) -> MLXArray {
         var h = x
@@ -229,17 +243,18 @@ class FlowMatchingAudioTransformer: Module {
     ///
     /// CRITICAL: Inputs are STACKED as sequence of 3, velocity extracted at position 0.
     /// Reference: acoustic_head.py lines 163-176
-    private func predictVelocity(xt: MLXArray, t: MLXArray, llmOutput: MLXArray) -> MLXArray {
-        let timeEmb = timeProjection(timeEmbedding(t))    // (B, dim)
+    private func predictVelocity(xt: MLXArray, t: MLXArray, llmOutput: MLXArray, dtype: DType) -> MLXArray {
+        // Projections and the acoustic head in float32 (small); only the transformer layers in `dtype` (K-39)
+        let timeEmb = timeProjection(timeEmbedding(t))     // (B, dim)
         let llmEmb = llmProjection(llmOutput)              // (B, dim)
         let acousticEmb = inputProjection(xt)              // (B, dim)
 
         // Stack as sequence: (B, 3, dim) — acoustic at position 0
-        let x = MLX.stacked([acousticEmb, timeEmb, llmEmb], axis: 1)
+        let x = MLX.stacked([acousticEmb, timeEmb, llmEmb], axis: 1).asType(dtype)
         let out = runTransformer(x)
 
         // Velocity extracted at position 0 (the acoustic position)
-        return acousticCodebookOutput(out[0..., 0, 0...])
+        return acousticCodebookOutput(out[0..., 0, 0...].asType(.float32))
     }
 
     /// Predict semantic codebook index DIRECTLY from LLM hidden state.
@@ -286,13 +301,17 @@ class FlowMatchingAudioTransformer: Module {
         let B = llmOutput.dim(0)
         let N_SPECIAL: Int32 = 2  // empty_audio=0, end_audio=1
 
-        // Cast to float32 for precision (critical for flow matching stability)
-        let llmF32 = llmOutput.asType(.float32)
+        // The flow-matching transformer layers run in `layerComputeDType` (K-39: bf16 for the bf16 pack); the
+        // projections, both heads, the Euler state `xt`, the velocity and the CFG combination stay in float32.
+        // Before K-39 the whole frame ran in float32 (`computeInWeightDType = false`), like mlx-audio. Semantic
+        // head in bf16 flipped 1.7 to 2.6 % of the codes on near-ties (teacher-forced parity).
+        let dtype = layerComputeDType
+        let llm = llmOutput.asType(.float32)
 
         // Semantic code (direct prediction from LLM hidden state)
-        let semanticCodes = predictSemantic(llmF32)  // (B,) in [0, 8319]
+        let semanticCodes = predictSemantic(llm)  // (B,) in [0, 8319]
 
-        // Euler integration for acoustic codes (in float32 for stability)
+        // Euler integration for acoustic codes (state in float32 for stability)
         var xt = MLXRandom.normal([B, nAcousticCodebook]).asType(.float32) * MLXArray(sigmaMax)
 
         let timesteps: [Float] = (0..<nDenoisingSteps).map { Float($0) / Float(nDenoisingSteps - 1) }
@@ -300,8 +319,8 @@ class FlowMatchingAudioTransformer: Module {
         // Classifier-free guidance: the conditional and unconditional velocity
         // passes are independent, so run them as a single batch-2 forward
         // instead of two sequential passes (halves the transformer forwards).
-        let llmZeros = MLX.zeros(like: llmF32)
-        let llmBoth = MLX.concatenated([llmF32, llmZeros], axis: 0)  // (2B, dim)
+        let llmZeros = MLX.zeros(like: llm)
+        let llmBoth = MLX.concatenated([llm, llmZeros], axis: 0)  // (2B, dim)
 
         for step in 0..<(nDenoisingSteps - 1) {
             let tVal = timesteps[step]
@@ -309,7 +328,7 @@ class FlowMatchingAudioTransformer: Module {
             let tBoth = MLX.full([2 * B], values: MLXArray(tVal))
             let xtBoth = MLX.concatenated([xt, xt], axis: 0)          // (2B, nAcoustic)
 
-            let vBoth = predictVelocity(xt: xtBoth, t: tBoth, llmOutput: llmBoth).asType(.float32)
+            let vBoth = predictVelocity(xt: xtBoth, t: tBoth, llmOutput: llmBoth, dtype: dtype).asType(.float32)
             let vCond = vBoth[0 ..< B]
             let vUncond = vBoth[B ..< (2 * B)]
             let v = MLXArray(cfgAlpha) * vCond + MLXArray(1.0 - cfgAlpha) * vUncond
