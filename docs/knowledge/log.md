@@ -191,14 +191,15 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-09 — **K-35 : baseline TTS**.
   - Par pas : 4 bits 25 à 26 ms, 6 bits 38 à 39, bf16 129 à 137 (après la reprise du 2026-10-10). Le bf16 est plus lent que le temps réel même en
     batch (RTF 1,7 à 1,8).
-  - Le streaming re-décode tout l'accumulé : 49 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,1 (K-43).
+  - Le streaming re-décode tout l'accumulé : 49 à 214 ms par frame sur le moyen et le long, RTF jusqu'à 3,0 (K-43).
   - Le codec décode d'un bloc : sur le texte long, 21 à 29 Go de pic MLX. Le plafond de cache retire 9 à 12 Go de
     `phys_footprint` sans changer la vitesse.
   - Aller-retour ASR : couverture 0,91 (court) à 0,98.
   - Leçon (1) : un premier relevé donnait au plafond un coût de 8 à 19 % ; il comparait deux protocoles et deux macOS.
     Une comparaison ne vaut que dans le même protocole, en A/B/B/A.
   - Leçon (2) : 5 cellules sur 9 ont échoué l'A/A un soir de compilations Xcode, puis 5 sur 5 sont passées le
-    lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite.
+    lendemain, machine calme. Un échec sans charge relevée se refait, sans cause écrite. (Une partie de ces échecs
+    touchait le texte moyen, alors mesuré sans repos après l'amorçage : entrée du 2026-10-10.)
 - 2026-10-09 — **K-35, vérification** : en bf16, `synthesize(voice:)` (préfixe de voix en cache) et
   `synthesize(voiceEmbedding:)` donnent un autre audio à même graine, alors que les 4 et 6 bits sont identiques.
   Les EVAL bf16 sont refaits par le chemin des BENCH. Leçon : un EVAL qui sert de référence de qualité pour une

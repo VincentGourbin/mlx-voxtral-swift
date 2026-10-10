@@ -1781,6 +1781,8 @@ Statistics:
 
 ## K-35 — Baseline TTS (4 / 6 bits, bf16 × court / moyen / long × prédéfinie / clonée × batch / streaming), ligne consommateur, aller-retour ASR — 2026-10-09 — rapportée
 - Porte observée (`BENCHMARKS.md` §« 2026-10-09 — K-35 », arbre propre, 60 cellules sur 60 `"dirty":false`) :
+  - (Les trois points suivants sont remplacés par la reprise du 2026-10-10 : 53 sur 60, 7 cellules, ligne
+    consommateur 38,47 / 38,49 ms/pas, A/A 0,05 %.)
   - A/A : 51 cellules sur 60 et la ligne consommateur (critère de `ASK.md` §Dérogations, 2026-10-05 et 2026-10-09).
   - 9 cellules streaming moyen ou long sans A/A (3,1 à 8,6 % sur `stream_frame_ms_p50`, ou p90 jusqu'à 34 %) :
     gardées, cause consignée (re-décodage de tout l'accumulé), référence « avant » de K-43 (ASK-34 = A).
@@ -1797,7 +1799,7 @@ Statistics:
     plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 % ; corrigé le
     2026-10-10 : − 1,0 à + 2,9 % sur le seul texte long).
   - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) (retiré le
-    2026-10-10 : GPU chaud, voir la reprise) ; 4 bits cloné, 60 % de frames en plus sur le moyen (1 806 contre
+    2026-10-10 : GPU chaud, voir la reprise) ; 4 bits cloné, 61 % de frames en plus sur le moyen (1 806 contre
     1 123).
   - K-92 trouvé ici (audio doublé dans 5 cellules streaming), corrigé par `599d622a`.
 - Écarts : `ASK.md` §Dérogations (2026-10-09) : texte court en un processus, macOS 27.0.0 / 27.0.1, plafond de cache
@@ -1865,3 +1867,14 @@ Statistics:
   - rapport du tracker périmé.
 - Fournis : chiffres corrigés, tableau sur la moyenne des deux passes (− 2,9 à − 17,0 %), commentaire de reprise
   sur #588.
+
+## Vérification du 2026-10-10 (2e passage) — K-35 (#588) — non vérifiée, manques fournis
+- Vérificateur `not verified` : clauses tenues, comptes recalculés ; manques :
+  - pourcentages de `KO` inversés dans la reprise ;
+  - charge non consignée dans les passes retenues de deux cellules streaming long (simulateur, compilations Xcode),
+    contraire à la règle du 2026-10-05 ;
+  - détails de dates, d'arrondis et d'annotations.
+- Fournis : les deux cellules refaites sur machine calme (`BENCHMARKS.md` §« Reprise de deux cellules streaming
+  long ») ; 6 bits prédéfinie passe (2,20 %), bf16 clonée reste hors A/A (p90 15,29 %). Baseline : 54 cellules sur 60
+  et la ligne consommateur à l'A/A, 6 cellules streaming sans A/A (ASK-34), 1 cellule à audio doublé. Détails
+  corrigés.

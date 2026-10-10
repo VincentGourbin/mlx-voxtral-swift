@@ -1,4 +1,4 @@
-# Baseline TTS — Apple M3 Max 96 Go — 2026-10-09, texte moyen repris le 2026-10-10 (K-35)
+# Baseline TTS — Apple M3 Max 96 Go — 2026-10-09, texte moyen repris les 2026-10-09 et 10 (K-35)
 
 Machine : M3 Max (GPU 40 cœurs), 96 Go, secteur. Dépendances résolues : mlx-swift 0.31.6 (`0bb916c`), mlx-swift-lm
 `main@604fae7`, swift-mlx-profiler 1.5.1 (`bfe71d8`). Binaires Release, arbre propre (60 cellules sur 60
@@ -15,12 +15,13 @@ Sources des lignes, par cellule :
 - **Texte court (36 cellules)** : `--passes 2` dans un processus, `--cooldown 120`, commit `d6129d02` / `73079515`,
   macOS 27.0.0, sans plafond de cache. Contrôle sous macOS 27.0.1 : § « Contrôle macOS ».
 - **Texte moyen (12 cellules) et ligne consommateur** : un processus par passe, amorçage puis `--cooldown 120`
-  avant la passe mesurée, commit `f6efa48d` (binaire de `599d622a`), macOS 27.0.1, 2026-10-10. Batch en profil par
+  avant la passe mesurée, commit `f6efa48d` (binaire de `599d622a`), macOS 27.0.1, 2026-10-09 au soir et nuit du 10. Batch en profil par
   défaut (sans plafond de cache, le chemin de FluxForge), streaming avec `--cache-limit-mb 2048`.
 - **Batch long (6 cellules)** : profil par défaut, un processus par passe, sans amorçage, commit `599d622a`, macOS
   27.0.1.
 - **Streaming long (6 cellules)** : `--cache-limit-mb 2048`, un processus par passe, sans amorçage, commit
-  `097fd145`, macOS 27.0.1.
+  `097fd145`, macOS 27.0.1 ; 6 bits prédéfinie et bf16 clonée refaites le 2026-10-10 (`eed131bc`), leurs premières
+  passes ayant tourné pendant des compilations Xcode et un simulateur démarré.
 - Sans plafond, le pic `phys_footprint` plafonnait à 74,1 Go (75 899 Mo) sur 96 dans les 12 cellules streaming
   moyen et long de la matrice réduite, et dans 18 cellules en comptant les graines 2 et 3 (swap non exclu).
 
@@ -38,15 +39,15 @@ référence en A/B/B/A.
 | Pack | Texte | Voix | Mode | ms/pas ou ms/frame p50 | TTFT ou TTFA ms | RTF | frames | pic MLX Go | A/A |
 |---|---|---|---|---|---|---|---|---|---|
 | tts-4b-6bit | court | neutral_female | batch | 38,15 à 38,18 | 252 à 258 | 0,522 à 0,559 | 71 à 99 | 4,1 à 4,3 | PASS (3 graines) |
-| tts-4b-6bit | court | neutral_female | streaming | — ¹ | 343 à 346 | 0,547 à 0,557 | 71 à 99 | 4,2 à 4,3 | PASS (3 graines) |
+| tts-4b-6bit | court | neutral_female | streaming | — ¹ | 343 à 346 | 0,548 à 0,557 | 71 à 99 | 4,2 à 4,3 | PASS (3 graines) |
 | tts-4b-6bit | court | clone_fr | batch | 38,01 à 38,06 | 153 à 160 ⁴ | 0,527 à 0,556 | 62 à 81 | 4,1 à 4,2 | PASS (3 graines) |
-| tts-4b-6bit | court | clone_fr | streaming | — ¹ | 246 à 256 | 0,539 à 0,542 | 62 à 81 | 4,2 | PASS (3 graines) |
+| tts-4b-6bit | court | clone_fr | streaming | — ¹ | 247 à 256 | 0,539 à 0,542 | 62 à 81 | 4,2 | PASS (3 graines) |
 | tts-4b-6bit | moyen | neutral_female | batch | 38,50 | 395 | 0,516 | 998 | 8,7 | PASS |
 | tts-4b-6bit | moyen | neutral_female | streaming | 58,09 | 491 | 0,829 | 998 | 9,1 | PASS |
 | tts-4b-6bit | moyen | clone_fr | batch | 38,45 | 327 | 0,507 | 858 | 7,3 | PASS |
 | tts-4b-6bit | moyen | clone_fr | streaming | 54,60 | 426 | 0,751 | 858 | 7,7 | PASS |
 | tts-4b-6bit | long | neutral_female | batch | 38,96 | 590 | 0,550 | 1 903 | 21,6 | PASS |
-| tts-4b-6bit | long | neutral_female | streaming | 107,89 | 740 ⁴ | 1,721 ² | 1 903 | 23,1 | sans A/A (ASK-34) |
+| tts-4b-6bit | long | neutral_female | streaming | 100,56 | 3 997 ⁴ | 1,650 | 1 903 | 23,1 | PASS |
 | tts-4b-6bit | long | clone_fr | batch | 38,94 | 525 | 0,548 | 1 868 | 20,9 | PASS |
 | tts-4b-6bit | long | clone_fr | streaming | 95,86 | 3 995 ⁴ | 1,557 | 1 868 | 22,5 | PASS |
 | tts-4b-4bit | court | neutral_female | batch | 24,80 à 24,95 | 232 à 236 | 0,361 à 0,379 | 78 à 111 | 3,3 à 3,5 | PASS (3 graines) |
@@ -65,14 +66,14 @@ référence en A/B/B/A.
 | tts-4b-mlx | court | neutral_female | streaming | — ¹ | 647 à 649 | 1,702 à 1,719 ² | 73 à 111 | 8,7 | PASS (3 graines) |
 | tts-4b-mlx | court | clone_fr | batch | 128,96 à 129,43 | 282 à 287 ⁴ | 1,676 à 1,776 | 61 à 75 | 8,6 | PASS (3 graines) |
 | tts-4b-mlx | court | clone_fr | streaming | — ¹ | 555 à 560 | 1,704 à 1,711 | 61 à 75 | 8,6 | PASS (3 graines) |
-| tts-4b-mlx | moyen | neutral_female | batch | 131,51 | 500 | 1,712 | 1 033 | 13,3 | PASS |
+| tts-4b-mlx | moyen | neutral_female | batch | 131,51 | 500 | 1,713 | 1 033 | 13,3 | PASS |
 | tts-4b-mlx | moyen | neutral_female | streaming | 160,10 | 799 | 2,087 | 1 033 | 13,7 | PASS |
 | tts-4b-mlx | moyen | clone_fr | batch | 131,83 | 457 | 1,758 | 919 | 12,1 | PASS |
 | tts-4b-mlx | moyen | clone_fr | streaming | 157,89 | 762 | 2,034 | 919 | 12,5 | sans A/A (ASK-34) |
 | tts-4b-mlx | long | neutral_female | batch | 136,98 | 5 768 ⁴ | 1,808 | 2 049 | 28,5 | PASS |
 | tts-4b-mlx | long | neutral_female | streaming | 213,57 | 991 | 3,007 | 2 049 | 30,5 | sans A/A (ASK-34) |
 | tts-4b-mlx | long | clone_fr | batch | 134,48 | 619 ⁴ | 1,762 | 1 735 | 22,8 | PASS |
-| tts-4b-mlx | long | clone_fr | streaming | 207,21 | 908 ⁴ | 3,105 | 1 735 | 24,2 | sans A/A (ASK-34) |
+| tts-4b-mlx | long | clone_fr | streaming | 201,61 | 7 840 ⁴ | 3,007 | 1 735 | 24,2 | sans A/A (ASK-34) |
 
 ¹ Le streaming court a été mesuré avant `stream_frame_ms_p50` (`0e7588a9`) ; A/A jugé sur `total_ms` (passe de moins
 de 60 s).
@@ -98,10 +99,10 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
 - **La voix clonée démarre plus vite** : TTFT court 139 à 160 ms contre 232 à 258 (4 et 6 bits), 282 à 287 contre 366
   à 373 (bf16). Cause non vérifiée.
 - **Le streaming coûte cher dès le texte moyen** : ms/frame 49 à 80 (4 bits), 55 à 58 (6 bits), 158 à 160 (bf16)
-  sur le moyen ; 85 à 109, 96 à 108 et 207 à 214 sur le long. RTF du streaming : 0,72 à 2,09 sur le moyen, 1,45 à
-  3,1 sur le long, plus lent que le temps réel dès le moyen pour le bf16 et le 4 bits cloné, sur le long pour les trois packs.
+  sur le moyen ; 85 à 109, 96 à 101 et 202 à 214 sur le long. RTF du streaming : 0,72 à 2,09 sur le moyen, 1,45 à
+  3,0 sur le long, plus lent que le temps réel dès le moyen pour le bf16 et le 4 bits cloné, sur le long pour les trois packs.
   Cause : chaque morceau re-décode tout l'accumulé (ASK-34). Référence « avant » de K-43.
-- **TTFA du streaming court** : 210 à 303 ms (4 bits), 246 à 346 (6 bits), 555 à 649 (bf16).
+- **TTFA du streaming court** : 210 à 303 ms (4 bits), 247 à 346 (6 bits), 555 à 649 (bf16).
 - **Le pic mémoire suit la longueur, par le codec** : le codec décode toute la séquence d'un bloc. Pic MLX de la phase
   `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 31 à 41 Go), contre 2,5 à 3,7 Go pour le décodage
   LLM en 4 et 6 bits (8,6 Go en bf16). Même plafonné, le texte long garde 21 à 29 Go de `phys_footprint` : sur

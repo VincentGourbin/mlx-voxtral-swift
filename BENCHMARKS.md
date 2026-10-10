@@ -1824,8 +1824,8 @@ Les cellules batch moyennes reposées retrouvent les valeurs de la matrice d'ori
 consommateur). Les constats « 6 bits plus lent sur le moyen » et « dispersion de ≈ 15 % de la ligne consommateur »
 de la section du 2026-10-09 venaient de la chaleur et sont retirés.
 
-Les passes écartées ci-dessous gardent leur `KO indexation/sauvegarde` éventuel dans leur `mc_*.log` (35 et 100 %
-avant la 1re paire bf16 prédéfinie batch, 112 % avant la p2 de la 2e paire bf16 clonée streaming) ; la p1 isolée
+Les passes écartées ci-dessous gardent leur `KO indexation/sauvegarde` éventuel dans leur `mc_*.log` (112 et 100 %
+avant la 1re paire bf16 prédéfinie batch, 35 % avant la p2 de la 2e paire bf16 clonée streaming) ; la p1 isolée
 mise en pause n'a pas de `mc_*.log` propre (le journal de la file la date). Lignes retenues :
 
 ```
@@ -1966,3 +1966,35 @@ après la reprise. Les 13 autres :
   `KO indexation/sauvegarde en cours (139 %)` avant sa p2 (`k35/capped/mc_M-mlx-long_en-s1-clone-batch-p2.log`),
   non listée dans le complément. Les paires plafonnées du moyen (`KO` avant `M-6bit-medium_en-s1-clone-batch-p2` et
   `M-4bit-medium_en-s1-clone-batch-p2`) ne sont plus comparées.
+
+### Reprise de deux cellules streaming long (2026-10-10, nuit)
+
+La vérification du 2026-10-10 a relevé de la charge dans les passes retenues de deux cellules streaming long
+(`k35/capped`, échantillonneur) :
+- `M-6bit-long_en-s1-preset-streaming` : un simulateur iOS démarré, arrêté 1 et 3 fois par `quiet.sh` pendant les
+  passes ;
+- `M-mlx-long_en-s1-clone-streaming` : des compilations Xcode (`swift-frontend`) et un simulateur arrêté 1 et 8 fois.
+
+Ces deux paires sont écartées pour cette charge et refaites sur machine calme. Protocole : même commande,
+`--cache-limit-mb 2048`, sans amorçage, un processus par passe, 180 s de repos et `machine-check` avant chacune
+(`k35/cd120`). Commit `eed131bc`, macOS 27.0.1, `"dirty":false`, aucun `KO`, aucun processus de compilation ni
+simulateur relevé.
+
+- 6 bits prédéfinie : A/A PASS (2,20 %), 100,56 / 102,80 ms/frame. La ligne est postérieure au correctif de K-92 :
+  `audio_s` et `rtf` sont justes, et il ne reste qu'une cellule à audio doublé (`M-mlx-short_en-s3-preset-streaming`).
+- bf16 clonée : `stream_frame_ms_p50` 1,09 %, mais p90 15,29 % : la cellule reste sans A/A (ASK-34).
+
+Bilan de la baseline : A/A sur 54 cellules sur 60 et la ligne consommateur. 6 cellules streaming restent sans A/A
+(4 long, 2 moyen). Le TTFA de ces deux cellules reste hors référence : 3 996 / 713 ms et 7 840 / 4 328 ms.
+L'écart des 13 cellules hors référence est inchangé.
+
+```
+# k35/cd120/M-6bit-long_en-s1-preset-streaming-cd120 (cd120)
+BENCH {"audio_s":152.24,"build":"Release","chip":"Apple M3 Max","commit":"eed131bcd","date":"2026-10-10T01:23:31Z","dirty":false,"frame_cap":2500,"frames":1903,"input":"docs/eval/tts/long_en.txt","load_ms":139.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"81915d5b627f06b1f4f807f6404c13aefb2b2d5a30a00bdd2e2e2cdce3e1cea6","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":24812.1,"peak_mlx_mb":23636.3,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":1.6503,"seed":1,"steps":0,"stream_frame_ms_p50":100.56,"stream_frame_ms_p90":255.31,"streaming":true,"tag":"M-6bit-long_en-s1-preset-streaming-cd120","text_tokens":444,"top_process":"16,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":251244.1,"ttfa_ms":3996.5,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.24,"build":"Release","chip":"Apple M3 Max","commit":"eed131bcd","date":"2026-10-10T01:34:40Z","dirty":false,"frame_cap":2500,"frames":1903,"input":"docs/eval/tts/long_en.txt","load_ms":112.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"81915d5b627f06b1f4f807f6404c13aefb2b2d5a30a00bdd2e2e2cdce3e1cea6","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":24784.9,"peak_mlx_mb":23636.3,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":1.6331,"seed":1,"steps":0,"stream_frame_ms_p50":102.8,"stream_frame_ms_p90":253.43,"streaming":true,"tag":"M-6bit-long_en-s1-preset-streaming-cd120","text_tokens":444,"top_process":"37,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":248623.7,"ttfa_ms":713,"voice":"neutral_female","warm":true,"warm_up":false}
+AA PASS out_sha256=identical stream_frame_ms_p50=2.20% stream_frame_ms_p90=0.74%(≤10) total_ms=1.05%(long, reported)
+# k35/cd120/M-mlx-long_en-s1-clone-streaming-cd120 (cd120)
+BENCH {"audio_s":138.8,"build":"Release","chip":"Apple M3 Max","commit":"eed131bcd","date":"2026-10-10T01:48:38Z","dirty":false,"frame_cap":2500,"frames":1735,"input":"docs/eval/tts/long_en.txt","load_ms":63.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"8148b59aaace624112e1d2bc97630b0fd33251a28a752e859d7075c0a095891d","pack_sha256":"9ca4678b1cf29894","pass":1,"peak_footprint_mb":25695.4,"peak_mlx_mb":24731.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":3.007,"seed":1,"steps":0,"stream_frame_ms_p50":201.61,"stream_frame_ms_p90":394.53,"streaming":true,"tag":"M-mlx-long_en-s1-clone-streaming-cd120","text_tokens":444,"top_process":"9,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":417364.9,"ttfa_ms":7839.7,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":138.8,"build":"Release","chip":"Apple M3 Max","commit":"eed131bcd","date":"2026-10-10T02:02:06Z","dirty":false,"frame_cap":2500,"frames":1735,"input":"docs/eval/tts/long_en.txt","load_ms":63.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"8148b59aaace624112e1d2bc97630b0fd33251a28a752e859d7075c0a095891d","pack_sha256":"9ca4678b1cf29894","pass":1,"peak_footprint_mb":25695.8,"peak_mlx_mb":24731.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":2.7883,"seed":1,"steps":0,"stream_frame_ms_p50":203.82,"stream_frame_ms_p90":338.48,"streaming":true,"tag":"M-mlx-long_en-s1-clone-streaming-cd120","text_tokens":444,"top_process":"31,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":387014.3,"ttfa_ms":4327.5,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+AA FAIL out_sha256=identical stream_frame_ms_p50=1.09% stream_frame_ms_p90=15.29%(≤10) total_ms=7.55%(long, reported)
+```

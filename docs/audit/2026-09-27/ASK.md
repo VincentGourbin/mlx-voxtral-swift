@@ -703,7 +703,7 @@ Décisions du planificateur du 2026-10-03 :
     2026-10-03/06), A/A 0,00 à 0,74 %. Ce régime ne montre pas l'écart d'un processus à l'autre. Contrôle : 4
     cellules courtes refaites un processus par passe, sous macOS 27.0.1 (écart − 0,6 à + 0,3 %, sortie identique bit à bit, `BENCHMARKS.md` §K-35 « Contrôle macOS »).
   - **macOS** : cellules courtes sous 27.0.0, le reste sous 27.0.1 (mise à jour du système pendant la campagne ; la
-    6 bits prédéfinie moyen en streaming, d'abord sous 27.0.0, a été refaite le 2026-10-10) ; le même contrôle
+    6 bits prédéfinie moyen en streaming, d'abord sous 27.0.0, a été refaite le 2026-10-09 au soir) ; le même contrôle
     couvre l'écart.
   - **Streaming moyen et long avec `--cache-limit-mb 2048`** : sans plafond, le `phys_footprint` plafonne à 74,1
     Go (75 899 Mo) sur 96 (swap non exclu). Ce plafond est une condition de mesure : le défaut public reste sans plafond.
@@ -718,10 +718,10 @@ Décisions du planificateur du 2026-10-03 :
     faible. La cause
     n'est écrite que si l'échantillonneur de charge la montre dans la passe lente ; sinon « cause non isolée »
     (régime de K-85). Les passes écartées restent dans `BENCHMARKS.md`, chacune avec son fichier et sa cause.
-  - **Cellules à audio doublé (K-92)** : 2 cellules streaming retenues (4 avant la reprise du texte moyen) gardent leur temps par frame ; leurs
+  - **Cellules à audio doublé (K-92)** : 1 cellule streaming retenue (4 avant les reprises du 2026-10-10) gardent leur temps par frame ; leurs
     `audio_s`, `rtf` et `out_sha256` sont marqués faux, et un contrôle après correctif est consigné.
   - **Machine-check** : 4 cellules retenues ont une ligne `KO indexation/sauvegarde en cours` avant une passe (7
-    avant la reprise du texte moyen ; liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 2 EVAL,
+    avant la reprise du texte moyen ; liste dans `BENCHMARKS.md`, complément de vérification K-35), comme 1 EVAL retenu (`RT-4bit-medium_en-s1`),
     2 passes du contrôle macOS et la p2 plafonnée de bf16 clonée long batch (comparaison).
     Décision de Vincent du 2026-10-05 : les services de fond ne bloquent jamais une mesure ; `quiet.sh` n'attend que
     pour les autres `KO` (autre inférence MLX, binaire Debug, batterie).
@@ -749,8 +749,8 @@ Décisions du planificateur du 2026-10-03 :
     `neutral_female.safetensors` du pack) : même `out_sha256` et mêmes frames que les BENCH, 5 sur 5. Couvertures
     retenues : 0,909 / 0,909 / 0,909 (court), 0,952 (moyen), 0,955 (long ; 0,949 par l'ancien chemin). L'écart entre
     les deux chemins en bf16 va à une fiche de suite.
-  - **ASK-34** : la question décrivait 4 cellules ; 7 cellules streaming moyen ou long restent sans A/A après la
-    reprise du 2026-10-10 (9 avant). La réponse
+  - **ASK-34** : la question décrivait 4 cellules ; 6 cellules streaming moyen ou long restent sans A/A après les
+    reprises du 2026-10-10 (9 avant). La réponse
     de Vincent (« les cellules streaming moyen et long sans A/A restent dans la baseline ») porte sur la classe
     entière.
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **repos de 120 s après l'amorçage** dans toute mesure en un
