@@ -733,7 +733,9 @@ Décisions du planificateur du 2026-10-03 :
     2026-10-09 (ligne consommateur ; 6 bits prédéfinie moyen en streaming). L'instrument ne sépare pas LLM et flow
     matching : `recordStep` enveloppe le pas entier (un span « Step i/n » par frame), et le chemin streaming n'émet
     aucune phase. Ce qui est mesuré : ms par frame (LLM + FM, `step_ms_p50`), phases du batch (préfill 344 ms,
-    génération 43,05 s à 99,9 % de GPU, décodage codec 465 ms à 98,8 %). Séparer LLM et FM demande un span par
+    génération 43,05 s à 99,9 % de GPU, décodage codec 465 ms à 98,8 %). Ces deux runs ont été faits sans repos
+    après l'amorçage (passes chaudes, 41,22 et 67,61 ms/frame contre 38,47 et 58,09 reposées, 2026-10-10) : leurs
+    durées ne sont pas des références. Séparer LLM et FM demande un span par
     sous-étape dans `VoxtralTTSModeling.swift` : fiche de suite à la replanification (#590).
   - **Enrôlement de la voix de test** : `--duration 8` ajouté à la commande de la fiche
     (`enroll docs/examples/clone_fr.wav -m tts-4b-6bit --epochs 2000 --duration 8 --seed 7`). Raison : `clone_fr.wav`

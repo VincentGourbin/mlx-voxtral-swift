@@ -1790,31 +1790,32 @@ passes retenues.
 
 - 11 cellules sur 13 passent l'A/A, à 0,04 à 1,81 % sur la médiane jugée.
 - bf16 prédéfinie batch : deux paires en échec sans charge bloquante relevée (147,80 / 131,67 puis 132,43 / 165,95
-  ms/pas), la troisième passe (131,51 / 132,20, 0,52 %) et est retenue. Une passe sur quatre du bf16 tourne 12 à 25 %
-  plus lentement, sans cause relevée (régime de K-85).
+  ms/pas ; `KO indexation/sauvegarde` avant les deux passes de la 1re paire), la troisième paire passe (131,51 /
+  132,20, 0,52 %) et est retenue. Sur les 8 passes bf16 batch moyen de la reprise (deux cellules), 2 tournent 12 et
+  25 % plus lentement, sans charge bloquante relevée (régime de K-85).
 - Deux cellules streaming restent sans A/A : 4 bits clonée (17,24 % puis 5,39 % ; la 1re paire pendant des
   compilations Xcode et un simulateur démarré) et bf16 clonée (3,19 % puis 25,97 %). Elles rejoignent la classe
   d'ASK-34 ; la paire retenue est celle dont l'écart est le plus faible.
 
 Ces lignes remplacent, pour le texte moyen et la ligne consommateur, celles retenues dans la section « 2026-10-09 —
-K-35 ». Écart entre la passe chaude et la passe reposée (`step_ms_p50` en batch, `stream_frame_ms_p50` en
-streaming ; même `out_sha256` sauf ¹) :
+K-35 ». Écart entre la paire chaude retenue le 2026-10-09 et la paire reposée retenue (moyenne des deux passes de
+`step_ms_p50` en batch, de `stream_frame_ms_p50` en streaming ; même `out_sha256` sauf ¹) :
 
 | Cellule | 2026-10-09 (`--cooldown 0`) | 2026-10-10 (`--cooldown 120`) | Écart |
 |---|---|---|---|
-| 6 bits prédéfinie batch | 46,19 | 38,50 | − 16,6 % |
-| 6 bits prédéfinie streaming | 71,74 | 58,09 | − 19,0 % |
-| 6 bits clonée batch | 44,32 | 38,45 | − 13,2 % |
-| 6 bits clonée streaming | 67,48 | 54,60 | − 19,1 % |
-| 4 bits prédéfinie batch | 26,46 | 25,15 | − 5,0 % |
-| 4 bits prédéfinie streaming ¹ | 55,43 | 49,14 | − 11,3 % |
-| 4 bits clonée batch | 29,90 | 25,34 | − 15,3 % |
-| 4 bits clonée streaming | 85,61 | 79,81 | − 6,8 % |
-| bf16 prédéfinie batch | 137,78 | 131,51 | − 4,6 % |
-| bf16 prédéfinie streaming ¹ | 166,37 | 160,10 | − 3,8 % |
-| bf16 clonée batch | 134,48 | 131,83 | − 2,0 % |
-| bf16 clonée streaming | 164,50 | 157,89 | − 4,0 % |
-| ligne consommateur | 43,70 | 38,47 | − 12,0 % |
+| 6 bits prédéfinie batch | 46,38 | 38,51 | − 17,0 % |
+| 6 bits prédéfinie streaming | 69,49 | 57,94 | − 16,6 % |
+| 6 bits clonée batch | 44,86 | 38,46 | − 14,3 % |
+| 6 bits clonée streaming | 64,88 | 54,83 | − 15,5 % |
+| 4 bits prédéfinie batch | 26,55 | 25,16 | − 5,2 % |
+| 4 bits prédéfinie streaming ¹ | 57,91 | 49,52 | − 14,5 % |
+| 4 bits clonée batch | 29,82 | 25,34 | − 15,0 % |
+| 4 bits clonée streaming | 84,33 | 77,72 | − 7,8 % |
+| bf16 prédéfinie batch | 138,09 | 131,85 | − 4,5 % |
+| bf16 prédéfinie streaming ¹ | 166,38 | 161,56 | − 2,9 % |
+| bf16 clonée batch | 135,52 | 131,61 | − 2,9 % |
+| bf16 clonée streaming | 165,19 | 160,45 | − 2,9 % |
+| ligne consommateur | 43,49 | 38,48 | − 11,5 % |
 
 ¹ Ligne du 2026-10-09 mesurée avant le correctif de K-92 (audio doublé) : `out_sha256` différent, frames identiques.
 
@@ -1823,7 +1824,9 @@ Les cellules batch moyennes reposées retrouvent les valeurs de la matrice d'ori
 consommateur). Les constats « 6 bits plus lent sur le moyen » et « dispersion de ≈ 15 % de la ligne consommateur »
 de la section du 2026-10-09 venaient de la chaleur et sont retirés.
 
-Lignes retenues :
+Les passes écartées ci-dessous gardent leur `KO indexation/sauvegarde` éventuel dans leur `mc_*.log` (35 et 100 %
+avant la 1re paire bf16 prédéfinie batch, 112 % avant la p2 de la 2e paire bf16 clonée streaming) ; la p1 isolée
+mise en pause n'a pas de `mc_*.log` propre (le journal de la file la date). Lignes retenues :
 
 ```
 # k35/cd120/M-6bit-medium_en-s1-preset-batch-cd120 (cd120)

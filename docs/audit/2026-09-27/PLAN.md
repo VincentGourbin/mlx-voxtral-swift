@@ -1791,10 +1791,11 @@ Statistics:
 - Note : `docs/knowledge/benchmarks/m3max-tts-baseline-2026-10.md`.
 - Constats :
   - 4 bits 1,5 à 1,7 fois plus rapide que le 6 bits par pas ; bf16 3,0 à 3,5 fois plus lent, RTF 1,67 à 1,83 en
-    batch (K-38, K-46).
+    batch (K-38, K-46) (corrigé le 2026-10-10 : 1,5 fois et 3,4 à 3,5 fois, voir la reprise).
   - Streaming : RTF 1,45 à 3,1 sur le texte long pour les trois packs (re-décodage, K-43).
   - Pic mémoire du texte long fixé par le codec : 21 à 29 Go de MLX, `phys_footprint` 31 à 41 Go sans plafond. Le
-    plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 %).
+    plafond de cache retire 9 à 12 Go sans changer la vitesse de façon mesurable (− 3,9 à + 4,8 % ; corrigé le
+    2026-10-10 : − 1,0 à + 2,9 % sur le seul texte long).
   - Sans cause isolée : 6 bits plus lent sur le moyen (44 à 46 ms) que sur le court et le long (38 à 39) (retiré le
     2026-10-10 : GPU chaud, voir la reprise) ; 4 bits cloné, 60 % de frames en plus sur le moyen (1 806 contre
     1 123).
@@ -1839,11 +1840,28 @@ Statistics:
   - 4 bits et bf16 clonée en streaming moyen restent sans A/A (ASK-34) : 7 cellules streaming sans A/A au total.
   - Baseline : 53 cellules sur 60 et la ligne consommateur à l'A/A ; TTFT/TTFA référence dans 47 cellules sur 60.
 - Constats corrigés :
-  - Passe chaude contre passe reposée : − 2,0 à − 19,1 % ; les cellules reposées retrouvent la matrice d'origine.
-  - 6 bits à 38,0 à 39,0 ms/pas sur les trois textes ; le constat « plus lent sur le moyen » est retiré.
+  - Paire chaude contre paire reposée (moyenne des deux passes) : − 2,9 à − 17,0 % ; les cellules reposées retrouvent la matrice d'origine.
+  - 6 bits à 38,0 à 39,0 ms/pas sur les trois textes ; le constat « plus lent sur le moyen » est retiré. Par pas, 4 bits
+    1,5 fois plus rapide que le 6 bits, bf16 3,4 à 3,5 fois plus lent.
   - Plafond de cache : comparé sur le seul texte long (sans amorçage), − 1,0 à + 2,9 %, 9,3 à 12,3 Go retirés.
   - La dispersion de ≈ 15 % de la ligne consommateur venait de la chaleur.
+  - Les deux runs `--trace` du 2026-10-09 (phases citées dans `ASK.md`) étaient des passes chaudes : 41,22 et 67,61
+    ms/frame contre 38,47 et 58,09 reposées ; diagnostic seulement.
 - Erratum des sections du 2026-10-09 (`BENCHMARKS.md`, fin de la reprise) : cause « 75,9 Go » sur les cellules batch
   de la matrice, comptes, TTFT, `KO` d'une paire de comparaison.
 - Écart : `ASK.md` §Dérogations K-35 du 2026-10-10 (repos de 120 s après l'amorçage). Les baselines K-34, K-36 et
   K-37 faites en un processus par passe avec amorçage et `--cooldown 0` sont à vérifier à la replanification (#590).
+
+## Vérification du 2026-10-10 — K-35 (#588) — non vérifiée, manques fournis
+- Vérificateur `not verified` : toutes les clauses de la porte tenues sur les sources (53 cellules sur 60 et la ligne
+  consommateur à l'A/A, 39 lignes de la reprise recopiées telles quelles, 4 `KO` couverts) ; manques de
+  documentation :
+  - macOS d'une cellule moyenne et deux constats de l'entrée du 2026-10-09 non annotés ;
+  - plage du streaming dans `log.md` (49 ms, pas 55) ;
+  - passes lentes du bf16 mal comptées ;
+  - runs `--trace` faits chauds ;
+  - `KO` des passes écartées de la reprise non nommés ;
+  - tableau chaud / reposé sur la p1 seule ;
+  - rapport du tracker périmé.
+- Fournis : chiffres corrigés, tableau sur la moyenne des deux passes (− 2,9 à − 17,0 %), commentaire de reprise
+  sur #588.

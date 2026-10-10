@@ -25,7 +25,7 @@ Sources des lignes, par cellule :
   moyen et long de la matrice réduite, et dans 18 cellules en comptant les graines 2 et 3 (swap non exclu).
 
 **Repos après l'amorçage.** Les mesures du texte moyen faites jusqu'au 2026-10-09 enchaînaient la passe mesurée
-juste après l'amorçage (`--cooldown 0`). Le GPU encore chaud les ralentissait de 2 à 19 %. A/B/B/A sur 6 bits
+juste après l'amorçage (`--cooldown 0`). Le GPU encore chaud les ralentissait de 3 à 17 % (moyenne des deux passes). A/B/B/A sur 6 bits
 moyen : 41,40 / 44,70 ms/pas sans repos, 38,52 / 38,50 avec 120 s, même sortie. Toutes ces cellules ont été
 refaites avec 120 s de repos.
 
@@ -144,15 +144,15 @@ l'échantillonneur a relevé de la charge pendant la passe lente : compilations 
 2026-10-09 après-midi, 5 sur 5 sont passées. Une partie de ces échecs touchait le texte moyen, alors mesuré sans
 repos après l'amorçage.
 
-Avec 120 s de repos (2026-10-10), une passe bf16 sur quatre de la cellule prédéfinie batch tourne 12 à 25 % plus
-lentement, sans charge bloquante relevée, et deux cellules streaming moyen restent hors A/A (4 bits et bf16 clonée).
+Avec 120 s de repos (2026-10-10), 2 des 6 passes de la cellule bf16 prédéfinie batch tournent 12 et 25 % plus
+lentement (147,80 et 165,95 contre 131,5 à 132,4 ms/pas), sans charge bloquante relevée, et deux cellules streaming moyen restent hors A/A (4 bits et bf16 clonée).
 Même régime que K-85 (bimodalité par processus, cause non isolée) : une cellule qui échoue sans charge relevée se
 refait, sans cause écrite.
 
 ## Contrôle macOS
 
-Les 36 cellules courtes ont tourné sous macOS 27.0.0, deux passes dans un processus ; les autres sous 27.0.1, un
-processus par passe, sauf 6 bits prédéfinie moyen en streaming (27.0.0). Quatre cellules courtes (graine 1, voix prédéfinie : 6 bits, 4 bits et bf16 en batch, 6 bits en
+Les 36 cellules courtes ont tourné sous macOS 27.0.0, deux passes dans un processus ; toutes les autres sous 27.0.1,
+un processus par passe. Quatre cellules courtes (graine 1, voix prédéfinie : 6 bits, 4 bits et bf16 en batch, 6 bits en
 streaming) ont été remesurées sous 27.0.1, un processus par passe. Écart à la matrice : − 0,2 %, − 0,2 %, + 0,3 % sur
 `step_ms_p50` et − 0,6 % sur `total_ms` (streaming), A/A 0,08 à 0,19 %, sortie identique bit à bit dans les quatre
 cas. Ni la mise à jour du système ni le régime à un processus ne déplacent les cellules courtes.
