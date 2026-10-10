@@ -761,8 +761,9 @@ Décisions du planificateur du 2026-10-03 :
   autres baselines faites en un processus par passe avec amorçage et `--cooldown 0` (K-34, K-36, K-37) sont à
   vérifier à la replanification (#590). Vérifié le 2026-10-10 (#590, corrigé après le vérificateur) : K-34 et K-36 ont passé
   `--warmup 1 --cooldown 0` en un processus par passe (`.local-runs/queue2b.sh`, `queue4.sh` à `queue16.sh` ; `queue2.sh`
-  pour mini-3b-8bit `.mlx` C-moyen EN et FR, p1 avec amorçage et p2 sans), y compris
-  5 des 10 cellules C-long retenues (mini-3b-8bit et mini-3b-4bit en `.mlx` et `.auto`, realtime-4b-fp16 : journaux
+  pour mini-3b-8bit `.mlx` C-moyen EN et FR, p1 avec amorçage et p2 sans), y compris les cellules chat
+  (`CHAT-mlx`, `queue9.sh` ; `CHAT-auto`, `queue16.sh` : un amorçage par question puis la mesure, sans repos,
+  `BenchCommand.swift:764-770`) et 5 des 10 cellules C-long retenues (mini-3b-8bit et mini-3b-4bit en `.mlx` et `.auto`, realtime-4b-fp16 : journaux
   « warm-up 1/1 done (excluded) ») ; C-long sans amorçage seulement à partir de `queue7.sh`. K-37 : la p1 des séries
   `A4-6bit-cli`, `A4-mlx-cli` et `A4-mlx-after_synthesis` a tourné avec amorçage puis `--cooldown 0` (`queue2.sh:30`),
   la p2 sans amorçage ; leur A/A p1 / p2 de 0,03 à 0,26 % montre un effet non mesurable sur l'enrôlement : K-37 n'est
@@ -802,8 +803,8 @@ Décisions du planificateur du 2026-10-03 :
     stéréo 48 kHz de 30 min non mesuré ; retrait sans code si l'extraction pèse moins de 5 % du pic) ;
   - retirées par la mesure : K-67 (post-traitement au plus 0,05 % du total,
     K-35), K-71 (codec 0,2 à 4,4 % du total en batch, gain attendu ≤ 10 % de la phase, K-35 ; rouverte si K-43 mesure
-    le codec au-dessus de 30 % du temps par frame en streaming) ;
-  - K-44 : gardée sous condition d'une mesure xctrace de l'occupation de la génération TTS (≥ 95 % → retirée sans code),
+    le codec au-dessus de 50 % (10 % de gain sur la phase = 5 % du total) du temps par frame en streaming) ;
+  - K-44 : gardée sous condition d'une mesure xctrace de l'occupation de la génération TTS (≥ 95,3 % → volet retiré sans code ; streaming jugé de même après K-93),
     le 99,9 % de K-35 venant du profileur ;
   - K-41 : porte recentrée sur le pic du codec ; K-58 : porte d'origine (codec − 20 %) gardée et complétée par
     `stream_frame_ms_p50` − 5 % sur le long après K-43 ; K-56 : valeur de départ mesurée par la fiche (le champ
@@ -812,4 +813,10 @@ Décisions du planificateur du 2026-10-03 :
     comportement public ; K-94 scindée (qualité de la voix clonée en 4 bits → K-97) ; K-43 ← K-93 ; K-50 ← K-94 ; K-77, K-78 ← K-96 ; K-79 ← K-95 ;
   - le relevé « `--cache-limit-mb 2048` coûte ≈ + 15 % au TTS 6 bits moyen » (2026-10-07), passe chaude, est retiré de
     K-52 et K-79 ; le défaut TTS du plafond est mesuré par K-95 et reste à Vincent ;
-  - fiches de suite : K-93 à K-97 (lot 4).
+  - fiches de suite : K-83, K-84, K-85 (2026-10-06, constats de K-34 et K-36), K-86 à K-89 (2026-10-06, entrées de
+    #590), K-90, K-91 (2026-10-07, ASK-19 et ASK-20), K-93 à K-97 (2026-10-10, constats de K-35) ;
+  - prérequis changés (ordre des tâches) : 2026-10-06 : K-49 et K-70 ← K-34 (au lieu de K-45) ; K-52 ← K-34, K-36 (K-51
+    retiré) ; K-64 ← K-37 (K-52 retiré) ; K-65 ← + K-38 ; K-72 ← K-42 (K-56 retiré) ; K-73 ← + K-84 ; K-42 ← + K-85 ;
+    K-56, K-60 ← + K-89 ; 2026-10-07 : K-77 ← + K-52 ; K-78 ← + K-91 ; K-79 ← + K-90 ; K-80 ← + K-90, K-91 ; K-75 ←
+    K-22, K-31 ; K-43 ← K-12, K-35 ; 2026-10-10 : K-43, K-44 ← + K-93 ; K-50 ← + K-94 ; K-58 ← + K-43 ; K-72 ← + K-89 ;
+    K-77, K-78 ← + K-96 ; K-79 ← + K-95 ; K-89 ← #604 (K-32b) au lieu de K-32.
