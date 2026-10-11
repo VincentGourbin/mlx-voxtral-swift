@@ -174,8 +174,9 @@ toutes les graines. Référence des portes qualité de K-39, K-48, K-58 et K-79.
 ³ EVAL bf16 refaits le 2026-10-09 par `--voice-embedding`, le chemin des BENCH (même `out_sha256`, 5 sur 5). Par
 `synthesize(voice:)`, le bf16 sort un autre audio à même graine (4 textes sur 5 ; long 0,949) ; les 4 et 6 bits
 sont identiques par les deux chemins. Cause (K-94) : la matmul bf16 dense arrondit selon le nombre de lignes (le
-préfixe préfillé seul, 220 lignes, contre le prompt entier) ; codes sémantiques égaux, codes acoustiques différents
-dès la frame 0 ; couverture égale sur 3 graines (long : 0,944 par `voice:`, 0,943 par `voiceEmbedding:`). Pas un
+préfixe préfillé seul, 220 lignes, contre le prompt entier) ; codes sémantiques égaux à la frame 0, codes acoustiques différents
+dès la frame 0 ; couverture égale sur 3 graines au même binaire, après K-39 (long : 0,944 par `voice:`, 0,943
+par `voiceEmbedding:` ; K-39 a changé la sortie bf16, ces valeurs ne se comparent pas à celles du tableau). Pas un
 défaut ; documenté dans `synthesize(text:voice:seed:)`.
 
 ## Variance d'un processus à l'autre

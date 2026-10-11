@@ -2135,9 +2135,10 @@ Statistics:
   et frame par frame, pour les trois packs et les trois textes.
 - Porte observée :
   - `VOICEPATH bf16 : première frame divergente 0, cause arrondi de la matmul bf16 dense selon le nombre de lignes (préfixe seul 220 lignes contre prompt entier ; court : écart né dans le suffixe, long : dans le préfixe, KV 0.0859) ; correctif = non (doc)`
-    (codes sémantiques égaux, acoustiques différents ; moyen : aucun écart ; 4 et 6 bits (`QuantizedLinear`) : mêmes KV et
+    (codes sémantiques égaux à la frame 0, acoustiques différents ; court : préfixe identique, matmul du suffixe retenue par élimination (packs quantifiés sans écart), non mesurée ; moyen : aucun écart ; 4 et 6 bits (`QuantizedLinear`) : mêmes KV et
     mêmes codes sur les 3 textes ; couverture ASR bf16 sur 3 graines : court 0,909 / 0,909, moyen 0,954 / 0,954 (même
-    sortie), long 0,944 par `voice:` contre 0,943 par `voiceEmbedding:` ; référence K-35 : 0,955 / 0,949, graine 1)
+    sortie), long 0,944 par `voice:` contre 0,943 par `voiceEmbedding:` ; valeurs postérieures à K-39, qui a changé la sortie bf16 : la
+    référence K-35, 0,955 / 0,949 graine 1, n'est pas comparable ; ligne verte du test : `Executed 1 test, with 0 failures (0 unexpected) in 1817.825 (1817.826) seconds`)
   - `PREFILL clone_fr 127,7 ms vs neutral_female 223,0 ms : cause nombre de positions préfillées (120 + 1 contre 237 + 1 ; bench tts passe toute voix par voiceEmbedding:, sans cache de préfixe)`
     (tts-4b-6bit court graine 1, moyenne des 2 passes ; `fr_female`, 97 frames : 116 + 1 positions, 124,8 ms ; chemin
     `voice:` : 17 + 1 positions par appel pour toute voix, test `testPrefillPositionsByVoiceAndPath`)
@@ -2145,3 +2146,8 @@ Statistics:
   pas par le cache ; le gain du cache pour une voix clonée est estimé à ≈ − 65 % du préfill (non mesuré) ; `bench tts`
   doit appeler le chemin caché pour lire la porte.
 - Aucune ligne `BENCH` de K-35 modifiée ; lignes K-94 dans `BENCHMARKS.md` §« 2026-10-11 — K-94 ».
+- Vérification du 2026-10-11 : vérificateur et contradicteur `verified`. Réserves de documentation corrigées :
+  valeurs bf16 postérieures à K-39 dites telles ; doc de `synthesize` réduite à ce qui est mesuré (cache de la seule
+  dernière voix, « observé » pour les packs quantifiés, sémantique égale à la frame 0 seulement) ; origine de l'écart du
+  court retenue par élimination, non mesurée ; invariance à M de la matmul quantifiée écrite comme constat ; estimation
+  de K-50 donnée comme extrapolation ; lignes de test recopiées dans l'ordre du journal avec leurs commandes.

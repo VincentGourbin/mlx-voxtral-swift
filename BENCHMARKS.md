@@ -2396,16 +2396,16 @@ BENCH {"audio_s":4.96,"build":"Release","chip":"Apple M3 Max","commit":"7cea4cb5
 
 Binaire Release `c7935f73` (`VoicePathParityTests`, aucun changement de code de production), `dirty:false`. Chaque
 mesure après `machine-check` (`.local-runs/tools/quiet.sh`, refroidissement 120 s) ; une ligne `KO indexation/sauvegarde`
-avant `RT-voice-long_en-s1` (tolérée, décision du 2026-10-05) ; `top_process` hors VoxtralCLI : `mediaanalysisd`
+au premier contrôle avant `RT-voice-long_en-s1`, le second contrôle étant sans `KO` (tolérée, décision du 2026-10-05) ; `top_process` hors VoxtralCLI : `mediaanalysisd`
 20,2 (PREFILL-clone_fr p2), `backupd` 117,2 / 77,8 et `WindowServer` 35,5 (EVAL moyen : sortie identique par les deux
 chemins, la qualité ne dépend pas de la charge).
 
 **(a) Chemins `voice:` et `voiceEmbedding:` en bf16** (test `VoicePathParityTests`, `.local-runs/k94/voicepath1.log`) :
 en 4 et 6 bits, mêmes projections, mêmes KV, mêmes codes sur les trois textes. En bf16 (`k_proj` = `Linear` dense),
-première frame divergente 0, codes acoustiques seulement (sémantiques égaux) : court `PROJ 0 · KV 0 · HIDDEN 0.25`
-(l'écart naît dans le suffixe de texte, 17 lignes contre 237 dans la même matmul), moyen aucun écart, long `PROJ 0.0156 ·
+première frame divergente 0, codes acoustiques (sémantiques égaux à cette frame, longueurs différentes ensuite) : court `PROJ 0 · KV 0 · HIDDEN 0.25`
+(préfixe identique : l'écart vient du suffixe ; la matmul dense y est retenue par élimination, non mesurée : les packs quantifiés, mêmes RoPE, masque, cache et activations bf16, n'ont aucun écart), moyen aucun écart, long `PROJ 0.0156 ·
 KV 0.0859 · HIDDEN 0.266` (le préfixe lui-même diffère selon le nombre de lignes). Cause : la matmul bf16 dense arrondit
-selon M ; la matmul quantifiée travaille ligne à ligne. Pas un défaut : documenté, pas de correctif.
+selon M ; la matmul quantifiée s'est montrée invariante à M ici (constat, pas un mécanisme vérifié). Pas un défaut : documenté, pas de correctif.
 
 Couverture ASR (tts-4b-mlx, `neutral_female`, graines 1 à 3) :
 
@@ -2476,11 +2476,19 @@ EVAL {"audio_s":160.32,"build":"Release","chip":"Apple M3 Max","commit":"c7935f7
 EVAL {"audio_s":152.96,"build":"Release","chip":"Apple M3 Max","commit":"c7935f738","coverage":0.949,"date":"2026-10-11T07:01:30Z","dirty":false,"frames":1912,"hyp_sha256":"5c7400436cf2c89628a00007dede2bf287dc236c9a22851e66289479755b9322","hyp_words":343,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"ec3db89de1915e7dde8aa6b12443ddda3394930bfd0280a7d523d0fed0d7a898","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"RT-emb-long_en-s3","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"26,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
 ```
 
-Test (Debug) :
+Tests (Debug) ; `TEST_RUNNER_VOXTRAL_TTS_PARITY=1 xcodebuild test … -only-testing:VoxtralCoreTests/VoicePathParityTests/testVoicePrefixCacheAgainstOneBlockPrefill`
+(`.local-runs/k94/voicepath1.log`, binaire de test de `c7935f73`) :
 ```
-	 Executed 1 test, with 0 failures (0 unexpected) in 4.136 (4.137) seconds
-	 Executed 1 test, with 0 failures (0 unexpected) in 4.136 (4.138) seconds
-PREFILL-POSITIONS clone_fr voice frames 101 · one-block (voiceEmbedding:) 120 + 1 · cached (voice:) prefix 103 once, then 17 + 1 per call
-PREFILL-POSITIONS fr_female voice frames 97 · one-block (voiceEmbedding:) 116 + 1 · cached (voice:) prefix 99 once, then 17 + 1 per call
+	 Executed 1 test, with 0 failures (0 unexpected) in 1817.825 (1817.826) seconds
+```
+`TEST_RUNNER_VOXTRAL_TTS_PARITY=1 TEST_RUNNER_VOXTRAL_TTS_PARITY_CLONE=$PWD/.local-runs/voices/clone_fr.safetensors xcodebuild test … -only-testing:VoxtralCoreTests/VoicePathParityTests/testPrefillPositionsByVoiceAndPath`
+(`.local-runs/k94/positions.log`, extrait filtré par `grep -E "PREFILL-POSITIONS|Executed|error:|failed"`, ordre du journal) :
+```
 PREFILL-POSITIONS neutral_female voice frames 218 · one-block (voiceEmbedding:) 237 + 1 · cached (voice:) prefix 220 once, then 17 + 1 per call
+PREFILL-POSITIONS fr_female voice frames 97 · one-block (voiceEmbedding:) 116 + 1 · cached (voice:) prefix 99 once, then 17 + 1 per call
+PREFILL-POSITIONS clone_fr voice frames 101 · one-block (voiceEmbedding:) 120 + 1 · cached (voice:) prefix 103 once, then 17 + 1 per call
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.136 (4.137) seconds
 ```
+Les valeurs bf16 de cette section sont postérieures à K-39 (couches FM en bf16, `1dc1632f`) : la sortie bf16 n'est plus
+celle de K-35 (long graine 1 par `voiceEmbedding:` : `811b0b92…`, 0,949, identique au `RTE-B-long_en-s1` de K-39, contre
+`d33949fa…`, 0,955 dans K-35) ; la comparaison des deux chemins se fait au même binaire, pas contre K-35.

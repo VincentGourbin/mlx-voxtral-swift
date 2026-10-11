@@ -236,8 +236,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   complète » se teste avant d'être payée, sur tout le domaine d'un paramètre public ; en
   attente de l'écoute de Vincent ; PLAN.md §7.
 - 2026-10-11 — **K-94 : en bf16, la matmul dense arrondit selon le nombre de lignes** : le cache de préfixe de voix
-  (préfixe préfillé seul) et le préfill d'un bloc donnent d'autres codes acoustiques dès la frame 0 en bf16, jamais en
-  4 / 6 bits (matmul quantifiée ligne à ligne). Couverture ASR égale : pas un défaut, documenté. « La voix clonée démarre
+  (préfixe préfillé seul) et le préfill d'un bloc donnent d'autres codes acoustiques dès la frame 0 en bf16, aucun écart en
+  4 / 6 bits sur 3 textes (invariance à M constatée, pas expliquée). Couverture ASR égale : pas un défaut, documenté. « La voix clonée démarre
   plus vite » venait d'une voix plus courte (101 frames contre 218), pas d'un chemin : `bench tts` préfille toute voix
   d'un bloc. Leçon : avant d'expliquer un écart entre deux cellules, vérifier quel chemin de code chacune a pris ;
   conséquence pour K-50 dans sa fiche ; PLAN.md §7.

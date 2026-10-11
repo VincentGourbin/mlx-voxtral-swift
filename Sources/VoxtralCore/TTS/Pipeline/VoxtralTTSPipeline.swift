@@ -252,14 +252,16 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     /// Synthesize speech with a preset voice.
     ///
-    /// The voice prefix (its frames' KV) is prefilled once per voice and
-    /// reused, so each call prefills only the text suffix. With the bf16 pack
+    /// The voice prefix (its frames' KV) is prefilled once and reused while
+    /// the same voice is used (only the last voice is kept), so each call
+    /// prefills only the text suffix. With the bf16 pack
     /// (`tts-4b-mlx`) this can give a different waveform, at the same seed, than
     /// `synthesize(text:voiceEmbedding:)` with the same voice's embedding, which
     /// prefills the whole prompt in one block: a dense bf16 matmul rounds
-    /// differently with the number of rows, so the first frame's acoustic codes
-    /// can differ (semantic codes equal). Both are correct; ASR coverage is the
-    /// same (K-94). The quantized packs give the same output by both paths.
+    /// differently with the number of rows, so the acoustic codes can differ
+    /// from the first frame on, and the outputs drift apart from there. Both
+    /// are correct; ASR coverage was the same in K-94's measurements, where the
+    /// quantized packs gave the same output by both paths.
     public func synthesize(
         text: String,
         voice: VoxtralVoice = .neutralFemale,
