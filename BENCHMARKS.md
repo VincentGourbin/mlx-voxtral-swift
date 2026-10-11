@@ -2376,8 +2376,11 @@ garde, graine 1 coupée à la frame 4 au lieu de 19 (1,2 s de porteur émis), 3 
 (`.local-runs/k68/stream-test-noguard.log`). Correctif `7cea4cb5` : aucune décision avant 7 frames. (2) Le test de
 préfixes n'appelait pas `synthesizeStreaming` : nouveau `testStreamingCutMatchesBatchCut` (10 graines en `chunkSize`
 10, graines 1 à 3 en 1, 2 et 3) : parent `23fc14fc` `STREAMSUM tts-4b-6bit: cut mismatches 0/19, late first chunk
-19/19` (rouge, premier son à 38 à 43 frames) ; `7cea4cb5` `cut mismatches 0/19, late first chunk 0/19` (vert).
-(3) Contrôle du binaire `7cea4cb5` (construit à 06:55:40 après le commit de 06:55:16), deux passes B : même sortie
+19/19` (rouge, premier son à 38 à 43 frames ; `Executed 1 test, with 1 failure`, `** TEST FAILED **`) ; sans garde
+`Executed 1 test, with 1 failure`, `** TEST FAILED **` ; `7cea4cb5` `cut mismatches 0/19, late first chunk 0/19` (vert ;
+`Executed 2 tests, with 0 failures (0 unexpected)`, `** TEST SUCCEEDED **`).
+(3) Contrôle du binaire `7cea4cb5` (construit à 06:55:40 après le commit de 06:55:16), deux passes B, `machine-check`
+sans `KO` et `quiet.sh` `QUIET` avant chacune (`mc_GUARD-B-1.log` : process le plus gourmand `7,2 claude` ; `-2` : `26,5 launchd`) : même sortie
 `89d79448…` que `a9d3c5cf` et `ttfa_ms` 1 094,4 / 1 089,1 : la garde ne change rien au `chunkSize` 10, la mesure A/B/B/A
 reste valable. (4) Sorties streaming A et B sauvegardées par le test (`.local-runs/k68/stream-A`, `stream-B`) : au plus
 1 pas de quantification 16 bits d'écart, sur 0 à 44 échantillons par graine.

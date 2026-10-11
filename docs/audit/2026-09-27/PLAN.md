@@ -2106,12 +2106,15 @@ Statistics:
   batch. Tests gardés `TTSCarrierEarlyCutTests` (`VOXTRAL_TTS_CARRIER_EARLY=1`) : préfixes décodés identiques au
   décodage complet (écart ≤ 1,9·10⁻⁶) ; chemin streaming réel : coupe égale à celle du batch et premier son au plus un
   morceau après la reprise, `chunkSize` 10 (10 graines) et 1 à 3 (3 graines) — rouge sur le parent (19/19 en retard),
-  rouge sans la garde des 7 frames (3/12 coupes fausses), vert ensuite (0/19, 0/19).
+  rouge sans la garde des 7 frames (3/12 coupes fausses), vert ensuite (0/19, 0/19) :
+  - parent `23fc14fc` : `Executed 1 test, with 1 failure (0 unexpected) in 279.074 (279.076) seconds`, `** TEST FAILED **` (`.local-runs/k68/stream-test-A.log`)
+  - sans la garde : `Executed 1 test, with 1 failure (0 unexpected) in 233.241 (233.242) seconds`, `** TEST FAILED **` (`stream-test-noguard.log`)
+  - `7cea4cb5` : `Executed 2 tests, with 0 failures (0 unexpected) in 384.132 (384.134) seconds`, `** TEST SUCCEEDED **` (`stream-test-B.log`)
 - Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-68 » et sa vérification) :
   - `BENCH ttfa clone streaming −42,63 % (≥ 30) ; fuites ≤ référence (même coupe que A sur 19/19 cas, test)` (tts-4b-6bit court `clone_fr` `--warm-up`, A/B/B/A, A/A 0,16 %, B/B 0,28 % ; 10 graines : médiane −42,7 %, graines 4 et 6 −21 % (pause vue au morceau de 33 frames) ; tts-4b-4bit −55,90 %, B/B 28,6 %, consigné ; contrôle `7cea4cb5` : même sortie, 1 094 / 1 089 ms)
   - `BATCH porteur/total = 0,75 %` (7 / 931, ligne consommateur, chemin batch inchangé)
 - Fuites en valeur absolue : non démontrées par la mesure. Transcriptions du chemin batch (même coupe) : aucun « la »,
-  mais « The » ajouté en tête (graine 5), « Flux » perdu (« Luxforge », « Luxport », graines 3 et 6), « FluxForge
+  mais « The Flockwatch Studio » (graine 5 : « The » ajouté, « FluxForge » déformé), « Flux » perdu (« Luxforge », « Luxport », graines 3 et 6), « FluxForge
   Studio » absent (graine 1, couverture 0,818) ; même coupe avant K-68 ; jugé à l'écoute.
 - Tests : 40 tests TTS exécutés, 7 sautés (gardés), 0 échec ; lourds `TTSStreamingSeedReproTests` (2) et
   `TTSStreamingFinalChunkTests` verts, `TTSStreamingCancellationTests` non lancés. `TTSWarmUpCarrierTrimTests` (batch,
@@ -2122,4 +2125,6 @@ Statistics:
 - Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs) : garde des 7 frames ajoutée
   (défaut réel, mesuré) ; test du chemin streaming ajouté ; écoute refaite en paires streaming A / B (la première
   version, 10 prises seules du chemin batch, sortait du cadre de l'agent) ; « fuites 0/10 » ramené à « ≤ référence »,
-  seule clause démontrée ; heure de construction de `a9d3c5cf` corrigée ; décompte des tests corrigé.
+  seule clause démontrée ; heure de construction de `a9d3c5cf` corrigée ; décompte des tests corrigé. Second passage
+  du vérificateur : code, tests et paires justes ; lignes `Executed …` recopiées, graine 5 et `machine-check` du contrôle
+  précisés ci-dessus et dans `BENCHMARKS.md`.
