@@ -2128,9 +2128,9 @@ A = commit parent `a8820cbb`, construit dans un worktree. Les champs `commit` et
 courant au lancement (K-93, note pour K-89) : toutes les lignes portent `1dc1632f0` ; le binaire de chaque passe se
 lit dans `top_process` quand VoxtralCLI y figure (chemin du worktree `k93-a` pour A), et pour le bf16 dans
 `out_sha256` (A `d30b16a9…`, 84 frames ; B `371018aa…`, 106 frames). Un processus par passe, `--warmup 1
---cooldown 120`, `machine-check` et `quiet.sh` avant chaque passe (42 sur 42 `QUIET` ; trois `KO` d'indexation, qui ne
+--cooldown 120`, `machine-check` et `quiet.sh` avant chaque passe (`quiet.sh check` ne lit que les lignes `BENCH` : 12 sur 12 `QUIET`, EVAL non contrôlés ; trois `KO` d'indexation, qui ne
 bloquent pas une passe, décision de Vincent du 2026-10-05 : `ABBA-6bit-1-A`, `ABBA-mlx-3-B`, `RTE-A-medium_en-s4`),
-simulateurs arrêtés. Court `neutral_female` par `--voice-embedding`, graine 1.
+simulateurs arrêtés. BENCH : court, `--voice neutral_female`, graine 1 (`d30b16a9…` = sortie bf16 de K-35) ; EVAL par `--voice-embedding`.
 
 - **Changement** : dans `decodeOneFrame`, les couches du transformeur du FM calculent dans le dtype des poids quand
   celui-ci n'est pas quantifié (bf16) ; projections d'entrée, tête sémantique, état d'Euler, vitesse, CFG et sortie
@@ -2164,7 +2164,7 @@ simulateurs arrêtés. Court `neutral_female` par `--voice-embedding`, graine 1.
 | long | 0,955 / 0,826 / 0,940 / 0,952 / 0,943 | 0,923 | 0,949 / 0,931 / 0,949 / 0,940 / 0,958 | 0,945 | 0,955 |
 
   A graine 1 reproduit la référence K-35 (0,909 / 0,952 / 0,955). B graine 1 long : 0,949, soit − 0,6 pt sous la
-  référence (seuil − 0,5 pt) ; sur cinq graines, B ≥ A sur les trois textes.
+  référence (seuil − 0,5 pt) ; moyenne 5 graines du long 0,945, sous 0,950 aussi : la clause échoue à la lettre. A échoue de même (0,923) ; B ≥ A sur les trois textes. Référence posée à Vincent (ASK-35).
 
 ```
 # k39/ABBA-mlx-1-A

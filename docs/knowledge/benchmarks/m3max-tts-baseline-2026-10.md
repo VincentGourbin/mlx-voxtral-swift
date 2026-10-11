@@ -148,7 +148,8 @@ Les couches du transformeur du flow matching calculent en bf16 quand les poids s
 reste du FM (projections, tête sémantique, Euler, CFG) reste en fp32. A/B/B/A court `neutral_female` graine 1
 (`BENCHMARKS.md` §« 2026-10-11 — K-39 ») : tts-4b-mlx 129,8 → 66,5 ms/pas (− 48,8 %), le FM passant de 107,6 ms
 (K-93) à environ 43 ms par frame si le LLM ne change pas (estimation, pas de trace) ; 4 et 6 bits inchangés,
-sorties identiques bit à bit. Parité forcée par l'enseignant : sémantique 100 %, acoustique 99,23 %, Δ1.
+sorties identiques bit à bit. Parité forcée par l'enseignant : sémantique 100 %, acoustique 99,23 %, Δ1. Couverture ASR (5 graines) égale
+ou meilleure que l'ancien code, mais long 0,945 sous la référence K-35 − 0,5 pt (ASK-35, en attente).
 
 Ce qui ne marche pas, mesuré : la tête sémantique en bf16 change 1,7 à 2,6 % des codes sémantiques (l'argmax sur
 8 320 logits est sensible) ; en 4 et 6 bits, des couches calculées en bf16 (dtype lu sur `scales`) changent trop de

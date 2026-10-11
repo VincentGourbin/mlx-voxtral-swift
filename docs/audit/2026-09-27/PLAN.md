@@ -2081,17 +2081,21 @@ Statistics:
   note de baseline : surcoût de la barrière en ordre de grandeur.
 - Second passage du vérificateur (2026-10-11, `b9ebc5dd`) : `verified` ; réserve de documentation sur le binaire du contrôle, consignée ci-dessus et dans `ASK.md`. K-93 vérifiée, #633 fermée.
 
-## K-39 — TTS : couches du transformeur du flow matching en bf16 pour le pack bf16 — 2026-10-11 — bloquée (écoute de Vincent)
+## K-39 — TTS : couches du transformeur du flow matching en bf16 pour le pack bf16 — 2026-10-11 — bloquée (ASK-35, ASK-36, écoute de Vincent)
 - Fait (commit `1dc1632f`) : dans `decodeOneFrame`, les couches du transformeur du FM calculent dans le dtype des
   poids s'il n'est pas quantifié (`layerComputeDType`, bf16 pour tts-4b-mlx) ; entrées projetées en fp32 puis castées,
   sortie recastée en fp32 avant la projection acoustique ; tête sémantique, état d'Euler, vitesse et CFG en fp32 ;
   facteur d'échelle de l'attention en scalaire Swift. Packs quantifiés : float32 comme avant (sortie identique).
   Test gardé `FlowMatchingTeacherForcedParityTests` (`VOXTRAL_TTS_PARITY=1`).
-- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-39 », `machine-check` et `quiet.sh` avant chaque passe, 42 / 42 `QUIET`) :
+- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-39 », `machine-check` et `quiet.sh` avant chaque passe ; `quiet.sh check` ne lit que les lignes `BENCH` : 12 / 12 `QUIET`, les 30 EVAL non contrôlés) :
   - `BENCH A/B/B/A tts-4b-mlx court graine 1 : ms/frame −48,80 % (≥ 40) ; tts-4b-4bit +0,20 % (≥ 5 non atteint, chemin inchangé, out_sha256 identique) ; tts-4b-6bit −0,13 % (consigné, out_sha256 identique)`
   - `PARITY teacher-forced acoustiques 99,23 % identiques (≥ 99, écart ≤ 1) · sémantiques 100 %` (bf16 ; 4 et 6 bits 100 % / 100 %)
   - `COVERAGE ASR bf16 moyenne 5 graines B / A : court 0,909 / 0,909, moyen 0,950 / 0,950, long 0,945 / 0,923 · graine 1 B 0,909 / 0,952 / 0,949 (réf. K-35 0,909 / 0,952 / 0,955 : long − 0,6 pt) · maxFrames 0`
-- Clause 4 bits (− 5 %) : non tenue ; trois variantes quantifiées mesurées et écartées par la parité (`ASK.md`
-  §Dérogations, K-39) ; décision de l'agent : la clause est retirée avec la mesure, le 6 bits consigné.
+- Couverture : la clause échoue à la lettre en long (graine 1 − 0,6 pt ; moyenne 5 graines 0,945 contre 0,950) ;
+  A du même jour échoue aussi (0,923) : référence posée à Vincent, ASK-35 (proposé : B ≥ A − 0,5 pt sur 5 graines).
+- Clause 4 bits (− 5 %) : non tenue ; trois variantes quantifiées écartées par la parité : ASK-36 (proposé : clause
+  retirée avec la mesure, gain 4 bits laissé à K-57). Écarts à l'objectif (tête sémantique, embedding temporel et
+  projections en fp32) et streaming non mesuré : `ASK.md` §Dérogations, K-39.
 - Écoute : 5 paires anonymisées (bf16 A / B : court graines 1 et 2, moyen graines 1 et 2, long graine 1) et grille
-  dans `.local-runs/listen/k39/` (`GRILLE.md`, clé `.key.json`) ; fiche `blocked` jusqu'à l'écoute (ASK-13 = A).
+  dans `.local-runs/listen/k39/` (`GRILLE.md`, clé `.key.json`) ; fiche `blocked` jusqu'à l'écoute (ASK-13 = A) et aux réponses ASK-35, ASK-36.
+- Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs ; code, chiffres et paires justes) : couverture présentée comme tenue alors qu'elle échoue à la lettre (→ ASK-35) ; clause 4 bits retirée sans décision de Vincent (→ ASK-36) ; « 42 / 42 `QUIET` » ramené aux 12 BENCH ; BENCH lancés par `--voice neutral_female`, pas `--voice-embedding` ; paires d'écoute retirées au sort (4 sur 5 avaient A en prise 1).

@@ -550,6 +550,36 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Proposé** : A.
 - **Fiches** : ⛔ K-35 (#588) ; K-43.
 
+### ASK-35 — K-39 : référence de la couverture ASR du FM bf16
+
+- **Contexte** : K-39 (#610) passe les couches du FM en bf16 pour tts-4b-mlx : pas − 48,8 %, parité forcée 99,23 %
+  Δ1. Porte recalée : couverture ASR (3 textes × 5 graines) ≥ référence K-35 − 0,5 pt, référence prise à la graine 1
+  (0,909 / 0,952 / 0,955).
+- **Ce qui a été constaté** (`BENCHMARKS.md` §« 2026-10-11 — K-39 ») : texte long, B graine 1 = 0,949 (− 0,6 pt,
+  deux mots sur 334) et moyenne 5 graines 0,945 (− 1,0 pt) : la clause échoue à la lettre. Mais A (code d'avant, même
+  jour, mêmes graines) a une moyenne de 0,923 sur le long (0,826 à 0,955 selon la graine) : A échoue aussi à cette
+  lecture, la référence d'une seule graine ne représente pas cinq graines. B ≥ A en moyenne sur les trois textes
+  (0,909 / 0,950 / 0,945 contre 0,909 / 0,950 / 0,923).
+- **Question** : quelle référence juge la couverture de K-39 (et des autres leviers TTS numériques) ?
+- **Options** : A) B ≥ A − 0,5 pt, moyenne des 5 graines, A mesuré le même jour (K-39 passe) ; B) référence K-35 −
+  0,5 pt sur la moyenne des 5 graines (K-39 échoue en long, code retiré) ; C) remesurer le long sur 10 graines A et B
+  (≈ 2 h de GPU), puis A).
+- **Proposé** : A.
+- **Fiches** : ⛔ K-39 (#610) ; mêmes clauses dans K-48, K-58, K-79.
+
+### ASK-36 — K-39 : clause « pas 4 bits − 5 % » non tenue
+
+- **Contexte** : la fiche dit « gain sous la porte ⇒ code retiré, fiche retirée ». Le changement gardé ne touche pas
+  les packs quantifiés (sorties 4 et 6 bits identiques bit à bit, + 0,20 % / − 0,13 %).
+- **Ce qui a été constaté** : trois variantes bf16 pour les packs quantifiés échouent à la parité (98,48 % Δ2 à
+  98,09 % Δ3) ; la seule rapide (tout le FM en bf16, environ − 9 % en 4 bits, essai d'une passe hors protocole)
+  est la moins fidèle.
+- **Question** : que faire de la clause 4 bits ?
+- **Options** : A) clause retirée avec la mesure, K-39 conclut sur le bf16 seul, le gain 4 bits reste à K-57 ; B)
+  fiche entière retirée (code bf16 retiré aussi) ; C) garder la variante rapide en 4 bits et assouplir la parité.
+- **Proposé** : A.
+- **Fiches** : ⛔ K-39 (#610) ; K-57.
+
 ---
 
 ## Réponses
@@ -593,6 +623,8 @@ réponse datée ici.
 | ASK-32 | A | 2026-10-06 | Vincent, session Mac (« À » en réponse à la question fermée) : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A, régime bimodal consigné, référence = médiane des passes rapides (75,13 ms), fiche de suivi K-85. |
 | ASK-33 | A, désactivable | 2026-10-06 | Vincent, session Mac : plafond par défaut pour Small sur ≤ 32 Go, que l'hôte peut désactiver. |
 | ASK-34 | A | 2026-10-07 | Vincent, session Mac : les cellules streaming moyen et long sans A/A restent dans la baseline K-35, cause consignée (re-décodage complet), référence « avant » de K-43. |
+| ASK-35 | | | |
+| ASK-36 | | | |
 
 ### Dérogations
 
@@ -827,14 +859,12 @@ Décisions du planificateur du 2026-10-03 :
   23:20:24 sans source recompilée, modification de K-39 datée de 23:21:42, `out_sha256` identique A/B. Le détecteur du
   mode trace a été remplacé après les mesures (`exportChromeTrace` → `VOXTRAL_TTS_SPLIT_TRACE`), chemin identique sous
   `bench --trace`, mesures non refaites ; contrôle après correctif sur un binaire `dirty` (arbre avec K-39 en cours) : il prouve la présence des spans et des phases ; son `out_sha256` `e64d2131…`, celui d'avant K-39, montre que le FM de K-39 n'y était pas (K-39 change les codes du 6 bits : parité acoustique 98,17 %). Correctif de l'instrument (`commit` du binaire, pas du dossier) : note pour K-89.
-- **K-39 (#610), 2026-10-11, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) clause « pas 4 bits − 5 % au moins »
-  retirée avec la mesure : les couches du FM en bf16 sur un pack quantifié (dtype lu sur `scales`) donnent 98,48 %
-  de codes acoustiques identiques avec un écart de 2 niveaux (6 bits 98,65 %, Δ2) et aucun gain en 4 bits (25,10
-  ms/pas, essai) ; tout le FM en bf16 gagne environ 9 % en 4 bits mais à 98,09 %, Δ3 ; la porte de parité (≥ 99 %,
-  Δ ≤ 1) prime. Les packs quantifiés gardent le chemin fp32 (sortie identique bit à bit, A/B/B/A). (2) Tête
-  sémantique gardée en fp32 contre l'objectif de la fiche : en bf16 elle change 1,7 à 2,6 % des codes sémantiques
-  (porte : 100 %). (3) Couverture ASR jugée sur la moyenne des cinq graines contre A mesuré le même jour (B ≥ A sur
-  les trois textes) ; à la graine 1 seule, B long est à 0,949 contre 0,955 pour la référence K-35 (− 0,6 pt, seuil
-  − 0,5 pt, deux mots sur 334), A long varie de 0,826 à 0,955 selon la graine ; question posée à Vincent avec
-  l'écoute. (4) Champs `commit` / `dirty` lus dans le dossier courant (K-93) : binaire de A prouvé par `top_process`
-  (worktree `k93-a`) et, en bf16, par `out_sha256` différent.
+- **K-39 (#610), 2026-10-11, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) objectif de la fiche réduit,
+  parité oblige : tête sémantique gardée en fp32 (en bf16 elle change 1,7 à 2,6 % des codes sémantiques, porte 100 %) ;
+  embedding temporel et projections d'entrée gardés en fp32 (le transformeur seul passe en bf16) ; packs quantifiés
+  sur le chemin fp32 (variantes bf16 : 98,48 % Δ2 à 98,09 % Δ3). (2) Couverture ASR et clause 4 bits : pas des
+  décisions de l'agent, posées à Vincent (ASK-35, ASK-36), fiche `blocked`. (3) Champs `commit` / `dirty` lus dans le
+  dossier courant (K-93) : binaire de A attesté par la file (`queue-k39.sh`, `$OLD` = worktree `k93-a` à
+  `a8820cbb`), par `top_process` quand VoxtralCLI y figure et, en bf16, par `out_sha256` ; `ABBA-6bit-4-A` (`top_process`
+  sysmond, sortie identique à B) ne l'est que par la file. (4) Streaming non mesuré : il appelle le même
+  `decodeOneFrame` (`VoxtralTTSModeling.swift:744`), donc change aussi en bf16 ; mesure laissée à K-43.
