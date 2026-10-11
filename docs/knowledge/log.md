@@ -231,5 +231,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-11 — **K-68 : le codec TTS est causal, le porteur se coupe sur un préfixe** : un préfixe de codes se
   décode comme le début du décodage complet (écart ≤ 1,9·10⁻⁶), donc la coupe du porteur décidée sur le waveform
   partiel égale celle du batch (10/10 graines). Le streaming n'attend plus 3 s : TTFA cloné avec porteur − 42,6 % en
-  6 bits (1,91 → 1,09 s). Leçon : une précaution « décider sur la vue complète » se teste avant d'être payée ; en
+  6 bits (1,91 → 1,09 s). Mais la coupe lit 5 frames de référence : avant 7 frames décodées (`chunkSize` ≤ 3) elle
+  se trompe (graine 1 : frame 4 au lieu de 19), d'où une garde de 7 frames. Leçon : une précaution « décider sur la vue
+  complète » se teste avant d'être payée, sur tout le domaine d'un paramètre public ; en
   attente de l'écoute de Vincent ; PLAN.md §7.

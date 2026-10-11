@@ -2101,20 +2101,25 @@ Statistics:
 - Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs ; code, chiffres et paires justes) : couverture présentée comme tenue alors qu'elle échoue à la lettre (→ ASK-35) ; clause 4 bits retirée sans décision de Vincent (→ ASK-36) ; « 42 / 42 `QUIET` » ramené aux 12 BENCH ; BENCH lancés par `--voice neutral_female`, pas `--voice-embedding` ; paires d'écoute retirées au sort (4 sur 5 avaient A en prise 1).
 
 ## K-68 — TTS : porteur de warm-up coupé sur le waveform partiel en streaming — 2026-10-11 — bloquée (écoute de Vincent)
-- Fait (commit `a9d3c5cf`) : `synthesizeStreaming` cherche la fin du porteur à chaque morceau au lieu d'attendre 3 s
-  d'audio ; même fonction de coupe (`trimLeadingCarrierAdaptive`) que le batch. Test gardé `TTSCarrierEarlyCutTests`
-  (`VOXTRAL_TTS_CARRIER_EARLY=1`) : un préfixe décodé donne les mêmes frames que le décodage complet (écart ≤ 1,9·10⁻⁶)
-  et la même coupe (10/10 graines) ; la coupe tombe après 23 frames en médiane au lieu de 43.
-- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-68 ») :
-  - `BENCH ttfa clone streaming −42,63 % (≥ 30) ; fuites 0/10 (≤ 0)` (tts-4b-6bit court `clone_fr` `--warm-up`, A/B/B/A, A/A 0,16 %, B/B 0,28 % ; 10 graines : médiane −42,7 % ; tts-4b-4bit −55,90 %, B/B 28,6 %, consigné)
+- Fait (commits `a9d3c5cf`, `7cea4cb5`) : `synthesizeStreaming` cherche la fin du porteur à chaque morceau, dès 7
+  frames décodées, au lieu d'attendre 3 s d'audio ; même fonction de coupe (`trimLeadingCarrierAdaptive`) que le
+  batch. Tests gardés `TTSCarrierEarlyCutTests` (`VOXTRAL_TTS_CARRIER_EARLY=1`) : préfixes décodés identiques au
+  décodage complet (écart ≤ 1,9·10⁻⁶) ; chemin streaming réel : coupe égale à celle du batch et premier son au plus un
+  morceau après la reprise, `chunkSize` 10 (10 graines) et 1 à 3 (3 graines) — rouge sur le parent (19/19 en retard),
+  rouge sans la garde des 7 frames (3/12 coupes fausses), vert ensuite (0/19, 0/19).
+- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-68 » et sa vérification) :
+  - `BENCH ttfa clone streaming −42,63 % (≥ 30) ; fuites ≤ référence (même coupe que A sur 19/19 cas, test)` (tts-4b-6bit court `clone_fr` `--warm-up`, A/B/B/A, A/A 0,16 %, B/B 0,28 % ; 10 graines : médiane −42,7 %, graines 4 et 6 −21 % (pause vue au morceau de 33 frames) ; tts-4b-4bit −55,90 %, B/B 28,6 %, consigné ; contrôle `7cea4cb5` : même sortie, 1 094 / 1 089 ms)
   - `BATCH porteur/total = 0,75 %` (7 / 931, ligne consommateur, chemin batch inchangé)
-- Sortie : même durée sur les 10 graines ; `out_sha256` différent sur 8 (écart ≤ 1,9·10⁻⁶ par échantillon, 102,6 dB
-  sous le pic). Constat hors fiche : graine 1, « FluxForge Studio » absent de la transcription (couverture 0,818), chemin
-  batch inchangé donc déjà présent avant ; signalé à l'écoute.
-- Tests : 40 tests TTS (pipeline, streaming, coupe) verts ; lourds `TTSStreamingSeedReproTests` (2, dont porteur
-  sur texte long) et `TTSStreamingFinalChunkTests` verts. `TTSWarmUpCarrierTrimTests` (batch, réglé sur tts-4b-6bit et
-  `clone_fr`) échoue (« A 5-frame true-silence run survives in the first second ») à l'identique sur le parent
-  `23fc14fc` : défaut du chemin batch antérieur à K-68, hors fiche (`.local-runs/k68/tests-carrier-A.log`) ; à suivre avec
-  le constat de la graine 1.
-- Écoute (ASK-13 = A) : 10 prises et grille dans `.local-runs/listen/k68/` (une prise par graine, pas de paires :
-  `ASK.md` §Dérogations, K-68) ; fiche `blocked` jusqu'à l'écoute.
+- Fuites en valeur absolue : non démontrées par la mesure. Transcriptions du chemin batch (même coupe) : aucun « la »,
+  mais « The » ajouté en tête (graine 5), « Flux » perdu (« Luxforge », « Luxport », graines 3 et 6), « FluxForge
+  Studio » absent (graine 1, couverture 0,818) ; même coupe avant K-68 ; jugé à l'écoute.
+- Tests : 40 tests TTS exécutés, 7 sautés (gardés), 0 échec ; lourds `TTSStreamingSeedReproTests` (2) et
+  `TTSStreamingFinalChunkTests` verts, `TTSStreamingCancellationTests` non lancés. `TTSWarmUpCarrierTrimTests` (batch,
+  tts-4b-6bit, `clone_fr`) échoue (« A 5-frame true-silence run survives in the first second ») à l'identique sur le
+  parent `23fc14fc` : défaut du chemin batch antérieur à K-68, hors fiche (`.local-runs/k68/tests-carrier-A.log`).
+- Écoute (ASK-13 = A) : 10 paires anonymisées de sorties streaming A / B (graines 1 à 10, `chunkSize` 10) et grille
+  dans `.local-runs/listen/k68/` ; fiche `blocked` jusqu'à l'écoute.
+- Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs) : garde des 7 frames ajoutée
+  (défaut réel, mesuré) ; test du chemin streaming ajouté ; écoute refaite en paires streaming A / B (la première
+  version, 10 prises seules du chemin batch, sortait du cadre de l'agent) ; « fuites 0/10 » ramené à « ≤ référence »,
+  seule clause démontrée ; heure de construction de `a9d3c5cf` corrigée ; décompte des tests corrigé.

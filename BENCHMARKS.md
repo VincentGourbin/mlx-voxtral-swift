@@ -2255,7 +2255,7 @@ EVAL {"audio_s":164.48,"build":"Release","chip":"Apple M3 Max","commit":"1dc1632
 
 ## 2026-10-11 — K-68 : porteur de warm-up coupé sur le waveform partiel en streaming
 
-Binaire B = `a9d3c5cf` (Release, `-onlyUsePackageVersionsFromResolvedFile`, construit après le commit ; mlx-swift
+Binaire B = `a9d3c5cf` (Release, `-onlyUsePackageVersionsFromResolvedFile`, construit à 04:00:18 sur les sources du commit de 04:00:37, modifiées pour la dernière fois à 03:59:53 ; mlx-swift
 0.31.6@0bb916c, mlx-swift-lm main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8) ; A = commit parent `23fc14fc`, construit
 dans le worktree `k93-a` (chemin dans `top_process`). Champs `commit` / `dirty` lus dans le dossier courant (note
 K-93) : les lignes portent le commit du dossier au lancement. Un processus par passe, `--warmup 1 --cooldown 120`,
@@ -2366,4 +2366,25 @@ EVAL {"audio_s":8.08,"build":"Release","chip":"Apple M3 Max","commit":"a9d3c5cf2
 # k68/RTE-B-s10
 EVAL {"audio_s":5.12,"build":"Release","chip":"Apple M3 Max","commit":"a9d3c5cf2","coverage":0.909,"date":"2026-10-11T04:24:01Z","dirty":false,"frames":81,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"01f35cdb642319dafbe3655eb98780c144f46e61e4450874a04c21cc28f22d3a","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":10,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"RTE-B-s10","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"57,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"clone_fr","warm_up":true,"wer":18.18}
 
+```
+
+### 2026-10-11 — K-68, vérification : garde des 7 frames, test du chemin streaming
+
+Vérificateur et contradicteur : `not verified`. (1) Avec `chunkSize` 1 à 3 (paramètre public), le streaming décodait
+des préfixes de 4 à 6 frames, où la coupe prend le niveau du porteur sur moins de ses 5 frames de référence : sans
+garde, graine 1 coupée à la frame 4 au lieu de 19 (1,2 s de porteur émis), 3 coupes fausses sur 12
+(`.local-runs/k68/stream-test-noguard.log`). Correctif `7cea4cb5` : aucune décision avant 7 frames. (2) Le test de
+préfixes n'appelait pas `synthesizeStreaming` : nouveau `testStreamingCutMatchesBatchCut` (10 graines en `chunkSize`
+10, graines 1 à 3 en 1, 2 et 3) : parent `23fc14fc` `STREAMSUM tts-4b-6bit: cut mismatches 0/19, late first chunk
+19/19` (rouge, premier son à 38 à 43 frames) ; `7cea4cb5` `cut mismatches 0/19, late first chunk 0/19` (vert).
+(3) Contrôle du binaire `7cea4cb5` (construit à 06:55:40 après le commit de 06:55:16), deux passes B : même sortie
+`89d79448…` que `a9d3c5cf` et `ttfa_ms` 1 094,4 / 1 089,1 : la garde ne change rien au `chunkSize` 10, la mesure A/B/B/A
+reste valable. (4) Sorties streaming A et B sauvegardées par le test (`.local-runs/k68/stream-A`, `stream-B`) : au plus
+1 pas de quantification 16 bits d'écart, sur 0 à 44 échantillons par graine.
+
+```
+# k68/GUARD-B-1
+BENCH {"audio_s":4.96,"build":"Release","chip":"Apple M3 Max","commit":"7cea4cb52","date":"2026-10-11T04:59:57Z","dirty":false,"frame_cap":216,"frames":81,"input":"docs/eval/tts/short_en.txt","load_ms":128.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"89d7944823438ceefc69f3752aac1db3e5647a4b45050b7f6832f21b08ea7270","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":5973.8,"peak_mlx_mb":4295.9,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.7094,"seed":1,"steps":0,"stream_frame_ms_p50":41.05,"stream_frame_ms_p90":45.57,"streaming":true,"tag":"GUARD-B-1","text_tokens":14,"top_process":"20,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3518.5,"ttfa_ms":1094.4,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":true}
+# k68/GUARD-B-2
+BENCH {"audio_s":4.96,"build":"Release","chip":"Apple M3 Max","commit":"7cea4cb52","date":"2026-10-11T05:04:05Z","dirty":false,"frame_cap":216,"frames":81,"input":"docs/eval/tts/short_en.txt","load_ms":114.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"89d7944823438ceefc69f3752aac1db3e5647a4b45050b7f6832f21b08ea7270","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":5982.2,"peak_mlx_mb":4295.9,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.708,"seed":1,"steps":0,"stream_frame_ms_p50":41.02,"stream_frame_ms_p90":46.96,"streaming":true,"tag":"GUARD-B-2","text_tokens":14,"top_process":"20,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3511.7,"ttfa_ms":1089.1,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":true}
 ```
