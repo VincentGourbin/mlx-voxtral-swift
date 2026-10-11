@@ -142,6 +142,19 @@ coûte de l'ordre de 3 % au pas en 6 bits (moyenne en trace 39,12 ms, pas 1 comp
 38,1 : statistiques différentes, ordre de grandeur seulement), à garder en tête en lisant les parts. La somme LLM + FM
 ≈ 100 % prouve la cohérence de l'instrument (les deux spans découpent le pas), pas la justesse de la frontière.
 
+## FM en bf16 pour le pack bf16 (K-39, 2026-10-11)
+
+Les couches du transformeur du flow matching calculent en bf16 quand les poids sont bf16 (`1dc1632f`) ; tout le
+reste du FM (projections, tête sémantique, Euler, CFG) reste en fp32. A/B/B/A court `neutral_female` graine 1
+(`BENCHMARKS.md` §« 2026-10-11 — K-39 ») : tts-4b-mlx 129,8 → 66,5 ms/pas (− 48,8 %), le FM passant de 107,6 ms
+(K-93) à environ 43 ms par frame si le LLM ne change pas (estimation, pas de trace) ; 4 et 6 bits inchangés,
+sorties identiques bit à bit. Parité forcée par l'enseignant : sémantique 100 %, acoustique 99,23 %, Δ1.
+
+Ce qui ne marche pas, mesuré : la tête sémantique en bf16 change 1,7 à 2,6 % des codes sémantiques (l'argmax sur
+8 320 logits est sensible) ; en 4 et 6 bits, des couches calculées en bf16 (dtype lu sur `scales`) changent trop de
+codes acoustiques (98,48 % Δ2, 98,65 % Δ2) et ne gagnent rien en 4 bits ; tout le FM en bf16 gagne environ 9 % en
+4 bits mais à 98,09 % Δ3. Le pas bf16 reste 2,7 fois celui du 4 bits.
+
 ## Aller-retour ASR (TTS → STT, `voxtral eval tts-roundtrip`, batch, `neutral_female`, mini-3b-8bit `.mlx`)
 
 | Pack | court (graines 1 / 2 / 3) | moyen | long |

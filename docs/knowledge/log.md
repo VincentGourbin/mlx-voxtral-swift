@@ -222,3 +222,9 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   23,2 pour le LLM) ; LLM + FM = 99,86 à 99,96 % du pas. Hors trace, sortie et `step_ms_p50` inchangés (+ 0,98 %,
   A/B/B/A). Le streaming émet ses phases en trace. Borne des leviers FM (K-39, K-48, K-57) ; note
   [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.
+- 2026-10-11 — **K-39 : FM bf16 pour le pack bf16, − 48,8 % sur le pas** : seules les couches du transformeur du
+  flow matching passent en bf16 (tts-4b-mlx 129,8 → 66,5 ms/pas, A/B/B/A ; parité forcée 99,23 % Δ1, sémantique
+  100 % ; couverture ASR sur 5 graines égale ou meilleure). La tête sémantique en bf16 change 1,7 à 2,6 % des codes ;
+  en 4 / 6 bits, le bf16 casse la parité sans gain : chemin fp32 gardé, sortie identique. Leçon : sur un pack
+  quantifié, le FM n'est pas limité par le dtype de calcul. En attente de l'écoute de Vincent ;
+  [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.

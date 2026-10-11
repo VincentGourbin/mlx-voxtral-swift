@@ -827,3 +827,14 @@ Décisions du planificateur du 2026-10-03 :
   23:20:24 sans source recompilée, modification de K-39 datée de 23:21:42, `out_sha256` identique A/B. Le détecteur du
   mode trace a été remplacé après les mesures (`exportChromeTrace` → `VOXTRAL_TTS_SPLIT_TRACE`), chemin identique sous
   `bench --trace`, mesures non refaites ; contrôle après correctif sur un binaire `dirty` (arbre avec K-39 en cours) : il prouve la présence des spans et des phases ; son `out_sha256` `e64d2131…`, celui d'avant K-39, montre que le FM de K-39 n'y était pas (K-39 change les codes du 6 bits : parité acoustique 98,17 %). Correctif de l'instrument (`commit` du binaire, pas du dossier) : note pour K-89.
+- **K-39 (#610), 2026-10-11, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) clause « pas 4 bits − 5 % au moins »
+  retirée avec la mesure : les couches du FM en bf16 sur un pack quantifié (dtype lu sur `scales`) donnent 98,48 %
+  de codes acoustiques identiques avec un écart de 2 niveaux (6 bits 98,65 %, Δ2) et aucun gain en 4 bits (25,10
+  ms/pas, essai) ; tout le FM en bf16 gagne environ 9 % en 4 bits mais à 98,09 %, Δ3 ; la porte de parité (≥ 99 %,
+  Δ ≤ 1) prime. Les packs quantifiés gardent le chemin fp32 (sortie identique bit à bit, A/B/B/A). (2) Tête
+  sémantique gardée en fp32 contre l'objectif de la fiche : en bf16 elle change 1,7 à 2,6 % des codes sémantiques
+  (porte : 100 %). (3) Couverture ASR jugée sur la moyenne des cinq graines contre A mesuré le même jour (B ≥ A sur
+  les trois textes) ; à la graine 1 seule, B long est à 0,949 contre 0,955 pour la référence K-35 (− 0,6 pt, seuil
+  − 0,5 pt, deux mots sur 334), A long varie de 0,826 à 0,955 selon la graine ; question posée à Vincent avec
+  l'écoute. (4) Champs `commit` / `dirty` lus dans le dossier courant (K-93) : binaire de A prouvé par `top_process`
+  (worktree `k93-a`) et, en bf16, par `out_sha256` différent.
