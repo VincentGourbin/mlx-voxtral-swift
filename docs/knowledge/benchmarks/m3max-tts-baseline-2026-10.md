@@ -120,10 +120,16 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
   Le bloc de comparaison est dans `BENCHMARKS.md` (reprise du 2026-10-10). Le défaut public (pas de plafond) est
   une décision de Vincent. Deux premiers relevés ne tiennent pas : 8 à 19 % de surcoût (comparaison à la matrice
   d'origine, autre protocole et autre macOS), puis − 3,9 à + 4,8 % sur 11 cellules (texte moyen mesuré chaud).
-- **Constat sans cause isolée** (à reprendre, pas de cause écrite) : le 4 bits avec la voix clonée produit beaucoup
-  plus de frames pour le même texte (1 806 contre 1 123 sur le moyen, 2 149 contre 1 932 sur le long) et son pic
-  MLX double sur le moyen (19,0 contre 9,1 Go). Le temps par pas est le même (25,34 contre 25,15 ms). L'aller-retour
-  ASR n'est fait qu'en voix prédéfinie : la qualité de ces sorties n'est pas mesurée.
+- **Voix clonée en 4 bits : la trajectoire quitte le texte** (cause trouvée par K-97, 2026-10-11 ; c'était le « constat
+  sans cause isolée » de K-35) : le 4 bits avec `clone_fr` produit 1 806 frames contre 858 en 6 bits sur le moyen, 2 149
+  contre 1 868 sur le long, et sa couverture ASR tombe à 0,731 (moyen) et 0,237 (long), contre 0,940 et 0,955 en 6
+  bits. Le long quitte le texte au premier tiers. Forcé sur la trajectoire du 6 bits, le 4 bits prend une autre
+  décision sémantique sur 14 % des frames, en voix clonée comme en `fr_female` (85,7 et 85,3 % d'accord), et lit la
+  fin au bon endroit. Le débordement n'est donc pas un défaut du test de fin : l'erreur de quantification fait dériver
+  la trajectoire libre (2 graines sur 3 en clonée, 1 sur 3 et moins loin en `fr_female`). Le pic MLX doublé (19,3
+  contre 7,3 Go) est celui de la phase `codec`, qui croît avec le nombre de frames. Le 6 bits et le bf16 clonés
+  restent à moins de 2 pt de leur voix prédéfinie (bf16 long : 0,934, après K-39). Lignes : `BENCHMARKS.md`
+  §« 2026-10-11 — K-97 ».
 - **Retiré le 2026-10-10** : « le 6 bits est plus lent sur le texte moyen » (44,3 et 46,2 ms/pas). Reposées, ces
   cellules sont à 38,45 et 38,50, comme le court et le long ; l'écart venait de la chaleur.
 
