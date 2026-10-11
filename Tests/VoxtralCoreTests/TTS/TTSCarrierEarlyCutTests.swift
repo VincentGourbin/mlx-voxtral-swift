@@ -61,6 +61,7 @@ final class TTSCarrierEarlyCutTests: XCTestCase {
 
         var edgeWorst = [Float](repeating: 0, count: 8)  // by distance from the prefix end, 1 = last frame
         var deepestIdentical = Float(0)                  // worst difference farther than 8 frames from the end
+        var sampleWorst = Float(0), samplePeak = Float(0)  // largest |prefix − full| sample difference, full peak
         var mismatches = [Int](repeating: 0, count: margins.count)
         var framesNeeded = [[Int]](repeating: [], count: margins.count)
         for seed in 1 ... seeds {
@@ -76,6 +77,10 @@ final class TTSCarrierEarlyCutTests: XCTestCase {
                 let part = model.decodeToWaveform(codes[0..., ..<n, 0...])
                 MLX.eval(part)
                 let partFrames = part.dim(0) / frameSize
+                let overlap = min(part.dim(0), full.dim(0))
+                sampleWorst = max(sampleWorst, MLX.abs(part[..<overlap].asType(.float32) - full[..<overlap].asType(.float32))
+                    .max().item(Float.self))
+                samplePeak = max(samplePeak, MLX.abs(full.asType(.float32)).max().item(Float.self))
                 for i in 0 ..< partFrames {
                     let d = abs(frameDB(part, i) - frameDB(full, i))
                     let fromEnd = partFrames - i
@@ -103,6 +108,8 @@ final class TTSCarrierEarlyCutTests: XCTestCase {
         print("EDGE \(id) max |ΔdB| by frame from the prefix end (1 = last): "
               + edgeWorst.map { String(format: "%.2f", $0) }.joined(separator: " ")
               + String(format: " ; farther: %.3f", deepestIdentical))
+        print(String(format: "SAMPLE \(id) max |prefix − full| %.3g (full peak %.3g, %.1f dB below)", sampleWorst, samplePeak,
+                     20 * Foundation.log10(max(samplePeak, 1e-9) / max(sampleWorst, 1e-12))))
         for (k, m) in margins.enumerated() {
             let sorted = framesNeeded[k].sorted()
             print("CUTSUM \(id) margin \(m): mismatches \(mismatches[k])/\(seeds), frames generated before the cut "

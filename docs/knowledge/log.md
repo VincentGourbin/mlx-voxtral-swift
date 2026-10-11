@@ -228,3 +228,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   en 4 / 6 bits, le bf16 casse la parité sans gain : chemin fp32 gardé, sortie identique. Leçon : sur un pack
   quantifié, le FM n'est pas limité par le dtype de calcul. En attente de l'écoute de Vincent et d'ASK-35 / ASK-36 ;
   [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.
+- 2026-10-11 — **K-68 : le codec TTS est causal, le porteur se coupe sur un préfixe** : un préfixe de codes se
+  décode comme le début du décodage complet (écart ≤ 1,9·10⁻⁶), donc la coupe du porteur décidée sur le waveform
+  partiel égale celle du batch (10/10 graines). Le streaming n'attend plus 3 s : TTFA cloné avec porteur − 42,6 % en
+  6 bits (1,91 → 1,09 s). Leçon : une précaution « décider sur la vue complète » se teste avant d'être payée ; en
+  attente de l'écoute de Vincent ; PLAN.md §7.

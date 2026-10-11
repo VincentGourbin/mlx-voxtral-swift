@@ -2099,3 +2099,17 @@ Statistics:
 - Écoute : 5 paires anonymisées (bf16 A / B : court graines 1 et 2, moyen graines 1 et 2, long graine 1) et grille
   dans `.local-runs/listen/k39/` (`GRILLE.md`, clé `.key.json`) ; fiche `blocked` jusqu'à l'écoute (ASK-13 = A) et aux réponses ASK-35, ASK-36.
 - Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs ; code, chiffres et paires justes) : couverture présentée comme tenue alors qu'elle échoue à la lettre (→ ASK-35) ; clause 4 bits retirée sans décision de Vincent (→ ASK-36) ; « 42 / 42 `QUIET` » ramené aux 12 BENCH ; BENCH lancés par `--voice neutral_female`, pas `--voice-embedding` ; paires d'écoute retirées au sort (4 sur 5 avaient A en prise 1).
+
+## K-68 — TTS : porteur de warm-up coupé sur le waveform partiel en streaming — 2026-10-11 — bloquée (écoute de Vincent)
+- Fait (commit `a9d3c5cf`) : `synthesizeStreaming` cherche la fin du porteur à chaque morceau au lieu d'attendre 3 s
+  d'audio ; même fonction de coupe (`trimLeadingCarrierAdaptive`) que le batch. Test gardé `TTSCarrierEarlyCutTests`
+  (`VOXTRAL_TTS_CARRIER_EARLY=1`) : un préfixe décodé donne les mêmes frames que le décodage complet (écart ≤ 1,9·10⁻⁶)
+  et la même coupe (10/10 graines) ; la coupe tombe après 23 frames en médiane au lieu de 43.
+- Porte observée (`BENCHMARKS.md` §« 2026-10-11 — K-68 ») :
+  - `BENCH ttfa clone streaming −42,63 % (≥ 30) ; fuites 0/10 (≤ 0)` (tts-4b-6bit court `clone_fr` `--warm-up`, A/B/B/A, A/A 0,16 %, B/B 0,28 % ; 10 graines : médiane −42,7 % ; tts-4b-4bit −55,90 %, B/B 28,6 %, consigné)
+  - `BATCH porteur/total = 0,75 %` (7 / 931, ligne consommateur, chemin batch inchangé)
+- Sortie : même durée sur les 10 graines ; `out_sha256` différent sur 8 (écart ≤ 1,9·10⁻⁶ par échantillon, 102,6 dB
+  sous le pic). Constat hors fiche : graine 1, « FluxForge Studio » absent de la transcription (couverture 0,818), chemin
+  batch inchangé donc déjà présent avant ; signalé à l'écoute.
+- Écoute (ASK-13 = A) : 10 prises et grille dans `.local-runs/listen/k68/` (une prise par graine, pas de paires :
+  `ASK.md` §Dérogations, K-68) ; fiche `blocked` jusqu'à l'écoute.

@@ -868,3 +868,10 @@ Décisions du planificateur du 2026-10-03 :
   `a8820cbb`), par `top_process` quand VoxtralCLI y figure et, en bf16, par `out_sha256` ; `ABBA-6bit-4-A` (`top_process`
   sysmond, sortie identique à B) ne l'est que par la file. (4) Streaming non mesuré : il appelle le même
   `decodeOneFrame` (`VoxtralTTSModeling.swift:744`), donc change aussi en bf16 ; mesure laissée à K-43.
+- **K-68 (#618), 2026-10-11, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) écoute (ASK-13 = A) préparée en 10
+  prises seules, pas en paires A / B : la coupe est la même (test `TTSCarrierEarlyCutTests` 10/10, mêmes durées sur
+  10 graines) et les échantillons diffèrent d'au plus 1,9·10⁻⁶ ; les prises viennent du chemin batch
+  (`eval tts-roundtrip --warm-up`), qui coupe au même endroit. (2) Fuites comptées par transcription (aucun « la »),
+  la référence A n'étant pas transcrite (même coupe). (3) `out_sha256` différent A / B sur 8 graines sur 10 : bruit de
+  décodage d'un préfixe (`SAMPLE`), pas une autre coupe. (4) tts-4b-4bit B/B 28,6 % (temps du premier morceau, sortie
+  identique) : consigné, la porte se juge sur le 6 bits (ligne consommateur).
