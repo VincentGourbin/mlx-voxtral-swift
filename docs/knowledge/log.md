@@ -241,9 +241,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   plus vite » venait d'une voix plus courte (101 frames contre 218), pas d'un chemin : `bench tts` préfille toute voix
   d'un bloc. Leçon : avant d'expliquer un écart entre deux cellules, vérifier quel chemin de code chacune a pris ;
   conséquence pour K-50 dans sa fiche ; PLAN.md §7.
-- 2026-10-11 — **K-97 : le 4 bits cloné quitte le texte** : couverture 0,731 (moyen) et 0,237 (long) contre 0,940 et
-  0,955 en 6 bits. À historique égal, le 4 bits prend une autre décision sémantique que le 6 bits sur 14 % des frames,
-  en voix clonée comme prédéfinie, et voit la fin du texte au bon endroit : la quantification fait dériver la
-  trajectoire libre, puis la fin arrive tard (frames et pic `codec` doublés). Leçon : une mesure de qualité faite sur
-  une seule voix (K-35, prédéfinie) ne couvre pas un pack ; la dérive se voit à la couverture, pas aux défauts
-  « silence » et « répétition » ; PLAN.md §7.
+- 2026-10-11 — **K-97 : le 4 bits ne supporte pas la voix clonée** : couverture 0,63 à 0,77 sur le moyen (3 graines)
+  et 0,237 sur le long, contre 0,940 / 0,955 en 6 bits ; pauses allongées (frames et pic `codec` doublés), le long
+  quitte le texte. La fin est lue au bon endroit, et le LLM comme la tête 4 bits s'écartent du bf16 au même taux pour
+  une voix prédéfinie, qui garde 0,90 à 0,93 : c'est la voix clonée qui rend la trajectoire fragile (hypothèse).
+  Leçons : une mesure de qualité faite sur une seule voix ne couvre pas un pack ; un taux d'écart par pas sans échelle
+  (paire bf16) et sans séparation des modules ne désigne pas une cause ; les pauses courtes échappent à une règle
+  « silence > 1 s » ; PLAN.md §7.

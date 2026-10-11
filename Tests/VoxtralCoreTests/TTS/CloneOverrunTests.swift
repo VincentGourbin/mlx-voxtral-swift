@@ -104,4 +104,66 @@ final class CloneOverrunTests: XCTestCase {
             XCTAssertGreaterThan(six.eoaMargin, 0, "6-bit must read EOA where its trajectory ended (\(name))")
         }
     }
+
+    /// 3. SWAP (K-97 verification): which module of the 4-bit pack parts from the others? The three packs' LLMs run
+    /// on the same history (the 6-bit seed-1 trajectory); every LLM's hidden state is read by every pack's semantic
+    /// head. Each (LLM, head) pair is compared with the bf16 pair (bf16 LLM, bf16 head), the scale for the others.
+    func testSemanticAgreementBySwappedModules() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["VOXTRAL_TTS_CLONE_OVERRUN"] == "1", "Set VOXTRAL_TTS_CLONE_OVERRUN=1 to run")
+        let clonePath = try XCTUnwrap(env["VOXTRAL_TTS_CLONE_OVERRUN_EMB"], "VOXTRAL_TTS_CLONE_OVERRUN_EMB required")
+        let clone = try XCTUnwrap(MLX.loadArrays(url: URL(fileURLWithPath: clonePath))["embedding"])
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let text = try String(contentsOf: root.appendingPathComponent("docs/eval/tts/medium_en.txt"), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let ids = ["tts-4b-mlx", "tts-4b-6bit", "tts-4b-4bit"], short = ["bf16", "6bit", "4bit"]
+        var pipelines: [VoxtralTTSPipeline] = []
+        for id in ids {
+            let p = VoxtralTTSPipeline()
+            try await p.loadModel(modelInfo: try XCTUnwrap(VoxtralTTSRegistry.model(withId: id)))
+            pipelines.append(p)
+        }
+        defer { pipelines.forEach { $0.unload() } }
+        let models = try pipelines.map { try XCTUnwrap($0.ttsModel) }
+        let tokenizer = try XCTUnwrap(pipelines[1].tokenizer)
+        let six = models[1]
+
+        for (name, voice) in [("clone_fr", clone), ("fr_female", try XCTUnwrap(pipelines[1].voiceEmbeddings["fr_female"]))] {
+            let out = six.generate(text: text, voiceEmbedding: voice, tokenizer: tokenizer, maxTokens: 2_379, seed: 1)
+            let codes = out.codes[0].asArray(Int32.self), width = out.codes.dim(2)
+            let ref = (0 ..< out.numFrames).map { Array(codes[($0 * width) ..< (($0 + 1) * width)]) }
+            let tokenIds = six.encodeText(text, voiceFrameCount: voice.dim(0), tokenizer: tokenizer, sanitize: true)
+            let audioTok = Int32(six.config.multimodal.audioModelArgs.audioTokenId)
+            var caches = models.map { $0.createCache() }
+            var hidden: [MLXArray] = []
+            for (m, model) in models.enumerated() {
+                _ = model.llmForward(inputEmbeds: model.buildInputEmbeddings(
+                    inputIds: MLXArray(tokenIds).reshaped(1, tokenIds.count), voiceEmbedding: voice), cache: caches[m])
+                hidden.append(model.llmForward(inputEmbeds: model.embedTokens(MLXArray([audioTok]).reshaped(1, 1)),
+                                               cache: caches[m]))
+            }
+            var agree = [[Int]](repeating: [Int](repeating: 0, count: 3), count: 3)  // [llm][head] vs (bf16, bf16)
+            for f in 0 ..< ref.count {
+                let h = hidden.map { $0[0..., -1, 0...] }
+                let truth = semanticRead(models[0], h[0]).argmax
+                for llm in 0 ..< 3 { for head in 0 ..< 3 where semanticRead(models[head], h[llm]).argmax == truth {
+                    agree[llm][head] += 1 } }
+                for (m, model) in models.enumerated() {
+                    let next = model.mmAudioEmbeddings
+                        .audioCodebookEmbeddings(model.codesToGlobalIndices(MLXArray(ref[f]).reshaped(1, ref[f].count)))
+                        .sum(axis: 1, keepDims: true)
+                    hidden[m] = model.llmForward(inputEmbeds: next, cache: caches[m])
+                }
+                if f % 64 == 0 { MLX.eval(hidden) }
+            }
+            caches.removeAll()
+            for llm in 0 ..< 3 {
+                print("SWAP \(name) LLM \(short[llm]): " + (0 ..< 3).map { head in
+                    String(format: "head %@ %.1f %%", short[head], Double(agree[llm][head]) / Double(ref.count) * 100)
+                }.joined(separator: " · ") + " (vs bf16 LLM + bf16 head, \(ref.count) frames of the 6-bit seed-1 trajectory)")
+            }
+            XCTAssertEqual(agree[0][0], ref.count, "bf16 pair against itself")
+        }
+    }
 }

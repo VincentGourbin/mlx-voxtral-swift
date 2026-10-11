@@ -2508,18 +2508,17 @@ sous − 50 dBFS par fenêtres de 80 ms ; 4-gramme répété ≥ 3 fois dans la 
 
 Frames et durées du 4 et du 6 bits identiques aux cellules clonées de K-35 (même graine) : pic MLX de K-35, phase
 `codec`, 19 336 Mo (4 bits) contre 7 309 Mo (6 bits) sur le moyen ; phases `prefill` / `decode` 2 879 contre 3 711 Mo.
-Défauts : 0 silence > 1 s, 0 répétition sur les 15 sorties. Le long du 4 bits quitte le texte au premier tiers
-(transcription : « Image is a good look at the PC and you can build an engine… ») sans 4-gramme répété : la règle
-de répétition ne le voit pas.
+Défauts : 0 silence > 1 s, 0 répétition sur les 15 sorties. Corrigé à la vérification (ci-dessous) : le moyen du 4
+bits suit le texte, ses frames en plus sont surtout des pauses courtes (53,5 s sous − 50 dBFS contre 8,5 s en 6 bits,
+séries de 0,8 s au plus, sous le seuil de la règle) ; seul le long quitte le texte au premier tiers (transcription :
+« Image is a good look at the PC and you can build an engine… »), sans 4-gramme répété.
 
-Cause (test `CloneOverrunTests`, gardé `TEST_RUNNER_VOXTRAL_TTS_CLONE_OVERRUN=1`, `.local-runs/k97/overrun-test.log`) :
-en libre, le 4 bits cloné déborde sur 2 graines sur 3 (1 806, 1 787 ; graine 3 : 866), `fr_female` (97 frames) une
-fois et moins (1 125 ; 914, 878) ; le 6 bits reste entre 845 et 977. Forcé sur la trajectoire du 6 bits, le 4 bits
-prend la même décision sémantique que le 6 bits sur 85,7 % des frames en voix clonée et 85,3 % en `fr_female` (6 bits
-sur lui-même : 100 %), et lit la fin du texte au même endroit (marge EOA + 3,02 en clonée, + 1,17 en `fr_female`). Le
-4 bits ne rate donc pas la fin : son erreur de quantification (14 % des codes sémantiques) fait dériver la trajectoire
-libre hors du texte sur certaines graines, et la fin n'arrive qu'après. Le pic doublé suit : la phase `codec` décode
-toute la séquence d'un bloc, son pic croît avec les frames (6 bits long, 1 868 frames : 21 420 Mo).
+Test `CloneOverrunTests` (gardé `TEST_RUNNER_VOXTRAL_TTS_CLONE_OVERRUN=1`, `.local-runs/k97/overrun-test.log`) : en
+libre, le 4 bits cloné fait 1 806, 1 787 et 866 frames (graines 1 à 3), `fr_female` (97 frames) 1 125, 914 et 878 ;
+le 6 bits reste entre 845 et 977. Forcé sur la trajectoire du 6 bits, le 4 bits prend la même décision sémantique que
+le 6 bits sur 85,7 % des frames en voix clonée et 85,3 % en `fr_female` (6 bits sur lui-même : 100 %), et lit la fin
+au même endroit (marge EOA + 3,02 et + 1,17) : le test de fin n'est pas en cause. Le pic doublé est celui de la phase
+`codec`, qui décode toute la séquence d'un bloc et croît avec les frames (6 bits long, 1 868 frames : 21 420 Mo).
 
 ```
 # k97/CL-4bit-short_en-s1
@@ -2573,7 +2572,10 @@ OVERRUN FREE tts-4b-4bit fr_female seed 3: frames 878 · EOA yes
 OVERRUN FORCED tts-4b-4bit clone_fr on 6-bit seed 1: semantic argmax = 6-bit 735 / 858 (85.7 %), first split 0, EOA margin at frame 858: 3.02
 OVERRUN FORCED tts-4b-4bit fr_female on 6-bit seed 1: semantic argmax = 6-bit 774 / 907 (85.3 %), first split 5, EOA margin at frame 907: 1.17
 	 Executed 1 test, with 0 failures (0 unexpected) in 1278.137 (1278.138) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 1278.137 (1278.139) seconds
+** TEST SUCCEEDED **
 ```
+(code de sortie 0 ; la ligne `Executed` répétée par xcodebuild apparaît trois fois dans le journal, deux formes distinctes)
 
 Défauts (`python3 .local-runs/tools/defects.py .local-runs/k97/eval/*/*.wav`) :
 ```
@@ -2593,4 +2595,51 @@ DEFECTS tts-4b-mlx_short_en_clone_fr_seed1.wav silences>1s 0 (0.00 s) repeats 0 
 DEFECTS tts-4b-mlx_short_en_clone_fr_seed2.wav silences>1s 0 (0.00 s) repeats 0 []
 DEFECTS tts-4b-mlx_short_en_clone_fr_seed3.wav silences>1s 0 (0.00 s) repeats 0 []
 DEFECTS total silences>1s 0, repeats 0
+```
+
+### 2026-10-11 — K-97, vérification : modules croisés, couverture par graine, pauses du moyen
+
+Vérificateur et contradicteur `not verified`. (1) Le moyen 4 bits ne quitte pas le texte : ses frames en plus sont
+surtout des pauses courtes. (2) « Même taux en voix prédéfinie » ne prouve pas que la voix clonée n'est pas en cause :
+à taux égal par frame, l'issue diffère. (3) Le taux de 14 % n'avait pas d'échelle et ne séparait pas le LLM de la
+tête. (4) « Le code est juste » n'est pas démontré. Mesures ajoutées (`.local-runs/queue-k97b.sh`, binaire `3b327e06`,
+`machine-check` et `quiet.sh` `QUIET` avant chaque EVAL) :
+
+- **Modules croisés** (`testSemanticAgreementBySwappedModules`) : les LLM des trois packs tournent sur la même
+  trajectoire (6 bits, graine 1), chaque état caché est lu par la tête sémantique de chaque pack, comparé à la paire bf16.
+  Paire 6 bits : 97,1 % (clonée), 96,4 % (`fr_female`) ; paire 4 bits : 86,2 % et 85,8 %. LLM 4 bits avec la tête bf16
+  ou 6 bits : 89,5 à 89,6 % (clonée), 87,8 à 88,3 % ; tête 4 bits sur le LLM bf16 : 90,4 % et 93,4 %. Le LLM 4 bits et
+  la tête 4 bits s'écartent chacun ; le LLM un peu plus. Le taux d'écart par frame est le même pour les deux voix.
+- **Couverture par graine, moyen, 4 bits** : `clone_fr` 0,731 / 0,629 / 0,772 (1 806, 1 787, 866 frames) ;
+  `fr_female` 0,916 / 0,928 / 0,898 (1 125, 914, 878). La voix clonée est mauvaise à toutes les graines, même à
+  longueur normale (graine 3) ; `fr_female` reste à moins de 6 pt de `neutral_female` (0,976, K-35).
+- **Pauses** (secondes sous − 50 dBFS, fenêtres de 80 ms, CPU) : 4 bits clonée 53,5 / 50,6 / 20,3 s pour 144,5 / 142,7 /
+  69,2 s ; 6 bits clonée 8,5 s pour 68,4 s ; bf16 clonée 11,4 s pour 69,7 s ; 4 bits `fr_female` 18,2 / 10,2 / 15,6 s.
+
+Conclusion révisée : l'EOA est hors de cause, aucun chemin de code propre au 4 bits n'est vu (mêmes modules, mêmes
+dtypes de calcul ; pas de comparaison à une implémentation de référence), et la dérive est propre à la voix clonée en
+4 bits : à écart par frame égal, `clone_fr` perd 17 à 31 pt de couverture sur le moyen et allonge ses pauses, `fr_female`
+non. Hypothèse, non démontrée : le conditionnement de `clone_fr` rend la trajectoire plus sensible aux erreurs du LLM
+et de la tête 4 bits.
+
+```
+SWAP clone_fr LLM bf16: head bf16 100.0 % · head 6bit 96.9 % · head 4bit 90.4 % (vs bf16 LLM + bf16 head, 858 frames of the 6-bit seed-1 trajectory)
+SWAP clone_fr LLM 6bit: head bf16 96.5 % · head 6bit 97.1 % · head 4bit 90.9 % (vs bf16 LLM + bf16 head, 858 frames of the 6-bit seed-1 trajectory)
+SWAP clone_fr LLM 4bit: head bf16 89.6 % · head 6bit 89.5 % · head 4bit 86.2 % (vs bf16 LLM + bf16 head, 858 frames of the 6-bit seed-1 trajectory)
+SWAP fr_female LLM bf16: head bf16 100.0 % · head 6bit 98.2 % · head 4bit 93.4 % (vs bf16 LLM + bf16 head, 907 frames of the 6-bit seed-1 trajectory)
+SWAP fr_female LLM 6bit: head bf16 96.1 % · head 6bit 96.4 % · head 4bit 92.6 % (vs bf16 LLM + bf16 head, 907 frames of the 6-bit seed-1 trajectory)
+SWAP fr_female LLM 4bit: head bf16 87.8 % · head 6bit 88.3 % · head 4bit 85.8 % (vs bf16 LLM + bf16 head, 907 frames of the 6-bit seed-1 trajectory)
+	 Executed 1 test, with 0 failures (0 unexpected) in 347.338 (347.339) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 347.338 (347.340) seconds
+** TEST SUCCEEDED **
+# k97/CLP-4bit-fr_female-medium_en-s1
+EVAL {"audio_s":90,"build":"Release","chip":"Apple M3 Max","commit":"3b327e06e","coverage":0.916,"date":"2026-10-11T08:29:55Z","dirty":true,"frames":1125,"hyp_sha256":"3c1c3d4e53b9125008b5210a441ecd625bf153be834b01987659114fe778970a","hyp_words":173,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-4bit","out_sha256":"6b95bec849333f841a01bc5f1002c1abc3bd71511cd9809f591107673e326a26","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"CLP-4bit-fr_female-medium_en-s1","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"36,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"fr_female","warm_up":false,"wer":11.98}
+# k97/CLP-4bit-fr_female-medium_en-s2
+EVAL {"audio_s":73.12,"build":"Release","chip":"Apple M3 Max","commit":"3b327e06e","coverage":0.928,"date":"2026-10-11T08:32:27Z","dirty":true,"frames":914,"hyp_sha256":"b02f6f0ebc7de309cb2f9925f2cddca75333829258e622dcff1fa9e18ef490b7","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-4bit","out_sha256":"39daecb732ec32b39d88d62707b7e00c35b78c6d5dbcf0d78d6f7fda23c10297","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"CLP-4bit-fr_female-medium_en-s2","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"38,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"fr_female","warm_up":false,"wer":10.18}
+# k97/CLP-4bit-fr_female-medium_en-s3
+EVAL {"audio_s":70.16,"build":"Release","chip":"Apple M3 Max","commit":"3b327e06e","coverage":0.898,"date":"2026-10-11T08:34:58Z","dirty":true,"frames":878,"hyp_sha256":"1e4cede69316d6c73a04ad34e07d84e8391b6559167cb8a01b147d4411235988","hyp_words":167,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-4bit","out_sha256":"896ca53fae38b77dc46c01aa2909994afa439af20110e12eeafaf75efba471eb","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"CLP-4bit-fr_female-medium_en-s3","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"27,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"fr_female","warm_up":false,"wer":12.57}
+# k97/CL-4bit-medium_en-s2
+EVAL {"audio_s":142.72,"build":"Release","chip":"Apple M3 Max","commit":"3b327e06e","coverage":0.629,"date":"2026-10-11T08:38:01Z","dirty":true,"frames":1787,"hyp_sha256":"932ad135cad75d46ca867c4fc703b5379dcbc877171dbf0de3dd28bafd53cb6d","hyp_words":140,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-4bit","out_sha256":"2b3191b3dceb86bf90556813dd7eca4ae3a694518e53348bf7208934924a746f","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"CL-4bit-medium_en-s2","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"33,9 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"clone_fr","warm_up":false,"wer":40.12}
+# k97/CL-4bit-medium_en-s3
+EVAL {"audio_s":69.2,"build":"Release","chip":"Apple M3 Max","commit":"3b327e06e","coverage":0.772,"date":"2026-10-11T08:41:26Z","dirty":true,"frames":866,"hyp_sha256":"7209ef8fd8026ff4de5844f15ab352e1777c8959c2567b8250e34a62df676cac","hyp_words":151,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-4bit","out_sha256":"f7bb3cc7d906c72e2b00743fdacf32d237a24fe981856c22ec06067e3f6c1055","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"CL-4bit-medium_en-s3","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"15,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"clone_fr","warm_up":false,"wer":24.55}
 ```

@@ -2155,14 +2155,21 @@ Statistics:
 ## K-97 — TTS : qualité de la voix clonée, frames en plus et pic doublé en 4 bits — 2026-10-11 — bloquée (écoute de Vincent)
 - Fait (commit `docs(K-97)`) : 15 `eval tts-roundtrip --voice-embedding clone_fr` (3 packs, court graines 1 à 3, moyen et
   long graine 1) ; script de défauts `.local-runs/tools/defects.py` ; test `CloneOverrunTests` (gardé
-  `TEST_RUNNER_VOXTRAL_TTS_CLONE_OVERRUN=1`) : `Executed 1 test, with 0 failures (0 unexpected) in 1278.137 (1278.138) seconds`.
+  `TEST_RUNNER_VOXTRAL_TTS_CLONE_OVERRUN=1`) : `Executed 1 test, with 0 failures (0 unexpected) in 1278.137 (1278.138) seconds`, `** TEST SUCCEEDED **`, code 0 ;
+  `testSemanticAgreementBySwappedModules` : `Executed 1 test, with 0 failures (0 unexpected) in 347.338 (347.339) seconds`, `** TEST SUCCEEDED **`.
 - Porte observée :
   - `EVAL clone_fr couverture 4bit / 6bit / bf16 : court 0,909·0,909·0,909 / 0,727·0,909·0,909 / 0,909·0,909·0,909 ; moyen 0,731 / 0,940 / 0,940 ; long 0,237 / 0,955 / 0,934`
   - `CLONE 4bit vs 6bit moyen : frames 1806 / 858, audio 144,48 / 68,40 s, pic 19,3 / 7,3 Go (phase codec, BENCH K-35) ; écart couverture − 20,9 pt (> 2)` ; long : 2 149 / 1 868 frames, 171,84 / 149,28 s, 26,1 / 21,4 Go, − 71,8 pt
-  - `DEFECTS silences > 1 s 0, répétitions 0 ; cause des frames en plus : dérive de la trajectoire libre du 4 bits hors du texte (décision sémantique différente du 6 bits sur 14 % des frames à historique égal, en clonée comme en fr_female ; fin lue au bon endroit, marge EOA + 3,02), 2 graines sur 3 en clonée`
+  - `DEFECTS silences > 1 s 0, répétitions 0 ; cause des frames en plus : pauses allongées (moyen, 50 à 54 s sous − 50 dBFS contre 8,5) et sortie du texte (long) du 4 bits cloné ; EOA hors de cause (fin lue au bon endroit, marge + 3,02) ; LLM et tête 4 bits s'écartent du bf16 (paire 4 bits 86 %, 6 bits 96-97 %) au même taux en fr_female, qui tient (0,898-0,928) : sensibilité propre à la voix clonée (hypothèse)`
 - Déclencheurs d'écoute : 4 bits cloné − 20,9 et − 71,8 pt sous le 6 bits cloné ; 4 bits cloné − 24,5 et − 71,8 pt sous
   sa voix prédéfinie de K-35 (0,976 / 0,955) ; bf16 cloné long 0,934, − 2,1 pt sous la référence K-35 (0,955), mais
   la sortie bf16 a changé avec K-39 (préfixe prédéfini après K-39 : 0,949, − 1,5 pt). La règle de répétition ne voit pas
   la dérive du long 4 bits (aucun 4-gramme répété).
 - Écoute (ASK-13 = A) : 5 paires anonymisées 4 bits / 6 bits clonés et grille dans `.local-runs/listen/k97/` ; question
   fermée sur l'usage du 4 bits avec une voix clonée dans `.local-runs/A-DECIDER.md` ; fiche `blocked`.
+- Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`) : « le moyen quitte le texte » faux (pauses
+  allongées) ; « même taux en voix prédéfinie » ne disculpait pas la voix clonée ; 14 % sans échelle ni séparation des
+  modules ; « le code est juste » non démontré ; lignes de test incomplètes ; bf16 « à moins de 2 pt » sans réserve.
+  Ajouts : test à modules croisés (échelle bf16, LLM et tête séparés), couverture 4 bits clonée graines 2 et 3 (0,629,
+  0,772) et `fr_female` graines 1 à 3 (0,916, 0,928, 0,898), pauses mesurées ; conclusion réécrite en hypothèse ; question
+  à Vincent refaite (option pack mixte ajoutée, fiche de suite décidée par l'agent).

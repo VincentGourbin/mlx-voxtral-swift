@@ -120,16 +120,18 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
   Le bloc de comparaison est dans `BENCHMARKS.md` (reprise du 2026-10-10). Le défaut public (pas de plafond) est
   une décision de Vincent. Deux premiers relevés ne tiennent pas : 8 à 19 % de surcoût (comparaison à la matrice
   d'origine, autre protocole et autre macOS), puis − 3,9 à + 4,8 % sur 11 cellules (texte moyen mesuré chaud).
-- **Voix clonée en 4 bits : la trajectoire quitte le texte** (cause trouvée par K-97, 2026-10-11 ; c'était le « constat
-  sans cause isolée » de K-35) : le 4 bits avec `clone_fr` produit 1 806 frames contre 858 en 6 bits sur le moyen, 2 149
-  contre 1 868 sur le long, et sa couverture ASR tombe à 0,731 (moyen) et 0,237 (long), contre 0,940 et 0,955 en 6
-  bits. Le long quitte le texte au premier tiers. Forcé sur la trajectoire du 6 bits, le 4 bits prend une autre
-  décision sémantique sur 14 % des frames, en voix clonée comme en `fr_female` (85,7 et 85,3 % d'accord), et lit la
-  fin au bon endroit. Le débordement n'est donc pas un défaut du test de fin : l'erreur de quantification fait dériver
-  la trajectoire libre (2 graines sur 3 en clonée, 1 sur 3 et moins loin en `fr_female`). Le pic MLX doublé (19,3
-  contre 7,3 Go) est celui de la phase `codec`, qui croît avec le nombre de frames. Le 6 bits et le bf16 clonés
-  restent à moins de 2 pt de leur voix prédéfinie (bf16 long : 0,934, après K-39). Lignes : `BENCHMARKS.md`
-  §« 2026-10-11 — K-97 ».
+- **Voix clonée en 4 bits : couverture effondrée, pauses allongées** (K-97, 2026-10-11 ; c'était le « constat sans
+  cause isolée » de K-35) : avec `clone_fr`, le 4 bits fait 1 806 frames contre 858 en 6 bits sur le moyen, 2 149
+  contre 1 868 sur le long ; couverture ASR 0,731 / 0,629 / 0,772 sur le moyen (graines 1 à 3) et 0,237 sur le long,
+  contre 0,940 et 0,955 en 6 bits. Le moyen suit le texte mais allonge ses pauses (50 à 54 s sous − 50 dBFS contre
+  8,5 s en 6 bits) ; le long quitte le texte au premier tiers. Le test de fin n'est pas en cause (fin lue au bon
+  endroit à historique égal). Le LLM 4 bits et la tête sémantique 4 bits s'écartent tous deux du bf16 (paire 4 bits :
+  86 % de décisions égales, paire 6 bits : 96 à 97 %), au même taux pour `clone_fr` et `fr_female` ; mais seule la
+  voix clonée en souffre (`fr_female` 4 bits : 0,898 à 0,928). Hypothèse non démontrée : le conditionnement de la voix
+  clonée rend la trajectoire plus sensible à ces écarts. Le pic MLX doublé (19,3 contre 7,3 Go) est celui de la phase
+  `codec`, qui croît avec les frames. Le 6 bits cloné reste à moins de 2 pt de sa voix prédéfinie ; le bf16 cloné long
+  (0,934) est à − 2,1 pt de la référence K-35 (0,955), − 1,5 pt de la voix prédéfinie après K-39 (0,949). Lignes :
+  `BENCHMARKS.md` §« 2026-10-11 — K-97 » et sa vérification.
 - **Retiré le 2026-10-10** : « le 6 bits est plus lent sur le texte moyen » (44,3 et 46,2 ms/pas). Reposées, ces
   cellules sont à 38,45 et 38,50, comme le court et le long ; l'écart venait de la chaleur.
 
