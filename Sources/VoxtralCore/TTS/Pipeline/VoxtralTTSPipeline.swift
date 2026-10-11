@@ -709,17 +709,12 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         let totalSamples = fullWaveform.dim(0)
 
                         // Locate the warm-up carrier's end once, then drop it.
-                        // Wait until the adaptive scan window (3 s) has actually
-                        // accumulated — deciding on a partial waveform can latch
-                        // onto a micro-pause inside the carrier and hold that
-                        // wrong cut for the rest of the stream. The batch path
-                        // never sees a partial waveform, so it needs no such
-                        // guard; this keeps both paths deciding on the same view.
-                        let scanWindowSamples = capturedSampleRate * 3
-                        if contentStart == nil, totalSamples < scanWindowSamples, !chunk.isFinal {
-                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
-                            continue
-                        }
+                        // Decided on the partial waveform as soon as the pause and
+                        // the resume are both in it (K-68): the codec is causal, a
+                        // prefix decodes to the same frames as the full decode
+                        // (0.00 dB on 10 seeds), and the cut only reads frames from
+                        // the start, so it equals the batch decision — it used to
+                        // wait for the 3 s scan window, ~20 frames later.
                         if contentStart == nil {
                             // Same adaptive cut as the batch path: no absolute
                             // level is assumed. The carrier's terminal pause is
