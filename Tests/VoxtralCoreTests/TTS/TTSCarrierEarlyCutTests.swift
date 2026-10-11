@@ -19,6 +19,13 @@
  * cut decided after 23 frames (median) instead of 43: the streaming path now decides on the prefix (no margin).
  * Asserts: no prefix frame differs from the full decode, and margin 0 never disagrees with the reference.
  *
+ * testStreamingCutMatchesBatchCut drives the real streaming path (`synthesizeStreaming`, the code K-68 changed):
+ * per seed and chunk size, the samples it emits must start exactly at the cut decided on the full decode of the
+ * same seed's codes, and the first content chunk must arrive within one chunk of the frame where speech resumes
+ * (red before K-68: the stream waited for 3 s, 38 frames). Chunk sizes 1 to 3 cover prefixes of 4 to 6 frames,
+ * where the cut's 5 reference frames are not all decoded yet. VOXTRAL_TTS_CARRIER_EARLY_OUT (optional) receives
+ * the streamed WAVs of chunk size 10, for listening.
+ *
  * Env: VOXTRAL_TTS_CARRIER_EARLY=1 (from xcodebuild: TEST_RUNNER_VOXTRAL_TTS_CARRIER_EARLY=1),
  *   VOXTRAL_TTS_CARRIER_EARLY_EMB (enrolled voice .safetensors, required), optional
  *   VOXTRAL_TTS_CARRIER_EARLY_MODEL (default tts-4b-6bit), VOXTRAL_TTS_CARRIER_EARLY_SEEDS (default 10).
@@ -117,5 +124,66 @@ final class TTSCarrierEarlyCutTests: XCTestCase {
         }
         XCTAssertEqual(max(edgeWorst.max() ?? 0, deepestIdentical), 0, accuracy: 0.01, "the codec is no longer causal")
         XCTAssertEqual(mismatches[0], 0, "a prefix cut disagrees with the full-waveform cut")
+    }
+
+    func testStreamingCutMatchesBatchCut() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["VOXTRAL_TTS_CARRIER_EARLY"] == "1", "Set VOXTRAL_TTS_CARRIER_EARLY=1 to run")
+        let embPath = try XCTUnwrap(env["VOXTRAL_TTS_CARRIER_EARLY_EMB"], "VOXTRAL_TTS_CARRIER_EARLY_EMB is required")
+        let id = env["VOXTRAL_TTS_CARRIER_EARLY_MODEL"] ?? "tts-4b-6bit"
+        let seeds = Int(env["VOXTRAL_TTS_CARRIER_EARLY_SEEDS"] ?? "10") ?? 10
+        let outDir = env["VOXTRAL_TTS_CARRIER_EARLY_OUT"].map { URL(fileURLWithPath: $0) }
+        if let outDir { try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true) }
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let text = try String(contentsOf: root.appendingPathComponent("docs/eval/tts/short_en.txt"), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let carrier = VoxtralTTSPipeline.recommendedWarmUpVocalise
+
+        let pipeline = VoxtralTTSPipeline()
+        try await pipeline.loadModel(modelInfo: try XCTUnwrap(VoxtralTTSRegistry.model(withId: id)))
+        defer { pipeline.unload() }
+        let model = try XCTUnwrap(pipeline.ttsModel)
+        let tokenizer = try XCTUnwrap(pipeline.tokenizer)
+        let voice = try XCTUnwrap(MLX.loadArrays(url: URL(fileURLWithPath: embPath))["embedding"])
+        let frameSize = pipeline.sampleRate * 2 / 25
+
+        var runs: [(seed: Int, chunk: Int)] = (1 ... seeds).map { ($0, 10) }
+        for seed in 1 ... min(3, seeds) { for chunk in [1, 2, 3] { runs.append((seed, chunk)) } }
+        var cutMismatches = 0, late = 0
+        for (seed, chunk) in runs {
+            let (codes, numFrames, _) = model.generate(text: carrier + " " + text, voiceEmbedding: voice,
+                                                       tokenizer: tokenizer, maxTokens: 216, seed: UInt64(seed))
+            let full = model.decodeToWaveform(codes)
+            MLX.eval(full)
+            let (_, reference) = trimLeadingCarrierAdaptive(full, sampleRate: pipeline.sampleRate)
+
+            var pieces: [MLXArray] = []
+            var firstContentFrames: Int?
+            var lastTotal = 0
+            for try await piece in pipeline.synthesizeStreaming(text: text, voiceEmbedding: voice, chunkSize: chunk,
+                                                                seed: UInt64(seed), warmUpText: carrier) {
+                if firstContentFrames == nil, piece.waveform.dim(0) > 0 { firstContentFrames = piece.totalFrames }
+                pieces.append(piece.waveform)
+                lastTotal = piece.totalFrames
+            }
+            let streamed = MLX.concatenated(pieces, axis: 0)
+            MLX.eval(streamed)
+            XCTAssertEqual(lastTotal, numFrames, "seed \(seed): streaming and batch generated different frame counts")
+            let start = numFrames * frameSize - streamed.dim(0)
+            let bound = max(7, reference + 1) + chunk - 1
+            let first = firstContentFrames ?? numFrames
+            if start != reference * frameSize { cutMismatches += 1 }
+            if first > bound { late += 1 }
+            print("STREAM seed \(seed) chunk \(chunk) cut \(start / frameSize) (\(start % frameSize)) reference \(reference) "
+                  + "first content at \(first) frames (bound \(bound))")
+            if let outDir, chunk == 10 {
+                try WAVWriter.write(waveform: streamed,
+                                    to: outDir.appendingPathComponent(String(format: "stream-s%02d.wav", seed)))
+            }
+        }
+        print("STREAMSUM \(id): cut mismatches \(cutMismatches)/\(runs.count), late first chunk \(late)/\(runs.count)")
+        XCTAssertEqual(cutMismatches, 0, "the streamed audio does not start at the batch cut")
+        XCTAssertEqual(late, 0, "the first content chunk waited past the resume frame")
     }
 }

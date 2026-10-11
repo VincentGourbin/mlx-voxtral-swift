@@ -714,7 +714,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         // prefix decodes to the same frames as the full decode
                         // (0.00 dB on 10 seeds), and the cut only reads frames from
                         // the start, so it equals the batch decision — it used to
-                        // wait for the 3 s scan window, ~20 frames later.
+                        // wait for the 3 s scan window, ~20 frames later. Below 7
+                        // frames the cut's carrier level would come from fewer than
+                        // its 5 reference frames (chunkSize < 4) and could differ.
+                        let minDecisionSamples = (2 + 5) * frameSize
+                        if contentStart == nil, totalSamples < minDecisionSamples, !chunk.isFinal {
+                            beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
+                            continue
+                        }
                         if contentStart == nil {
                             // Same adaptive cut as the batch path: no absolute
                             // level is assumed. The carrier's terminal pause is
