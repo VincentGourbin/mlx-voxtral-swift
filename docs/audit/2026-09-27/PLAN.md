@@ -2111,5 +2111,10 @@ Statistics:
 - Sortie : même durée sur les 10 graines ; `out_sha256` différent sur 8 (écart ≤ 1,9·10⁻⁶ par échantillon, 102,6 dB
   sous le pic). Constat hors fiche : graine 1, « FluxForge Studio » absent de la transcription (couverture 0,818), chemin
   batch inchangé donc déjà présent avant ; signalé à l'écoute.
+- Tests : 40 tests TTS (pipeline, streaming, coupe) verts ; lourds `TTSStreamingSeedReproTests` (2, dont porteur
+  sur texte long) et `TTSStreamingFinalChunkTests` verts. `TTSWarmUpCarrierTrimTests` (batch, réglé sur tts-4b-6bit et
+  `clone_fr`) échoue (« A 5-frame true-silence run survives in the first second ») à l'identique sur le parent
+  `23fc14fc` : défaut du chemin batch antérieur à K-68, hors fiche (`.local-runs/k68/tests-carrier-A.log`) ; à suivre avec
+  le constat de la graine 1.
 - Écoute (ASK-13 = A) : 10 prises et grille dans `.local-runs/listen/k68/` (une prise par graine, pas de paires :
   `ASK.md` §Dérogations, K-68) ; fiche `blocked` jusqu'à l'écoute.
