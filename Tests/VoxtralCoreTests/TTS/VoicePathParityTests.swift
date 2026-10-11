@@ -100,4 +100,40 @@ final class VoicePathParityTests: XCTestCase {
             }
         }
     }
+
+    /// Positions each path prefills, per voice (K-94 b): the one-block path (`voiceEmbedding:`, the path of
+    /// `bench tts` for every voice) prefills the whole prompt, so its length follows the voice's frame count; the
+    /// cached path (`voice:`) prefills only the text suffix, the same for every voice.
+    /// Env: as above, plus optional VOXTRAL_TTS_PARITY_CLONE (a cloned voice .safetensors, key "embedding").
+    func testPrefillPositionsByVoiceAndPath() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["VOXTRAL_TTS_PARITY"] == "1", "Set VOXTRAL_TTS_PARITY=1 to run")
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let text = try String(contentsOf: root.appendingPathComponent("docs/eval/tts/short_en.txt"), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let pipeline = VoxtralTTSPipeline()
+        try await pipeline.loadModel(modelInfo: try XCTUnwrap(VoxtralTTSRegistry.model(withId: "tts-4b-6bit")))
+        defer { pipeline.unload() }
+        let model = try XCTUnwrap(pipeline.ttsModel)
+        let tokenizer = try XCTUnwrap(pipeline.tokenizer)
+
+        var voices: [(String, MLXArray)] = try ["neutral_female", "fr_female"].map {
+            ($0, try XCTUnwrap(pipeline.voiceEmbeddings[$0]))
+        }
+        if let clone = env["VOXTRAL_TTS_PARITY_CLONE"] {
+            voices.append(("clone_fr", try XCTUnwrap(MLX.loadArrays(url: URL(fileURLWithPath: clone))["embedding"])))
+        }
+        var suffixes = Set<Int>()
+        for (name, voice) in voices {
+            let ids = model.encodeText(text, voiceFrameCount: voice.dim(0), tokenizer: tokenizer, sanitize: true)
+            let (_, prefixLen) = model.precomputeVoicePrefixCache(voiceEmbedding: voice)
+            let suffix = ids.count - prefixLen
+            suffixes.insert(suffix)
+            XCTAssertEqual(prefixLen, voice.dim(0) + 2)
+            print("PREFILL-POSITIONS \(name) voice frames \(voice.dim(0)) · one-block (voiceEmbedding:) \(ids.count) + 1 "
+                  + "· cached (voice:) prefix \(prefixLen) once, then \(suffix) + 1 per call")
+        }
+        XCTAssertEqual(suffixes.count, 1, "the cached path prefills the same suffix for every voice")
+    }
 }

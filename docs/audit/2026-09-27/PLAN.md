@@ -2128,3 +2128,20 @@ Statistics:
   seule clause démontrée ; heure de construction de `a9d3c5cf` corrigée ; décompte des tests corrigé. Second passage
   du vérificateur : code, tests et paires justes ; lignes `Executed …` recopiées, graine 5 et `machine-check` du contrôle
   précisés ci-dessus et dans `BENCHMARKS.md`.
+
+## K-94 — TTS : écart des deux chemins de voix en bf16, préfill de la voix clonée — 2026-10-11 — rapportée
+- Fait (commit `c7935f73` : test ; commit `docs(K-94)` : test des positions, doc de `synthesize(text:voice:seed:)`,
+  notes) : `VoicePathParityTests` (gardé `TEST_RUNNER_VOXTRAL_TTS_PARITY=1`) compare les deux chemins couche par couche
+  et frame par frame, pour les trois packs et les trois textes.
+- Porte observée :
+  - `VOICEPATH bf16 : première frame divergente 0, cause arrondi de la matmul bf16 dense selon le nombre de lignes (préfixe seul 220 lignes contre prompt entier ; court : écart né dans le suffixe, long : dans le préfixe, KV 0.0859) ; correctif = non (doc)`
+    (codes sémantiques égaux, acoustiques différents ; moyen : aucun écart ; 4 et 6 bits (`QuantizedLinear`) : mêmes KV et
+    mêmes codes sur les 3 textes ; couverture ASR bf16 sur 3 graines : court 0,909 / 0,909, moyen 0,954 / 0,954 (même
+    sortie), long 0,944 par `voice:` contre 0,943 par `voiceEmbedding:` ; référence K-35 : 0,955 / 0,949, graine 1)
+  - `PREFILL clone_fr 127,7 ms vs neutral_female 223,0 ms : cause nombre de positions préfillées (120 + 1 contre 237 + 1 ; bench tts passe toute voix par voiceEmbedding:, sans cache de préfixe)`
+    (tts-4b-6bit court graine 1, moyenne des 2 passes ; `fr_female`, 97 frames : 116 + 1 positions, 124,8 ms ; chemin
+    `voice:` : 17 + 1 positions par appel pour toute voix, test `testPrefillPositionsByVoiceAndPath`)
+- Conséquence pour K-50 (écrite dans sa fiche) : la « voix prédéfinie déjà en cache » des valeurs de K-35 ne passait
+  pas par le cache ; le gain du cache pour une voix clonée est estimé à ≈ − 65 % du préfill (non mesuré) ; `bench tts`
+  doit appeler le chemin caché pour lire la porte.
+- Aucune ligne `BENCH` de K-35 modifiée ; lignes K-94 dans `BENCHMARKS.md` §« 2026-10-11 — K-94 ».

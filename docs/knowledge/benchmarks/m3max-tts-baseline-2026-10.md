@@ -97,7 +97,11 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
   plus lent que le temps réel en batch). Le temps par pas varie peu avec la longueur du texte : + 2 à 6 % du court
   au long selon le pack. Même signature bf16 que le STT et le Realtime (K-34, K-36) : K-38, K-46.
 - **La voix clonée démarre plus vite** : TTFT court 139 à 160 ms contre 232 à 258 (4 et 6 bits), 282 à 287 contre 366
-  à 373 (bf16). Cause non vérifiée.
+  à 373 (bf16). Cause (K-94) : `bench tts` passe toutes les voix par `voiceEmbedding:`, préfill du prompt entier
+  sans cache de préfixe, prédéfinies comprises ; le préfill suit le nombre de positions, frames de la voix + 19 sur
+  le court : 237 pour `neutral_female` (218 frames, 220 à 226 ms en 6 bits), 116 pour `fr_female` (97 frames, 119 à
+  131 ms), 120 pour `clone_fr` (101 frames, 124 à 131 ms). La voix clonée n'a pas de chemin plus rapide : elle est
+  plus courte. Le chemin `voice:` (cache) préfille 17 + 1 positions par appel pour toute voix, non mesuré par `bench`.
 - **Le streaming coûte cher dès le texte moyen** : ms/frame 49 à 80 (4 bits), 55 à 58 (6 bits), 158 à 160 (bf16)
   sur le moyen ; 85 à 109, 96 à 101 et 202 à 214 sur le long. RTF du streaming : 0,72 à 2,09 sur le moyen, 1,45 à
   3,0 sur le long (première passe ; 3,25 dans la p2 de bf16 prédéfinie long, cellule sans A/A), plus lent que le temps réel dès le moyen pour le bf16 et le 4 bits cloné, sur le long pour les trois packs.
@@ -169,7 +173,10 @@ toutes les graines. Référence des portes qualité de K-39, K-48, K-58 et K-79.
 
 ³ EVAL bf16 refaits le 2026-10-09 par `--voice-embedding`, le chemin des BENCH (même `out_sha256`, 5 sur 5). Par
 `synthesize(voice:)`, le bf16 sort un autre audio à même graine (4 textes sur 5 ; long 0,949) ; les 4 et 6 bits
-sont identiques par les deux chemins. Fiche de suite.
+sont identiques par les deux chemins. Cause (K-94) : la matmul bf16 dense arrondit selon le nombre de lignes (le
+préfixe préfillé seul, 220 lignes, contre le prompt entier) ; codes sémantiques égaux, codes acoustiques différents
+dès la frame 0 ; couverture égale sur 3 graines (long : 0,944 par `voice:`, 0,943 par `voiceEmbedding:`). Pas un
+défaut ; documenté dans `synthesize(text:voice:seed:)`.
 
 ## Variance d'un processus à l'autre
 
