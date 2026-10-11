@@ -243,8 +243,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   conséquence pour K-50 dans sa fiche ; PLAN.md §7.
 - 2026-10-11 — **K-97 : le 4 bits ne supporte pas la voix clonée** : couverture 0,63 à 0,77 sur le moyen (3 graines)
   et 0,237 sur le long, contre 0,940 / 0,955 en 6 bits ; pauses allongées (frames et pic `codec` doublés), le long
-  quitte le texte. La fin est lue au bon endroit, et le LLM comme la tête 4 bits s'écartent du bf16 au même taux pour
-  une voix prédéfinie, qui garde 0,90 à 0,93 : c'est la voix clonée qui rend la trajectoire fragile (hypothèse).
+  quitte le texte. La fin est lue au bon endroit, et le LLM comme la tête 4 bits s'écartent du bf16 ; une voix
+  prédéfinie de même longueur perd moins (0,90 à 0,93) : la voix clonée rendrait la trajectoire plus fragile (hypothèse).
   Leçons : une mesure de qualité faite sur une seule voix ne couvre pas un pack ; un taux d'écart par pas sans échelle
   (paire bf16) et sans séparation des modules ne désigne pas une cause ; les pauses courtes échappent à une règle
   « silence > 1 s » ; PLAN.md §7.

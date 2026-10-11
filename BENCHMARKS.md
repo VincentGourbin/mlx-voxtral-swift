@@ -2509,9 +2509,10 @@ sous − 50 dBFS par fenêtres de 80 ms ; 4-gramme répété ≥ 3 fois dans la 
 Frames et durées du 4 et du 6 bits identiques aux cellules clonées de K-35 (même graine) : pic MLX de K-35, phase
 `codec`, 19 336 Mo (4 bits) contre 7 309 Mo (6 bits) sur le moyen ; phases `prefill` / `decode` 2 879 contre 3 711 Mo.
 Défauts : 0 silence > 1 s, 0 répétition sur les 15 sorties. Corrigé à la vérification (ci-dessous) : le moyen du 4
-bits suit le texte, ses frames en plus sont surtout des pauses courtes (53,5 s sous − 50 dBFS contre 8,5 s en 6 bits,
-séries de 0,8 s au plus, sous le seuil de la règle) ; seul le long quitte le texte au premier tiers (transcription :
-« Image is a good look at the PC and you can build an engine… »), sans 4-gramme répété.
+bits cloné graine 1 suit le texte en gros mais omet un passage (« LoRA TRAINING ») et finit sur du texte inventé ; ses
+frames en plus sont des pauses courtes (53,5 s sous − 50 dBFS contre 8,5 s en 6 bits, séries de 0,8 s au plus, sous le
+seuil de la règle) et de la parole en plus (91 s de son contre 60 s). Le long quitte le texte au premier tiers
+(« Image is a good look at the PC and you can build an engine… »), sans 4-gramme répété.
 
 Test `CloneOverrunTests` (gardé `TEST_RUNNER_VOXTRAL_TTS_CLONE_OVERRUN=1`, `.local-runs/k97/overrun-test.log`) : en
 libre, le 4 bits cloné fait 1 806, 1 787 et 866 frames (graines 1 à 3), `fr_female` (97 frames) 1 125, 914 et 878 ;
@@ -2575,7 +2576,8 @@ OVERRUN FORCED tts-4b-4bit fr_female on 6-bit seed 1: semantic argmax = 6-bit 77
 	 Executed 1 test, with 0 failures (0 unexpected) in 1278.137 (1278.139) seconds
 ** TEST SUCCEEDED **
 ```
-(code de sortie 0 ; la ligne `Executed` répétée par xcodebuild apparaît trois fois dans le journal, deux formes distinctes)
+(code de sortie non enregistré pour ce lancement, lancé à la main ; la ligne `Executed` répétée par xcodebuild apparaît
+trois fois dans le journal, deux formes distinctes)
 
 Défauts (`python3 .local-runs/tools/defects.py .local-runs/k97/eval/*/*.wav`) :
 ```
@@ -2602,25 +2604,30 @@ DEFECTS total silences>1s 0, repeats 0
 Vérificateur et contradicteur `not verified`. (1) Le moyen 4 bits ne quitte pas le texte : ses frames en plus sont
 surtout des pauses courtes. (2) « Même taux en voix prédéfinie » ne prouve pas que la voix clonée n'est pas en cause :
 à taux égal par frame, l'issue diffère. (3) Le taux de 14 % n'avait pas d'échelle et ne séparait pas le LLM de la
-tête. (4) « Le code est juste » n'est pas démontré. Mesures ajoutées (`.local-runs/queue-k97b.sh`, binaire `3b327e06`,
-`machine-check` et `quiet.sh` `QUIET` avant chaque EVAL) :
+tête. (4) « Le code est juste » n'est pas démontré. Mesures ajoutées (`.local-runs/queue-k97b.sh` ; binaire Release construit sur `941c441c`, code de production identique à
+`3b327e06` ; EVAL lancés avec `CloneOverrunTests.swift` modifié et non commité, d'où `"dirty":true` ; test seul ;
+`machine-check` et `quiet.sh` `QUIET` avant chaque EVAL ; test SWAP : code de sortie 0, `.local-runs/queue-k97b.txt`) :
 
 - **Modules croisés** (`testSemanticAgreementBySwappedModules`) : les LLM des trois packs tournent sur la même
   trajectoire (6 bits, graine 1), chaque état caché est lu par la tête sémantique de chaque pack, comparé à la paire bf16.
   Paire 6 bits : 97,1 % (clonée), 96,4 % (`fr_female`) ; paire 4 bits : 86,2 % et 85,8 %. LLM 4 bits avec la tête bf16
   ou 6 bits : 89,5 à 89,6 % (clonée), 87,8 à 88,3 % ; tête 4 bits sur le LLM bf16 : 90,4 % et 93,4 %. Le LLM 4 bits et
-  la tête 4 bits s'écartent chacun ; le LLM un peu plus. Le taux d'écart par frame est le même pour les deux voix.
+  la tête 4 bits s'écartent chacun ; le LLM un peu plus. Paire 4 bits : même taux pour les deux voix ; tête 4 bits seule
+  sur le LLM bf16 : 9,6 % d'écart en clonée contre 6,6 % en `fr_female` (piste : la tête 4 bits).
 - **Couverture par graine, moyen, 4 bits** : `clone_fr` 0,731 / 0,629 / 0,772 (1 806, 1 787, 866 frames) ;
-  `fr_female` 0,916 / 0,928 / 0,898 (1 125, 914, 878). La voix clonée est mauvaise à toutes les graines, même à
-  longueur normale (graine 3) ; `fr_female` reste à moins de 6 pt de `neutral_female` (0,976, K-35).
+  `fr_female` 0,916 / 0,928 / 0,898 (1 125, 914, 878). La voix clonée perd 17 à 31 pt sur le 6 bits cloné (0,940) à
+  toutes les graines, même à longueur normale (graine 3 : omissions, texte inventé en fin) ; la graine 2 quitte le texte
+  (WER 40,1). `fr_female` perd 4,8 à 7,8 pt sur `neutral_female` 4 bits (0,976, K-35), déborde aussi en graine 1
+  (1 125 frames, 90 s) ; pas de référence `fr_female` en 6 bits ou bf16.
 - **Pauses** (secondes sous − 50 dBFS, fenêtres de 80 ms, CPU) : 4 bits clonée 53,5 / 50,6 / 20,3 s pour 144,5 / 142,7 /
   69,2 s ; 6 bits clonée 8,5 s pour 68,4 s ; bf16 clonée 11,4 s pour 69,7 s ; 4 bits `fr_female` 18,2 / 10,2 / 15,6 s.
 
-Conclusion révisée : l'EOA est hors de cause, aucun chemin de code propre au 4 bits n'est vu (mêmes modules, mêmes
-dtypes de calcul ; pas de comparaison à une implémentation de référence), et la dérive est propre à la voix clonée en
-4 bits : à écart par frame égal, `clone_fr` perd 17 à 31 pt de couverture sur le moyen et allonge ses pauses, `fr_female`
-non. Hypothèse, non démontrée : le conditionnement de `clone_fr` rend la trajectoire plus sensible aux erreurs du LLM
-et de la tête 4 bits.
+Conclusion révisée : `clone_fr` en 4 bits perd 17 à 31 pt de couverture sur le moyen à toutes les graines, par des
+omissions, du texte inventé et des pauses allongées ; le long quitte le texte. L'EOA est hors de cause. Le LLM et la
+tête 4 bits s'écartent tous deux du bf16 (paire 4 bits 86 %, paire 6 bits 96 à 97 %). `fr_female` 4 bits perd moins
+(4,8 à 7,8 pt sous `neutral_female`), sans référence 6 bits ou bf16. Aucun chemin de code propre au 4 bits n'est
+vu (mêmes modules ; pas de comparaison à une implémentation de référence). Hypothèse non démontrée : la voix clonée
+rend la trajectoire plus sensible aux écarts du 4 bits, peut-être surtout à ceux de la tête sémantique.
 
 ```
 SWAP clone_fr LLM bf16: head bf16 100.0 % · head 6bit 96.9 % · head 4bit 90.4 % (vs bf16 LLM + bf16 head, 858 frames of the 6-bit seed-1 trajectory)

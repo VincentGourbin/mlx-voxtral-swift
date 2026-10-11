@@ -123,12 +123,12 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
 - **Voix clonée en 4 bits : couverture effondrée, pauses allongées** (K-97, 2026-10-11 ; c'était le « constat sans
   cause isolée » de K-35) : avec `clone_fr`, le 4 bits fait 1 806 frames contre 858 en 6 bits sur le moyen, 2 149
   contre 1 868 sur le long ; couverture ASR 0,731 / 0,629 / 0,772 sur le moyen (graines 1 à 3) et 0,237 sur le long,
-  contre 0,940 et 0,955 en 6 bits. Le moyen suit le texte mais allonge ses pauses (50 à 54 s sous − 50 dBFS contre
-  8,5 s en 6 bits) ; le long quitte le texte au premier tiers. Le test de fin n'est pas en cause (fin lue au bon
+  contre 0,940 et 0,955 en 6 bits. Le moyen omet des passages, finit sur du texte inventé (la graine 2 quitte le texte)
+  et allonge ses pauses (20 à 54 s sous − 50 dBFS contre 8,5 s en 6 bits) ; le long quitte le texte au premier tiers. Le test de fin n'est pas en cause (fin lue au bon
   endroit à historique égal). Le LLM 4 bits et la tête sémantique 4 bits s'écartent tous deux du bf16 (paire 4 bits :
-  86 % de décisions égales, paire 6 bits : 96 à 97 %), au même taux pour `clone_fr` et `fr_female` ; mais seule la
-  voix clonée en souffre (`fr_female` 4 bits : 0,898 à 0,928). Hypothèse non démontrée : le conditionnement de la voix
-  clonée rend la trajectoire plus sensible à ces écarts. Le pic MLX doublé (19,3 contre 7,3 Go) est celui de la phase
+  86 % de décisions égales, paire 6 bits : 96 à 97 %), (tête 4 bits seule : 9,6 % d'écart en clonée, 6,6 % en `fr_female`). `fr_female` 4 bits perd
+  moins (0,898 à 0,928, soit 4,8 à 7,8 pt sous `neutral_female`, sans référence 6 bits). Hypothèse non démontrée :
+  la voix clonée rend la trajectoire plus sensible aux écarts du 4 bits. Le pic MLX doublé (19,3 contre 7,3 Go) est celui de la phase
   `codec`, qui croît avec les frames. Le 6 bits cloné reste à moins de 2 pt de sa voix prédéfinie ; le bf16 cloné long
   (0,934) est à − 2,1 pt de la référence K-35 (0,955), − 1,5 pt de la voix prédéfinie après K-39 (0,949). Lignes :
   `BENCHMARKS.md` §« 2026-10-11 — K-97 » et sa vérification.
