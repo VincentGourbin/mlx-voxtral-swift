@@ -2779,11 +2779,14 @@ et `trace/mc_decode-realtime-4b-4bit.log`, toléré comme ci-dessus). Phase prin
 94,4 → 94,3 % et 95,4 → 95,6 %) ; realtime-4b-4bit Realtime Generation 92,3 → 93,1 % (`ioreg` 95,3 → 95,3 %) ;
 realtime-4b-fp16 98,4 → 98,3 % (`ioreg` 98,5 → 98,5 %). Écart ≤ 0,8 pt sur la phase principale (les phases courtes bougent davantage : Audio Encoding de
 realtime-4b-4bit 85,4 → 96,4 %, 0,4 s) : les bornes Mini de K-45 et celle de K-47 tiennent
-(K-47 : 93,1 % refaite) ; la mention Small de K-45 (96,6 %) reste un chiffre sans repos, non refait. prefill-small-4bit pas encore refaite : quatre essais (13/10 19:50 ; 16/10 06:33, 07:53,
-08:10, le dernier écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt, `xctrace` ne
-finalise pas la trace dans le délai par défaut de 120 s de `MetalSystemTrace.Recorder.stop(timeout:)`, que `bench` ne
-règle pas ; refaite après la file K-95 avec un délai plus long, ses chiffres d'origine (l. 530-535) restent cités
-d'ici là (`ASK.md` §Dérogations, K-96 (4)).
+(K-47 : 93,1 % refaite). prefill-small-4bit : quatre essais (13/10 19:50 ; 16/10 06:33, 07:53, 08:10, le dernier
+écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt : `xctrace` ne finalise pas la
+trace dans le délai par défaut de 120 s de `MetalSystemTrace.Recorder.stop(timeout:)`, que `bench` ne réglait pas.
+Refaite le 2026-10-16 à 10:44 après la file K-95, `bench` passant `stop(timeout: 600)` (commit `135260c1`, seul
+changement de `Sources/` depuis `44713fd3`, dans l'outil `bench`) ; `"dirty":false`, `quiet.sh` sans charge, 36 069
+intervalles. Small, xctrace (avant K-96 → refaite) : Prefill 99,8 → 99,7 % (`ioreg` 99,9 → 99,8 %), Generation
+96,6 → 96,8 % et 97,6 → 97,5 % (`ioreg` 97,6 → 97,6 % et 98,4 → 98,2 %) ; le préfill passe de 16,0 à 12,0 s
+(passe tracée, non retenue). Écart ≤ 0,2 pt : la mention Small de K-45 tient (96,8 % refaite).
 
 ```
 METAL_TRACE /Volumes/Lexar/voxtral-xctrace-k96/prefill-mini-3b-8bit/trace-stt-2026-10-13T173235Z.trace intervals=11573 busy=94.6%
@@ -2804,6 +2807,12 @@ GPUOCC {"duration_ms": 417.3, "gap_ioreg_xctrace_pts": 5.2, "gap_profiler_xctrac
 GPUOCC {"duration_ms": 161.6, "gap_ioreg_xctrace_pts": 7.7, "gap_profiler_xctrace_pts": 11.4, "ioreg_mean": 95.0, "ioreg_n": 1, "phase": "Prefill", "profiler_gpu_mean": 98.7, "xctrace_busy_pct": 87.3}
 GPUOCC {"duration_ms": 35299.5, "gap_ioreg_xctrace_pts": 0.2, "gap_profiler_xctrace_pts": 1.5, "ioreg_mean": 98.5, "ioreg_n": 208, "phase": "Realtime Generation", "profiler_gpu_mean": 99.8, "xctrace_busy_pct": 98.3}
 GPUOCC {"duration_ms": 0, "gap_profiler_xctrace_pts": 48, "ioreg_mean": null, "ioreg_n": 0, "phase": "Token Decoding", "profiler_gpu_mean": 48, "xctrace_busy_pct": 0}
+METAL_TRACE /Volumes/Lexar/voxtral-xctrace-k96/prefill-small-4bit/trace-stt-2026-10-16T085255Z.trace intervals=36069 busy=97.6%
+GPUOCC {"duration_ms": 16.3, "gap_profiler_xctrace_pts": 2.7, "ioreg_mean": null, "ioreg_n": 0, "phase": "Audio Feature Extraction", "profiler_gpu_mean": 20.3, "xctrace_busy_pct": 17.6}
+GPUOCC {"duration_ms": 12028.9, "gap_ioreg_xctrace_pts": 0.1, "gap_profiler_xctrace_pts": 0.1, "ioreg_mean": 99.8, "ioreg_n": 76, "phase": "Prefill", "profiler_gpu_mean": 99.8, "xctrace_busy_pct": 99.7}
+GPUOCC {"duration_ms": 31427.8, "gap_ioreg_xctrace_pts": 0.8, "gap_profiler_xctrace_pts": 3.1, "ioreg_mean": 97.6, "ioreg_n": 187, "phase": "Generation", "profiler_gpu_mean": 99.9, "xctrace_busy_pct": 96.8}
+GPUOCC {"duration_ms": 45267.6, "gap_ioreg_xctrace_pts": 0.7, "gap_profiler_xctrace_pts": 2.2, "ioreg_mean": 98.2, "ioreg_n": 274, "phase": "Generation", "profiler_gpu_mean": 99.7, "xctrace_busy_pct": 97.5}
+GPUOCC {"duration_ms": 0.2, "gap_profiler_xctrace_pts": 0, "ioreg_mean": null, "ioreg_n": 0, "phase": "Token Decoding", "profiler_gpu_mean": 0, "xctrace_busy_pct": 0}
 ```
 
 

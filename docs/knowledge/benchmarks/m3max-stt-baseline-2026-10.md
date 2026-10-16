@@ -94,8 +94,9 @@ small-4bit C-moyen `.mlx` EN 78,57 → 72,78 ms/pas (− 7,4 %), `.mlx` FR 76,55
 
 Traces d'origine (amorçage puis `--cooldown 0`). Refaites par K-96 avec repos (`BENCHMARKS.md` §« 2026-10-13 —
 K-96 ») : mini-3b-8bit inchangé à 0,2 pt près (Prefill 99,1 %, Generation 92,8 % / 94,4 % en xctrace) ; small-4bit
-pas encore refaite (`xctrace` ne finalise pas la trace dans le délai d'arrêt par défaut de 120 s, que `bench` ne règle
-pas ; quatre essais), chiffres d'origine cités d'ici là.
+inchangé à 0,2 pt près (Prefill 99,7 %, Generation 96,8 % / 97,5 % en xctrace ; `ioreg` 99,8 / 97,6 / 98,2 %), refaite
+le 2026-10-16 avec un délai d'arrêt `xctrace` de 600 s passé par `bench` (quatre essais avaient échoué avec les 120 s
+par défaut). Le tableau garde les chiffres d'origine.
 
 | Modèle | Phase | Profiler (IOReport) | Metal System Trace | `ioreg` | Écart max |
 |---|---|---|---|---|---|

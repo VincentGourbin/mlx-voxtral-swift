@@ -258,7 +258,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   small-4bit C-moyen (− 4,7 à − 7,4 % sur le pas, − 7,0 à − 12,1 % sur le total), chat `.mlx` q2 à q4 (total − 4,2 à
   − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 / − 4,2 %) et STT C-long `.mlx` (total
   − 10,2 % en 4 bits, − 5,3 % en 8 bits ; `.auto` 8 bits − 3,8 %) ; mêmes sorties. Traces GPUOCC refaites : occupation de la phase principale inchangée à 0,8 pt près (phases courtes
-  davantage ; small-4bit à refaire avec un délai d'arrêt `xctrace` plus long que les 120 s par défaut).
+  davantage ; small-4bit refaite le 2026-10-16 avec un délai d'arrêt `xctrace` de 600 s au lieu des 120 s par défaut :
+  Generation 96,6 → 96,8 %).
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
   paire A sans repos (jusqu'à 15 %) cache l'effet au lieu de le mesurer ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.

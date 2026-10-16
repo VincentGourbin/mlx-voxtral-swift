@@ -894,7 +894,8 @@ Décisions du planificateur du 2026-10-03 :
   dépendance). Décision : la trace est refaite après la file K-95 (le binaire et l'arbre doivent rester inchangés
   pendant ses passes), avec un délai d'arrêt plus long passé par `bench` (outil interne, pas d'API publique, aucune
   dépendance modifiée) ; en attendant, ses chiffres d'origine (prefill 99,8 %, decode 96,6 / 97,6 %) restent ceux
-  cités. (5) K-56, nommée dans la liste de la porte, est
+  cités. Fait le 2026-10-16 à 10:44 (`stop(timeout: 600)`, commit `135260c1`) : trace finalisée, prefill 99,7 %, decode
+  96,8 / 97,5 % (xctrace), écart ≤ 0,2 pt. (5) K-56, nommée dans la liste de la porte, est
   déclarée sans objet (2026-10-16) : sa porte recalée du 2026-10-10 mesure la valeur de départ dans son propre A ; les
   chiffres K-34 qu'elle cite encore (4 840 Mo, ≈ 1 735 ms) sont annotés comme historiques dans la fiche, avec les
   valeurs refaites (89,6 / 68,7 Mo, ≈ 1 729 ms). (6) Écarts aux règles de mesure de `VERIFY.md` §1, sans effet sur
