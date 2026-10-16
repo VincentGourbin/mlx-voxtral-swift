@@ -2784,7 +2784,8 @@ realtime-4b-4bit 85,4 → 96,4 %, 0,4 s) : les bornes Mini de K-45 et celle de K
 écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt : `xctrace` ne finalise pas la
 trace dans le délai par défaut de 120 s de `MetalSystemTrace.Recorder.stop(timeout:)`, que `bench` ne réglait pas.
 Refaite le 2026-10-16 à 10:44 après la file K-95, `bench` passant `stop(timeout: 600)` (commit `135260c1`, seul
-changement de `Sources/` depuis `44713fd3`, dans l'outil `bench`) ; `"dirty":false`, `quiet.sh` sans charge, 36 069
+changement de `Sources/` depuis `44713fd3`, dans l'outil `bench`) ; `"dirty":false`, `quiet.sh` sans passe rejetée (corespotlightd jusqu'à 193 % et Mail 153 % dans
+`samples.raw`, sous le seuil de rejet), 36 069
 intervalles. Small, xctrace (avant K-96 → refaite) : Prefill 99,8 → 99,7 % (`ioreg` 99,9 → 99,8 %), Generation
 96,6 → 96,8 % et 97,6 → 97,5 % (`ioreg` 97,6 → 97,6 % et 98,4 → 98,2 %) ; le préfill passe de 16,0 à 12,0 s
 (passe tracée, non retenue). Écart ≤ 0,2 pt : la mention Small de K-45 tient (96,8 % refaite).
