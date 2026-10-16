@@ -2203,6 +2203,9 @@ Statistics:
   K-36 : WER inchangés. C-court et Realtime C-long : sans effet, non repris.
 - Décisions de l'agent (`ASK.md` §Dérogations, K-96) : chat dans le pipeline STT mais jugé comme un clip à part ;
   « A/A en échec deux fois » lu sur le Realtime C-moyen (ses deux témoins) ; STT C-long refait par prudence.
+- Tracker (2026-10-16) : commentaire « Amendement K-96 » sur les 21 issues des fiches touchées (#609, #611, #613,
+  #614, #620, #630, #638, #641, #642, #644, #645, #647, #648, #649, #650, #652, #654, #657, #658, #659, #661), qui
+  recopie les lignes refaites de chaque fiche : le corps des issues gardait les valeurs d'avant K-96.
 - Traces GPUOCC (`queue8.sh`, `queue8b.sh`, `queue8c.sh`) refaites avec repos (`.local-runs/queue-k96-trace*.sh`,
   2026-10-13 et 2026-10-16) : phase principale à 0,8 pt près des traces d'origine (realtime-4b-4bit 92,3 → 93,1 %,
   mini-3b-8bit 92,8 / 94,4 % inchangés, fp16 98,4 → 98,3 %) ; bornes Mini de K-45 et borne de K-47 maintenues ; mention Small de K-45 (96,6 %) sans repos, non refaite. prefill-small-4bit
