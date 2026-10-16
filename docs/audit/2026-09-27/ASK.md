@@ -810,7 +810,7 @@ Décisions du planificateur du 2026-10-03 :
     sur 5 ; 4 et 6 bits identiques). Les 5 EVAL bf16 sont refaits avec `--voice-embedding` (fichier
     `neutral_female.safetensors` du pack) : même `out_sha256` et mêmes frames que les BENCH, 5 sur 5. Couvertures
     retenues : 0,909 / 0,909 / 0,909 (court), 0,952 (moyen), 0,955 (long ; 0,949 par l'ancien chemin). L'écart entre
-    les deux chemins en bf16 va à une fiche de suite.
+    les deux chemins en bf16 va à une fiche de suite (K-94, #634).
   - **ASK-34** : la question décrivait 4 cellules ; 6 cellules streaming moyen ou long restent sans A/A après les
     reprises du 2026-10-10 (9 avant). La réponse
     de Vincent (« les cellules streaming moyen et long sans A/A restent dans la baseline ») porte sur la classe
@@ -907,6 +907,12 @@ Décisions du planificateur du 2026-10-03 :
   quantification 16 bits sur 0 à 44 échantillons. (3) tts-4b-4bit B/B 28,6 % (temps du premier morceau, sortie
   identique) : consigné, la porte se juge sur le 6 bits (ligne consommateur). (4) La mesure A/B/B/A porte sur
   `a9d3c5cf` ; la garde de `7cea4cb5` ne change rien au `chunkSize` 10 (contrôle : même sortie, même TTFA).
+- **K-94 (#634), 2026-10-11, décision de l'agent** (`VERIFY.md` §2, inscrite le 2026-10-16) : la porte cite les
+  couvertures ASR de référence K-35 (0,955 / 0,949, graine 1) ; K-39 ayant changé la sortie bf16 entre-temps, la
+  couverture des deux chemins est comparée sur 3 graines au même binaire (`c7935f73`, après K-39) au lieu de la
+  référence K-35, qui ne mesure plus le même code. Mesure plus stricte (même binaire, 3 graines au lieu d'une) ; la
+  branche « correctif » de la porte est sans objet (aucun correctif). Le machine-check n'est pas recopié dans
+  `BENCHMARKS.md`, seulement résumé (règle K-37) : brut dans `.local-runs/k94/mc_*.log`.
 - **K-96 (#636), 2026-10-13, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) le chat compte dans le pipeline STT,
   comme le dit la porte (« STT, chat compris »), mais ses cellules sont jugées comme un clip à part : le témoin chat q2
   (`total_ms` B − A − 6,14 %, A/A 1,88 %) déclenche la reprise du chat, pas celle d'un clip STT. (2) « Un témoin dont

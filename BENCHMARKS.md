@@ -2396,7 +2396,8 @@ BENCH {"audio_s":4.96,"build":"Release","chip":"Apple M3 Max","commit":"7cea4cb5
 
 Binaire Release `c7935f73` (`VoicePathParityTests`, aucun changement de code de production), `dirty:false`. Chaque
 mesure après `machine-check` (`.local-runs/tools/quiet.sh`, refroidissement 120 s) ; une ligne `KO indexation/sauvegarde`
-au premier contrôle avant `RT-voice-long_en-s1`, le second contrôle étant sans `KO` (tolérée, décision du 2026-10-05) ; `top_process` hors VoxtralCLI : `mediaanalysisd`
+(140 %, `backupd`) au seul contrôle avant `RT-voice-long_en-s1` : `quiet.sh wait` ne réessaie pas sur ce `KO`, toléré
+(décision de Vincent du 2026-10-05 ; correction du 2026-10-16 : la première rédaction citait un second contrôle sans `KO`, qui n'a pas eu lieu) ; `top_process` hors VoxtralCLI : `mediaanalysisd`
 20,2 (PREFILL-clone_fr p2), `backupd` 117,2 / 77,8 et `WindowServer` 35,5 (EVAL moyen : sortie identique par les deux
 chemins, la qualité ne dépend pas de la charge).
 
@@ -2476,13 +2477,15 @@ EVAL {"audio_s":160.32,"build":"Release","chip":"Apple M3 Max","commit":"c7935f7
 EVAL {"audio_s":152.96,"build":"Release","chip":"Apple M3 Max","commit":"c7935f738","coverage":0.949,"date":"2026-10-11T07:01:30Z","dirty":false,"frames":1912,"hyp_sha256":"5c7400436cf2c89628a00007dede2bf287dc236c9a22851e66289479755b9322","hyp_words":343,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"ec3db89de1915e7dde8aa6b12443ddda3394930bfd0280a7d523d0fed0d7a898","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"RT-emb-long_en-s3","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"26,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
 ```
 
-Tests (Debug) ; `TEST_RUNNER_VOXTRAL_TTS_PARITY=1 xcodebuild test … -only-testing:VoxtralCoreTests/VoicePathParityTests/testVoicePrefixCacheAgainstOneBlockPrefill`
-(`.local-runs/k94/voicepath1.log`, binaire de test de `c7935f73`) :
+Tests (Debug) ; `TEST_RUNNER_VOXTRAL_TTS_PARITY=1 xcodebuild test … -only-testing:VoxtralCoreTests/VoicePathParityTests` (niveau classe ;
+la seule méthode alors présente était `testVoicePrefixCacheAgainstOneBlockPrefill`), `.local-runs/k94/voicepath1.log`,
+lancé de 07:09 à 07:39 sur l'arbre de travail commité ensuite en `c7935f73` (07:40 ; code de production inchangé) :
 ```
 	 Executed 1 test, with 0 failures (0 unexpected) in 1817.825 (1817.826) seconds
 ```
 `TEST_RUNNER_VOXTRAL_TTS_PARITY=1 TEST_RUNNER_VOXTRAL_TTS_PARITY_CLONE=$PWD/.local-runs/voices/clone_fr.safetensors xcodebuild test … -only-testing:VoxtralCoreTests/VoicePathParityTests/testPrefillPositionsByVoiceAndPath`
-(`.local-runs/k94/positions.log`, extrait filtré par `grep -E "PREFILL-POSITIONS|Executed|error:|failed"`, ordre du journal) :
+(`.local-runs/k94/positions.log`, extrait filtré par `grep -E "PREFILL-POSITIONS|Executed|error:|failed"`, ordre du journal ;
+lancé à 09:02 sur l'arbre commité ensuite en `18efa6ec` ; l'invocation et la ligne `TEST SUCCEEDED` ne sont pas conservées) :
 ```
 PREFILL-POSITIONS neutral_female voice frames 218 · one-block (voiceEmbedding:) 237 + 1 · cached (voice:) prefix 220 once, then 17 + 1 per call
 PREFILL-POSITIONS fr_female voice frames 97 · one-block (voiceEmbedding:) 116 + 1 · cached (voice:) prefix 99 once, then 17 + 1 per call
