@@ -890,4 +890,7 @@ Décisions du planificateur du 2026-10-03 :
   SSD interne) finissent par `xctrace record failed (exit -1)`, `xctrace` ne finalisant pas la trace dans le délai fixe
   de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1, dépendance : non modifiée) ; ses chiffres
   d'origine (K-34, prefill 99,8 %, decode 96,6 / 97,6 %) restent la référence, les trois autres traces refaites ne
-  bougent que de 0,8 pt au plus sur leur phase principale (préfill, décodage).
+  bougent que de 0,8 pt au plus sur leur phase principale (préfill, décodage). (5) K-56, nommée dans la liste de la porte, est
+  déclarée sans objet (2026-10-16) : sa porte recalée du 2026-10-10 mesure la valeur de départ dans son propre A ; les
+  chiffres K-34 qu'elle cite encore (4 840 Mo, ≈ 1 735 ms) sont annotés comme historiques dans la fiche, avec les
+  valeurs refaites (89,6 / 68,7 Mo, ≈ 1 729 ms).
