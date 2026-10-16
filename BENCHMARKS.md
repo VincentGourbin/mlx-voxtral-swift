@@ -2771,8 +2771,9 @@ chat `.auto` (≤ 0,9 %), Mini C-moyen, bf16 compris (≤ 2,9 %, TTFT de mini-3b
 `.local-runs/queue-k96-trace.sh`, résultats dans `.local-runs/k96/trace/`.
 
 Traces GPUOCC refaites (amorçage, `--cooldown 120`, une passe ; `.local-runs/queue-k96-trace.sh`, puis
-`queue-k96-trace2.sh` après la pause du 2026-10-13, prefill-mini-3b-8bit gardée ; binaire `44713fd3`, `"dirty":true`
-par les docs K-96 non commitées, `Sources/` et `Package.resolved` inchangés ; lignes `BENCH` des passes tracées non
+`queue-k96-trace2.sh` après la pause du 2026-10-13, prefill-mini-3b-8bit gardée ; binaire `44713fd3`, `"dirty":false`
+pour prefill-mini-3b-8bit, `"dirty":true` pour les deux traces Realtime (docs K-96 non commitées, `Sources/` et
+`Package.resolved` inchangés) ; lignes `BENCH` des passes tracées non
 retenues, une trace ralentit la passe ; `KO indexation/sauvegarde` (95 %) dans `trace/mc_prefill-mini-3b-8bit.log`
 et `trace/mc_decode-realtime-4b-4bit.log`, toléré comme ci-dessus). Phase principale, xctrace
 (avant K-96 → refaite) : mini-3b-8bit Prefill 99,0 → 99,1 %, Generation 92,8 → 92,8 % et 94,4 → 94,4 % (`ioreg`

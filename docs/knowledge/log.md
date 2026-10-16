@@ -255,13 +255,14 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   sans amorçage) : B − A − 6,2 % sur le pas (mini-3b C-moyen EN), − 13,0 % sur le total (small-4bit C-moyen
   EN) et − 15,1 % sur le total du chat q4 ; A/A de A en échec sur le Realtime C-moyen et le STT C-long ; C-court et
   Realtime C-long sans effet. 25 cellules refaites au protocole actuel : la plupart tiennent à 3 % près ; ont bougé
-  small-4bit C-moyen (− 4,7 à − 7,4 % sur le pas, − 7,0 à − 12,1 % sur le total), chat `.mlx` q2 à q4 (total − 4,2 à
+  small-4bit C-moyen (`.mlx` − 4,7 à − 7,4 % sur le pas, − 10,7 à − 12,1 % sur le total ; `.auto` FR − 2,6 / − 7,0 %), chat `.mlx` q2 à q4 (total − 4,2 à
   − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 / − 4,2 %) et STT C-long `.mlx` (total
   − 10,2 % en 4 bits, − 5,3 % en 8 bits ; `.auto` 8 bits − 3,8 %) ; mêmes sorties. Traces GPUOCC refaites : occupation de la phase principale inchangée à 0,8 pt près (phases courtes
   davantage ; small-4bit refaite le 2026-10-16 avec un délai d'arrêt `xctrace` de 600 s au lieu des 120 s par défaut :
   Generation 96,6 → 96,8 %).
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
-  paire A sans repos (jusqu'à 15 %) cache l'effet au lieu de le mesurer ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
+  paire A dont l'A/A échoue (jusqu'à 15 %, avec une indexation en arrière-plan dans les deux cas) ne permet pas de
+  lire l'effet : on refait la cellule ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.
 - 2026-10-16 — **K-95 : le plafond de cache `--cache-limit-mb 2048` ne coûte rien au pas TTS et retire 26 à 33 % de
   l'empreinte** : A/B/B/A sur 5 cellules (6 et 4 bits, moyen et long, ligne consommateur `clone_fr`), A/A ≤ 0,31 %,
