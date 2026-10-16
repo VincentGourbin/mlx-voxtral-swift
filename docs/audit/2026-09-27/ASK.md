@@ -800,7 +800,9 @@ Décisions du planificateur du 2026-10-03 :
   `A4-6bit-cli`, `A4-mlx-cli` et `A4-mlx-after_synthesis` a tourné avec amorçage puis `--cooldown 0` (`queue2.sh:30`),
   la p2 sans amorçage ; leur A/A p1 / p2 de 0,03 à 0,26 % montre un effet non mesurable sur l'enrôlement : K-37 n'est
   pas reprise. Le contrôle des cellules K-34 / K-36 est confié à K-96 ; d'ici là, une porte en pourcentage se juge
-  contre le A de chaque fiche, mesuré avec repos.
+  contre le A de chaque fiche, mesuré avec repos. Issue (K-96, 2026-10-13) : effet mesuré sur les témoins C-moyen,
+  chat et C-long ; 25 cellules refaites avec repos (`BENCHMARKS.md` §« 2026-10-13 — K-96 »), la plupart à 3 % près
+  des anciennes valeurs ; C-court et Realtime C-long sans effet, gardés.
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
   gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
   d'une invocation `--passes 2 --warmup 1 --cooldown 120`). Raison : sur le texte court, l'amorçage dure environ 3 à 12 s
@@ -875,3 +877,17 @@ Décisions du planificateur du 2026-10-03 :
   quantification 16 bits sur 0 à 44 échantillons. (3) tts-4b-4bit B/B 28,6 % (temps du premier morceau, sortie
   identique) : consigné, la porte se juge sur le 6 bits (ligne consommateur). (4) La mesure A/B/B/A porte sur
   `a9d3c5cf` ; la garde de `7cea4cb5` ne change rien au `chunkSize` 10 (contrôle : même sortie, même TTFA).
+- **K-96 (#636), 2026-10-13, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) le chat compte dans le pipeline STT,
+  comme le dit la porte (« STT, chat compris »), mais ses cellules sont jugées comme un clip à part : le témoin chat q2
+  (`total_ms` B − A − 6,14 %, A/A 1,88 %) déclenche la reprise du chat, pas celle d'un clip STT. (2) « Un témoin dont
+  l'A/A échoue deux fois est jugé au-delà du seuil » est lu par pipeline et longueur : le Realtime C-moyen, dont l'A/A
+  de A échoue sur ses deux témoins (4 bits 4,12 %, fp16 12,95 % sur `step_ms_p50`), est jugé au-delà par prudence ;
+  le STT C-long (A/A en échec une fois, 11,04 %, écart B − A − 7,26 / − 11,36 % juste sous la dispersion) est aussi
+  refait par prudence. Le Realtime C-long et tous les C-court ne sont pas refaits : leurs témoins sont sans effet
+  (|B − A| ≤ 1,64 %, A/A ≤ 1,51 %). (3) Valeurs de départ des fiches = moyenne des deux passes retenues de la reprise ;
+  seuils absolus dérivés recalculés, pourcentages des portes inchangés (une porte en pourcentage reste jugée contre le
+  A de chaque fiche). (4) Trace GPUOCC prefill-small-4bit non refaite : trois essais (2026-10-16, dont un écrit sur le
+  SSD interne) finissent par `xctrace record failed (exit -1)`, `xctrace` ne finalisant pas la trace dans le délai fixe
+  de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1, dépendance : non modifiée) ; ses chiffres
+  d'origine (K-34, prefill 99,8 %, decode 96,6 / 97,6 %) restent la référence, les trois autres traces refaites ne
+  bougent que de 0,8 pt au plus.

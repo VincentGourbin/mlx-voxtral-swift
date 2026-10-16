@@ -42,23 +42,32 @@ pour les 8 cellules) :
 | Modèle | Clip | ms/pas p50 / p90 | TTFT ms | encodage ms par s d'audio | RTF | pic `phys_footprint` Mo | pas |
 |---|---|---|---|---|---|---|---|
 | realtime-4b-4bit | C-court EN | 25,45 / 25,53 | 193 | 23,19 | 0,40 | 6 206 | 72 |
-| realtime-4b-4bit | C-moyen EN | 27,25 / 28,37 | 2 958 | 19,58 | 0,36 | 10 590 | 1 835 |
-| realtime-4b-4bit | C-moyen FR | 27,22 / 28,74 | 2 689 | 19,76 | 0,37 | 10 431 | 1 645 |
+| realtime-4b-4bit | C-moyen EN ² | 26,94 / 27,52 | 2 904 | 19,16 | 0,36 | 10 590 | 1 835 |
+| realtime-4b-4bit | C-moyen FR ² | 26,85 / 27,31 | 2 618 | 19,21 | 0,36 | 10 431 | 1 645 |
 | realtime-4b-4bit | C-long | 29,26 / 33,53 | 14 521 | 20,85 | 0,40 | 7 908 | 6 933 |
 | realtime-4b-fp16 | C-court EN | 125,88 / 126,35 | 410 | 26,18 | 1,88 | 12 930 | 72 |
-| realtime-4b-fp16 | C-moyen EN | 135,97 / 141,79 | 3 438 | 21,38 | 1,74 | 16 538 | 1 835 |
-| realtime-4b-fp16 | C-moyen FR | 136,16 / 142,19 | 3 075 | 21,11 | 1,75 | 16 379 | 1 645 |
+| realtime-4b-fp16 | C-moyen EN ² | 129,07 / 131,62 | 3 476 | 21,61 | 1,65 | 16 540 | 1 835 |
+| realtime-4b-fp16 | C-moyen FR ² | 130,31 / 137,33 | 3 194 | 21,96 | 1,67 | 16 379 | 1 645 |
 | realtime-4b-fp16 | C-long | 148,29 / 161,11 | 13 038 | 22,74 | 1,92 | 14 296 | 6 933 |
 
 (passe p1 de chaque cellule ; C-moyen = C-moyen exact, 146,1 / 130,9 s ; C-long = C-long exact, 9 min 14 s (K-33,
 `ASK.md` §Dérogations) ; C-long sans amorçage, `--cache-limit-mb 2048`.)
 
+² Repris par K-96 (2026-10-13) : la passe d'origine avait suivi l'amorçage sans repos (`--warmup 1 --cooldown 0`).
+Remesuré avec `--warmup 1 --cooldown 120`, binaire `44713fd3`, même commande, même sortie (`out_sha256`) ; première
+passe de la paire retenue (p3 pour fp16 C-moyen FR, 1re paire en échec à l'A/A). Moyenne des deux passes, avant →
+après : 4 bits 27,26 → 26,94 (EN) et 27,23 → 26,85 ms/pas (FR) ; fp16 136,05 → 129,84 (EN, − 4,6 %) et 136,09 →
+130,38 (FR, − 4,2 %). Lignes : `BENCHMARKS.md` §« 2026-10-13 — K-96 ». C-court et C-long : témoins sans effet, non
+repris.
+
 - **Occupation GPU du décodage** (« Realtime Generation », `bench --trace --metal-trace` sur `c_20s_en`) : 4 bits
   profiler 99,3 % · xctrace 92,3 % · `ioreg` 95,3 % (écart profiler/xctrace 7,0 pts) ; fp16 99,9 % · 98,4 % ·
   98,5 % (1,5 pt). Le GPU est occupé pendant tout le décodage : le « 49 % » de #24 n'était pas une occupation.
   Recoupement sur C-moyen EN complet (4 bits, trace de la 1re série) : xctrace 93,0 %, hors encodage et préfill.
-- **Coût d'encodage** (amendement du 2026-10-03, remesuré à froid) : 19,6 à 23,2 ms par seconde d'audio (4 bits) et
-  21,1 à 26,2 (fp16) en p1. Dispersion p1/p2 notable sur C-long 4 bits : 20,85 → 27,16 (+26 %), alors que
+  Traces d'origine prises après l'amorçage sans repos ; refaites par K-96 avec repos : 4 bits xctrace 93,1 %
+  (+ 0,8 pt, `ioreg` 95,3 %), fp16 98,3 % (`BENCHMARKS.md` §« 2026-10-13 — K-96 »).
+- **Coût d'encodage** (amendement du 2026-10-03, remesuré à froid) : 19,2 à 23,2 ms par seconde d'audio (4 bits) et
+  21,6 à 26,2 (fp16) en p1 (C-moyen repris par K-96). Dispersion p1/p2 notable sur C-long 4 bits : 20,85 → 27,16 (+26 %), alors que
   `step_ms_p50` ne varie que de 2,6 %. La valeur haute de K-13 (27,76 sur 12 min) se reproduit donc d'une passe à
   l'autre sur l'audio long. L'encodage C-long n'est pas une référence stable, à remesurer par K-38 et K-46 avant
   tout gain annoncé.
@@ -69,7 +78,7 @@ pour les 8 cellules) :
 - **`pad_fraction`** (tout pas sans texte) : 0,82 / 0,76 / 0,69 / 0,72 ; **`[STREAMING_PAD]` seul**
   (`streaming_pad_fraction`, entrée de K-73) : 0,70 / 0,60 / 0,52 / 0,56 (C-court, C-moyen EN, C-moyen FR, C-long).
   `[STREAMING_PAD]` est le rang 32 de `tekken.json` (`mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit`).
-- **fp16 n'est pas temps réel** (RTF 1,7 à 1,9 ; 126 à 148 ms par pas de 80 ms) : 5 fois le 4 bits, cohérent avec la
+- **fp16 n'est pas temps réel** (RTF 1,65 à 1,9 ; 126 à 148 ms par pas de 80 ms, C-moyen repris par K-96) : 5 fois le 4 bits, cohérent avec la
   tête liée recopiée en fp32 (piège ci-dessus), à traiter par K-38 et K-46.
 - **Invite** (constat, hors périmètre) : `streamingPadTokenId` vaut 11, `<pad>` dans `tekken.json` ; `[STREAMING_PAD]`
   est 32 et la référence mlx-audio utilise 32 avec 32 jetons de remplissage à gauche (nous : 1). Fiche de suivi K-84.
