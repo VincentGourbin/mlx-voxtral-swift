@@ -893,4 +893,11 @@ Décisions du planificateur du 2026-10-03 :
   bougent que de 0,8 pt au plus sur leur phase principale (préfill, décodage). (5) K-56, nommée dans la liste de la porte, est
   déclarée sans objet (2026-10-16) : sa porte recalée du 2026-10-10 mesure la valeur de départ dans son propre A ; les
   chiffres K-34 qu'elle cite encore (4 840 Mo, ≈ 1 735 ms) sont annotés comme historiques dans la fiche, avec les
-  valeurs refaites (89,6 / 68,7 Mo, ≈ 1 729 ms).
+  valeurs refaites (89,6 / 68,7 Mo, ≈ 1 729 ms). (6) Écarts aux règles de mesure de `VERIFY.md` §1, sans effet sur
+  les verdicts : les passes tracées de 2026-10-13 et 2026-10-16 tournent en `"dirty":true` (docs K-96 non commitées,
+  `Sources/` et `Package.resolved` inchangés ; seules leurs lignes GPUOCC sont retenues, pas leurs lignes `BENCH`) ;
+  les 10 séries de témoins partagent les étiquettes `A` / `B` (chaque série reste distinguée par son nom de journal
+  `.local-runs/k96/<témoin>-{A1,B1,B2,A2}.log`), et la reprise réutilise les étiquettes de K-34 / K-36 parce que la
+  porte impose la même commande. (7) ASK à Vincent liée à (4) (dépendance) : rendre réglable le délai d'arrêt de
+  `MetalSystemTrace.Recorder.stop` dans swift-mlx-profiler ; option recommandée : oui, paramètre `timeout` exposé par
+  `bench --metal-trace-stop-timeout`, défaut 120 s inchangé ; la trace prefill-small-4bit est alors refaite.

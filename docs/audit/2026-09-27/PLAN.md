@@ -2182,14 +2182,14 @@ Statistics:
 - Fait (commit `docs(K-96)`) : inventaire par script (`.local-runs/tools/k96_inventory.py`, `.local-runs/k96/inventory.txt`) ;
   A/B/B/A sur 10 témoins (`.local-runs/queue-k96.sh`, 40 passes, binaire Release `44713fd3`, `"dirty":false`) ; reprise
   de 25 cellules au protocole actuel (`.local-runs/queue-k96-redo.sh`, `queue-k96-redo2.sh` après la pause demandée par
-  Vincent le 2026-10-11) ; lignes, notes STT et Realtime, 19 fiches et `ASK.md` §Dérogations mis à jour.
+  Vincent le 2026-10-11) ; lignes, notes STT et Realtime, 20 fiches et `ASK.md` §Dérogations mis à jour.
 - Porte observée :
   - `INVENTORY cellules K-34 / K-36 avec amorçage et --cooldown 0 : 36 (…)` (liste complète dans `BENCHMARKS.md`
     §« 2026-10-13 — K-96 » ; 43 cellules, 96 lignes retenues)
   - `ABBA C-court : mini-3b −0,09 / +0,06 % ; realtime fp16 −0,38 / −0,10 % ; chat q2 mini-3b-8bit −1,31 / −6,14 %`
   - `ABBA C-moyen EN : mini-3b −6,24 / −4,82 % ; mini-3b-8bit −0,52 / −0,40 % ; small-4bit mlx −5,96 / −12,96 % ; realtime 4bit −2,66 / −2,30 % (A/A 4,12 %, échec) ; realtime fp16 −8,15 / −8,86 % (A/A 12,95 %, échec)`
   - `ABBA C-long : mini-3b-8bit −7,26 / −11,36 % (A/A 11,04 %, échec) ; realtime fp16 +0,46 / +1,64 %`
-  - `REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89 ; K-56 sans objet (valeur de départ mesurée dans son A, recalage du 2026-10-10)`
+  - `REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-47, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89 ; K-56 sans objet (valeur de départ mesurée dans son A, recalage du 2026-10-10)`
   (écarts B − A `step_ms_p50` / `total_ms` ; B/B ≤ 0,7 % partout ; `out_sha256` identique dans les quatre passes de
   chaque témoin)
 - Conclusion : l'absence de repos a ralenti les passes A des témoins STT C-moyen et chat ; sur le Realtime C-moyen
@@ -2204,7 +2204,7 @@ Statistics:
   « A/A en échec deux fois » lu sur le Realtime C-moyen (ses deux témoins) ; STT C-long refait par prudence.
 - Traces GPUOCC (`queue8.sh`, `queue8b.sh`, `queue8c.sh`) refaites avec repos (`.local-runs/queue-k96-trace*.sh`,
   2026-10-13 et 2026-10-16) : phase principale à 0,8 pt près des traces d'origine (realtime-4b-4bit 92,3 → 93,1 %,
-  mini-3b-8bit 92,8 / 94,4 % inchangés, fp16 98,4 → 98,3 %) ; bornes de K-45 et K-47 maintenues. prefill-small-4bit
+  mini-3b-8bit 92,8 / 94,4 % inchangés, fp16 98,4 → 98,3 %) ; bornes Mini de K-45 et borne de K-47 maintenues ; mention Small de K-45 (96,6 %) sans repos, non refaite. prefill-small-4bit
   non refaite : trois essais en échec à l'arrêt (`xctrace` ne finalise pas dans les 120 s de
   `MetalSystemTrace.Recorder.stop`), chiffres d'origine gardés (`ASK.md` §Dérogations, K-96 ; demande à Vincent pour
   un délai réglable dans swift-mlx-profiler).

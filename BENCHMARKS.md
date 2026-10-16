@@ -2701,7 +2701,7 @@ INVENTORY cellules K-34 / K-36 avec amorçage et --cooldown 0 : 36 (BASE-realtim
 ABBA C-court : mini-3b −0,09 / +0,06 % ; realtime fp16 −0,38 / −0,10 % ; chat q2 mini-3b-8bit −1,31 / −6,14 %
 ABBA C-moyen EN : mini-3b −6,24 / −4,82 % ; mini-3b-8bit −0,52 / −0,40 % ; small-4bit mlx −5,96 / −12,96 % ; realtime 4bit −2,66 / −2,30 % (A/A 4,12 %, échec) ; realtime fp16 −8,15 / −8,86 % (A/A 12,95 %, échec)
 ABBA C-long : mini-3b-8bit −7,26 / −11,36 % (A/A 11,04 %, échec) ; realtime fp16 +0,46 / +1,64 %
-REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89 ; K-56 sans objet (valeur de départ mesurée dans son A, recalage du 2026-10-10)
+REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-47, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89 ; K-56 sans objet (valeur de départ mesurée dans son A, recalage du 2026-10-10)
 ```
 (écarts B − A : `step_ms_p50` / `total_ms`)
 
@@ -2776,8 +2776,8 @@ et `trace/mc_decode-realtime-4b-4bit.log`, toléré comme ci-dessus). Phase prin
 (avant K-96 → refaite) : mini-3b-8bit Prefill 99,0 → 99,1 %, Generation 92,8 → 92,8 % et 94,4 → 94,4 % (`ioreg`
 94,4 → 94,3 % et 95,4 → 95,6 %) ; realtime-4b-4bit Realtime Generation 92,3 → 93,1 % (`ioreg` 95,3 → 95,3 %) ;
 realtime-4b-fp16 98,4 → 98,3 % (`ioreg` 98,5 → 98,5 %). Écart ≤ 0,8 pt sur la phase principale (les phases courtes bougent davantage : Audio Encoding de
-realtime-4b-4bit 85,4 → 96,4 %, 0,4 s) : les bornes de K-45 et K-47 tiennent
-(K-47 : 93,1 % refaite). prefill-small-4bit non refaite : trois essais (16/10 06:33, 07:53, 08:10, le dernier
+realtime-4b-4bit 85,4 → 96,4 %, 0,4 s) : les bornes Mini de K-45 et celle de K-47 tiennent
+(K-47 : 93,1 % refaite) ; la mention Small de K-45 (96,6 %) reste un chiffre sans repos, non refait. prefill-small-4bit non refaite : trois essais (16/10 06:33, 07:53, 08:10, le dernier
 écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt, `xctrace` ne finalise pas la
 trace dans le délai de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1) ; ses chiffres
 d'origine (l. 530-535) restent la référence (`ASK.md` §Dérogations, K-96).

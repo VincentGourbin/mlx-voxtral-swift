@@ -248,16 +248,16 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Leçons : une mesure de qualité faite sur une seule voix ne couvre pas un pack ; un taux d'écart par pas sans échelle
   (paire bf16) et sans séparation des modules ne désigne pas une cause ; les pauses courtes échappent à une règle
   « silence > 1 s » ; PLAN.md §7.
-- 2026-10-13 — **K-96 : sans repos après l'amorçage, les baselines STT C-moyen et chat étaient lentes (C-long et Realtime
-  C-moyen dispersées, refaites par prudence)** :
+- 2026-10-13 — **K-96 : sans repos après l'amorçage, les baselines STT C-moyen (mini-3b bf16, small-4bit) et chat étaient
+  lentes (C-long et Realtime C-moyen dispersées, refaites par prudence)** :
   A/B/B/A sur 10 témoins (A = `--warmup 1 --cooldown 0`, le protocole de K-34 / K-36 ; B = `--cooldown 120`, C-long
   sans amorçage) : B − A − 6,2 % sur le pas (mini-3b C-moyen EN), − 13,0 % sur le total (small-4bit C-moyen
   EN) et − 15,1 % sur le total du chat q4 ; A/A de A en échec sur le Realtime C-moyen et le STT C-long ; C-court et
   Realtime C-long sans effet. 25 cellules refaites au protocole actuel : la plupart tiennent à 3 % près ; ont bougé
   small-4bit C-moyen (− 4,7 à − 7,4 % sur le pas, − 7,0 à − 12,1 % sur le total), chat `.mlx` q2 à q4 (total − 4,2 à
   − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 / − 4,2 %) et STT C-long `.mlx` (total
-  − 10,2 % en 4 bits, − 5,3 % en 8 bits ; `.auto` 8 bits − 3,8 %) ; mêmes sorties. Traces GPUOCC refaites : occupation inchangée à 0,8 pt près (small-4bit non refaite, `xctrace` hors
-  délai à l'arrêt).
+  − 10,2 % en 4 bits, − 5,3 % en 8 bits ; `.auto` 8 bits − 3,8 %) ; mêmes sorties. Traces GPUOCC refaites : occupation de la phase principale inchangée à 0,8 pt près (phases courtes
+  davantage ; small-4bit non refaite, `xctrace` hors délai à l'arrêt).
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
   paire A sans repos (jusqu'à 15 %) cache l'effet au lieu de le mesurer ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.
