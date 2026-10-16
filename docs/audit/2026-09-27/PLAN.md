@@ -2139,8 +2139,11 @@ Statistics:
   valable ; défauts présents dans les deux prises, donc antérieurs à K-68 : graine 02, souffle et warm-up audible
   (11,6 s contre 4,8 à 8,1 s pour les autres graines ; la transcription commence bien par « Flux Forge Studio ») ;
   graine 01, « FluxForge Studio » absent (« Turns your Mac into… », comme la transcription batch de la graine 1).
-  Graines 04 à 10 : écoute non rapportée. Le défaut de la coupe du porteur (trop tard en 02, trop tôt en 01) relève
-  d'une fiche de suite, à ouvrir au prochain replanning.
+  Graines 04 à 10 (même jour) : 04 son de téléphone, 05 saccadé, 06 bon, 07 et 09 saturés (sans écrêtage : crête 0,16
+  à 0,25 de la pleine échelle sur les 10 graines, la distorsion vient du modèle ou du codec), 08 warm-up audible,
+  10 bon mais accent non natif. Bilan : 3 graines sur 10 jugées bonnes (03, 06, 10), défauts identiques dans A et B.
+  Deux fiches de suite au prochain replanning : coupe du porteur (trop tard en 02 et 08, trop tôt en 01) ; qualité de
+  la voix clonée `clone_fr` en 6 bits selon la graine (téléphone, saccades, saturation, accent ; à rapprocher de K-97).
 ## K-94 — TTS : écart des deux chemins de voix en bf16, préfill de la voix clonée — 2026-10-11 — rapportée
 - Fait (commit `c7935f73` : test ; commit `docs(K-94)` : test des positions, doc de `synthesize(text:voice:seed:)`,
   notes) : `VoicePathParityTests` (gardé `TEST_RUNNER_VOXTRAL_TTS_PARITY=1`) compare les deux chemins couche par couche
