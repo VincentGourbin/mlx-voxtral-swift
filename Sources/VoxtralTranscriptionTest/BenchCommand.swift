@@ -124,7 +124,8 @@ struct PassMeasurement {
         m.peakFootprintMB = samples.map(\.footprintMB).max() ?? BenchSystem.footprintMB()
         var kernels: [GPUKernelInterval] = []
         if let recorder {
-            let bundle = try recorder.stop()
+            // xctrace can take minutes to flush a long trace; the profiler's default 120 s stop timeout failed (K-96)
+            let bundle = try recorder.stop(timeout: 600)
             let summary = try session.mergeMetalSystemTrace(bundle)
             kernels = session.mergedGPUKernelIntervals
             print("METAL_TRACE \(bundle.path) intervals=\(summary.intervalCount) busy=\(String(format: "%.1f", summary.busyPercent))%")
