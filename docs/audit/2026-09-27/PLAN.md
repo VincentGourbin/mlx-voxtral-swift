@@ -2100,6 +2100,11 @@ Statistics:
   dans `.local-runs/listen/k39/` (`GRILLE.md`, clé `.key.json`) ; fiche `blocked` jusqu'à l'écoute (ASK-13 = A) et aux réponses ASK-35, ASK-36.
 - Vérification du 2026-10-11 (vérificateur et contradicteur `not verified`, mêmes motifs ; code, chiffres et paires justes) : couverture présentée comme tenue alors qu'elle échoue à la lettre (→ ASK-35) ; clause 4 bits retirée sans décision de Vincent (→ ASK-36) ; « 42 / 42 `QUIET` » ramené aux 12 BENCH ; BENCH lancés par `--voice neutral_female`, pas `--voice-embedding` ; paires d'écoute retirées au sort (4 sur 5 avaient A en prise 1).
 
+- Écoute de Vincent (2026-10-12, précisée le 2026-10-16 ; grille remplie dans `.local-runs/listen/k39/GRILLE.md`) :
+  préférence « = » sur les 5 paires, l'écoute est non inférieure. Défauts communs aux deux prises, donc antérieurs à
+  K-39 : sur le moyen et le long, la voix s'essouffle et le volume baisse vers la fin (mesuré au 1er → 4e quart : moyen
+  − 6,0 à − 14,4 dB, long − 12,9 à − 17,6 dB) ; sur le court, diction de la graine 2 peu appréciée. Restent ASK-35 et
+  ASK-36 ; le volume qui baisse va à la fiche de mesure prévue au prochain replanning.
 ## K-68 — TTS : porteur de warm-up coupé sur le waveform partiel en streaming — 2026-10-11 — bloquée (écoute de Vincent)
 - Fait (commits `a9d3c5cf`, `7cea4cb5`) : `synthesizeStreaming` cherche la fin du porteur à chaque morceau, dès 7
   frames décodées, au lieu d'attendre 3 s d'audio ; même fonction de coupe (`trimLeadingCarrierAdaptive`) que le
