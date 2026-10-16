@@ -435,6 +435,9 @@ class LlamaStandardModel: Module {
             // Python: h = self.embed_tokens(inputs)
             hiddenStates = embedTokens(inputs!)
         }
+        // Compute in the decoder's dtype (K-40): fp32 audio embeddings or bf16 embedding scales next to fp16 weights
+        // promote every Linear, the KV cache and the logits to fp32
+        if hiddenStates.dtype != computeDType { hiddenStates = hiddenStates.asType(computeDType) }
 
         var attentionMask = mask
         // Python: if mask is None:
@@ -465,6 +468,10 @@ class LlamaStandardModel: Module {
         // Python: return self.norm(h)
         return norm(hiddenStates)
     }
+
+    /// The decoder's compute dtype, read on the final norm (never quantized): bf16 for `mini-3b`, fp16 for the
+    /// quantized packs (K-40)
+    var computeDType: DType { norm.weight.dtype }
 
     // Legacy backward compatibility callAsFunction
     func callAsFunction(_ inputs: MLXArray, cache: [any KVCache]?) -> MLXArray {
@@ -837,8 +844,9 @@ class VoxtralStandardEncoder: Module {
 
     func callAsFunction(_ inputs: MLXArray) -> MLXArray {
         // Input shape: [batch, n_mels, seq_len] (matches Python)
-        // Transpose to [batch, seq_len, n_mels] for Conv1d
-        var hiddenStates = inputs.transposed(0, 2, 1)
+        // Transpose to [batch, seq_len, n_mels] for Conv1d. The fp32 mel is cast to the encoder's dtype (K-40)
+        let dtype = conv1.weight.dtype
+        var hiddenStates = inputs.asType(dtype).transposed(0, 2, 1)
 
         // Conv layers with GELU activation (matching Python)
         hiddenStates = gelu(conv1(hiddenStates))
@@ -846,7 +854,8 @@ class VoxtralStandardEncoder: Module {
 
         // Add positional embeddings
         let seqLen = hiddenStates.shape[1]
-        let embedPos = embedPositions.weight[0..<seqLen]  // [seqLen, hiddenSize]
+        // The bf16 checkpoint stores the positions in fp32: cast them, or the whole encoder runs in fp32 (K-40)
+        let embedPos = embedPositions.weight[0..<seqLen].asType(dtype)  // [seqLen, hiddenSize]
         hiddenStates = hiddenStates + embedPos  // Broadcasting: [batch, seqLen, hidden] + [seqLen, hidden]
 
         // Pass through transformer layers. With several 30 s windows (long audio) each layer is evaluated so a

@@ -514,6 +514,9 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         super.init()
     }
     
+    /// The decoder's compute dtype (K-40); nil for a decoder type without one
+    private var decoderComputeDType: DType? { (language_model as? LlamaStandardModel)?.computeDType }
+
     // Helper function to call language_model regardless of its concrete type
     private func callLanguageModel(inputs: MLXArray?, mask: MLXArray?, cache: [any KVCache]?, inputsEmbeds: MLXArray?) -> MLXArray {
         if let llamaModel = language_model as? LlamaModel {
@@ -736,8 +739,10 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         let audioEmbedsGathered = expandedDimensions(audioEmbedsGathered2D, axis: 0)  // [batch, seqLen, hiddenSize]
 
         // Step 3: Use where() to select between audio and text embeddings
+        // Both sides in the decoder's dtype (K-40): bf16 embedding scales next to fp16 audio would promote to fp32
         let maskExpanded = expandedDimensions(audioTokenMask, axis: -1)  // [batch, seqLen, 1]
-        let finalEmbeddings = which(maskExpanded, audioEmbedsGathered, embeddings)  // [batch, seqLen, hiddenSize]
+        let dtype = decoderComputeDType ?? embeddings.dtype
+        let finalEmbeddings = which(maskExpanded, audioEmbedsGathered.asType(dtype), embeddings.asType(dtype))
 
         return finalEmbeddings
     }
@@ -1261,8 +1266,10 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         let audioEmbedsGathered2D = take(audioEmbedsFlat, indicesFlat, axis: 0)
         let audioEmbedsGathered = expandedDimensions(audioEmbedsGathered2D, axis: 0)
 
+        // Core ML returns fp32: cast both sides to the decoder's dtype (K-40)
         let maskExpanded = expandedDimensions(audioTokenMask, axis: -1)
-        let finalEmbeddings = which(maskExpanded, audioEmbedsGathered, embeddings)
+        let dtype = decoderComputeDType ?? embeddings.dtype
+        let finalEmbeddings = which(maskExpanded, audioEmbedsGathered.asType(dtype), embeddings.asType(dtype))
 
         eval(finalEmbeddings)
 
