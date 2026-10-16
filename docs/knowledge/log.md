@@ -249,7 +249,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   (paire bf16) et sans séparation des modules ne désigne pas une cause ; les pauses courtes échappent à une règle
   « silence > 1 s » ; PLAN.md §7.
 - 2026-10-13 — **K-96 : sans repos après l'amorçage, les passes STT C-moyen (mini-3b bf16, small-4bit) et chat étaient
-  lentes ; à la reprise, seules small-4bit et le chat `.mlx` bougent de plus de 3 % sur ce clip (C-long et Realtime
+  lentes ; à la reprise, seules small-4bit C-moyen et le chat `.mlx` bougent de plus de 3 % (C-long et Realtime
   C-moyen dispersés, refaits par prudence)** :
   A/B/B/A sur 10 témoins (A = `--warmup 1 --cooldown 0`, le protocole de K-34 / K-36 ; B = `--cooldown 120`, C-long
   sans amorçage) : B − A − 6,2 % sur le pas (mini-3b C-moyen EN), − 13,0 % sur le total (small-4bit C-moyen
