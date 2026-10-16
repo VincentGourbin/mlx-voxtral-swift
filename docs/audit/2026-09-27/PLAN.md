@@ -2189,11 +2189,12 @@ Statistics:
   - `ABBA C-court : mini-3b −0,09 / +0,06 % ; realtime fp16 −0,38 / −0,10 % ; chat q2 mini-3b-8bit −1,31 / −6,14 %`
   - `ABBA C-moyen EN : mini-3b −6,24 / −4,82 % ; mini-3b-8bit −0,52 / −0,40 % ; small-4bit mlx −5,96 / −12,96 % ; realtime 4bit −2,66 / −2,30 % (A/A 4,12 %, échec) ; realtime fp16 −8,15 / −8,86 % (A/A 12,95 %, échec)`
   - `ABBA C-long : mini-3b-8bit −7,26 / −11,36 % (A/A 11,04 %, échec) ; realtime fp16 +0,46 / +1,64 %`
-  - `REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89`
+  - `REDO packs au-delà de 3 % : STT C-moyen (mini-3b, small-4bit mlx), chat (q2 à q4) ; par prudence Realtime C-moyen (A/A en échec sur ses deux témoins) et STT C-long (A/A en échec, écart juste sous la dispersion) ; cellules refaites 25 ; fiches mises à jour K-38, K-40, K-42, K-45, K-46, K-49, K-51, K-52, K-53, K-54, K-60, K-61, K-62, K-63, K-65, K-70, K-72, K-78, K-89 ; K-56 sans objet (valeur de départ mesurée dans son A, recalage du 2026-10-10)`
   (écarts B − A `step_ms_p50` / `total_ms` ; B/B ≤ 0,7 % partout ; `out_sha256` identique dans les quatre passes de
   chaque témoin)
-- Conclusion : l'absence de repos a faussé les passes A des témoins C-moyen, chat et C-long (plus lentes, plus
-  dispersées). Reprises au protocole actuel (A/A final en succès pour les 25 ; 4 paires refaites une fois), la plupart
+- Conclusion : l'absence de repos a ralenti les passes A des témoins STT C-moyen et chat ; sur le Realtime C-moyen
+  et le STT C-long, elle les a rendues plus dispersées (A/A en échec), l'effet n'y est pas établi et la reprise est
+  faite par prudence. Reprises au protocole actuel (A/A final en succès pour les 25 ; 4 paires refaites une fois), la plupart
   des références de K-34 / K-36 tiennent à 3 % près. Ont bougé : small-4bit C-moyen (`.mlx` EN − 7,4 % sur le pas,
   − 12,1 % sur le total ; `.mlx` FR − 4,7 / − 10,7 % ; `.auto` FR total − 7,0 %), chat `.mlx` total q2 à q4 (− 4,2,
   − 8,5, − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 % EN, − 4,2 % FR), STT C-long

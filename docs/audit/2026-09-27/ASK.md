@@ -800,8 +800,8 @@ Décisions du planificateur du 2026-10-03 :
   `A4-6bit-cli`, `A4-mlx-cli` et `A4-mlx-after_synthesis` a tourné avec amorçage puis `--cooldown 0` (`queue2.sh:30`),
   la p2 sans amorçage ; leur A/A p1 / p2 de 0,03 à 0,26 % montre un effet non mesurable sur l'enrôlement : K-37 n'est
   pas reprise. Le contrôle des cellules K-34 / K-36 est confié à K-96 ; d'ici là, une porte en pourcentage se juge
-  contre le A de chaque fiche, mesuré avec repos. Issue (K-96, 2026-10-13) : effet mesuré sur les témoins C-moyen,
-  chat et C-long ; 25 cellules refaites avec repos (`BENCHMARKS.md` §« 2026-10-13 — K-96 »), la plupart à 3 % près
+  contre le A de chaque fiche, mesuré avec repos. Issue (K-96, 2026-10-13) : effet mesuré sur les témoins STT C-moyen
+  et chat ; Realtime C-moyen et STT C-long jugés au-delà par prudence (A/A en échec, effet non établi) ; 25 cellules refaites avec repos (`BENCHMARKS.md` §« 2026-10-13 — K-96 »), la plupart à 3 % près
   des anciennes valeurs ; C-court et Realtime C-long sans effet, gardés.
 - **K-35 (#588), 2026-10-10, décision de l'agent** — **préalables de l'amendement du 2026-10-03 et contrôle macOS
   gardés malgré l'absence de repos après l'amorçage** (un processus par passe, `--warmup 1` sans `--cooldown`, au lieu
@@ -890,4 +890,4 @@ Décisions du planificateur du 2026-10-03 :
   SSD interne) finissent par `xctrace record failed (exit -1)`, `xctrace` ne finalisant pas la trace dans le délai fixe
   de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1, dépendance : non modifiée) ; ses chiffres
   d'origine (K-34, prefill 99,8 %, decode 96,6 / 97,6 %) restent la référence, les trois autres traces refaites ne
-  bougent que de 0,8 pt au plus.
+  bougent que de 0,8 pt au plus sur leur phase principale (préfill, décodage).
