@@ -2693,8 +2693,10 @@ A/A = |A1 − A2| / moyenne de A ; seuil : 3 % et au-delà de l'A/A.
 
 Chat, autres questions (`total_ms` B − A, A/A) : q1 − 0,07 % (0,05 %), q3 − 6,00 % (0,74 %), q4 − 15,11 % (0,98 %) ;
 `step_ms_p50` de − 0,40 à − 1,31 %. Le repos agit sur le TTFT du chat (amorçage par question), pas sur le pas.
-Dispersion B/B ≤ 0,7 % sur tous les témoins ; `out_sha256` identique dans les quatre passes de chaque témoin. Sans
-repos, la passe A est plus lente et plus dispersée ; avec repos, les deux passes B se recoupent.
+Dispersion B/B ≤ 0,7 % sur tous les témoins ; `out_sha256` identique dans les quatre passes de chaque témoin. Sur les
+témoins jugés au-delà, la passe A sans repos est plus lente (mini-3b bf16 et small-4bit C-moyen, chat) ou plus
+dispersée (Realtime C-moyen, STT C-long) ; les quatre témoins sans effet (C-court, mini-3b-8bit C-moyen, Realtime
+C-long) ont une A/A de A de 0,04 à 1,51 %.
 
 ```
 INVENTORY cellules K-34 / K-36 avec amorçage et --cooldown 0 : 36 (BASE-realtime-4b-4bit-c_court_en, BASE-realtime-4b-4bit-c_moyen_en, BASE-realtime-4b-4bit-c_moyen_fr, BASE-realtime-4b-fp16-c_court_en, BASE-realtime-4b-fp16-c_moyen_en, BASE-realtime-4b-fp16-c_moyen_fr, BASE-realtime-4b-fp16-c_long, BASE-mini-3b-8bit-mlx-c_court_en, BASE-mini-3b-8bit-mlx-c_moyen_en [partial(1/2 lines)], BASE-mini-3b-8bit-mlx-c_moyen_fr [partial(1/2 lines)], BASE-mini-3b-8bit-mlx-c_long, BASE-mini-3b-8bit-auto-c_court_en, BASE-mini-3b-8bit-auto-c_moyen_en, BASE-mini-3b-8bit-auto-c_moyen_fr, BASE-mini-3b-8bit-auto-c_long, BASE-mini-3b-4bit-mlx-c_court_en, BASE-mini-3b-4bit-mlx-c_moyen_en, BASE-mini-3b-4bit-mlx-c_moyen_fr, BASE-mini-3b-4bit-mlx-c_long, BASE-mini-3b-4bit-auto-c_court_en, BASE-mini-3b-4bit-auto-c_moyen_en, BASE-mini-3b-4bit-auto-c_moyen_fr, BASE-mini-3b-4bit-auto-c_long, BASE-mini-3b-mlx-c_court_en, BASE-mini-3b-mlx-c_moyen_en, BASE-mini-3b-mlx-c_moyen_fr, BASE-mini-3b-auto-c_court_en, BASE-mini-3b-auto-c_moyen_en, BASE-mini-3b-auto-c_moyen_fr, BASE-small-4bit-mlx-c_court_en, BASE-small-4bit-mlx-c_moyen_en, BASE-small-4bit-mlx-c_moyen_fr, BASE-small-4bit-auto-c_court_en, BASE-small-4bit-auto-c_moyen_fr, CHAT-mlx, CHAT-auto)
