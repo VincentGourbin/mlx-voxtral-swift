@@ -2134,6 +2134,13 @@ Statistics:
   du vérificateur : code, tests et paires justes ; lignes `Executed …` recopiées, graine 5 et `machine-check` du contrôle
   précisés ci-dessus et dans `BENCHMARKS.md`.
 
+- Écoute de Vincent (2026-10-16, graines 01 à 03 ; grille `.local-runs/listen/k68/GRILLE.md`) : A et B s'entendent
+  pareil (ils diffèrent d'au plus un pas 16 bits), K-68 n'est donc pas inférieure. Seule la graine 03 est jugée
+  valable ; défauts présents dans les deux prises, donc antérieurs à K-68 : graine 02, souffle et warm-up audible
+  (11,6 s contre 4,8 à 8,1 s pour les autres graines ; la transcription commence bien par « Flux Forge Studio ») ;
+  graine 01, « FluxForge Studio » absent (« Turns your Mac into… », comme la transcription batch de la graine 1).
+  Graines 04 à 10 : écoute non rapportée. Le défaut de la coupe du porteur (trop tard en 02, trop tôt en 01) relève
+  d'une fiche de suite, à ouvrir au prochain replanning.
 ## K-94 — TTS : écart des deux chemins de voix en bf16, préfill de la voix clonée — 2026-10-11 — rapportée
 - Fait (commit `c7935f73` : test ; commit `docs(K-94)` : test des positions, doc de `synthesize(text:voice:seed:)`,
   notes) : `VoicePathParityTests` (gardé `TEST_RUNNER_VOXTRAL_TTS_PARITY=1`) compare les deux chemins couche par couche
