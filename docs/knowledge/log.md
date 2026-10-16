@@ -271,3 +271,12 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   long garde 22 Go). Le « 6 bits plafonné 2,6 à 2,9 % plus lent » de K-35 venait d'une comparaison paire à paire.
   Défaut public posé à Vincent (ASK-37). Leçon : un écart de 3 % entre deux jours ou deux binaires ne se lit pas
   comme un effet ; seul l'A/B/B/A le tranche ; [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.
+- 2026-10-16 — **K-40 : le STT calculait tout en fp32, le dtype du décodeur divise le pas de mini-3b par 4,7** :
+  mel fp32, positions F32 du checkpoint bf16 et `embed_tokens.scales` BF16 des packs F16 promouvaient tout le
+  graphe (KV, logits) en fp32. Calcul au dtype de `norm.weight` : bf16 pour mini-3b, fp16 pour les packs 8 et 4 bits.
+  A/B/B/A, 18 A/A PASS : mini-3b `.mlx` 135,72 → 28,75 ms par pas, − 4,4 Go ; 8 et 4 bits − 19 à − 30 % par pas,
+  `ttft_ms` − 7 à − 23 %, `peak_mlx_mb` − 13 à − 28 %. Parité : C-court identique, corpus court identique, C-moyen
+  2 meilleures et 2 moins bonnes d'un mot (FR `.auto`, + 0,25 pt contre un seuil de + 0,2) : ASK-38. Leçon : un
+  dtype mixte (F16 et BF16, ou bf16 et F32) dans un graphe MLX promeut en silence tout ce qui suit en fp32 ; relever
+  le dtype du cache KV après préfill (`VOXTRAL_DTYPE_AUDIT=1`) avant de mesurer un levier de dtype ; PLAN.md §7,
+  `BENCHMARKS.md` §« 2026-10-16 — K-40 ».

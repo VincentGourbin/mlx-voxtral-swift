@@ -609,6 +609,40 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
   le défaut que là où il manque de mémoire, prends C.
 - **Fiches** : ⛔ K-95 (#635, `blocked` jusqu'à la réponse) ; application dans K-79.
 
+### ASK-38 — K-40 : parité « WER ≤ réf + 0,2 pt » manquée d'un mot sur deux cellules `.auto` FR
+
+- **Contexte** : K-40 (#611, 2026-10-16) fait calculer le STT dans le dtype du décodeur : bf16 pour mini-3b, fp16 pour
+  les packs 8 et 4 bits, au lieu de tout promouvoir en fp32. A/B/B/A sur M3 Max 96 Go, A = `be7f8df9`, B = `215452fa`
+  (`BENCHMARKS.md` §« 2026-10-16 — K-40 »). La porte de parité est celle d'ASK-11 = A : texte identique sur C-court et
+  WER normalisé ≤ référence + 0,2 pt sur C-moyen EN/FR. Sur C-moyen FR (406 mots), un mot vaut 0,25 pt.
+- **Ce qui a été constaté** :
+  - Vitesse et mémoire tenues partout, 18 A/A sous 3 % : mini-3b `.mlx` C-moyen EN `step_ms_p50` 135,7 → 28,7 ms
+    (− 79 %), pic `phys_footprint` − 4,4 Go ; packs 8 et 4 bits, `.mlx` et `.auto`, moyen et long : `step_ms_p50`
+    − 19 à − 30 %, `ttft_ms` − 7 à − 23 %, `peak_mlx_mb` − 13 à − 28 %.
+  - C-court : texte identique dans les 6 cas.
+  - C-moyen (12 cellules) : 8 égales, 2 meilleures (mini-3b EN : `.mlx` 1,05 → 0,53, `.auto` 0,79 → 0,53), 2 moins
+    bonnes d'un mot, donc au-delà du seuil : mini-3b `.auto` FR et 8 bits `.auto` FR, 1,97 → 2,22 (« explorer » →
+    « explorez », « l'exporte » → « l'export »).
+  - Corpus élargi (c_20s EN/FR, es_1 à es_3 : 30 cas) : WER identique partout. C-long exact (WER de 52 à 56 % dans
+    les deux versions, le modèle saute des passages) : 8 bits `.auto` 53,75 → 53,05, 4 bits `.auto` 55,73 → 55,53,
+    mini-3b `.auto` 52,54 → 52,67, mini-3b `.mlx` 52,16 → 54,13 ; les quatre autres cellules sont identiques.
+  - Repli prévu par la fiche, encodeur fp32 et décodeur bf16 (sonde non commitée, `.mlx`) : il ne règle rien. Les
+    packs quantifiés retrouvent la sortie de A, mini-3b perd le gain du moyen EN (1,05) et reste à 53,75 sur le long.
+    Il ne touche pas `.auto`, dont l'encodeur est Core ML : les deux cellules en échec ne changent pas.
+- **Question** : K-40 est-elle acceptée malgré ces deux écarts d'un mot ?
+- **Options** :
+  - **A)** Oui, telle quelle : le bilan sur C-moyen est net positif (− 0,78 pt en EN, + 0,50 pt en FR sur 12
+    cellules), C-court et les 30 cas courts sont identiques, et l'écart est un mot par clip. La fiche est vérifiée
+    sur cette exception, écrite dans `ASK.md` §Dérogations ; le seuil d'ASK-11 reste le même pour les autres fiches.
+  - **B)** Oui, mais K-40 ne s'applique qu'au backend `.mlx` : `.auto` garde son décodeur en fp32. La parité tient
+    alors à la lettre sur C-moyen ; `.auto` perd ses gains (− 20 à − 30 % par pas, − 15 à − 28 % de pic MLX).
+  - **C)** Non : K-40 est retirée (revert de `215452fa`) et le calcul reste en fp32.
+- **Proposé** : A. Un mot sur un clip de 406 mots est sous la résolution du seuil, et les écarts vont dans les deux
+  sens. Limite : un seul clip FR long de référence (C-moyen FR) ; le C-long exact varie de 2 pt selon les arrondis
+  dans les deux versions et ne départage pas.
+- **Fiches** : ⛔ K-40 (#611, `blocked` jusqu'à la réponse) ; en attente derrière elle : K-42, K-45, K-53, K-54,
+  K-55, K-56, K-60.
+
 ---
 
 ## Réponses
@@ -655,6 +689,7 @@ réponse datée ici.
 | ASK-35 | | | |
 | ASK-36 | | | |
 | ASK-37 | | | |
+| ASK-38 | | | |
 
 ### Dérogations
 
