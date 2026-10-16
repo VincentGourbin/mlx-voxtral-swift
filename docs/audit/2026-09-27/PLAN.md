@@ -2194,9 +2194,10 @@ Statistics:
   chaque témoin)
 - Conclusion : l'absence de repos a ralenti les passes A des témoins STT C-moyen mini-3b bf16 et small-4bit
   et du chat (mini-3b-8bit C-moyen sans effet) ; sur le Realtime C-moyen
-  et le STT C-long, l'A/A de A échoue (deux passes aberrantes, chacune pendant une indexation en arrière-plan :
-  corespotlightd dans `RT-fp16-c_moyen_en-A1`, `KO indexation` avant `STT-mini-3b-8bit-c_long-A2`), la part du manque
-  de repos n'y est pas établie et la reprise est faite par prudence. Reprises au protocole actuel (A/A final en succès pour les 25 ; 4 paires refaites une fois), la plupart
+  et le STT C-long, l'A/A de A échoue (Realtime 4 bits 4,12 %, fp16 12,95 %, STT C-long 11,04 %) ; deux des passes en cause
+  tournent avec une charge de fond (corespotlightd, Teams et Mail dans `RT-fp16-c_moyen_en-A1` ; `KO indexation` avant
+  `STT-mini-3b-8bit-c_long-A2`), la troisième (`RT-4bit-c_moyen_en-A2`) sans charge relevée ; la part du manque de
+  repos n'y est pas établie et la reprise est faite par prudence. Reprises au protocole actuel (A/A final en succès pour les 25 ; 4 paires refaites une fois), la plupart
   des références de K-34 / K-36 tiennent à 3 % près. Ont bougé : small-4bit C-moyen (`.mlx` EN − 7,4 % sur le pas,
   − 12,1 % sur le total ; `.mlx` FR − 4,7 / − 10,7 % ; `.auto` FR total − 7,0 %), chat `.mlx` total q2 à q4 (− 4,2,
   − 8,5, − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 % EN, − 4,2 % FR), STT C-long

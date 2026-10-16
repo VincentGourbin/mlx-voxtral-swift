@@ -261,7 +261,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   davantage ; small-4bit refaite le 2026-10-16 avec un délai d'arrêt `xctrace` de 600 s au lieu des 120 s par défaut :
   Generation 96,6 → 96,8 %).
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
-  paire A dont l'A/A échoue (jusqu'à 15 %, avec une indexation en arrière-plan dans les deux cas) ne permet pas de
+  paire A dont l'A/A échoue (jusqu'à 15 %, avec une charge de fond dans deux passes sur trois) ne permet pas de
   lire l'effet : on refait la cellule ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.
 - 2026-10-16 — **K-95 : le plafond de cache `--cache-limit-mb 2048` ne coûte rien au pas TTS et retire 26 à 33 % de
