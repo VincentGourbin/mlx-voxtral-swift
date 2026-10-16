@@ -53,8 +53,9 @@ Remesuré au protocole actuel (`--warmup 1 --cooldown 120` ; C-long `--warmup 0`
 valeurs de la première passe de la paire retenue (p3 pour mini-3b-8bit et mini-3b-4bit `.mlx` C-long, dont la 1re
 paire a échoué à l'A/A). `out_sha256` identique à l'ancienne passe : WER inchangés. Lignes : `BENCHMARKS.md`
 §« 2026-10-13 — K-96 », qui remplace pour ces cellules les lignes de K-34. Écarts notables (moyenne des deux passes) :
-small-4bit C-moyen `.mlx` EN 78,57 → 72,78 ms/pas, TTFT − 17,7 à − 25,3 % sur les trois cellules Small ; C-long
-`.mlx` TTFT − 11,7 % (8 bits) et − 16,2 % (4 bits). Les autres cellules reprises bougent de moins de 3 % sur le pas.
+small-4bit C-moyen `.mlx` EN 78,57 → 72,78 ms/pas (− 7,4 %), `.mlx` FR 76,55 → 72,92 (− 4,7 %), TTFT − 17,7 à
+− 25,3 % sur les trois cellules Small ; C-long `.mlx` TTFT − 11,7 % (8 bits) et − 16,2 % (4 bits), pas 21,20 →
+20,40 en 4 bits (− 3,8 %). Les autres cellules STT reprises bougent de moins de 3 % sur le pas.
 
 ## Lecture
 

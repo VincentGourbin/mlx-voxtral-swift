@@ -2694,7 +2694,7 @@ A/A = |A1 − A2| / moyenne de A ; seuil : 3 % et au-delà de l'A/A.
 Chat, autres questions (`total_ms` B − A, A/A) : q1 − 0,07 % (0,05 %), q3 − 6,00 % (0,74 %), q4 − 15,11 % (0,98 %) ;
 `step_ms_p50` de − 0,40 à − 1,31 %. Le repos agit sur le TTFT du chat (amorçage par question), pas sur le pas.
 Dispersion B/B ≤ 0,7 % sur tous les témoins ; `out_sha256` identique dans les quatre passes de chaque témoin. Sur les
-témoins jugés au-delà, la passe A sans repos est plus lente (mini-3b bf16 et small-4bit C-moyen, chat) ou plus
+témoins jugés au-delà ou refaits par prudence, la passe A sans repos est plus lente (mini-3b bf16 et small-4bit C-moyen, chat) ou plus
 dispersée (Realtime C-moyen, STT C-long) ; les quatre témoins sans effet (C-court, mini-3b-8bit C-moyen, Realtime
 C-long) ont une A/A de A de 0,04 à 1,51 %.
 
