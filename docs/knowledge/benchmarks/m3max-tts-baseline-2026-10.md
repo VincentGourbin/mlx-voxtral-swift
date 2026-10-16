@@ -111,15 +111,16 @@ après l'amorçage allaient de 40,4 à 46,6 ms/pas : c'était la chaleur, pas un
   `codec` 21 à 29 Go sur le texte long en batch (`phys_footprint` 31 à 41 Go), contre 2,5 à 3,7 Go (tous textes ; 2,5 à 3,4 sur le long) pour le décodage
   LLM en 4 et 6 bits (8,6 Go en bf16). Même plafonné, le texte long garde 21 à 29 Go de `phys_footprint` : sur
   un appareil de 32 Go, la phase codec fixe la limite.
-- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas la vitesse du batch long au-delà du seuil de 5 % et
-  retire 9 à 12 Go** (comparaison paire à paire, jours et binaires différents, pas un A/B/B/A ; le 6 bits plafonné
-  est 2,6 à 2,9 % plus lent dans les deux cellules, à confirmer en A/B/B/A avant toute décision de défaut) : sur les 6 cellules batch long, mesurées sans amorçage dans les deux profils, l'écart de
-  `step_ms_p50` va de − 1,0 % à + 2,9 % (moyenne des deux passes, paire plafonnée qui passe l'A/A), sous le seuil de
-  5 %. Le `phys_footprint` baisse de 9,3 à 12,3 Go (41,3 → 29,0 Go pour bf16 prédéfinie). Le texte moyen et la
-  ligne consommateur ne sont pas comparés : leurs paires plafonnées ont été mesurées sans repos après l'amorçage.
-  Le bloc de comparaison est dans `BENCHMARKS.md` (reprise du 2026-10-10). Le défaut public (pas de plafond) est
-  une décision de Vincent. Deux premiers relevés ne tiennent pas : 8 à 19 % de surcoût (comparaison à la matrice
-  d'origine, autre protocole et autre macOS), puis − 3,9 à + 4,8 % sur 11 cellules (texte moyen mesuré chaud).
+- **Le plafond de cache (`--cache-limit-mb 2048`) ne change pas le temps par pas et retire 26 à 33 % de
+  `phys_footprint`** (K-95, 2026-10-16, A/B/B/A, A/A ≤ 0,31 %, mêmes sorties) : 6 et 4 bits sur le moyen et le long,
+  plus la ligne consommateur. `step_ms_p50` − 0,47 à + 0,05 % ; `total_ms` + 0,1 à + 0,9 %, le surcoût est dans la
+  phase `codec` (+ 11 à + 28 %). `phys_footprint` − 3,6 à − 5,1 Go sur le moyen, − 11,1 Go sur le long (33,2 → 22,1
+  à 22,2 Go) ; le pic MLX actif est le même dans les deux profils. Une seule machine (M3 Max 96 Go) ; streaming et
+  bf16 non comparés. Le défaut public (aujourd'hui sans plafond) est posé à Vincent (ASK-37). Bloc de mesures :
+  `BENCHMARKS.md` §« 2026-10-16 — K-95 ». La comparaison paire à paire de K-35 (6 cellules batch long, jours et binaires
+  différents ; − 9,3 à − 12,3 Go) reste la seule pour le bf16 (41,3 → 29,0 Go) ; son « 6 bits plafonné 2,6 à 2,9 %
+  plus lent » ne se retrouve pas en A/B/B/A. Deux relevés plus anciens ne tiennent pas : 8 à 19 % de surcoût (autre
+  protocole et autre macOS), puis − 3,9 à + 4,8 % (texte moyen mesuré chaud).
 - **Voix clonée en 4 bits : couverture effondrée, pauses allongées** (K-97, 2026-10-11 ; c'était le « constat sans
   cause isolée » de K-35) : avec `clone_fr`, le 4 bits fait 1 806 frames contre 858 en 6 bits sur le moyen, 2 149
   contre 1 868 sur le long ; couverture ASR 0,731 / 0,629 / 0,772 sur le moyen (graines 1 à 3) et 0,237 sur le long,

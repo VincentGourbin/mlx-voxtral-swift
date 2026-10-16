@@ -580,6 +580,35 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Proposé** : A.
 - **Fiches** : ⛔ K-39 (#610) ; K-57.
 
+### ASK-37 — Plafond de cache MLX par défaut en TTS
+
+- **Contexte** : K-95 (#635, 2026-10-16), A/B/B/A sur M3 Max 96 Go, profil par défaut contre
+  `--cache-limit-mb 2048` (`BENCHMARKS.md` §« 2026-10-16 — K-95 »). Cinq cellules : 6 bits et 4 bits sur les textes
+  moyen et long, plus la ligne consommateur (6 bits, `clone_fr`, moyen). Les 10 A/A passent (0,00 à 0,31 %).
+  Aujourd'hui, `VoxtralTTSPipeline.Configuration.cacheLimitBytes` vaut `nil` par défaut, c'est-à-dire sans plafond.
+- **Ce qui a été constaté** :
+  - `step_ms_p50` : de − 0,47 à + 0,05 %.
+  - `total_ms` : de + 0,1 à + 0,9 %, soit + 50 à + 486 ms. Le surcoût vient de la phase `codec`.
+  - Pic `phys_footprint` : − 3,6 à − 5,1 Go sur le texte moyen (− 26 à − 32 %), − 11,1 Go sur le texte long
+    (− 33 %).
+  - Sorties identiques à l'octet.
+  - Le pic MLX actif ne change pas : le texte long garde 22 Go plafonné.
+  - Le seuil de K-79 pour un profil `lean` est tenu largement : pic − 20 % pour au plus + 5 % de temps.
+- **Question** : quel plafond de cache MLX par défaut pour `VoxtralTTSPipeline` ?
+- **Options** :
+  - **A)** Pas de plafond par défaut, comme aujourd'hui. On documente `cacheLimitBytes` (2048 Mo conseillés) et
+    K-79 ne l'applique qu'aux profils `lean`.
+  - **B)** Plafond de 2048 Mo par défaut pour toutes les machines, désactivable par l'hôte. C'est un défaut public :
+    version mineure, CHANGELOG, FluxForge prévenu (règle d'ASK-9). Il faut aussi un moyen additif de dire « sans
+    plafond », puisque `nil` deviendrait le défaut plafonné : par exemple une valeur 0 documentée ou une constante.
+  - **C)** Plafond par défaut seulement sous N Go de RAM, désactivable, sur le modèle de la réponse à ASK-33 pour
+    Small. Je propose N = 32.
+- **Proposé** : B. Le coût mesuré est sous 1 % de temps total sur cette machine, et la baisse de 26 à 33 % de
+  l'empreinte profite aussi aux hôtes qui partagent la mémoire (FluxForge). Limites : une seule machine a été
+  mesurée, et le streaming n'est pas comparé (la baseline K-35 le mesure déjà plafonné). Si tu préfères ne changer
+  le défaut que là où il manque de mémoire, prends C.
+- **Fiches** : ⛔ K-95 (#635, `blocked` jusqu'à la réponse) ; application dans K-79.
+
 ---
 
 ## Réponses
@@ -625,6 +654,7 @@ réponse datée ici.
 | ASK-34 | A | 2026-10-07 | Vincent, session Mac : les cellules streaming moyen et long sans A/A restent dans la baseline K-35, cause consignée (re-décodage complet), référence « avant » de K-43. |
 | ASK-35 | | | |
 | ASK-36 | | | |
+| ASK-37 | | | |
 
 ### Dérogations
 

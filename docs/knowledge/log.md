@@ -263,3 +263,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
   paire A sans repos (jusqu'à 15 %) cache l'effet au lieu de le mesurer ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.
+- 2026-10-16 — **K-95 : le plafond de cache `--cache-limit-mb 2048` ne coûte rien au pas TTS et retire 26 à 33 % de
+  l'empreinte** : A/B/B/A sur 5 cellules (6 et 4 bits, moyen et long, ligne consommateur `clone_fr`), A/A ≤ 0,31 %,
+  mêmes sorties. `step_ms_p50` − 0,47 à + 0,05 % ; `total_ms` + 0,1 à + 0,9 %, le surcoût est dans la phase `codec`
+  (+ 11 à + 28 %) ; `phys_footprint` − 3,6 à − 5,1 Go sur le moyen, − 11,1 Go sur le long, pic MLX actif inchangé (le
+  long garde 22 Go). Le « 6 bits plafonné 2,6 à 2,9 % plus lent » de K-35 venait d'une comparaison paire à paire.
+  Défaut public posé à Vincent (ASK-37). Leçon : un écart de 3 % entre deux jours ou deux binaires ne se lit pas
+  comme un effet ; seul l'A/B/B/A le tranche ; [baseline TTS](benchmarks/m3max-tts-baseline-2026-10.md), PLAN.md §7.
