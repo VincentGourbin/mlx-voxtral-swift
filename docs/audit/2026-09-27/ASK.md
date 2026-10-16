@@ -912,7 +912,7 @@ Décisions du planificateur du 2026-10-03 :
   couverture des deux chemins est comparée sur 3 graines au même binaire (`c7935f73`, après K-39) au lieu de la
   référence K-35, qui ne mesure plus le même code. Mesure plus stricte (même binaire, 3 graines au lieu d'une) ; la
   branche « correctif » de la porte est sans objet (aucun correctif). Le machine-check n'est pas recopié dans
-  `BENCHMARKS.md`, seulement résumé (règle K-37) : brut dans `.local-runs/k94/mc_*.log`.
+  `BENCHMARKS.md`, seulement résumé, écart à `VERIFY.md` §1 (depuis K-37, la sortie du machine-check est recopiée) : brut dans `.local-runs/k94/mc_*.log`.
 - **K-96 (#636), 2026-10-13, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) le chat compte dans le pipeline STT,
   comme le dit la porte (« STT, chat compris »), mais ses cellules sont jugées comme un clip à part : le témoin chat q2
   (`total_ms` B − A − 6,14 %, A/A 1,88 %) déclenche la reprise du chat, pas celle d'un clip STT. (2) « Un témoin dont

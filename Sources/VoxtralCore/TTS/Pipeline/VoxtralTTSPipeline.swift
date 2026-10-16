@@ -257,11 +257,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// prefills only the text suffix. With the bf16 pack
     /// (`tts-4b-mlx`) this can give a different waveform, at the same seed, than
     /// `synthesize(text:voiceEmbedding:)` with the same voice's embedding, which
-    /// prefills the whole prompt in one block: a dense bf16 matmul rounds
-    /// differently with the number of rows, so the acoustic codes can differ
-    /// from the first frame on, and the outputs drift apart from there. Both
-    /// are correct; ASR coverage was the same in K-94's measurements, where the
-    /// quantized packs gave the same output by both paths.
+    /// prefills the whole prompt in one block: the acoustic codes can differ
+    /// from the first frame on, and the outputs drift apart from there. K-94
+    /// traced this, by elimination on the short text, to a dense bf16 matmul
+    /// rounding differently with the number of rows. Both are correct; ASR
+    /// coverage was the same on average over 3 seeds in K-94's measurements
+    /// (within 1.8 points per seed on the long text), and the quantized packs
+    /// gave the same output by both paths.
     public func synthesize(
         text: String,
         voice: VoxtralVoice = .neutralFemale,
