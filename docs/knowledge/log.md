@@ -249,8 +249,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   (paire bf16) et sans séparation des modules ne désigne pas une cause ; les pauses courtes échappent à une règle
   « silence > 1 s » ; PLAN.md §7.
 - 2026-10-13 — **K-96 : sans repos après l'amorçage, les passes STT C-moyen (mini-3b bf16, small-4bit) et chat étaient
-  lentes ; à la reprise, seules small-4bit C-moyen et le chat `.mlx` bougent de plus de 3 % (C-long et Realtime
-  C-moyen dispersés, refaits par prudence)** :
+  lentes ; à la reprise, small-4bit C-moyen, le chat `.mlx`, realtime-4b-fp16 C-moyen et le STT C-long `.mlx`
+  bougent de plus de 3 % (ces deux derniers refaits par prudence, A/A en échec)** :
   A/B/B/A sur 10 témoins (A = `--warmup 1 --cooldown 0`, le protocole de K-34 / K-36 ; B = `--cooldown 120`, C-long
   sans amorçage) : B − A − 6,2 % sur le pas (mini-3b C-moyen EN), − 13,0 % sur le total (small-4bit C-moyen
   EN) et − 15,1 % sur le total du chat q4 ; A/A de A en échec sur le Realtime C-moyen et le STT C-long ; C-court et
@@ -258,7 +258,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   small-4bit C-moyen (− 4,7 à − 7,4 % sur le pas, − 7,0 à − 12,1 % sur le total), chat `.mlx` q2 à q4 (total − 4,2 à
   − 19,1 %, TTFT ≈ 4,7 s à chaque question), realtime-4b-fp16 C-moyen (− 4,6 / − 4,2 %) et STT C-long `.mlx` (total
   − 10,2 % en 4 bits, − 5,3 % en 8 bits ; `.auto` 8 bits − 3,8 %) ; mêmes sorties. Traces GPUOCC refaites : occupation de la phase principale inchangée à 0,8 pt près (phases courtes
-  davantage ; small-4bit non refaite, `xctrace` hors délai à l'arrêt).
+  davantage ; small-4bit à refaire avec un délai d'arrêt `xctrace` plus long que les 120 s par défaut).
   Leçon : un repos après l'amorçage fait partie du protocole, aussi pour le STT et le chat ; la dispersion d'une
   paire A sans repos (jusqu'à 15 %) cache l'effet au lieu de le mesurer ; [baseline STT](benchmarks/m3max-stt-baseline-2026-10.md),
   [Realtime](decisions/realtime-diagnostics-23-25.md), PLAN.md §7.

@@ -2209,6 +2209,6 @@ Statistics:
 - Traces GPUOCC (`queue8.sh`, `queue8b.sh`, `queue8c.sh`) refaites avec repos (`.local-runs/queue-k96-trace*.sh`,
   2026-10-13 et 2026-10-16) : phase principale à 0,8 pt près des traces d'origine (realtime-4b-4bit 92,3 → 93,1 %,
   mini-3b-8bit 92,8 / 94,4 % inchangés, fp16 98,4 → 98,3 %) ; bornes Mini de K-45 et borne de K-47 maintenues ; mention Small de K-45 (96,6 %) sans repos, non refaite. prefill-small-4bit
-  non refaite : trois essais en échec à l'arrêt (`xctrace` ne finalise pas dans les 120 s de
-  `MetalSystemTrace.Recorder.stop`), chiffres d'origine gardés (`ASK.md` §Dérogations, K-96 ; demande à Vincent pour
-  un délai réglable dans swift-mlx-profiler).
+  pas encore refaite : quatre essais en échec à l'arrêt (`xctrace` ne finalise pas dans le délai par défaut de 120 s de
+  `MetalSystemTrace.Recorder.stop(timeout:)`, que `bench` ne règle pas) ; refaite après la file K-95 avec un délai plus
+  long (`ASK.md` §Dérogations, K-96 (4)).

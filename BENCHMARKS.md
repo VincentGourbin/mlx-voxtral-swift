@@ -2779,10 +2779,11 @@ et `trace/mc_decode-realtime-4b-4bit.log`, toléré comme ci-dessus). Phase prin
 94,4 → 94,3 % et 95,4 → 95,6 %) ; realtime-4b-4bit Realtime Generation 92,3 → 93,1 % (`ioreg` 95,3 → 95,3 %) ;
 realtime-4b-fp16 98,4 → 98,3 % (`ioreg` 98,5 → 98,5 %). Écart ≤ 0,8 pt sur la phase principale (les phases courtes bougent davantage : Audio Encoding de
 realtime-4b-4bit 85,4 → 96,4 %, 0,4 s) : les bornes Mini de K-45 et celle de K-47 tiennent
-(K-47 : 93,1 % refaite) ; la mention Small de K-45 (96,6 %) reste un chiffre sans repos, non refait. prefill-small-4bit non refaite : trois essais (16/10 06:33, 07:53, 08:10, le dernier
-écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt, `xctrace` ne finalise pas la
-trace dans le délai de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1) ; ses chiffres
-d'origine (l. 530-535) restent la référence (`ASK.md` §Dérogations, K-96).
+(K-47 : 93,1 % refaite) ; la mention Small de K-45 (96,6 %) reste un chiffre sans repos, non refait. prefill-small-4bit pas encore refaite : quatre essais (13/10 19:50 ; 16/10 06:33, 07:53,
+08:10, le dernier écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)` à l'arrêt, `xctrace` ne
+finalise pas la trace dans le délai par défaut de 120 s de `MetalSystemTrace.Recorder.stop(timeout:)`, que `bench` ne
+règle pas ; refaite après la file K-95 avec un délai plus long, ses chiffres d'origine (l. 530-535) restent cités
+d'ici là (`ASK.md` §Dérogations, K-96 (4)).
 
 ```
 METAL_TRACE /Volumes/Lexar/voxtral-xctrace-k96/prefill-mini-3b-8bit/trace-stt-2026-10-13T173235Z.trace intervals=11573 busy=94.6%

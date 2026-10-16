@@ -886,11 +886,15 @@ Décisions du planificateur du 2026-10-03 :
   refait par prudence. Le Realtime C-long et tous les C-court ne sont pas refaits : leurs témoins sont sans effet
   (|B − A| ≤ 1,64 %, A/A ≤ 1,51 %). (3) Valeurs de départ des fiches = moyenne des deux passes retenues de la reprise ;
   seuils absolus dérivés recalculés, pourcentages des portes inchangés (une porte en pourcentage reste jugée contre le
-  A de chaque fiche). (4) Trace GPUOCC prefill-small-4bit non refaite : trois essais (2026-10-16, dont un écrit sur le
-  SSD interne) finissent par `xctrace record failed (exit -1)`, `xctrace` ne finalisant pas la trace dans le délai fixe
-  de 120 s de `MetalSystemTrace.Recorder.stop` (swift-mlx-profiler 1.5.1, dépendance : non modifiée) ; ses chiffres
-  d'origine (K-34, prefill 99,8 %, decode 96,6 / 97,6 %) restent la référence, les trois autres traces refaites ne
-  bougent que de 0,8 pt au plus sur leur phase principale (préfill, décodage). (5) K-56, nommée dans la liste de la porte, est
+  A de chaque fiche). (4) Trace GPUOCC prefill-small-4bit : quatre essais (2026-10-13 19:50 ; 2026-10-16 06:33,
+  07:53, 08:10, le dernier écrit sur le SSD interne) finissent par `xctrace record failed (exit -1)`, `xctrace` ne
+  finalisant pas la trace dans le délai par défaut de 120 s de `MetalSystemTrace.Recorder.stop(timeout:)`. Ce délai
+  est un paramètre public de swift-mlx-profiler 1.5.1 ; seul l'appel de `bench` (`BenchCommand.swift:127`) garde la
+  valeur par défaut (correction du contradicteur, 2026-10-16 : la première rédaction le disait fixe dans la
+  dépendance). Décision : la trace est refaite après la file K-95 (le binaire et l'arbre doivent rester inchangés
+  pendant ses passes), avec un délai d'arrêt plus long passé par `bench` (outil interne, pas d'API publique, aucune
+  dépendance modifiée) ; en attendant, ses chiffres d'origine (prefill 99,8 %, decode 96,6 / 97,6 %) restent ceux
+  cités. (5) K-56, nommée dans la liste de la porte, est
   déclarée sans objet (2026-10-16) : sa porte recalée du 2026-10-10 mesure la valeur de départ dans son propre A ; les
   chiffres K-34 qu'elle cite encore (4 840 Mo, ≈ 1 735 ms) sont annotés comme historiques dans la fiche, avec les
   valeurs refaites (89,6 / 68,7 Mo, ≈ 1 729 ms). (6) Écarts aux règles de mesure de `VERIFY.md` §1, sans effet sur
@@ -898,6 +902,5 @@ Décisions du planificateur du 2026-10-03 :
   `Sources/` et `Package.resolved` inchangés ; seules leurs lignes GPUOCC sont retenues, pas leurs lignes `BENCH`) ;
   les 10 séries de témoins partagent les étiquettes `A` / `B` (chaque série reste distinguée par son nom de journal
   `.local-runs/k96/<témoin>-{A1,B1,B2,A2}.log`), et la reprise réutilise les étiquettes de K-34 / K-36 parce que la
-  porte impose la même commande. (7) ASK à Vincent liée à (4) (dépendance) : rendre réglable le délai d'arrêt de
-  `MetalSystemTrace.Recorder.stop` dans swift-mlx-profiler ; option recommandée : oui, paramètre `timeout` exposé par
-  `bench --metal-trace-stop-timeout`, défaut 120 s inchangé ; la trace prefill-small-4bit est alors refaite.
+  porte impose la même commande. (7) Retirée (2026-10-16) : l'ASK à Vincent sur un délai réglable dans swift-mlx-profiler
+  était sans objet, le délai étant déjà un paramètre (voir (4)).
