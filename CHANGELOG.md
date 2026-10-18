@@ -58,8 +58,10 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-38 — Realtime computes in the model's 16-bit dtype.** At load time the pack's fp32 parameters (norms, biases,
   Ada MLP) are cast to the dtype of the tied token table; the mel, RoPE tables, delay conditioning and causal-conv
   padding follow the activations. Encoder output, KV cache and logits are no longer fp32: realtime-4b-4bit 26.9 →
-  11.7 ms per step and −4.2 GB peak, realtime-4b-fp16 129.7 → 26.9 ms (faster than real time), identical text.
-  `VoxtralRealtimePipeline.extractAudioEmbeddings` now returns the model's dtype (was float32).
+  11.7 ms per step and −4.2 GB peak, realtime-4b-fp16 129.7 → 26.9 ms (faster than real time), identical text on
+  the evaluation clips for both packs. The original bf16 checkpoint `realtime-4b` now computes in bf16 (was fp32): same
+  WER, one hyphen of difference on one clip. `VoxtralRealtimePipeline.extractAudioEmbeddings` and
+  `VoxtralRealtimeManager.extractAudioEmbeddings` now return the model's dtype (was float32).
 - **K-2 — STT memory presets keep the full context.** `MemoryOptimizationConfig` presets no longer set
   `maxKVCacheSize` (a rotating window silently dropped the start of long audio, or stopped the process beyond the
   window); the KV cache is always `KVCacheSimple`. A prompt that does not fit throws

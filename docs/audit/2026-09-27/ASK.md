@@ -1074,3 +1074,8 @@ Décisions du planificateur du 2026-10-03 :
   texte C-court identique, un trait d'union de différence sur C-moyen EN. (10) Passe 4 bits A1 démarrée sur un `KO`
   « indexation/sauvegarde » (mediaanalysisd 29 %), toléré par la décision du 2026-10-05, désormais nommé ; charge de
   fond des passes fp16 (`spotlightknowledged`) consignée, des deux côtés, A/A ≤ 0,41 %.
+- **K-38 (#609), 2026-10-19, après le contradicteur** : (11) laissés en suite, hors porte : `logits * (1 / temperature)`
+  se calcule en 16 bits (`VoxtralRealtimeModel.swift`), une température très basse pourrait dépasser 65 504 en fp16
+  (défaut 0 = argmax, non concerné ; cast fp32 avant la division à faire avec K-47) ; pas d'`EVAL` C-long après K-38
+  (K-78 le mesure) ; tests gardés Realtime non rejoués (`RealtimeOriginalRepoTests`,
+  `CancellationTests.testCancelRealtimeOnCLong`, `UnloadFootprintTests.testRealtimeUnloadReturnsFootprint`).
