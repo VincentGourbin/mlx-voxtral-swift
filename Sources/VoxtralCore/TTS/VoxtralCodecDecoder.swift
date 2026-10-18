@@ -339,6 +339,31 @@ class CodecTransformerLayer: Module {
         out = out + h
         return out
     }
+
+    /// The layer over time slices of `timeChunk` positions (K-41): slice [s, e) is computed from x[s − W, e) and
+    /// keeps its last e − s rows. Exact up to rounding: norms and the feed-forward act per position, ALiBi depends on
+    /// j − i only, and a query of the slice sees its W previous keys. Bounds the transient of a long decode (fp32
+    /// activations of 15 000 positions at the last stage) to one slice. Each slice is evaluated: inference only, not
+    /// for a differentiated graph.
+    func callAsFunction(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int, timeChunk: Int) -> MLXArray {
+        let T = x.dim(1)
+        guard timeChunk > 0, windowSize > 0, T > timeChunk else {
+            return self(x, alibiSlopes: alibiSlopes, windowSize: windowSize)
+        }
+        var parts: [MLXArray] = []
+        var start = 0
+        while start < T {
+            let end = min(start + timeChunk, T)
+            let lo = max(0, start - windowSize)
+            let y = self(x[0..., lo ..< end, 0...], alibiSlopes: alibiSlopes, windowSize: windowSize)
+            let part = y[0..., (start - lo)..., 0...]
+            // Evaluated here: left lazy, MLX schedules the slices together and their transients add up.
+            MLX.eval(part)
+            parts.append(part)
+            start = end
+        }
+        return MLX.concatenated(parts, axis: 1)
+    }
 }
 
 /// SwiGLU feed-forward matching feed_forward.{w1, w2, w3}
@@ -373,6 +398,17 @@ class CodecTransformerBlock: Module {
         var h = x
         for layer in layers {
             h = layer(h, alibiSlopes: alibiSlopes, windowSize: windowSize)
+        }
+        return h
+    }
+
+    /// Inference path (K-41): each layer by time slices, evaluated before the next one, so that a long decode never
+    /// holds more than one slice's transient. Not for a differentiated graph (voice enrollment uses the lazy path).
+    func evaluatedByLayer(_ x: MLXArray, alibiSlopes: MLXArray, windowSize: Int, timeChunk: Int) -> MLXArray {
+        var h = x
+        for layer in layers {
+            h = layer(h, alibiSlopes: alibiSlopes, windowSize: windowSize, timeChunk: timeChunk)
+            MLX.eval(h)
         }
         return h
     }
@@ -502,15 +538,21 @@ class VoxtralCodecDecoder: Module {
     /// Decode audio codes to waveform.
     /// codes: (B, T, 37) — with +2 special token offset
     func decode(_ codes: MLXArray) -> MLXArray {
-        return forwardEmbeddings(quantizer.decode(codes))
+        return forwardEmbeddings(quantizer.decode(codes), timeChunk: bandedInference ? Self.inferenceTimeChunk : 0)
     }
+
+    /// Time slice of the inference path (K-41); 0 = the lazy whole-sequence path.
+    static let inferenceTimeChunk = 2048
+    /// Internal switch for the parity tests: false decodes with the lazy whole-sequence path.
+    var bandedInference = true
 
     /// Run the decoder network on continuous quantizer-space embeddings.
     /// Equivalent to Python's `_forward_decoder` — this is the entry point
     /// used by voice enrollment, where gradients flow through `embeddings`
     /// while the decoder weights stay frozen.
     /// embeddings: (B, T, 292) → waveform (B, T*1920)
-    func forwardEmbeddings(_ embeddings: MLXArray) -> MLXArray {
+    /// timeChunk > 0 (inference only, `decode`): transformer layers by time slices, evaluated layer by layer.
+    func forwardEmbeddings(_ embeddings: MLXArray, timeChunk: Int = 0) -> MLXArray {
         var x = embeddings
 
         // Sliding windows: [2, 4, 8, 16] — encoder reversed
@@ -529,7 +571,11 @@ class VoxtralCodecDecoder: Module {
             // Transformer block (odd index)
             let window = stageIdx < windowSizes.count ? windowSizes[stageIdx] : 16
             if let xformerBlock = decoderBlocks[i + 1] as? CodecTransformerBlock {
-                x = xformerBlock(x, alibiSlopes: _alibiSlopes, windowSize: window)
+                if timeChunk > 0 {
+                    x = xformerBlock.evaluatedByLayer(x, alibiSlopes: _alibiSlopes, windowSize: window, timeChunk: timeChunk)
+                } else {
+                    x = xformerBlock(x, alibiSlopes: _alibiSlopes, windowSize: window)
+                }
             }
         }
 

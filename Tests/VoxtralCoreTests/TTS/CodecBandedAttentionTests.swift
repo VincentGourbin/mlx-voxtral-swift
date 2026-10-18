@@ -121,10 +121,52 @@ final class CodecBandedAttentionTests: XCTestCase {
         XCTAssertEqual(maxAbs(other, full), 0)
     }
 
+    /// A layer by time slices (the inference path) equals the whole-sequence layer, for slices shorter and longer
+    /// than the window and a partial last slice.
+    func testLayerByTimeSlicesMatchesWhole() throws {
+        let config = try makeCodecConfig()
+        let layer = CodecTransformerLayer(config: config)
+        // Layer scale 0.01 would hide the attention and feed-forward behind the residual.
+        layer.attention_scale = MLX.ones([config.dim])
+        layer.ffn_scale = MLX.ones([config.dim])
+        let slopes = getAlibiSlopes(nHeads: config.nHeads)
+        let x = MLXRandom.normal([1, 300, config.dim])
+        for window in [2, 16] {
+            let whole = layer(x, alibiSlopes: slopes, windowSize: window)
+            for chunk in [7, 64, 100, 299] {
+                let sliced = layer(x, alibiSlopes: slopes, windowSize: window, timeChunk: chunk)
+                MLX.eval(whole, sliced)
+                XCTAssertEqual(sliced.shape, whole.shape)
+                let d = maxAbs(sliced, whole)
+                XCTAssertLessThanOrEqual(d, 1e-5, "window \(window) chunk \(chunk): |Δ|max \(d)")
+            }
+        }
+    }
+
+    /// The whole decoder (random weights): the inference path (banded attention, time slices, eval by layer) equals
+    /// the lazy full path.
+    func testDecoderInferencePathMatchesFull() throws {
+        let config = try makeCodecConfig()
+        let decoder = VoxtralCodecDecoder(config: config)
+        let random = decoder.parameters().mapValues { MLXRandom.normal($0.shape) * 0.2 }
+        decoder.update(parameters: random)
+        let embeddings = MLXRandom.normal([1, 40, config.semanticDim + config.acousticDim])
+        let full = decoder.forwardEmbeddings(embeddings)
+        setBanded(decoder, true)
+        let sliced = decoder.forwardEmbeddings(embeddings, timeChunk: 48)  // last stage: 320 positions, 7 slices
+        setBanded(decoder, false)
+        let lazyFull = decoder.forwardEmbeddings(embeddings)
+        MLX.eval(full, sliced, lazyFull)
+        XCTAssertEqual(sliced.shape, lazyFull.shape)
+        XCTAssertGreaterThan(MLX.max(MLX.abs(lazyFull)).item(Float.self), 0)
+        XCTAssertLessThanOrEqual(relL2(sliced, lazyFull), 1e-5)
+    }
+
     private func setBanded(_ module: Module, _ banded: Bool) {
         for case let (_, attention as CodecAttention) in module.namedModules() {
             attention.bandedAttention = banded
         }
+        (module as? VoxtralCodecDecoder)?.bandedInference = banded
     }
 
     func testDecodeParityOnModelCodes() async throws {
