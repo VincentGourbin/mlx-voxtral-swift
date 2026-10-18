@@ -3998,7 +3998,7 @@ du 2026-10-05) ; pendant la passe, `quiet.sh sample` : les 28 passes sont « ok 
 | 3 | 6bit-short-preset | — / 3 728 → — / 4 243 | 3 635 / 3 634 → 3 635 / 3 635 | 5 022 / 5 192 → 4 963 / 4 935 | 25,7 / 26,8 → 25,2 / 25,0 | 3 971 / 3 962 → 3 980 / 3 970 | identique |
 
 **Lecture.**
-- **Les 14 A/A et B/B passent** : `step_ms_p50` de 0,00 à 0,65 %, `out_sha256` identique dans chaque paire. Sur le
+- **Les 14 A/A et B/B passent** : `step_ms_p50` de 0,00 à 0,66 %, `out_sha256` identique dans chaque paire. Sur le
   long, `total_ms` A1 dépasse A2 de 3,1 à 3,5 % : le préfill de A1, première passe de la cellule sans amorçage, prend
   2,1 à 3,0 s contre 0,45 à 0,55 s ailleurs ; ce n'est pas le codec.
 - **Série 1 (bandes seules)** : le transitoire T × T disparaît (pic codec 22 017 → 5 160 Mo en 6 bits, 26 104 →
@@ -4019,8 +4019,11 @@ du 2026-10-05) ; pendant la passe, `quiet.sh sample` : les 28 passes sont « ok 
   exactement le chemin mesuré en série 2 (seuil de 256 frames dépassé) ; les cellules longues ne sont pas refaites.
 - **`out_sha256`** : différent A / B (somme des scores dans un autre ordre) ; écart mesuré par la parité ci-dessous.
 - **Pic codec du court** : la phase codec (25 ms) n'est pas toujours échantillonnée par `peak_mlx_mb_by_phase`
-  (« — » dans le tableau).
-- **Hors mesure** : streaming (chaque morceau décode les codes accumulés, `VoxtralTTSPipeline.swift:734` à `c6b13d3f` : même
+  (« — » dans le tableau), et l'échantillonné varie d'une passe à l'autre (série 3 : A2 3 728, B2 4 243 Mo). Le pic
+  exact de la passe (`peak_mlx_mb`, `Memory.peakMemory`) ne monte pas : court série 3, 4 347 Mo en A contre 4 263 en B ;
+  `peak_footprint_mb` 5 022 / 5 192 → 4 963 / 4 935. Long série 2 : `peak_mlx_mb` B = 3 890,8 Mo (6 bits, les deux
+  passes, ≤ 4 537) et 3 022,1 Mo (4 bits, ≤ 3 625), la porte tient aussi sur le pic exact (contradicteur, 2026-10-18).
+- **Hors mesure** : streaming (chaque morceau décode les codes accumulés, `VoxtralTTSPipeline.swift:718` à `c6b13d3f` : même
   chemin, tranches au-delà de 256 frames) ; enrôlement (`forwardEmbeddings` sans tranche, attention par bandes,
   gradient testé égal à celui de l'attention pleine) ; une seule machine.
 
@@ -4534,3 +4537,35 @@ Tests/VoxtralCoreTests/TTS/TTSStreamingTruncationTests.swift:55: error: -[Voxtra
 Executed 611 tests, with 48 tests skipped and 0 failures (0 unexpected) in 13.355 (13.470) seconds
 ** TEST SUCCEEDED **
 ```
+
+### Tests gardés après la vérification (2026-10-18, `229f9342` : code de K-41 + K-86, `TEST_RUNNER_VOXTRAL_TTS_STREAM`, `_STREAM_SEED`, `_CARRIER_EARLY` (+ `_EMB` = clone_fr), `_ENROLL_REPRO`, `_ENROLL_EXCLUSION`)
+
+```
+# gated-229f9342.log
+Test Case '-[VoxtralCoreTests.EnrollInferenceExclusionTests testEnrollmentAndStreamingNeverOverlap]' passed (61.006 seconds).
+Test Case '-[VoxtralCoreTests.EnrollmentReproTests testCancellationThrowsCancellationError]' passed (0.397 seconds).
+Test Case '-[VoxtralCoreTests.EnrollmentReproTests testNaNAtEpochKReturnsBestStepCodes]' passed (0.324 seconds).
+Test Case '-[VoxtralCoreTests.EnrollmentReproTests testNaNAtEpochZeroThrowsDiverged]' passed (0.062 seconds).
+Test Case '-[VoxtralCoreTests.EnrollmentReproTests testSameSeedSameCodesOtherSeedOtherCodes]' passed (1.962 seconds).
+Test Case '-[VoxtralCoreTests.EnrollmentReproTests testStopAndResumeIsBitIdentical]' passed (1.361 seconds).
+Test Case '-[VoxtralCoreTests.TTSCarrierEarlyCutTests testPrefixCutMatchesFullCut]' failed (0.057 seconds).
+Test Case '-[VoxtralCoreTests.TTSCarrierEarlyCutTests testStreamingCutMatchesBatchCut]' failed (0.001 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingCancellationTests testCancelAfterFiveChunks]' passed (5.253 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingCancellationTests testFirstChunkWithinBatchTTFT]' passed (186.974 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingCancellationTests testGenerateStreamingReturnsImmediately]' passed (0.873 seconds).
+[stream] PARITY codes stream=[1, 2280, 37] batch=[1, 2280, 37] identical=true
+[stream] PARITY samples stream=4377600 batch=4377600 max|Δ|=1.7057173e-06
+Test Case '-[VoxtralCoreTests.TTSStreamingCancellationTests testStreamConcatEqualsBatch]' passed (1044.319 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingSeedReproTests testStreamingSeedIsDeterministic]' passed (165.231 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingSeedReproTests testWarmUpCarrierTrimmedLongText]' skipped (0.238 seconds).
+** TEST FAILED **
+Executed 14 tests, with 1 test skipped and 2 failures (0 unexpected) in 1468.059 (1468.066) seconds
+# gated2-229f9342.log
+Test Case '-[VoxtralCoreTests.TTSCarrierEarlyCutTests testPrefixCutMatchesFullCut]' passed (80.850 seconds).
+Test Case '-[VoxtralCoreTests.TTSCarrierEarlyCutTests testStreamingCutMatchesBatchCut]' passed (424.733 seconds).
+Test Case '-[VoxtralCoreTests.TTSStreamingSeedReproTests testWarmUpCarrierTrimmedLongText]' passed (80.837 seconds).
+** TEST SUCCEEDED **
+Executed 3 tests, with 0 failures (0 unexpected) in 586.420 (586.423) seconds
+```
+
+Le premier passage des deux tests `TTSCarrierEarlyCutTests` échoue sur `XCTUnwrap` (variable `VOXTRAL_TTS_CARRIER_EARLY_EMB` absente, pas d'assertion jugée) ; refaits dans `gated2-229f9342.log` avec la voix clonée.
