@@ -693,6 +693,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let frameSize = capturedSampleRate * 2 / 25  // 80 ms acoustic frame
             var previousContentSamples = 0
             var isFirst = true
+            // Each chunk decodes its new frames from a bounded left context (K-43); with a warm-up carrier, the
+            // samples decoded from the start are kept until the first emission, which may begin before the chunk
+            let contextFrames = ctx.model.codecContextFrames
+            var head: MLXArray?
 
             do {
                 // The MLX error handler is task-local: the boundary lives in this producing Task (K-1)
@@ -713,17 +717,26 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         try Task.checkCancellation()
                         // Set before the final chunk is yielded, so a consumer that sees `isFinal` reads it (K-86)
                         if chunk.isFinal { ctx.pipeline.lastSynthesisTruncated = chunk.totalFrames >= capturedMaxFrames }
-                        // Decode all accumulated codes to get full waveform
+                        // Decode the new frames only, from a bounded left context (K-43)
                         // `bench --trace` only: one "Codec Decode" phase per chunk, as in batch (K-93)
                         let session = MLXProfiler.shared.activeSession
                         let tracePhases = VoxtralTTSModel.splitTrace(session)
                         if tracePhases { session?.beginPhase("Codec Decode", category: .codecDecode) }
-                        let fullWaveform = ctx.model.decodeToWaveform(chunk.accumulatedCodes)
-                        MLX.eval(fullWaveform)
+                        let firstNewFrame = chunk.totalFrames - chunk.newFrameCount
+                        let piece = ctx.model.decodeToWaveform(
+                            chunk.accumulatedCodes, from: firstNewFrame, context: contextFrames)
+                        MLX.eval(piece)
                         if tracePhases { session?.endPhase("Codec Decode", category: .codecDecode) }
                         try errors.check()
 
-                        let totalSamples = fullWaveform.dim(0)
+                        let pieceStart = firstNewFrame * frameSize
+                        let totalSamples = pieceStart + piece.dim(0)
+                        if ctx.hasWarmUp && isFirst {
+                            head = head.map { MLX.concatenated([$0, piece], axis: 0) } ?? piece
+                        }
+                        // The decoded waveform from sample 0 while it is kept (carrier), else from `pieceStart`
+                        let fullWaveform = head ?? piece
+                        let fullStart = head == nil ? pieceStart : 0
 
                         // Locate the warm-up carrier's end once, then drop it.
                         // Decided on the partial waveform as soon as the pause and
@@ -768,7 +781,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                             // Final chunk with no content past the cut: emit an
                             // empty final marker so consumers see completion.
                             continuation.yield(TTSStreamingChunk(
-                                waveform: fullWaveform[(totalSamples)...],
+                                waveform: fullWaveform[(totalSamples - fullStart)...],
                                 frameIndex: chunk.totalFrames, frameCount: 0,
                                 totalFrames: chunk.totalFrames, sampleRate: capturedSampleRate,
                                 isFirst: isFirst, isFinal: true,
@@ -787,7 +800,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                             beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                             continue
                         }
-                        let newWaveform = fullWaveform[(start + sliceStart)...]
+                        let newWaveform = fullWaveform[(start + sliceStart - fullStart)...]
 
                         let elapsed = Date().timeIntervalSince(startTime)
 
@@ -804,6 +817,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                         previousContentSamples = contentTotal
                         isFirst = false
+                        head = nil
                         beacon?.update(phase: "streaming", step: chunk.totalFrames, totalSteps: capturedMaxFrames)
                     }
 

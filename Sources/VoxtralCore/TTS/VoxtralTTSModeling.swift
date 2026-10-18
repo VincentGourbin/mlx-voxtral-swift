@@ -610,6 +610,16 @@ class VoxtralTTSModel: Module {
         return waveform.squeezed(axis: 0)  // (samples,)
     }
 
+    /// Left context of `decodeToWaveform(_:from:)`: the codec's receptive field plus a margin of 2 frames (K-43).
+    var codecContextFrames: Int { audioTokenizer.receptiveFieldFrames + 2 }
+
+    /// Samples of frames `start ..< codes.dim(1)` only, decoded from `context` frames before `start` (K-43): the codec
+    /// is causal with a bounded receptive field, so this equals the matching slice of `decodeToWaveform(codes)`
+    /// (up to rounding) as long as `context` covers it, at a cost that no longer grows with the position.
+    func decodeToWaveform(_ codes: MLXArray, from start: Int, context: Int) -> MLXArray {
+        audioTokenizer.decode(codes, from: start, context: context).squeezed(axis: 0)
+    }
+
     // MARK: - Streaming Generation
 
     /// Streaming chunk yielded during generation.

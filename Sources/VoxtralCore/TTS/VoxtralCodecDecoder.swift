@@ -541,6 +541,37 @@ class VoxtralCodecDecoder: Module {
         return forwardEmbeddings(quantizer.decode(codes), timeChunk: bandedInference ? Self.inferenceTimeChunk : 0)
     }
 
+    /// Sliding windows of the transformer stages: [2, 4, 8, 16] — encoder reversed
+    static let windowSizes = [2, 4, 8, 16]
+
+    /// Output samples per frame of codes (strides × patch size: 8 × 240 = 1 920, 80 ms at 24 kHz).
+    var samplesPerFrame: Int { strides.reduce(1, *) * config.pretransformPatchSize }
+
+    /// Causal receptive field in frames (K-43): the samples of frame t depend on the codes of frames t − R … t only.
+    /// Walked back from the output: the projection conv (K − 1 positions), each transformer stage (n layers × W
+    /// keys), each stage conv (K − 1 positions, or ⌈(r + K − 1) / s⌉ input positions for a causal transposed conv of
+    /// stride s). Pack (2,2,2,2 layers; kernels 3,4,4,4; projection 7): 22 frames.
+    var receptiveFieldFrames: Int {
+        let kernels = config.decoderConvsKernels, lengths = config.decoderTransformerLengths
+        var r = config.patchProjKernelSize - 1
+        for stage in stride(from: lengths.count - 1, through: 0, by: -1) {
+            let window = stage < Self.windowSizes.count ? Self.windowSizes[stage] : 16
+            r += lengths[stage] * window
+            let s = strides[stage]
+            r = s > 1 ? (r + kernels[stage] - 1 + s - 1) / s : r + kernels[stage] - 1
+        }
+        return r
+    }
+
+    /// Samples of frames `start ..< codes.dim(1)`, decoded from at most `context` frames before `start` (K-43):
+    /// equal to the matching slice of `decode(codes)` up to rounding when `context ≥ receptiveFieldFrames`.
+    /// codes: (B, T, 37) → (B, (T − start) × samplesPerFrame)
+    func decode(_ codes: MLXArray, from start: Int, context: Int) -> MLXArray {
+        let lo = max(0, start - context)
+        let waveform = decode(lo == 0 ? codes : codes[0..., lo..., 0...])
+        return waveform[0..., ((start - lo) * samplesPerFrame)...]
+    }
+
     /// Time slice of the inference path (K-41); 0 = the lazy whole-sequence path.
     static let inferenceTimeChunk = 2048
     /// Internal switch for the parity tests: false decodes with the lazy whole-sequence path.
@@ -559,8 +590,7 @@ class VoxtralCodecDecoder: Module {
         let upsampling = strides.reduce(1, *)
         let timeChunk = timeChunk > 0 && embeddings.dim(1) * upsampling > timeChunk ? timeChunk : 0
 
-        // Sliding windows: [2, 4, 8, 16] — encoder reversed
-        let windowSizes = [2, 4, 8, 16]
+        let windowSizes = Self.windowSizes
 
         for i in stride(from: 0, to: decoderBlocks.count, by: 2) {
             let stageIdx = i / 2
