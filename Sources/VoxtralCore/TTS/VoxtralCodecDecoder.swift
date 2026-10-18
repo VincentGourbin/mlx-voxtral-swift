@@ -154,6 +154,15 @@ class CodecAttention: Module {
     let headDim: Int
     let scale: Float
 
+    /// Queries per block of the banded path (K-41).
+    static let bandBlockSize = 64
+
+    /// Sliding-window attention by blocks of queries instead of a (T, T) score matrix (K-41). A long decode reaches
+    /// 18 000 positions at the last stage, where the full scores, ALiBi and masks took about 10 GB each. Exact up to
+    /// rounding: every key outside the band carries the −1e9 mask, whose weight is exactly 0 after the softmax.
+    /// Internal switch for the parity tests; the full path stays for `windowSize == 0`.
+    var bandedAttention = true
+
     @ModuleInfo(key: "wq") var wq: Linear
     @ModuleInfo(key: "wk") var wk: Linear
     @ModuleInfo(key: "wv") var wv: Linear
@@ -207,6 +216,11 @@ class CodecAttention: Module {
             vh = MLX.repeated(vh, count: repeat_, axis: 1)
         }
 
+        if bandedAttention && windowSize > 0 && windowSize <= Self.bandBlockSize {
+            let out = banded(qh, kh, vh, alibiSlopes: alibiSlopes, windowSize: windowSize, dtype: x.dtype)
+            return wo(out.transposed(0, 2, 1, 3).reshaped(B, T, -1))
+        }
+
         var scores = MLX.matmul(qh, kh.transposed(0, 1, 3, 2)) * MLXArray(scale)
 
         // ALiBi bias: dist[i,j] = j - i (negative for past)
@@ -232,6 +246,54 @@ class CodecAttention: Module {
         var out = MLX.matmul(weights, vh)
         out = out.transposed(0, 2, 1, 3).reshaped(B, T, -1)
         return wo(out)
+    }
+
+    /// Banded attention: the T queries are cut into blocks of `bandBlockSize`; block b attends to the W keys before
+    /// it and to its own keys, (Bq + W) keys in all, with the same ALiBi and causal / window masks as the full path.
+    /// Queries and keys are padded to a whole number of blocks (padded keys lie in the future of every real query and
+    /// are masked; padded queries are dropped), and W zero keys before the first block are masked too.
+    /// qh, kh, vh: (B, H, T, D) → (B, H, T, D)
+    private func banded(
+        _ qh: MLXArray, _ kh: MLXArray, _ vh: MLXArray, alibiSlopes: MLXArray, windowSize W: Int, dtype: DType
+    ) -> MLXArray {
+        let B = qh.dim(0), H = qh.dim(1), T = qh.dim(2), D = qh.dim(3)
+        let Bq = Self.bandBlockSize
+        let nb = (T + Bq - 1) / Bq
+        let Tp = nb * Bq
+
+        func padTime(_ a: MLXArray, before: Int, after: Int) -> MLXArray {
+            before == 0 && after == 0 ? a : MLX.padded(a, widths: [0, 0, .init((before, after)), 0])
+        }
+        let qb = padTime(qh, before: 0, after: Tp - T).reshaped(B, H, nb, Bq, D)
+        // Per block: the W keys before it (from the keys shifted by W), then its own Bq keys.
+        func window(_ a: MLXArray) -> MLXArray {
+            let own = padTime(a, before: 0, after: Tp - T).reshaped(B, H, nb, Bq, D)
+            let before = padTime(a, before: W, after: Tp - T)[0..., 0..., ..<Tp, 0...]
+                .reshaped(B, H, nb, Bq, D)[0..., 0..., 0..., ..<W, 0...]
+            return MLX.concatenated([before, own], axis: 3)  // (B, H, nb, W + Bq, D)
+        }
+        let kb = window(kh)
+        let vb = window(vh)
+
+        var scores = MLX.matmul(qb, kb.transposed(0, 1, 2, 4, 3)) * MLXArray(scale)  // (B, H, nb, Bq, W + Bq)
+
+        // Query i of block b sits at b·Bq + i, key j at b·Bq − W + j: dist = j − W − i, as in the full path.
+        let i = MLX.expandedDimensions(MLXArray(0..<Int32(Bq)), axis: 1)
+        let j = MLX.expandedDimensions(MLXArray(0..<Int32(W + Bq)), axis: 0)
+        let dist = j - MLXArray(Int32(W)) - i  // (Bq, W + Bq)
+        let alibi = alibiSlopes.reshaped(H, 1, 1, 1) * dist.asType(.float32)  // (H, 1, Bq, W + Bq)
+        let outside = MLX.logicalOr(dist .> MLXArray(Int32(0)), dist .< MLXArray(Int32(-W)))
+        let bandMask = MLX.where(outside, MLXArray(Float(-1e9)), MLXArray(Float(0)))
+        // Keys before position 0 (the W padded keys of block 0).
+        let block = MLXArray(0..<Int32(nb)).reshaped(nb, 1, 1)
+        let beforeStart = MLX.logicalAnd(block .== MLXArray(Int32(0)), j.reshaped(1, 1, W + Bq) .< MLXArray(Int32(W)))
+        let startMask = MLX.where(beforeStart, MLXArray(Float(-1e9)), MLXArray(Float(0)))  // (nb, 1, W + Bq)
+
+        scores = scores + alibi + (bandMask + startMask)
+
+        let weights = MLX.softmax(scores.asType(.float32), axis: -1).asType(dtype)
+        let out = MLX.matmul(weights, vb).reshaped(B, H, Tp, D)
+        return Tp == T ? out : out[0..., 0..., ..<T, 0...]
     }
 }
 
