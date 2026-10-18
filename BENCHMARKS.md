@@ -3966,8 +3966,9 @@ OK  refroidissement fait
 **Protocole.** File `.local-runs/queue-k41.sh` (séries 1 et 2) et `queue-k41s3.sh` (série 3, texte court seul).
 A = commit parent `c903e109` (worktree `convertvoxtral-k41A`, binaire Release construit et lancé depuis lui) ; B =
 binaire Release du dépôt principal, lancé depuis lui. Série 1 : B = `d10653c0` (attention par bandes seule ; champ
-`"commit":"e89b59602"`, commits de documentation K-68 posés avant la file, sans changement de `Sources/` ni
-recompilation). Série 2 : B = `97878621` (bandes + couches du transformeur par tranches de 2 048 positions, chaque
+`"commit":"e89b59602"` : commits de documentation K-68 `e1b3644e` et `e89b5960` posés pendant la série 1, à 18:09 et
+18:17, avant B1, sans changement de `Sources/` ni recompilation ; `commit` et `dirty` viennent d'un `git rev-parse` du
+dossier courant et attestent l'arbre, pas le binaire). Série 2 : B = `97878621` (bandes + couches du transformeur par tranches de 2 048 positions, chaque
 tranche évaluée). Série 3 : B = `c6b13d3f` (tranches seulement quand le dernier étage dépasse une tranche, soit plus
 de 256 frames). Tous construits avec `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift 0.31.6@0bb916c,
 mlx-swift-lm main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go, secteur. 28 lignes `BENCH`
@@ -4019,7 +4020,7 @@ du 2026-10-05) ; pendant la passe, `quiet.sh sample` : les 28 passes sont « ok 
 - **`out_sha256`** : différent A / B (somme des scores dans un autre ordre) ; écart mesuré par la parité ci-dessous.
 - **Pic codec du court** : la phase codec (25 ms) n'est pas toujours échantillonnée par `peak_mlx_mb_by_phase`
   (« — » dans le tableau).
-- **Hors mesure** : streaming (chaque morceau décode les codes accumulés, `VoxtralTTSPipeline.swift:718` : même
+- **Hors mesure** : streaming (chaque morceau décode les codes accumulés, `VoxtralTTSPipeline.swift:734` à `c6b13d3f` : même
   chemin, tranches au-delà de 256 frames) ; enrôlement (`forwardEmbeddings` sans tranche, attention par bandes,
   gradient testé égal à celui de l'attention pleine) ; une seule machine.
 
@@ -4421,3 +4422,24 @@ INFO mémoire libre+inactive ≈ 65,7 Go
 INFO refroidissement 120s…
 OK  refroidissement fait
 ```
+
+### Mutations du test (vérification, 2026-10-18 ; worktree jetable `convertvoxtral-k41mut` à `c6b13d3f`, `.local-runs/k41/mutations.sh`)
+
+`-only-testing:VoxtralCoreTests/CodecBandedAttentionTests`, Debug, sans parallélisme ; lignes recopiées de `mut*.log`.
+
+```
+# mut0-green
+Executed 6 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.395 (0.398) seconds
+** TEST SUCCEEDED **
+# mut1-no-startMask
+Executed 6 tests, with 1 test skipped and 74 failures (0 unexpected) in 1.811 (1.814) seconds
+** TEST FAILED **
+Tests/VoxtralCoreTests/TTS/CodecBandedAttentionTests.swift:107: error: -[VoxtralCoreTests.CodecBandedAttentionTests testBandedGradientMatchesFull] : XCTAssertLessThanOrEqual failed: ("0.32142454") is greater than ("1e-05")
+# mut2-no-overlap
+Executed 6 tests, with 1 test skipped and 9 failures (0 unexpected) in 1.777 (1.779) seconds
+** TEST FAILED **
+Tests/VoxtralCoreTests/TTS/CodecBandedAttentionTests.swift:162: error: -[VoxtralCoreTests.CodecBandedAttentionTests testDecoderInferencePathMatchesFull] : XCTAssertLessThanOrEqual failed: ("0.48229808") is greater than ("1e-05")
+```
+
+- `mut1-no-startMask` : `scores + alibi + bandMask` (masque des W clés nulles du bloc 0 retiré).
+- `mut2-no-overlap` : `let lo = start` (tranche sans les W positions qui la précèdent).

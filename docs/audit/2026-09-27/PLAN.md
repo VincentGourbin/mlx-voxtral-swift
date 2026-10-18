@@ -2308,7 +2308,7 @@ Statistics:
   relative remplace un seuil de qualité validé par Vincent (ASK-10, « 0 fuite sur 10 prises ») : décision réservée
   (`VERIFY.md` §2). Retenue sans tiers arbitre : ASK-39 posée, #618 `blocked`. Aucune objection sur les chiffres.
 
-## K-41 — Codec TTS : attention par bandes et décodage par tranches de temps — 2026-10-18 — validée
+## K-41 — Codec TTS : attention par bandes et décodage par tranches de temps — 2026-10-18 — appliquée
 - Fait (commits `d10653c0`, `97878621`, `c6b13d3f`, `CodecBandedAttentionTests` ; commit `docs(K-41)` : mesures) :
   l'attention du codec (fenêtres 2, 4, 8, 16) calcule ses scores par blocs de 64 requêtes sur leurs W + 64 clés au lieu
   d'une matrice (B, H, T, T) fp32 ; en inférence (`decode`), au-delà de 256 frames, chaque couche du transformeur
@@ -2320,7 +2320,7 @@ Statistics:
   - `PEAK codec 4 bits cloné long : 3 022 Mo ≤ decode 2 601 + 1 024 ; phys_footprint 39 084 → 6 819 / 7 069 Mo (− 32,0 Go)`
   - `phases_ms.codec long : 6 bits 2 269 / 2 146 → 499 / 465 ms (− 78 %, plafond 2 216) ; 4 bits 2 819 / 2 720 → 525 / 513 ms`
   - `BENCH codec court A/B/B/A : 25,7 / 26,8 → 25,2 / 25,0 ms (− 4,4 %, bruit) ; 14 A/A et B/B PASS (step_ms_p50 ≤ 0,65 %)`
-  - `test suite Debug complète c6b13d3f : 603 tests, 45 sautés, 0 échec ; CodecBandedAttentionTests rouge par mutation (masque de début retiré : 73 échecs ; tranches sans recouvrement : 9 échecs)`
+  - `test suite Debug complète c6b13d3f : 603 tests, 45 sautés, 0 échec ; CodecBandedAttentionTests rouge par mutation à `c6b13d3f` (masque de début retiré : 74 échecs ; tranches sans recouvrement : 9 échecs ; logs recopiés dans `BENCHMARKS.md`)`
 - Lecture : l'attention par bandes seule (série 1) retire le transitoire T × T mais manque la clause du pic (5 160
   > 4 537 Mo en 6 bits) : MLX ordonnance ensemble les tranches d'un graphe paresseux ; il faut les tranches évaluées
   (série 2). Celles-ci coûtaient 4 ms de codec au texte court (+ 16 %) : seuil de 256 frames (`c6b13d3f`, série 3).

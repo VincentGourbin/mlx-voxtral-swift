@@ -1023,4 +1023,11 @@ Décisions du planificateur du 2026-10-03 :
   longues sont mesurées sur `97878621`, le court sur `c6b13d3f` : pour 998 et 1 903 frames, `c6b13d3f` exécute le même
   chemin que `97878621` (seuil franchi), la parité est refaite sur `c6b13d3f`. (5) Série 1 : champ `"commit":"e89b59602"`
   pour B (commits de documentation K-68 après `d10653c0`, `Sources/` identiques). (6) Clause d'origine « décodage court
-  ± 5 % » remplacée par la porte recalée (2026-10-10) ; mesurée quand même (série 3 : − 4,4 %).
+  ± 5 % » remplacée par la porte recalée (2026-10-10) ; mesurée quand même (série 3 : − 4,4 %). Ajouts après le
+  vérificateur (2026-10-18) : (7) A reste `c903e109` (état avant K-41) dans les trois séries, au lieu du parent de
+  chaque commit B (`e89b5960`, `97878621`) : comparaison à l'état d'origine, plus stricte pour la porte, qui juge
+  K-41 entière. (8) Les tags ne changent pas d'une série à l'autre (`K41-<cellule>-A|B`, `VERIFY.md` : un tag distinct
+  par série) : séries distinguées par leur dossier (`.local-runs/k41/seriesN`), leur date et le champ `commit` de B.
+  (9) Les A/A jugés sont ceux de `step_ms_p50` (`aa.py`) ; sur `phases_ms.codec` et le pic codec, la dispersion
+  monte à 23 % (B 6 bits, série 1) : la porte est en seuils absolus, tenus par chaque passe, et l'effet (− 78 à
+  − 88 %) dépasse toute dispersion.
