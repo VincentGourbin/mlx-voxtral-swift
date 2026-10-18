@@ -942,6 +942,17 @@ Décisions du planificateur du 2026-10-03 :
   quantification 16 bits sur 0 à 44 échantillons. (3) tts-4b-4bit B/B 28,6 % (temps du premier morceau, sortie
   identique) : consigné, la porte se juge sur le 6 bits (ligne consommateur). (4) La mesure A/B/B/A porte sur
   `a9d3c5cf` ; la garde de `7cea4cb5` ne change rien au `chunkSize` 10 (contrôle : même sortie, même TTFA).
+  Complément du 2026-10-18, après l'écoute de Vincent (2026-10-16) : (5) l'écoute mesure la référence A elle-même à
+  2 fuites audibles sur 10 (graines 02 et 08) et 1 coupe trop tôt (graine 01), identiques en B ; la clause est donc
+  jugée sous sa forme relative (« ≤ la référence », tenue : B = A à 1 pas 16 bits près) et le « (0/10) » de la porte
+  et d'ASK-10, valeur de K-35 non réécoutée, est réfuté pour la référence : défaut antérieur à K-68, renvoyé à une
+  fiche de suite (coupe du porteur). Ce n'est pas un affaiblissement : K-68 ne change ni le nombre ni la place des
+  fuites, et la retirer ne rendrait pas le 0/10 ; Vincent a entendu ces défauts et demandé des fiches de suite, pas
+  un retrait (signalé dans le message groupé). (6) La préférence « = » de la grille est déduite par l'agent de
+  l'écart A − B (≤ 1 LSB sur 0 à 44 échantillons) et des remarques de Vincent, qui décrivent les mêmes défauts dans
+  les deux prises. (7) Le machine-check n'est pas recopié dans `BENCHMARKS.md`, seulement résumé, écart à
+  `VERIFY.md` §1 : brut dans `.local-runs/k68/mc_*.log` (aucun `KO` avant les séries de la porte ; un `KO`
+  « indexation » avant ABBA-4bit-3-B, hors porte, couvert par la décision du 2026-10-05).
 - **K-94 (#634), 2026-10-11, décision de l'agent** (`VERIFY.md` §2, inscrite le 2026-10-16) : la porte cite les
   couvertures ASR de référence K-35 (0,955 / 0,949, graine 1) ; K-39 ayant changé la sortie bf16 entre-temps, la
   couverture des deux chemins est comparée sur 3 graines au même binaire (`c7935f73`, après K-39) au lieu de la

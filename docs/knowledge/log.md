@@ -233,8 +233,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   partiel égale celle du batch (10/10 graines). Le streaming n'attend plus 3 s : TTFA cloné avec porteur − 42,6 % en
   6 bits (1,91 → 1,09 s). Mais la coupe lit 5 frames de référence : avant 7 frames décodées (`chunkSize` ≤ 3) elle
   se trompe (graine 1 : frame 4 au lieu de 19), d'où une garde de 7 frames. Leçon : une précaution « décider sur la vue
-  complète » se teste avant d'être payée, sur tout le domaine d'un paramètre public ; en
-  attente de l'écoute de Vincent ; PLAN.md §7.
+  complète » se teste avant d'être payée, sur tout le domaine d'un paramètre public ;
+  écoute de Vincent (2026-10-16, 10 paires à l'aveugle) : A et B identiques, non inférieure ; mais la référence
+  elle-même laisse entendre le porteur sur 2 graines sur 10 (02, 08) et le coupe trop tôt sur une (01), et la voix
+  clonée 6 bits n'est bonne que sur 3 graines : deux fiches de suite ; PLAN.md §7.
 - 2026-10-11 — **K-94 : en bf16, la matmul dense arrondit selon le nombre de lignes (sur le court, par élimination)** : le cache de préfixe de voix
   (préfixe préfillé seul) et le préfill d'un bloc donnent d'autres codes acoustiques dès la frame 0 en bf16 sur le court et le long (le moyen sans écart), aucun écart en
   4 / 6 bits sur 3 textes (invariance à M constatée, pas expliquée). Couverture ASR égale en moyenne sur 3 graines (≤ 1,8 pt par graine sur le long) : pas un défaut, documenté. « La voix clonée démarre
