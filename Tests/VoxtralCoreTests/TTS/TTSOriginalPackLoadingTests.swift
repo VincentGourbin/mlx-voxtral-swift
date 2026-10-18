@@ -79,15 +79,23 @@ final class TTSOriginalPackLoadingTests: XCTestCase {
         (0 ..< rows * cols).map { Float($0 % 17) * 0.25 - 2 }
     }
 
+    /// `offset` elements of filler (99) precede the tensor in its storage, as for a view saved by torch.save.
     private func writeTorchVoice(_ url: URL, rows: Int, cols: Int, storage: String = "BFloat16Storage",
-                                 method: Int = 0, stride: [Int]? = nil) throws {
-        let raw = values(rows: rows, cols: cols).flatMap { v -> [UInt8] in
-            let b = v.bitPattern >> 16
-            return [UInt8(b & 0xFF), UInt8(b >> 8 & 0xFF)]
+                                 method: Int = 0, stride: [Int]? = nil, offset: Int = 0,
+                                 byteorder: String = "little") throws {
+        let raw = (Array(repeating: Float(99), count: offset) + values(rows: rows, cols: cols)).flatMap { v -> [UInt8] in
+            let bits: UInt32
+            switch storage {
+            case "FloatStorage": bits = v.bitPattern
+            case "HalfStorage": bits = UInt32(Float16(v).bitPattern)
+            default: bits = v.bitPattern >> 16
+            }
+            let n = storage == "FloatStorage" ? 4 : 2
+            return (0 ..< n).map { UInt8(bits >> (8 * $0) & 0xFF) }
         }
         let zip = storedZip([
-            ("voice_embed/data.pkl", tensorPickle(storage: storage, rows: rows, cols: cols, stride: stride)),
-            ("voice_embed/byteorder", Array("little".utf8)),
+            ("voice_embed/data.pkl", tensorPickle(storage: storage, rows: rows, cols: cols, offset: offset, stride: stride)),
+            ("voice_embed/byteorder", Array(byteorder.utf8)),
             ("voice_embed/data/0", raw),
             ("voice_embed/version", Array("3\n".utf8)),
         ], method: method)
@@ -103,6 +111,18 @@ final class TTSOriginalPackLoadingTests: XCTestCase {
         XCTAssertEqual(tensor.shape, [5, 6])
         XCTAssertEqual(tensor.dtype, .bfloat16)
         XCTAssertEqual(tensor.asType(.float32).asArray(Float.self), values(rows: 5, cols: 6))
+    }
+
+    func testStorageOffsetAndOtherDTypesAreRead() throws {
+        let dir = try temporaryDirectory()
+        for (storage, dtype) in [("BFloat16Storage", DType.bfloat16), ("HalfStorage", .float16), ("FloatStorage", .float32)] {
+            let url = dir.appendingPathComponent("\(storage).pt")
+            try writeTorchVoice(url, rows: 3, cols: 4, storage: storage, offset: 5)
+            let tensor = try TorchTensorReader.loadTensor(url: url)
+            XCTAssertEqual(tensor.dtype, dtype, storage)
+            XCTAssertEqual(tensor.shape, [3, 4], storage)
+            XCTAssertEqual(tensor.asType(.float32).asArray(Float.self), values(rows: 3, cols: 4), storage)
+        }
     }
 
     func testPresetVoicesLoadFromPtFiles() throws {
@@ -122,6 +142,7 @@ final class TTSOriginalPackLoadingTests: XCTestCase {
             ("storage type", { try self.writeTorchVoice($0, rows: 2, cols: 3, storage: "LongStorage") }),
             ("non-contiguous", { try self.writeTorchVoice($0, rows: 2, cols: 3, stride: [1, 2]) }),
             ("compressed entry", { try self.writeTorchVoice($0, rows: 2, cols: 3, method: 8) }),
+            ("big endian", { try self.writeTorchVoice($0, rows: 2, cols: 3, byteorder: "big") }),
         ]
         for (label, write) in cases {
             let url = dir.appendingPathComponent("neutral_female.pt")
@@ -160,6 +181,17 @@ final class TTSOriginalPackLoadingTests: XCTestCase {
         let weights = try loadAllTTSWeights(from: dir)
         XCTAssertEqual(Set(weights.keys), ["layers.1.weight", "layers.2.weight", "layers.3.weight"])
         XCTAssertEqual(weights["layers.3.weight"]?.sum().item(Float.self), 12)
+    }
+
+    func testMixedOrExtraShardsWithoutIndexAreRefused() throws {
+        for names in [["model-00001-of-00002.safetensors", "model-00002-of-00003.safetensors"],
+                      ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "model-00003-of-00002.safetensors"]] {
+            let dir = try temporaryDirectory()
+            for (i, name) in names.enumerated() {
+                try MLX.save(arrays: ["layers.\(i).weight": MLXArray.ones([2, 2])], url: dir.appendingPathComponent(name))
+            }
+            XCTAssertThrowsError(try loadAllTTSWeights(from: dir), "\(names)")
+        }
     }
 
     func testMissingShardWithoutIndexIsNamed() throws {

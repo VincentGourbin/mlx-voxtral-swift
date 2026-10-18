@@ -145,6 +145,10 @@ func loadAllTTSWeights(from directory: URL) throws -> [String: MLXArray] {
         let expected = (1 ... max(total, 1)).map { i in
             "model-\(String(repeating: "0", count: max(0, digits - String(i).count)))\(i)-of-\(counts.first!).safetensors"
         }
+        let unexpected = shards.filter { !expected.contains($0) }
+        guard unexpected.isEmpty else {
+            throw VoxtralTTSError.modelLoadingFailed("shards beyond \(total) or misnumbered in \(directory.path): \(unexpected)")
+        }
         let missing = expected.filter { !shards.contains($0) }
         guard missing.isEmpty else {
             throw VoxtralTTSError.fileNotFound("\(missing.joined(separator: ", ")) (no model.safetensors.index.json) in \(directory.path)")

@@ -20,8 +20,9 @@ enum TorchTensorReader {
             .modelLoadingFailed("unsupported PyTorch .pt file \(url.lastPathComponent): \(why)")
         }
         let entries = try zipEntries(data, fail: fail)
-        guard let pickleName = entries.keys.first(where: { $0.hasSuffix("/data.pkl") || $0 == "data.pkl" }),
-              let pickle = entries[pickleName] else {
+        let pickles = entries.keys.filter { $0.hasSuffix("/data.pkl") || $0 == "data.pkl" }
+        guard pickles.count <= 1 else { throw fail("\(pickles.count) data.pkl entries") }
+        guard let pickleName = pickles.first, let pickle = entries[pickleName] else {
             throw fail("no data.pkl entry (not a torch.save zip archive)")
         }
         let prefix = String(pickleName.dropLast("data.pkl".count))
@@ -120,10 +121,12 @@ enum TorchTensorReader {
             case 0x4A: stack.append(.int(Int(Int32(truncatingIfNeeded: le(try take(4))))))  // BININT
             case 0x4B: stack.append(.int(le(try take(1))))                // BININT1
             case 0x4D: stack.append(.int(le(try take(2))))                // BININT2
-            case 0x8A:                                                    // LONG1 (non-negative, ≤ 8 bytes)
+            case 0x8A:                                                    // LONG1 (two's complement, ≤ 7 bytes)
                 let n = le(try take(1))
-                guard n <= 8 else { throw fail("integer too large") }
-                stack.append(.int(le(try take(n))))
+                guard n <= 7 else { throw fail("integer too large") }
+                let bytes = try take(n)
+                let v = le(bytes)
+                stack.append(.int(n > 0 && bytes.last! & 0x80 != 0 ? v - (1 << (8 * n)) : v))
             case 0x4E: stack.append(.none)                                // NONE
             case 0x88: stack.append(.bool(true))                          // NEWTRUE
             case 0x89: stack.append(.bool(false))                         // NEWFALSE
@@ -174,6 +177,9 @@ enum TorchTensorReader {
             let strides = try stride.map { v -> Int in
                 guard case .int(let n) = v else { throw fail("tensor stride is not an integer tuple") }
                 return n
+            }
+            guard shape.count == strides.count, shape.allSatisfy({ $0 >= 0 }), offset >= 0 else {
+                throw fail("tensor size \(shape) and stride \(strides) do not match")
             }
             var expected = 1
             for (n, s) in zip(shape, strides).reversed() {
