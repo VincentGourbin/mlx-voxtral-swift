@@ -2395,3 +2395,6 @@ Statistics:
   RoPE, paramètres fp32 du pack, zéros du conv causal) ; la plus grosse est le pack lui-même, qui garde ses normes en
   fp32 : un `rms_norm` fp32 rend du fp32 et chaque `Linear` recopiait ses poids. Le fp16 passe sous le temps réel (RTF
   0,34). `BENCHMARKS.md` §« 2026-10-18 — K-38 ». Écarts : ASK.md §Dérogations, K-38.
+- Complément (2026-10-19, après le vérificateur) : machine-check des 8 passes recopiés (un `KO` indexation toléré
+  en 4 bits A1) ; checkpoint bf16 `realtime-4b` : WER identiques A/B, texte C-court identique, calcul en bf16 ;
+  `BENCHMARKS.md` §« 2026-10-19 — K-38, complément de vérification » ; dérogations 9 et 10.

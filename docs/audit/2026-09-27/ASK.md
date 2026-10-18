@@ -1068,3 +1068,9 @@ Décisions du planificateur du 2026-10-03 :
   n'existe pas et le test ne compile pas ; l'audit A (float32) fait le rouge sur les vrais packs. (7) `perf(K-38)` et
   `docs(K-38)` : deux commits. (8) Le dtype des embeddings rendus par `extractAudioEmbeddings` passe de float32 au
   dtype du modèle (0 consommateur connu ; CHANGELOG).
+- **K-38 (#609), 2026-10-19, ajouts après le vérificateur** : (9) le checkpoint d'origine `realtime-4b` (bf16) calcule
+  désormais en bf16 au lieu de fp32 (mel et `tCond` fp32 promouvaient tout) ; hors porte recalée (4 bits et fp16),
+  mesuré après coup (`BENCHMARKS.md` §« 2026-10-19 — K-38, complément ») : WER identiques (9,09 / 1,05 / 1,97 %),
+  texte C-court identique, un trait d'union de différence sur C-moyen EN. (10) Passe 4 bits A1 démarrée sur un `KO`
+  « indexation/sauvegarde » (mediaanalysisd 29 %), toléré par la décision du 2026-10-05, désormais nommé ; charge de
+  fond des passes fp16 (`spotlightknowledged`) consignée, des deux côtés, A/A ≤ 0,41 %.
