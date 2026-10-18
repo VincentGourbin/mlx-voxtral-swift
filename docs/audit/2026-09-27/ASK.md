@@ -1055,3 +1055,16 @@ Décisions du planificateur du 2026-10-03 :
   republication des voix dans un autre format `torch.save` le rendrait inchargeable, à surveiller (CHANGELOG).
   (11) « Appliquer la graine partout » couvre le CLI (`-v`, `--blend`, `--voice-embedding`, `--voice-xyz`, `bench`) ;
   la façade `VoxtralTTSSynthesisManager` n'a toujours pas de graine (hors porte), noté pour une fiche de suite.
+- **K-38 (#609), 2026-10-18, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) dtype de calcul lu sur
+  `tok_embeddings` et non sur `norm` ou `ada_down.weight` (fiche, comme mlx-audio) : dans les packs mlx-community ces
+  tenseurs sont fp32 ; la table liée n'est jamais quantifiée et porte le dtype 16 bits des matrices. (2) Paramètres
+  fp32 du pack castés en 16 bits au chargement (hors fiche, qui ne castait que mel, RoPE et `tCond`) : sans ce cast,
+  ces trois casts ne changent pas le dtype des activations ; parité prouvée (textes identiques). Un modèle fp32 reste
+  fp32 (test). (3) 4e source fp32 corrigée, absente de l'audit : zéros du remplissage du conv causal de l'encodeur.
+  (4) `mel` reste rapporté float32 par l'audit (casté dans l'encodeur, après le point d'audit) ; la porte nomme
+  embedding, KV et logits, tous fp16. (5) `--passes 1` par processus, quatre processus A1/B1/B2/A2, au lieu de
+  `--passes 2` (fiche) : protocole K-96 (un processus par passe, repos et `quiet.sh` avant chacune). (6) Rouge du test
+  montré sur l'arbre du correctif sans le cast des zéros (3 échecs, float32) : au parent, `castRealtimeParameters`
+  n'existe pas et le test ne compile pas ; l'audit A (float32) fait le rouge sur les vrais packs. (7) `perf(K-38)` et
+  `docs(K-38)` : deux commits. (8) Le dtype des embeddings rendus par `extractAudioEmbeddings` passe de float32 au
+  dtype du modèle (0 consommateur connu ; CHANGELOG).

@@ -299,3 +299,11 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Même fiche : ZeroVoice (`--voice-xyz`) prend la graine, le streaming signale la troncature, un dossier de N shards
   sans index se charge. Leçon : un format « Python seulement » peut être un conteneur simple ; vérifier `unzip -lv`
   et `pickletools.dis` avant d'ajouter une dépendance ou un refus. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-18 — K-86 ».
+- 2026-10-18 — **K-38 : le Realtime calculait en fp32 à cause du pack, pas seulement du mel** : les packs
+  mlx-community gardent normes, biais et MLP Ada en fp32 (300 tenseurs) ; `rms_norm` et `matmul` rendent le type
+  promu, donc un seul poids fp32 remet le flux résiduel, le cache KV et les logits en fp32 et chaque `Linear` recopie
+  ses poids à chaque appel. Caster ces paramètres au dtype de `tok_embeddings` au chargement, plus mel, tables RoPE,
+  `tCond` et les zéros du conv causal (`MLX.zeros` est fp32 par défaut) : 4 bits 26,9 → 11,7 ms par pas, fp16
+  129,7 → 26,9 ms (sous le temps réel), pic − 4,2 / − 5,3 Go, textes identiques. Leçon : lire le dtype des
+  activations (`VOXTRAL_DTYPE_AUDIT=1`) après chaque cast, pas celui des poids ; inspecter les dtypes stockés du pack
+  avant de choisir le tenseur qui fixe le dtype de calcul. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-18 — K-38 ».
