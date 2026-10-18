@@ -292,3 +292,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Une évaluation par couche coûte 4 ms sur un graphe petit (texte court + 16 %) : tranches seulement au-delà de 256
   frames. Leçon : contre un pic de transitoires dans MLX, découper ne suffit pas, il faut `eval` chaque morceau ;
   et le garder hors d'un graphe différentiable (enrôlement). PLAN.md §7, `BENCHMARKS.md` §« 2026-10-18 — K-41 ».
+- 2026-10-18 — **K-86 : les voix `.pt` du pack d'origine `tts-4b` se lisent sans Python** : un fichier `torch.save`
+  est un zip à entrées stockées (non compressées) avec un pickle de 165 octets (`_rebuild_tensor_v2`, stockage
+  `BFloat16Storage`, taille, pas) et le stockage brut ; un lecteur de moins de 200 lignes (répertoire central du zip, machine
+  pickle réduite aux opcodes d'un tenseur) suffit, et les 20 voix sont égales bit à bit à celles du pack MLX bf16.
+  Même fiche : ZeroVoice (`--voice-xyz`) prend la graine, le streaming signale la troncature, un dossier de N shards
+  sans index se charge. Leçon : un format « Python seulement » peut être un conteneur simple ; vérifier `unzip -lv`
+  et `pickletools.dis` avant d'ajouter une dépendance ou un refus. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-18 — K-86 ».

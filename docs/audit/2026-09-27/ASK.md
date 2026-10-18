@@ -1031,3 +1031,15 @@ Décisions du planificateur du 2026-10-03 :
   (9) Les A/A jugés sont ceux de `step_ms_p50` (`aa.py`) ; sur `phases_ms.codec` et le pic codec, la dispersion
   monte à 23 % (B 6 bits, série 1) : la porte est en seuils absolus, tenus par chaque passe, et l'effet (− 78 à
   − 88 %) dépasse toute dispersion.
+- **K-86 (#627), 2026-10-18, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) « `out_sha256` » de la porte lu comme
+  le SHA-256 du WAV écrit par `VoxtralCLI tts` : `tts` n'émet pas de ligne `BENCH` et `bench tts` n'a pas
+  `--voice-xyz` ; graine vérifiée sur tts-4b-6bit (la porte ne nomme pas de modèle). (2) API publique : une surcharge
+  `synthesize(text:voiceCoordinate:seed:)` ajoutée (additive, prévue par la fiche), l'ancienne inchangée et déléguée ;
+  pas de nouveau cas dans `VoxtralTTSError` (un cas ajouté casserait les `switch` exhaustifs des consommateurs) :
+  `modelLoadingFailed` nomme le `.pt`. (3) « Rouge avant » prouvé, pour les tests, par mutation du correctif dans un
+  worktree jetable (les tests appellent `loadVoiceEmbeddings` et `TorchTensorReader`, absents avant) ; `mut2` saute la
+  recherche des shards et reproduit l'erreur d'avant K-86 ; pour le CLI, par le binaire de `c6b13d3f` (même
+  `Sources/` que le parent). (4) Le test « frame par frame » est le générateur streaming avec `chunkSize` 1 (graine 3,
+  texte court) ; K-12 le compare déjà au batch par morceaux de 10. (5) Deux commits (`fix(K-86)`, `docs(K-86)`).
+  (6) `voiceEmbeddings` est désormais remplacé au chargement au lieu d'être complété (un rechargement d'un autre pack
+  ne garde plus les voix du précédent).

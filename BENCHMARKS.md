@@ -4443,3 +4443,94 @@ Tests/VoxtralCoreTests/TTS/CodecBandedAttentionTests.swift:162: error: -[Voxtral
 
 - `mut1-no-startMask` : `scores + alibi + bandMask` (masque des W clés nulles du bloc 0 retiré).
 - `mut2-no-overlap` : `let lo = start` (tranche sans les W positions qui la précèdent).
+
+## 2026-10-18 — K-86 : voix `.pt` de `tts-4b`, graine de ZeroVoice, troncature en streaming, shards sans index (preuves, pas de mesure)
+
+Fiche de correction : aucune ligne `BENCH` (pas de levier de vitesse). Preuves de la porte recopiées des sorties
+(`.local-runs/k86/`). Texte : « The quick brown fox jumps over the lazy dog. » ; `VoxtralCLI tts -m tts-4b -v
+neutral_female` puis `tts -m tts-4b-6bit --voice-xyz 50,50,50 --seed 3` (deux fois) et `--seed 4`, avant et après ;
+« `out_sha256` » de la porte lu comme le SHA-256 du WAV écrit (`tts` n'émet pas de ligne `BENCH`, `bench tts` n'a pas
+`--voice-xyz`). Machine-check non requis (pas de mesure de temps).
+
+```
+# avant : binaire Release de c6b13d3f (Sources/ = parent de 4d93fcb4)
+aa2e6c0b5fef4943dffaf95a403adc4e528a84d2dcf3cb3e6e4476e7c9450749  .local-runs/k86/before-xyz-3a.wav
+8094930aba34fe1dd2fb869740e6333727f3ed96f3add9fd2fbd819804e23a0f  .local-runs/k86/before-xyz-3b.wav
+4a66ee23d0d57ef038fcf56df0b61fdb4877c67ab3a933c7d251616af439a33f  .local-runs/k86/before-xyz-4.wav
+# before-tts4b.log
+Error: Voice not found: Voice 'neutral_female' not loaded
+[100%] TTS model ready (0 voices loaded)
+# before-xyz-3a.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 42
+# before-xyz-3b.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 57
+# before-xyz-4.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 58
+# après : binaire Release construit sur un arbre identique à 4d93fcb4
+95dd1478eba8819cb96c195f6783936670b26f7e0982dc450941c8b0258fb078  .local-runs/k86/after-tts4b.wav
+88be156e3b5a68bdfdea39423e4cb993dc117dcab2b1ad9c20f6d2642dfe6385  .local-runs/k86/after-xyz-3a.wav
+88be156e3b5a68bdfdea39423e4cb993dc117dcab2b1ad9c20f6d2642dfe6385  .local-runs/k86/after-xyz-3b.wav
+b1099d615a149e34a596dae98da7fa06d577afd29386b93f26d885814e0c6d8e  .local-runs/k86/after-xyz-4.wav
+# after-tts4b.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 63
+# after-xyz-3a.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 69
+# after-xyz-3b.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 69
+# after-xyz-4.log
+[100%] TTS model ready (20 voices loaded)
+Frames: 43
+# VoxtralCLI transcribe .local-runs/k86/after-tts4b.wav (modèle par défaut)
+The quick brown fox jumps over the lazy dog.
+```
+
+Tests (Debug, sans parallélisme ; `TEST_RUNNER_VOXTRAL_TTS_STREAM=1` pour `TTSStreamingTruncationTests`, tts-4b-6bit,
+graine 3). Rouges : worktree jetable à `4d93fcb4`, chaque partie du correctif défaite à son tour
+(`.local-runs/k86/mutations.sh`) : `mut1` retire la lecture `.pt` dans `loadVoiceEmbeddings`, `mut2` saute la
+recherche des shards (`if let first = shards.first, false`), ce qui rend l'erreur d'avant K-86 (« No safetensors
+files found »), `mut3` retire la mise à jour de `lastSynthesisTruncated` en streaming.
+
+```
+# unit1.log
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles]' passed (0.015 seconds).
+[k86] tts-4b: 20 voices from .pt ; tts-4b-mlx: 20
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testRealPresetMatchesTheMLXPack]' passed (0.754 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad]' passed (0.005 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testTorchSaveTensorIsRead]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat]' passed (0.004 seconds).
+Executed 17 tests, with 0 failures (0 unexpected) in 0.840 (0.845) seconds
+# stream1.log
+[k86] PARITY frame-by-frame stream=[1, 68, 37] batch=[1, 68, 37] chunks=69 identical=true
+Test Case '-[VoxtralCoreTests.TTSStreamingTruncationTests testFrameByFrameStreamYieldsTheBatchCodes]' passed (8.023 seconds).
+[k86] streaming with cap 12: 12 frames, truncated=true
+[k86] streaming without cap: 68 frames, truncated=false
+Test Case '-[VoxtralCoreTests.TTSStreamingTruncationTests testStreamingCutByTheCapIsReportedTruncated]' passed (7.889 seconds).
+Executed 2 tests, with 0 failures (0 unexpected) in 15.911 (15.913) seconds
+# mut0-green
+Executed 8 tests, with 0 failures (0 unexpected) in 15.740 (15.744) seconds
+** TEST SUCCEEDED **
+# mut1-no-pt-reader
+Executed 6 tests, with 8 failures (0 unexpected) in 1.834 (1.838) seconds
+** TEST FAILED **
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:113: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles] : XCTAssertEqual failed: ("[]") is not equal to ("["fr_male", "neutral_female"]")
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:114: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles] : XCTAssertEqual failed: ("nil") is not equal to ("Optional([7, 3072])")
+# mut2-no-shard-glob
+Executed 6 tests, with 2 failures (1 unexpected) in 1.783 (1.786) seconds
+** TEST FAILED **
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:172: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed] : XCTAssertTrue failed - fileNotFound("No safetensors files found in /var/folders/jr/9xx2w80149bcttnf80zr6dnr0000gn/T/voxtral-k86-922AC200-4160-437A-8EDC-BF87B1182900")
+Sources/VoxtralCore/TTS/VoxtralTTSModelLoading.swift:167: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad] : failed: caught error: "fileNotFound("No safetensors files found in /var/folders/jr/9xx2w80149bcttnf80zr6dnr0000gn/T/voxtral-k86-113152C1-39EF-4891-B713-F68F265B9584")"
+# mut3-no-stream-flag
+Executed 2 tests, with 1 failure (0 unexpected) in 15.974 (15.976) seconds
+** TEST FAILED **
+Tests/VoxtralCoreTests/TTS/TTSStreamingTruncationTests.swift:55: error: -[VoxtralCoreTests.TTSStreamingTruncationTests testStreamingCutByTheCapIsReportedTruncated] : XCTAssertTrue failed - the cap was reached in streaming
+# fullsuite-4d93fcb4.log
+Executed 611 tests, with 48 tests skipped and 0 failures (0 unexpected) in 13.355 (13.470) seconds
+** TEST SUCCEEDED **
+```
