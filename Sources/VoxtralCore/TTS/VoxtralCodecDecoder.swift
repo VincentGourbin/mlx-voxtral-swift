@@ -554,6 +554,10 @@ class VoxtralCodecDecoder: Module {
     /// timeChunk > 0 (inference only, `decode`): transformer layers by time slices, evaluated layer by layer.
     func forwardEmbeddings(_ embeddings: MLXArray, timeChunk: Int = 0) -> MLXArray {
         var x = embeddings
+        // Slices and per-layer evals only pay off once the last stage is longer than a slice: below that, the lazy
+        // graph is small and one eval per layer costs more than it saves (short text, streaming chunks).
+        let upsampling = strides.reduce(1, *)
+        let timeChunk = timeChunk > 0 && embeddings.dim(1) * upsampling > timeChunk ? timeChunk : 0
 
         // Sliding windows: [2, 4, 8, 16] — encoder reversed
         let windowSizes = [2, 4, 8, 16]
