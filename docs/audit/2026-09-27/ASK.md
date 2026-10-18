@@ -1014,3 +1014,13 @@ Décisions du planificateur du 2026-10-03 :
   `.local-runs/k96/<témoin>-{A1,B1,B2,A2}.log`), et la reprise réutilise les étiquettes de K-34 / K-36 parce que la
   porte impose la même commande. (7) Retirée (2026-10-16) : l'ASK à Vincent sur un délai réglable dans swift-mlx-profiler
   était sans objet, le délai étant déjà un paramètre (voir (4)).
+- **K-41 (#612), 2026-10-18, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) trois commits `perf(K-41)` au lieu
+  d'un (`d10653c0` bandes, `97878621` tranches évaluées, `c6b13d3f` seuil de 256 frames) : chaque série de mesure a
+  conduit au suivant, chacun mesuré. (2) Blocs de 64 requêtes au lieu de 128 à 256 (fiche) : avec W ≤ 16, le bloc ne
+  touche que la taille du transitoire, exactitude testée. (3) Les tranches de temps évaluées dépassent l'objectif
+  « attention par bandes » : sans elles, la clause du pic de la porte recalée est manquée (série 1 : 5 160 > 4 537 Mo),
+  elles restent internes à `decode` (aucune API publique), l'enrôlement garde le graphe entier. (4) Les cellules
+  longues sont mesurées sur `97878621`, le court sur `c6b13d3f` : pour 998 et 1 903 frames, `c6b13d3f` exécute le même
+  chemin que `97878621` (seuil franchi), la parité est refaite sur `c6b13d3f`. (5) Série 1 : champ `"commit":"e89b59602"`
+  pour B (commits de documentation K-68 après `d10653c0`, `Sources/` identiques). (6) Clause d'origine « décodage court
+  ± 5 % » remplacée par la porte recalée (2026-10-10) ; mesurée quand même (série 3 : − 4,4 %).

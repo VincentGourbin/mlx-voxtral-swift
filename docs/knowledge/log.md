@@ -283,3 +283,12 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   dtype mixte (F16 et BF16, ou bf16 et F32) dans un graphe MLX promeut en silence tout ce qui suit en fp32 ; relever
   le dtype du cache KV après préfill (`VOXTRAL_DTYPE_AUDIT=1`) avant de mesurer un levier de dtype ; PLAN.md §7,
   `BENCHMARKS.md` §« 2026-10-16 — K-40 ».
+- 2026-10-18 — **K-41 : le pic du codec TTS passe de 22 à 3,6 Go, mais l'attention par bandes seule ne suffit pas** :
+  scores par blocs de 64 requêtes sur leurs W + 64 clés au lieu de (T, T) fp32 (exact : clés masquées à − 1e9).
+  Seule, elle laisse le pic codec à 5,2 Go (6 bits long, 1 903 frames) : un graphe MLX paresseux ordonnance ensemble
+  ses tranches indépendantes et leurs transitoires s'additionnent (sonde : graphe entier + 2,0 à 2,3 Go, tranches non
+  évaluées + 1,7 Go, tranches évaluées une à une + 0,6 Go). Inférence par tranches de 2 048 positions évaluées : pic
+  codec 3,6 à 3,9 Go (6 bits) et 3,0 Go (4 bits cloné), `phys_footprint` 33 → 8 Go et 39 → 7 Go, codec long − 78 %.
+  Une évaluation par couche coûte 4 ms sur un graphe petit (texte court + 16 %) : tranches seulement au-delà de 256
+  frames. Leçon : contre un pic de transitoires dans MLX, découper ne suffit pas, il faut `eval` chaque morceau ;
+  et le garder hors d'un graphe différentiable (enrôlement). PLAN.md §7, `BENCHMARKS.md` §« 2026-10-18 — K-41 ».
