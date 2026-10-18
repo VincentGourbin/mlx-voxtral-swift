@@ -235,7 +235,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   se trompe (graine 1 : frame 4 au lieu de 19), d'où une garde de 7 frames. Leçon : une précaution « décider sur la vue
   complète » se teste avant d'être payée, sur tout le domaine d'un paramètre public ;
   écoute de Vincent (2026-10-16, 10 paires à l'aveugle) : A et B identiques, non inférieure ; mais la référence
-  elle-même laisse entendre le porteur sur 2 graines sur 10 (02, 08) et le coupe trop tôt sur une (01), et la voix
+  elle-même laisse entendre le porteur sur 2 graines sur 10 (02, 08 : coupe trop tôt, frames 3 et 4) et perd
+  « FluxForge Studio » sur une (01, coupe à la frame 19), et la voix
   clonée 6 bits n'est bonne que sur 3 graines : deux fiches de suite ; PLAN.md §7.
 - 2026-10-11 — **K-94 : en bf16, la matmul dense arrondit selon le nombre de lignes (sur le court, par élimination)** : le cache de préfixe de voix
   (préfixe préfillé seul) et le préfill d'un bloc donnent d'autres codes acoustiques dès la frame 0 en bf16 sur le court et le long (le moyen sans écart), aucun écart en

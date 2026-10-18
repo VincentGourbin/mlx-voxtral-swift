@@ -3538,3 +3538,425 @@ EVAL {"backend":"mlx","build":"Release","chip":"Apple M3 Max","clip":"c_moyen_en
 EVAL {"backend":"mlx","build":"Release","chip":"Apple M3 Max","clip":"c_moyen_fr","clip_language":"fr","commit":"87c793b83","date":"2026-10-16T14:22:04Z","del":0,"dirty":true,"hyp_words":406,"input":"docs/eval/clips/c_moyen_fr.wav","input_s":130.88,"ins":0,"language":"auto","language_mode":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b","out_sha256":"10402c37a7aa7bdee69afef7f1d4db340ab240fccb7561b60b0c6b73bc09f4b2","pipeline":"stt","power":"AC Power","ram_gb":96,"ref_words":406,"reference_sha256":"82d03278e2cb52a444e2f05ce4ba1e3f2f648d6aa8f345ad6be87fd1740ad5a7","sub":8,"tag":"K40EVALM-mini-3b-mlx","top_process":"24,9 .build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":1.97}
 EVAL {"backend":"mlx","build":"Release","chip":"Apple M3 Max","clip":"c_long_exact","clip_language":"mixed","commit":"87c793b83","date":"2026-10-16T14:22:54Z","del":577,"dirty":true,"hyp_words":995,"input":".local-runs/corpus/c_long_exact.wav","input_s":553.92,"ins":0,"language":"auto","language_mode":"auto","last_sentence_coverage":0.167,"last_sentence_present":false,"length_ratio":0.633,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b","must_contain_coverage":0.167,"must_contain_present":false,"out_sha256":"281f8af5dde62256632b681b5a0a431154d67537626dfa89bae2b1a974e1c34b","pipeline":"stt","power":"AC Power","ram_gb":96,"ref_words":1572,"reference_sha256":"08711bcfa6894f493501aa5d1b9cf824fac4ece43a0192290822b1fdd1bb9c60","sub":268,"tag":"K40EVALM-mini-3b-mlx","top_process":"31,1 .build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":53.75}
 ```
+
+## 2026-10-18 — K-68 : sorties du machine-check (recopie, vérification)
+
+Sorties de `machine-check.sh --cooldown 120 --procs 'Voxtral.*|FluxForge.*'` (via `quiet.sh wait`) avant chaque passe de K-68
+(2026-10-11), recopiées telles quelles depuis `.local-runs/k68/mc_*.log` à la demande de la vérification (`VERIFY.md` §1).
+Aucun `KO` avant les passes de la porte (ABBA 6 bits) ; un `KO` « indexation/sauvegarde » avant ABBA-4bit-3-B, hors porte,
+couvert par la décision du 2026-10-05 (`ASK.md`).
+
+```
+# mc_ABBA-6bit-1-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 9,8 Vibe
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-6bit-2-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,2 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-6bit-3-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 9,7 loginwindow
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-6bit-4-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,3 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-4bit-1-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 2,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-4bit-2-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,6 sysmond
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-4bit-3-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 26,9 backupd
+KO  indexation/sauvegarde en cours (26 %) : refaire plus tard
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_ABBA-4bit-4-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,4 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,3 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s10.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 17,2 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 10,9 mds_stores
+OK  indexeur en tete mais faible (10 %)
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s3.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,0 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s4.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 56,3 textunderstandingd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s5.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 26,3 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s6.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,9 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s7.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,7 simdiskimaged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s8.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,3 sysmond
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-A-s9.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,6 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 2,1 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s10.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,5 locationd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s3.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,8 Finder
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s4.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 9,6 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s5.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,7 simdiskimaged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s6.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,3 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s7.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,6 coresymbolicationd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s8.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 14,4 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_SEED-B-s9.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 18,4 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,0 simdiskimaged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s10.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 11,1 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,2 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s3.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 17,5 AXVisualSupportAgent
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s4.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,3 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s5.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,3 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s6.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,2 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s7.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 1,3 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s8.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,4 Activity
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_RTE-B-s9.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,4 sysmond
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_CONSUMER-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 3,5 sysmond
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_GUARD-B-1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,2 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# mc_GUARD-B-2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 26,5 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 65,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+```

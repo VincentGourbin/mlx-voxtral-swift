@@ -2105,7 +2105,7 @@ Statistics:
   K-39 : sur le moyen et le long, la voix s'essouffle et le volume baisse vers la fin (mesuré au 1er → 4e quart : moyen
   − 6,0 à − 14,4 dB, long − 12,9 à − 17,6 dB) ; sur le court, diction de la graine 2 peu appréciée. Restent ASK-35 et
   ASK-36 ; le volume qui baisse va à la fiche de mesure prévue au prochain replanning.
-## K-68 — TTS : porteur de warm-up coupé sur le waveform partiel en streaming — 2026-10-11 — bloquée (écoute de Vincent)
+## K-68 — TTS : porteur de warm-up coupé sur le waveform partiel en streaming — 2026-10-11 — validée (écoute du 2026-10-16)
 - Fait (commits `a9d3c5cf`, `7cea4cb5`) : `synthesizeStreaming` cherche la fin du porteur à chaque morceau, dès 7
   frames décodées, au lieu d'attendre 3 s d'audio ; même fonction de coupe (`trimLeadingCarrierAdaptive`) que le
   batch. Tests gardés `TTSCarrierEarlyCutTests` (`VOXTRAL_TTS_CARRIER_EARLY=1`) : préfixes décodés identiques au
@@ -2142,7 +2142,7 @@ Statistics:
   Graines 04 à 10 (même jour) : 04 son de téléphone, 05 saccadé, 06 bon, 07 et 09 saturés (sans écrêtage : crête 0,16
   à 0,25 de la pleine échelle sur les 10 graines, la distorsion vient du modèle ou du codec), 08 warm-up audible,
   10 bon mais accent non natif. Bilan : 3 graines sur 10 jugées bonnes (03, 06, 10), défauts identiques dans A et B.
-  Deux fiches de suite au prochain replanning : coupe du porteur (trop tard en 02 et 08, trop tôt en 01) ; qualité de
+  Deux fiches de suite au prochain replanning : coupe du porteur (trop tôt en 02 et 08, frame 3 et 4 : le porteur reste audible ; frame 19 en 01, où « FluxForge Studio » manque : coupe trop tard ou omission du modèle, à établir) ; qualité de
   la voix clonée `clone_fr` en 6 bits selon la graine (téléphone, saccades, saturation, accent ; à rapprocher de K-97).
 ## K-94 — TTS : écart des deux chemins de voix en bf16, préfill de la voix clonée — 2026-10-11 — rapportée
 - Fait (commit `c7935f73` : test ; commit `docs(K-94)` : test des positions, doc de `synthesize(text:voice:seed:)`,
