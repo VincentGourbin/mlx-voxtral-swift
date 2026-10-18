@@ -114,6 +114,8 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **K-86 — `VoxtralTTSPipeline.synthesize(text:voiceCoordinate:seed:)`**: ZeroVoice with a seed (the CLI's
+  `--voice-xyz` now honours `--seed`); the overload without `seed` is unchanged.
 - **K-1 — `VoxtralError.mlx(String)`**: an MLX error raised inside a public entry point (transcribe, chat,
   synthesis, Realtime, loading) is thrown instead of terminating the host process.
 - **K-2 — `VoxtralError.contextTooLong(prompt:maxTokens:limit:)`.**
@@ -176,6 +178,10 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-32 — the `VoxtralBenchmark` executable** (ASK-26 = B), replaced by `VoxtralCLI bench`.
 
 ### Fixed
+- **K-86 — original `tts-4b` pack**: its 20 preset voices (`voice_embedding/*.pt`, `torch.save` files) are read
+  without Python (before: "0 voices loaded"); a `.pt` that cannot be read makes `loadModel` throw
+  `modelLoadingFailed` naming the file. `synthesizeStreaming` sets `lastSynthesisTruncated` (reset at the start of
+  each call). A TTS folder of N shards without `model.safetensors.index.json` loads every shard and names a missing one.
 - **K-27 — no crash from the public API**: `TranscriptionResult.tokenCount` counts the generated tokens (was 0); no
   forced casts; an unsupported module type, a missing input or a too short reference throws
   `invalidConfiguration` at the entry points instead of stopping the process; unreadable tokenizer or quantization

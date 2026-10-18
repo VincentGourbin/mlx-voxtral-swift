@@ -397,7 +397,7 @@ struct TTS: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output WAV file path")
     var output: String = "output.wav"
 
-    @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b-4bit, tts-4b-6bit")
+    @Option(name: .shortAndLong, help: "TTS model: tts-4b-mlx (bf16), tts-4b (original), tts-4b-4bit, tts-4b-6bit")
     var model: String = "tts-4b-mlx"
 
     @Option(name: .shortAndLong, help: "Voice preset (use 'voxtral list' to see available voices)")

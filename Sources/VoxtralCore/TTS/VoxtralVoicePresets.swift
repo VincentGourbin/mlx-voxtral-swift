@@ -5,9 +5,7 @@
  * The TTS model uses 20 voice presets stored as PyTorch .pt files
  * in the voice_embedding/ directory of the model repo.
  *
- * Note: .pt files are PyTorch pickle format. For MLX Swift compatibility,
- * these should be converted to .safetensors format. A Python conversion
- * script is provided for this purpose.
+ * The .pt files (`torch.save` zip archives) are read by `TorchTensorReader` (K-86); MLX packs ship .safetensors.
  */
 
 import Foundation

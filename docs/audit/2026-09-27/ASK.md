@@ -1033,14 +1033,14 @@ Décisions du planificateur du 2026-10-03 :
   − 88 %) dépasse toute dispersion.
 - **K-86 (#627), 2026-10-18, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) « `out_sha256` » de la porte lu comme
   le SHA-256 du WAV écrit par `VoxtralCLI tts` : `tts` n'émet pas de ligne `BENCH` et `bench tts` n'a pas
-  `--voice-xyz` ; graine vérifiée sur tts-4b-6bit (la porte ne nomme pas de modèle). (2) API publique : une surcharge
+  `--voice-xyz` ; graine vérifiée sur tts-4b-6bit, et non sur le défaut du CLI (`tts-4b-mlx`) que prendrait la commande de la porte, sans `-m` : le chemin ZeroVoice ne dépend pas du pack (graine transmise à `generate`, pas de cache de préfixe) (correction du contradicteur). (2) API publique : une surcharge
   `synthesize(text:voiceCoordinate:seed:)` ajoutée (additive, prévue par la fiche), l'ancienne inchangée et déléguée ;
   pas de nouveau cas dans `VoxtralTTSError` (un cas ajouté casserait les `switch` exhaustifs des consommateurs) :
   `modelLoadingFailed` nomme le `.pt`. (3) « Rouge avant » prouvé, pour les tests, par mutation du correctif dans un
   worktree jetable (les tests appellent `loadVoiceEmbeddings` et `TorchTensorReader`, absents avant) ; `mut2` saute la
   recherche des shards et reproduit l'erreur d'avant K-86 ; pour le CLI, par le binaire de `c6b13d3f` (même
   `Sources/` que le parent). (4) Le test « frame par frame » est le générateur streaming avec `chunkSize` 1 (graine 3,
-  texte court) ; K-12 le compare déjà au batch par morceaux de 10. (5) Deux commits (`fix(K-86)`, `docs(K-86)`).
+  texte court) ; K-12 le compare déjà au batch par morceaux de 10. (5) Cinq commits : deux `fix(K-86)` (`4d93fcb4`, `0bd4d410` après le vérificateur) et trois `docs(K-86)`, plus celui de la vérification.
   (6) `voiceEmbeddings` est désormais remplacé au chargement au lieu d'être complété (un rechargement d'un autre pack
   ne garde plus les voix du précédent). Ajouts après le vérificateur (2026-10-18) : (7) la clause « 0 clé manquante
   (`verify` de K-7) » est prouvée par la fixture (`loadAllTTSWeights`, clés synthétiques) et par le pack réel
@@ -1049,3 +1049,9 @@ Décisions du planificateur du 2026-10-03 :
   modèle absent, module non pris en charge : le flux finit en erreur, le drapeau garde la valeur précédente) ; après une
   annulation en streaming il vaut `false`. (9) Un `model.safetensors` accompagné de shards résiduels sans index lève
   désormais une erreur (shards incomplets nommés) au lieu de charger le seul shard 1.
+  Ajouts après le contradicteur (2026-10-18) : (10) un `.pt` illisible fait échouer tout `loadModel` (porte en
+  `.error`) ; avant, `tts-4b` se chargeait avec 0 voix et restait utilisable par `synthesize(text:voiceEmbedding:)`.
+  Refus permis par la fiche (« erreur typée nommant le format ») ; `tts-4b` suit `main` sans révision épinglée : une
+  republication des voix dans un autre format `torch.save` le rendrait inchargeable, à surveiller (CHANGELOG).
+  (11) « Appliquer la graine partout » couvre le CLI (`-v`, `--blend`, `--voice-embedding`, `--voice-xyz`, `bench`) ;
+  la façade `VoxtralTTSSynthesisManager` n'a toujours pas de graine (hors porte), noté pour une fiche de suite.
