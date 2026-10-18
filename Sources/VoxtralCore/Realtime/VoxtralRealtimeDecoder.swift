@@ -164,8 +164,10 @@ class VoxtralRealtimeDecoder: Module {
     /// Precompute Ada RMS-Norm scales from delay conditioning.
     /// Call once after model loading with the chosen delay.
     func precomputeAdaScales(tCond: MLXArray) {
+        // tCond is built in fp32: cast to the Ada MLP's dtype (mlx-audio `voxtral_realtime.py:130-131`), or the scales
+        // would promote the residual stream to fp32 from layer 0 (K-38)
         adaScales = layers.map { layer in
-            layer.adaNorm?.computeScale(tCond)
+            layer.adaNorm.map { $0.computeScale(tCond.asType($0.adaDown.weight.dtype)) }
         }
         // Evaluate eagerly
         for scale in adaScales {

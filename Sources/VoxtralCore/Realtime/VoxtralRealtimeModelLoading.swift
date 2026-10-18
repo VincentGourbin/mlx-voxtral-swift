@@ -60,9 +60,32 @@ func loadVoxtralRealtimeModel(
     // Step 6: Apply
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
     try model.updateVerified(parameters: parameters)
+    castRealtimeParameters(model, to: realtimeComputeDType(model))
 
     progressCallback?(1.0, "Model loaded successfully")
     return model
+}
+
+// MARK: - Compute dtype (K-38)
+
+/// The dtype the Realtime path computes in: the tied token table's. It is never quantized (it is also the LM head,
+/// `tok_embeddings` is skipped by the quantizer) and holds the 16-bit dtype of every pack's matrices. Not `norm` or
+/// `ada_down`: the mlx-community packs store norms, biases and the Ada MLP in fp32 (300 tensors).
+func realtimeComputeDType(_ model: VoxtralRealtimeModel) -> DType {
+    model.decoder.tokEmbeddings.weight.dtype
+}
+
+/// Cast the fp32 parameters (norms, biases, Ada MLP) to `dtype`, a 16-bit float: each one would otherwise promote the
+/// activations, every Linear (a fp32 copy of its weights per call), the KV cache and the logits to fp32
+/// (`rms_norm` and `matmul` return `result_type`, `fast.cpp:82`). A fp32 model is left as it is.
+func castRealtimeParameters(_ model: Module, to dtype: DType) {
+    guard dtype == .float16 || dtype == .bfloat16 else { return }
+    let cast = model.parameters().flattened().compactMap { key, value in
+        value.dtype == .float32 ? (key, value.asType(dtype)) : nil
+    }
+    guard !cast.isEmpty else { return }
+    model.update(parameters: ModuleParameters.unflattened(cast))
+    MLX.eval(model.parameters())
 }
 
 // MARK: - Config Loading

@@ -41,7 +41,8 @@ class RealtimeCausalConv1d: Module {
         if padding > 0 {
             let B = x.dim(0)
             let C = x.dim(2)
-            padded = MLX.concatenated([MLX.zeros([B, padding, C]), x], axis: 1)
+            // In the input dtype: fp32 zeros would promote the stem back to fp32 (K-38)
+            padded = MLX.concatenated([MLX.zeros([B, padding, C], dtype: x.dtype), x], axis: 1)
         }
         return conv(padded)
     }
@@ -73,13 +74,14 @@ func interleavedRoPE(_ x: MLXArray, cos: MLXArray, sin: MLXArray, nHeads: Int, h
 
 /// Compute RoPE cos/sin frequencies.
 /// positions: [seq_len] int array → (cos, sin) each [seq_len, head_dim/2]
-func computeRoPEFreqs(positions: MLXArray, headDim: Int, theta: Float) -> (cos: MLXArray, sin: MLXArray) {
+/// Computed in fp32, returned in `dtype` (the activations' dtype: fp32 tables would promote q and k, K-38).
+func computeRoPEFreqs(positions: MLXArray, headDim: Int, theta: Float, dtype: DType = .float32) -> (cos: MLXArray, sin: MLXArray) {
     let freqs = 1.0 / MLX.pow(
         MLXArray(theta),
         MLXArray(stride(from: 0, to: headDim, by: 2).map { Float($0) / Float(headDim) })
     )
     let angles = MLX.expandedDimensions(positions.asType(.float32), axis: -1) * freqs
-    return (MLX.cos(angles), MLX.sin(angles))
+    return (MLX.cos(angles).asType(dtype), MLX.sin(angles).asType(dtype))
 }
 
 // MARK: - Encoder Attention (Selective Biases)
@@ -357,6 +359,9 @@ class VoxtralRealtimeEncoder: Module {
     /// pass would attend past 15 s, a context the model never saw, and degenerate.
     /// mel: [mel_bins, frames] → [seq/4, decoder_dim]
     func callAsFunction(_ mel: MLXArray) -> MLXArray {
+        // The fp32 mel would promote the whole encoder and adapter: cast to the conv dtype (K-38, as mlx-audio's
+        // streaming encoder does)
+        let mel = mel.asType(conv1.conv.weight.dtype)
         // Within the window (mel ≤ 2 × window frames): one pass, full causal attention
         if mel.dim(1) <= 2 * config.slidingWindow {
             let convOut = convStem(mel)
@@ -385,7 +390,8 @@ class VoxtralRealtimeEncoder: Module {
             if !chunks.isEmpty, VoxtralCancellation.isCancelled { break }
             let end = min(start + window, seqLen)
             let (ropeCos, ropeSin) = computeRoPEFreqs(
-                positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta
+                positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta,
+                dtype: convOut.dtype
             )
             // The mask depends only on the chunk length and the cache offset: shared by every layer
             let maskMode = caches[0].makeMask(n: end - start, windowSize: window, returnArray: false)
@@ -406,7 +412,7 @@ class VoxtralRealtimeEncoder: Module {
         let seqLen = convOut.dim(0)
         let positions = MLXArray(0..<Int32(seqLen))
         let (ropeCos, ropeSin) = computeRoPEFreqs(
-            positions: positions, headDim: config.headDim, theta: config.ropeTheta
+            positions: positions, headDim: config.headDim, theta: config.ropeTheta, dtype: convOut.dtype
         )
 
         var x = convOut
