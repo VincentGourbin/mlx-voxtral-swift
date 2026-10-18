@@ -2329,7 +2329,7 @@ Statistics:
   lieu de 128 à 256 ; tranches de temps ajoutées ; long mesuré sur `97878621`, court sur `c6b13d3f`.
 
 ## K-86 — TTS : voix `.pt` de `tts-4b`, graine de ZeroVoice, troncature en streaming, shards sans index — 2026-10-18 — appliquée
-- Fait (commit `4d93fcb4`, tests `TTSOriginalPackLoadingTests`, `TTSStreamingTruncationTests` ; commit `docs(K-86)`) :
+- Fait (commits `4d93fcb4` et `0bd4d410` (cas limites, après le vérificateur), tests `TTSOriginalPackLoadingTests`, `TTSStreamingTruncationTests` ; commit `docs(K-86)`) :
   `TorchTensorReader` lit les voix `torch.save` du pack d'origine (zip à entrées stockées + machine pickle minimale,
   sans dépendance ; fichier illisible → `VoxtralTTSError.modelLoadingFailed` qui nomme le `.pt`) ;
   `VoxtralTTSPipeline.loadVoiceEmbeddings(from:)` lit `.safetensors` puis `.pt` ; surcharge additive
@@ -2341,9 +2341,9 @@ Statistics:
   - `--voice-xyz 50,50,50 --seed 3 ×2 → SHA-256 88be156e… identiques ; --seed 4 → b1099d61… (différent) ; avant : aa2e6c0b… ≠ 8094930a… (42 et 57 frames)`
   - `test synthesizeStreaming, plafond 12 atteint → lastSynthesisTruncated == true ; sans plafond (68 frames) → false ; rouge avant (mut3 : 1 échec)`
   - `test frame par frame (chunkSize 1, graine 3) : codes [1, 68, 37] identiques au batch, 69 morceaux`
-  - `fixture 3 shards sans index → 3 clés sur 3 ; shard manquant nommé ; rouge avant (mut2 : 2 échecs, « No safetensors files found »)`
+  - `fixture 3 shards sans index → 3 clés sur 3 ; shard manquant nommé ; rouge avant (mut2 : 2 échecs, « No safetensors files found ») ; pack réel tts-4b-mlx (2 shards sans index) → nouveau chemin + updateVerified (K-7) sans clé manquante, 20 voix, audio transcrit à l'identique (0bd4d410)`
   - `voix .pt réelles : 20/20 égales bit à bit aux .safetensors de tts-4b-mlx ; rouge sans lecteur (mut1 : 8 échecs)`
-  - `suite Debug complète 4d93fcb4 : 611 tests, 48 sautés, 0 échec`
+  - `suite Debug complète 4d93fcb4 : 611 tests, 48 sautés, 0 échec ; 0bd4d410 : 613 tests, 48 sautés, 0 échec`
 - Lecture : la porte offrait « lecteur ou erreur typée » ; le lecteur suffit (format fixe de `torch.save`, 165 octets
   de pickle), il ne lit qu'un tenseur contigu bf16, fp16 ou fp32 et refuse le reste en nommant le fichier.
   `BENCHMARKS.md` §« 2026-10-18 — K-86 ». Écarts : ASK.md §Dérogations, K-86.

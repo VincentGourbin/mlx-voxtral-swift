@@ -1042,4 +1042,10 @@ Décisions du planificateur du 2026-10-03 :
   `Sources/` que le parent). (4) Le test « frame par frame » est le générateur streaming avec `chunkSize` 1 (graine 3,
   texte court) ; K-12 le compare déjà au batch par morceaux de 10. (5) Deux commits (`fix(K-86)`, `docs(K-86)`).
   (6) `voiceEmbeddings` est désormais remplacé au chargement au lieu d'être complété (un rechargement d'un autre pack
-  ne garde plus les voix du précédent).
+  ne garde plus les voix du précédent). Ajouts après le vérificateur (2026-10-18) : (7) la clause « 0 clé manquante
+  (`verify` de K-7) » est prouvée par la fixture (`loadAllTTSWeights`, clés synthétiques) et par le pack réel
+  `tts-4b-mlx` (2 shards sans index, `updateVerified`) ; pas de pack réel à 3 shards sans index dans le registre.
+  (8) `lastSynthesisTruncated` n'est pas remis à zéro quand `synthesizeStreaming` refuse de démarrer (pipeline occupé,
+  modèle absent, module non pris en charge : le flux finit en erreur, le drapeau garde la valeur précédente) ; après une
+  annulation en streaming il vaut `false`. (9) Un `model.safetensors` accompagné de shards résiduels sans index lève
+  désormais une erreur (shards incomplets nommés) au lieu de charger le seul shard 1.

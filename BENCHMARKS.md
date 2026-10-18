@@ -4569,3 +4569,107 @@ Executed 3 tests, with 0 failures (0 unexpected) in 586.420 (586.423) seconds
 ```
 
 Le premier passage des deux tests `TTSCarrierEarlyCutTests` échoue sur `XCTUnwrap` (variable `VOXTRAL_TTS_CARRIER_EARLY_EMB` absente, pas d'assertion jugée) ; refaits dans `gated2-229f9342.log` avec la voix clonée.
+
+### K-86 : complément après le vérificateur (2026-10-18, `0bd4d410`)
+
+Le vérificateur (1er passage, `not verified`) objecte que la clause « 3 shards sans index → chargement complet,
+0 clé manquante (`verify` de K-7) » n'est prouvée que sur `loadAllTTSWeights`, sans `updateVerified`. Preuve
+ajoutée : `tts-4b-mlx`, seul pack du registre sans index (`model-0000{1,2}-of-00002.safetensors`), se charge par le
+nouveau chemin puis par `updateVerified` (aucune clé manquante, sinon le chargement lèverait `missingWeights`) et
+produit l'audio transcrit à l'identique. Passes CLI refaites avec la commande, le commit et l'état de l'arbre en tête
+de chaque journal (`.local-runs/k86/after2/`, binaire Release construit à `0bd4d410`, arbre propre) ; transcriptions
+gardées en journal. `0bd4d410` durcit le lecteur et les shards ; ses tests (offset de stockage, fp16 et fp32,
+big-endian refusé, comptes de shards mixtes ou en trop) sont rouges par mutation (`mut4` : offset ignoré, `mut5` :
+byteorder ignoré ; fichier restauré après chaque mutation, `diff` vide).
+
+```
+434cc113b44ccd51fc5374c71d73569d62de417bdfde7dab357bfaabc626e79a  .local-runs/k86/after2/tts4b.wav
+8ecf89c6613d8f39898a0ae8a9612b1ce2789b0c9417343d54e9c25379f6ce3d  .local-runs/k86/after2/tts4bmlx.wav
+88be156e3b5a68bdfdea39423e4cb993dc117dcab2b1ad9c20f6d2642dfe6385  .local-runs/k86/after2/xyz-3a.wav
+88be156e3b5a68bdfdea39423e4cb993dc117dcab2b1ad9c20f6d2642dfe6385  .local-runs/k86/after2/xyz-3b.wav
+b1099d615a149e34a596dae98da7fa06d577afd29386b93f26d885814e0c6d8e  .local-runs/k86/after2/xyz-4.wav
+# after2/tts4b.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI tts -m tts-4b -v neutral_female -o .local-runs/k86/after2/tts4b.wav The quick brown fox jumps over the lazy dog.
+  [100%] TTS model ready (20 voices loaded)
+  Frames: 79
+# after2/tts4bmlx.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI tts -m tts-4b-mlx -v neutral_female -o .local-runs/k86/after2/tts4bmlx.wav The quick brown fox jumps over the lazy dog.
+  [100%] TTS model ready (20 voices loaded)
+  Frames: 70
+# after2/xyz-3a.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI tts -m tts-4b-6bit --voice-xyz 50,50,50 --seed 3 -o .local-runs/k86/after2/xyz-3a.wav The quick brown fox jumps over the lazy dog.
+  [100%] TTS model ready (20 voices loaded)
+  Frames: 69
+# after2/xyz-3b.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI tts -m tts-4b-6bit --voice-xyz 50,50,50 --seed 3 -o .local-runs/k86/after2/xyz-3b.wav The quick brown fox jumps over the lazy dog.
+  [100%] TTS model ready (20 voices loaded)
+  Frames: 69
+# after2/xyz-4.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI tts -m tts-4b-6bit --voice-xyz 50,50,50 --seed 4 -o .local-runs/k86/after2/xyz-4.wav The quick brown fox jumps over the lazy dog.
+  [100%] TTS model ready (20 voices loaded)
+  Frames: 43
+# after2/stt-tts4b.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI transcribe .local-runs/k86/after2/tts4b.wav
+The quick brown fox jumps over the lazy dog.
+# after2/stt-tts4bmlx.log
+$ git rev-parse HEAD: 0bd4d410, dirty: 0
+$ VoxtralCLI transcribe .local-runs/k86/after2/tts4bmlx.wav
+The quick brown fox jumps over the lazy dog.
+# unit2.log
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMixedOrExtraShardsWithoutIndexAreRefused]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles]' passed (0.024 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testRealPresetMatchesTheMLXPack]' passed (0.644 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead]' passed (0.007 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad]' passed (0.005 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testTorchSaveTensorIsRead]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat]' passed (0.004 seconds).
+Executed 16 tests, with 0 failures (0 unexpected) in 0.747 (0.752) seconds
+** TEST SUCCEEDED **
+# mut4-offset-ignored.log
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed]' passed (0.026 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMixedOrExtraShardsWithoutIndexAreRefused]' passed (0.004 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles]' passed (0.024 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testRealPresetMatchesTheMLXPack]' passed (0.642 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead]' failed (1.615 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad]' passed (0.004 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testTorchSaveTensorIsRead]' passed (0.001 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat]' passed (0.002 seconds).
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:124: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead] : XCTAssertEqual failed: ("[99.0, 99.0, 99.0, 99.0, 99.0, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5]") is not equal to ("[-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]") - BFloat16Storage
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:124: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead] : XCTAssertEqual failed: ("[99.0, 99.0, 99.0, 99.0, 99.0, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5]") is not equal to ("[-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]") - HalfStorage
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:124: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead] : XCTAssertEqual failed: ("[99.0, 99.0, 99.0, 99.0, 99.0, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5]") is not equal to ("[-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]") - FloatStorage
+Executed 8 tests, with 3 failures (0 unexpected) in 2.318 (2.321) seconds
+** TEST FAILED **
+# mut5-byteorder-ignored.log
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed]' passed (0.028 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMixedOrExtraShardsWithoutIndexAreRefused]' passed (0.004 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles]' passed (0.024 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testRealPresetMatchesTheMLXPack]' passed (0.659 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead]' passed (0.005 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad]' passed (0.007 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testTorchSaveTensorIsRead]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat]' failed (1.122 seconds).
+Tests/VoxtralCoreTests/TTS/TTSOriginalPackLoadingTests.swift:150: error: -[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat] : XCTAssertThrowsError failed: did not throw an error - big endian
+Executed 8 tests, with 1 failure (0 unexpected) in 1.852 (1.856) seconds
+** TEST FAILED **
+# fullsuite-0bd4d410.log
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMissingShardWithoutIndexIsNamed]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testMixedOrExtraShardsWithoutIndexAreRefused]' passed (0.005 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testPresetVoicesLoadFromPtFiles]' passed (0.023 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testRealPresetMatchesTheMLXPack]' passed (0.024 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testStorageOffsetAndOtherDTypesAreRead]' passed (0.003 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testThreeShardsWithoutIndexAllLoad]' passed (0.006 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testTorchSaveTensorIsRead]' passed (0.002 seconds).
+Test Case '-[VoxtralCoreTests.TTSOriginalPackLoadingTests testUnreadablePtFileNamesTheFormat]' passed (0.003 seconds).
+2026-10-18 22:44:00.343028+0200 xctest[29091:22623725] [error] CoreData: error: Unable to create token NSXPCConnection.  NSXPCStoreServerEndpointFactory 0x7c70928c40 -newEndpointWithError returned error Error Domain=NSCocoaErrorDomain Code=4097 "connection to service named com.apple.contactsd.persistence" UserInfo={NSDebugDescription=connection to service named com.apple.contactsd.persistence}
+CoreData: error: Unable to create token NSXPCConnection.  NSXPCStoreServerEndpointFactory 0x7c70928c40 -newEndpointWithError returned error Error Domain=NSCocoaErrorDomain Code=4097 "connection to service named com.apple.contactsd.persistence" UserInfo={NSDebugDescription=connection to service named com.apple.contactsd.persistence}
+2026-10-18 22:44:00.349070+0200 xctest[29091:22623725] [error] CoreData: error: NSXPCStoreConnectionManager failed to initialize any connections for store at file:///Users/vincent/Library/Application%20Support/AddressBook/AddressBook-v22.abcddb with error = Error Domain=NSCocoaErrorDomain Code=4097 "Impossible de communiquer avec une application d’aide." UserInfo={NSUnderlyingError=0x7c71c846c0 {Error Domain=NSCocoaErrorDomain Code=4097 "connection to service named com.apple.contactsd.persistence" UserInfo={NSDebugDescription=connection to service named com.apple.contactsd.persistence}}}
+Executed 613 tests, with 48 tests skipped and 0 failures (0 unexpected) in 13.075 (13.190) seconds
+** TEST SUCCEEDED **
+```
