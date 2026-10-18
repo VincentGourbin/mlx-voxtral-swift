@@ -511,7 +511,7 @@ struct TTS: AsyncParsableCommand {
             if let recipe = pipeline.voiceRecipe(x: coord.x, y: coord.y, z: coord.z) {
                 print("  ZeroVoice: \(recipe.voiceA.rawValue) + \(recipe.voiceB.rawValue) @ \(String(format: "%.2f", recipe.blendWeight))")
             }
-            result = try await pipeline.synthesize(text: text, voiceCoordinate: coord)
+            result = try await pipeline.synthesize(text: text, voiceCoordinate: coord, seed: seed)
 
         } else if let blendSpec = blend {
             // Manual blend mode: "voiceA+voiceB:weight"

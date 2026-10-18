@@ -132,17 +132,26 @@ func loadAllTTSWeights(from directory: URL) throws -> [String: MLXArray] {
         return weights
     }
 
-    // Check for sharded model first
-    let shard1 = directory.appendingPathComponent("model-00001-of-00002.safetensors")
-    let shard2 = directory.appendingPathComponent("model-00002-of-00002.safetensors")
-
-    if FileManager.default.fileExists(atPath: shard1.path) {
-        var weights = try MLX.loadArrays(url: shard1)
-        if FileManager.default.fileExists(atPath: shard2.path) {
-            let weights2 = try MLX.loadArrays(url: shard2)
-            for (k, v) in weights2 {
-                weights[k] = v
-            }
+    // Shards without an index: every `model-<i>-of-<n>.safetensors`, all n of them required (K-86; before, a
+    // fixed two-shard fallback ignored any other count)
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    let shards = names.filter { $0.range(of: #"^model-\d+-of-\d+\.safetensors$"#, options: .regularExpression) != nil }.sorted()
+    if let first = shards.first {
+        let counts = Set(shards.map { $0.dropLast(".safetensors".count).split(separator: "-").last.map(String.init) ?? "" })
+        guard counts.count == 1, let total = Int(counts.first!) else {
+            throw VoxtralTTSError.modelLoadingFailed("shards of different counts in \(directory.path): \(shards)")
+        }
+        let digits = first.split(separator: "-")[1].count
+        let expected = (1 ... max(total, 1)).map { i in
+            "model-\(String(repeating: "0", count: max(0, digits - String(i).count)))\(i)-of-\(counts.first!).safetensors"
+        }
+        let missing = expected.filter { !shards.contains($0) }
+        guard missing.isEmpty else {
+            throw VoxtralTTSError.fileNotFound("\(missing.joined(separator: ", ")) (no model.safetensors.index.json) in \(directory.path)")
+        }
+        var weights: [String: MLXArray] = [:]
+        for shard in expected {
+            for (k, v) in try MLX.loadArrays(url: directory.appendingPathComponent(shard)) { weights[k] = v }
         }
         return weights
     }

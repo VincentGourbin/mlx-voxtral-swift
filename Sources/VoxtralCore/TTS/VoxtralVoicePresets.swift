@@ -119,15 +119,10 @@ class VoxtralVoicePresetManager: @unchecked Sendable {
             return embedding
         }
 
-        // Try .pt file (may work if it's a simple tensor)
+        // torch.save file of the original Mistral pack (K-86)
         let ptPath = modelDirectory.appendingPathComponent(voice.embeddingFileName)
         if FileManager.default.fileExists(atPath: ptPath.path) {
-            // MLX can sometimes load simple .pt files
-            let arrays = try MLX.loadArrays(url: ptPath)
-            guard let embedding = arrays.values.first else {
-                throw VoxtralTTSError.voiceNotFound("Could not load .pt file for voice \(voice.rawValue). Convert to .safetensors first.")
-            }
-            return embedding
+            return try TorchTensorReader.loadTensor(url: ptPath)
         }
 
         throw VoxtralTTSError.voiceNotFound(

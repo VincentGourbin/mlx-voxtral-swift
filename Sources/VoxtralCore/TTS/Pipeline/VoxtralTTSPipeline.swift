@@ -224,16 +224,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 // Load voice embeddings
                 progress?(0.90, "Loading voice embeddings...")
                 session?.beginPhase("4. Voice Embeddings", category: .voiceEmbedding)
-                let voiceDir = modelDir.appendingPathComponent("voice_embedding")
-                for voice in VoxtralVoice.allCases {
-                    let safetensorsPath = voiceDir.appendingPathComponent("\(voice.rawValue).safetensors")
-                    if FileManager.default.fileExists(atPath: safetensorsPath.path) {
-                        let data = try MLX.loadArrays(url: safetensorsPath)
-                        if let emb = data["embedding"] ?? data.values.first {
-                            voiceEmbeddings[voice.rawValue] = emb
-                        }
-                    }
-                }
+                voiceEmbeddings = try Self.loadVoiceEmbeddings(from: modelDir.appendingPathComponent("voice_embedding"))
                 session?.endPhase("4. Voice Embeddings", category: .voiceEmbedding)
 
                 progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
@@ -364,10 +355,19 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         text: String,
         voiceCoordinate: (x: Int, y: Int, z: Int)
     ) async throws -> TTSSynthesisResult {
+        try await synthesize(text: text, voiceCoordinate: voiceCoordinate, seed: nil)
+    }
+
+    /// Synthesize speech using a ZeroVoice coordinate, with a seed for reproducible output (K-86).
+    public func synthesize(
+        text: String,
+        voiceCoordinate: (x: Int, y: Int, z: Int),
+        seed: UInt64?
+    ) async throws -> TTSSynthesisResult {
         guard let voiceEmb = zeroVoice?.voiceAt(x: voiceCoordinate.x, y: voiceCoordinate.y, z: voiceCoordinate.z) else {
             throw VoxtralTTSError.voiceNotFound("Could not generate voice for coordinate (\(voiceCoordinate.x), \(voiceCoordinate.y), \(voiceCoordinate.z))")
         }
-        return try await synthesize(text: text, voiceEmbedding: voiceEmb)
+        return try await synthesize(text: text, voiceEmbedding: voiceEmb, seed: seed)
     }
 
     /// Synthesize speech using a pre-computed blended voice embedding.
@@ -634,6 +634,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
         let voiceEmb = voiceEmbedding
+        lastSynthesisTruncated = false
 
         // Reuse (or compute) the voice-conditioned prefix KV when we have a key.
         let prefix: (cache: [any KVCache], len: Int)? = voiceKey.map {
@@ -710,6 +711,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                     for try await chunk in codeStream {
                         try Task.checkCancellation()
+                        // Set before the final chunk is yielded, so a consumer that sees `isFinal` reads it (K-86)
+                        if chunk.isFinal { ctx.pipeline.lastSynthesisTruncated = chunk.totalFrames >= capturedMaxFrames }
                         // Decode all accumulated codes to get full waveform
                         // `bench --trace` only: one "Codec Decode" phase per chunk, as in batch (K-93)
                         let session = MLXProfiler.shared.activeSession
@@ -816,6 +819,25 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         }
         continuation.onTermination = { _ in task.cancel() }
         return stream
+    }
+
+    /// Preset voices of a pack: `<voice>.safetensors` (MLX packs) or `<voice>.pt` (original Mistral pack `tts-4b`,
+    /// read without Python, K-86); a `.pt` that cannot be read throws an error naming it.
+    static func loadVoiceEmbeddings(from voiceDir: URL) throws -> [String: MLXArray] {
+        var embeddings: [String: MLXArray] = [:]
+        for voice in VoxtralVoice.allCases {
+            let safetensorsPath = voiceDir.appendingPathComponent("\(voice.rawValue).safetensors")
+            let ptPath = voiceDir.appendingPathComponent("\(voice.rawValue).pt")
+            if FileManager.default.fileExists(atPath: safetensorsPath.path) {
+                let data = try MLX.loadArrays(url: safetensorsPath)
+                if let emb = data["embedding"] ?? data.values.first {
+                    embeddings[voice.rawValue] = emb
+                }
+            } else if FileManager.default.fileExists(atPath: ptPath.path) {
+                embeddings[voice.rawValue] = try TorchTensorReader.loadTensor(url: ptPath)
+            }
+        }
+        return embeddings
     }
 
     // MARK: - Resource Management
