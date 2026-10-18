@@ -4578,9 +4578,12 @@ ajoutée : `tts-4b-mlx`, seul pack du registre sans index (`model-0000{1,2}-of-0
 nouveau chemin puis par `updateVerified` (aucune clé manquante, sinon le chargement lèverait `missingWeights`) et
 produit l'audio transcrit à l'identique. Passes CLI refaites avec la commande, le commit et l'état de l'arbre en tête
 de chaque journal (`.local-runs/k86/after2/`, binaire Release construit à `0bd4d410`, arbre propre) ; transcriptions
-gardées en journal. `0bd4d410` durcit le lecteur et les shards ; ses tests (offset de stockage, fp16 et fp32,
-big-endian refusé, comptes de shards mixtes ou en trop) sont rouges par mutation (`mut4` : offset ignoré, `mut5` :
-byteorder ignoré ; fichier restauré après chaque mutation, `diff` vide).
+gardées en journal. `0bd4d410` durcit le lecteur et les shards. Deux de ses tests sont prouvés rouges par mutation,
+lancée dans l'arbre principal avant le commit (le `diff` de chaque mutation est imprimé avant le test, puis le fichier
+est restauré depuis une copie) : `mut4` (offset ignoré : `testStorageOffsetAndOtherDTypesAreRead` rouge) et `mut5`
+(byteorder ignoré : big-endian accepté). Les autres cas ajoutés (comptes de shards mixtes ou en trop, plusieurs
+`data.pkl`, LONG1 négatif, taille et pas de longueurs différentes) n'ont pas de rouge enregistré (vérificateur, 2e
+passage).
 
 ```
 434cc113b44ccd51fc5374c71d73569d62de417bdfde7dab357bfaabc626e79a  .local-runs/k86/after2/tts4b.wav
