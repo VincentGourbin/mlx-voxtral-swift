@@ -643,6 +643,28 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Fiches** : ⛔ K-40 (#611, `blocked` jusqu'à la réponse) ; en attente derrière elle : K-42, K-45, K-53, K-54,
   K-55, K-56, K-60.
 
+### ASK-39 — K-68 : « 0 fuite sur 10 prises » (ASK-10) est-il un seuil absolu ou « pas pire que la référence » ?
+
+- **Contexte** : K-68 (#618) coupe le porteur de warm-up sur le waveform partiel en streaming : TTFA des voix clonées
+  avec porteur − 42,6 % en 6 bits (1,91 → 1,09 s, A/B/B/A, `BENCHMARKS.md` §« 2026-10-11 — K-68 »). La porte
+  (ASK-10 = A) demande « fuites du porteur ≤ la référence (0/10) sur 10 prises », écoutées à l'aveugle par Vincent.
+- **Ce qui a été constaté** : à l'écoute du 2026-10-16, les prises A (avant K-68) et B (après) sont identiques à
+  1 pas 16 bits près, avec la même coupe sur 19/19 cas ; mais la référence A elle-même laisse entendre le porteur sur
+  2 prises sur 10 (graines 02 et 08, coupées trop tôt, frames 3 et 4) et perd « FluxForge Studio » sur une (graine 01,
+  coupe à la frame 19). Le « 0/10 » venait de K-35 (ASR en batch), jamais réécouté. K-68 ne change ni le nombre ni la
+  place des fuites ; la retirer ne rendrait pas le 0/10.
+- **Question** : la clause « fuites » de K-68 se juge-t-elle par rapport à la référence (tenue) ou au 0/10 absolu
+  (manquée, avant comme après) ?
+- **Options** :
+  - **A)** Par rapport à la référence : K-68 est validée (gain de TTFA gardé) ; les 2/10 fuites et la graine 01 vont
+    à une fiche de suite sur la coupe du porteur, avec sa propre porte d'écoute.
+  - **B)** 0/10 absolu : K-68 reste `blocked` jusqu'à la fiche de suite sur la coupe, puis l'écoute est refaite sur
+    les 10 graines.
+  - **C)** 0/10 absolu, et K-68 est retirée : le streaming attend de nouveau 3 s (TTFA 1,91 s), sans changer les fuites.
+- **Proposé** : A. La garantie « ne pas aggraver » est tenue ; le défaut est antérieur et mérite sa propre fiche.
+- **Fiches** : ⛔ K-68 (#618, `blocked` jusqu'à la réponse ; vérification : vérificateur `verified` au 3e passage,
+  contradicteur `not verified` sur ce seul point).
+
 ---
 
 ## Réponses
@@ -690,6 +712,7 @@ réponse datée ici.
 | ASK-36 | | | |
 | ASK-37 | | | |
 | ASK-38 | | | |
+| ASK-39 | | | |
 
 ### Dérogations
 
@@ -947,9 +970,9 @@ Décisions du planificateur du 2026-10-03 :
   (graine 01, frame 19 : coupe trop tard ou omission du modèle), identiques en B ; la clause est donc
   jugée sous sa forme relative (« ≤ la référence », tenue : B = A à 1 pas 16 bits près) et le « (0/10) » de la porte
   et d'ASK-10, valeur de K-35 non réécoutée, est réfuté pour la référence : défaut antérieur à K-68, renvoyé à une
-  fiche de suite (coupe du porteur). Ce n'est pas un affaiblissement : K-68 ne change ni le nombre ni la place des
-  fuites, et la retirer ne rendrait pas le 0/10 ; Vincent a entendu ces défauts et demandé des fiches de suite, pas
-  un retrait (signalé dans le message groupé). (6) La préférence « = » de la grille est déduite par l'agent de
+  fiche de suite (coupe du porteur). K-68 ne change ni le nombre ni la place des fuites, et la retirer ne rendrait pas
+  le 0/10 ; mais le « 0/10 » est un seuil de qualité validé par Vincent (ASK-10) : la lecture relative lui revient,
+  posée en ASK-39 (contradicteur du 2026-10-18), K-68 `blocked` jusqu'à la réponse. (6) La préférence « = » de la grille est déduite par l'agent de
   l'écart A − B (≤ 1 LSB sur 0 à 44 échantillons) et des remarques de Vincent, qui décrivent les mêmes défauts dans
   les deux prises. (7) Le machine-check, d'abord seulement résumé, est recopié le 2026-10-18 dans `BENCHMARKS.md`
   §« 2026-10-18 — K-68 : sorties du machine-check » (41 sorties ; aucun `KO` avant les séries de la porte ; un `KO`
