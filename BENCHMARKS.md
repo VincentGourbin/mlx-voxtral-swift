@@ -6314,8 +6314,12 @@ conclusion (lu sur la couverture, pas sur `out_sha256`).
 - Porte tenue : − 52,6 % sur le préfill de la 2ᵉ synthèse de `clone_fr` en 6 bits (A/A 0,6 %), − 55,4 % en 4 bits ;
   K-94 extrapolait ≈ − 65 % hors de la plage mesurée : le plancher de lecture des poids à 18 positions retient le
   reste. Le TTFT de la voix clonée courte baisse de 42 %, le temps total d'environ 2 % (le préfill pèse 4 % du court).
-- Texte moyen : − 26,4 %, pour information : le suffixe (texte) y est plus long, la part du préfixe plus petite.
+- Texte moyen : − 26,4 %, pour information : le suffixe (texte) y est plus long, la part du préfixe plus petite ;
+  A/A 4,0 %, au-dessus du seuil de 3 % (`VERIFY.md` §1) : cette cellule ne se lit qu'à titre indicatif.
 - Coût mémoire : une entrée de 26,7 Mo par voix en cache (trois au plus).
+- Après la mesure (vérification) : le retrait par étiquette, qui faisait se chasser deux voix `voiceEmbedding:`
+  alternées (même étiquette « embedding »), est supprimé (commit `fix(K-50)`) ; les cellules mesurées n'emploient
+  qu'une voix, ce chemin n'y passait pas : mesures inchangées.
 
 **Passe sur batterie, écartée.** Le Mac a été débranché de 13:54:17 à 14:13:55 (`pmset -g log`) ; le machine-check
 de `6bit-medium-B2` (13:54:22, `mc_6bit-medium-B2.log`) affiche encore « OK sur secteur » et `powermode 2`, mais sa
@@ -6327,7 +6331,7 @@ de `6bit-medium-A2` a refusé de lancer la passe (« KO sur batterie » de 14:02
 
 **Charge.** Machine-check : `KO  indexation/sauvegarde en cours` avant `4bit-short-B2` (168 %) et `6bit-medium-A2`
 (88 %), tolérés par la décision de Vincent du 2026-10-05 ; leurs valeurs (55,1 et 306,0 ms) sont proches de leurs
-jumelles (56,7 et 293,9 ; A/A moyen 4,0 %). Les autres passes : aucun `KO`. Charge de fond pendant les passes :
+jumelles (56,7 et 293,9). Les autres passes : aucun `KO`. Charge de fond pendant les passes :
 corespotlightd, mediaanalysisd, Mail, ScreenTimeAgent, jamais une autre charge GPU. Les évaluations (non
 chronométrées) ont tourné pendant une sauvegarde Time Machine (`top_process` backupd sur trois lignes `EVAL`).
 

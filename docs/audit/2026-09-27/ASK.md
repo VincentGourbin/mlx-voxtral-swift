@@ -1223,3 +1223,22 @@ Décisions du planificateur du 2026-10-03 :
   du modèle (`VoxtralTTSModeling.swift:482`) : `phases_ms.prefill` ne les compte pas ; `total_ms` les compte (− 2,0 %, cohérent avec − 66 ms de
   préfill), coût de l'empreinte non mesuré seul. (11) Tags `K50-<cellule>-A|B` partagés par A1/A2 et B1/B2 ;
   passes distinguées par la date et l'ordre de la file.
+  Après le vérificateur : (12) défaut corrigé après la mesure (commit `fix(K-50)`) : un échec de recherche retirait
+  l'entrée de même étiquette, et toutes les voix `voiceEmbedding:` portent l'étiquette « embedding » : deux voix
+  alternées se chassaient (une seule entrée utile). Le retrait par étiquette est supprimé (l'empreinte suffit contre
+  un préfixe périmé ; un `voiceKey` réutilisé laisse l'ancienne entrée jusqu'à son éviction LRU) ; test
+  `testVoicesSharingAKeyKeepTheirEntries` rouge sur l'ancien code (worktree jetable, `.local-runs/k50-red2.log` et
+  `k50-red2.diff.txt` : 4 calculs au lieu de 2), vert avec (`.local-runs/k50-unit2.log`) ; suite Debug rejouée
+  (`.local-runs/k50/suite2.log` : 628 tests, 49 sautés, 0 échec). Cellules mesurées à une voix : chemin non emprunté, mesures non rejouées.
+  (13) Le rouge de la mutation « clé seule » (dérogation 3) a été fait dans l'arbre principal et son diff n'est pas
+  archivé (`VERIFY.md` §1 : worktree jetable) ; celui de (12) l'est. (14) La surcharge streaming sans `voiceKey`
+  calcule désormais le préfixe (et l'empreinte) de façon synchrone sur le thread de l'appelant, hors de
+  `withMLXErrors` (`VoxtralTTSPipeline.swift:643`, avant le `Task`), comme les voix prédéfinies et un `voiceKey`
+  fourni le faisaient déjà : ≈ 100 à 300 ms au premier appel d'une voix, à reprendre par une fiche de suite.
+  (15) Les amendements de #643 (2026-10-16) lisent la porte « sur le chemin caché `synthesize(voice:)` » : mesurée
+  par `voiceEmbedding:`, le chemin que K-50 met en cache (`clone_fr` n'est pas une voix prédéfinie). (16) Câblage
+  streaming et correction « Fixed » du `voiceKey` couverts par les tests unitaires de `VoicePrefixCache` seuls, sans
+  test de pipeline ni mesure du streaming ; coût de l'empreinte non mesuré seul (≈ 1,2 Mo copiés et hachés par appel
+  pour `clone_fr` en fp32). (17) `unload()` vide le cache hors du `gate` (`:864`), même course qu'avant K-50 sur
+  `prefixCacheEntry`. (18) A/A de la cellule d'information 6 bits moyen 4,0 %, au-dessus du seuil de 3 % : lue à
+  titre indicatif (BENCHMARKS précisé).

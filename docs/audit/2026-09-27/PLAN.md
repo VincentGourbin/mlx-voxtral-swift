@@ -2547,4 +2547,6 @@ Statistics:
 - Lecture : le préfill de la 2ᵉ synthèse passe de 120 + 1 positions à 17 + 1 ; le plancher de lecture des poids
   retient le gain à − 53 % (K-94 extrapolait − 65 % hors plage). Effet sur le temps total ≈ − 2 % sur le texte court.
   Une passe d'information (`6bit-medium-B2`) a tourné sur batterie (Mac débranché 13:54 → 14:13) : écartée, refaite
-  sur secteur. `BENCHMARKS.md` §« 2026-10-19 — K-50 ». Écarts : ASK.md §Dérogations, K-50.
+  sur secteur. Après le vérificateur (commit `fix(K-50)`) : le retrait par étiquette, qui faisait se chasser deux voix
+  `voiceEmbedding:` alternées, est supprimé (test `testVoicesSharingAKeyKeepTheirEntries`, rouge sur l'ancien code).
+  `BENCHMARKS.md` §« 2026-10-19 — K-50 ». Écarts : ASK.md §Dérogations, K-50.

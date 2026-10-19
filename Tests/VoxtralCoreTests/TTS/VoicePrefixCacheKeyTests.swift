@@ -36,8 +36,21 @@ final class VoicePrefixCacheKeyTests: XCTestCase {
         let second = cache.prefix(key: "clone", embedding: voice(2), compute: compute)
         XCTAssertEqual(computed, 2, "same key, other embedding: the prefix must be recomputed")
         XCTAssertNotEqual(first.len, second.len)
-        XCTAssertEqual(cache.entries.count, 1, "the stale entry of that key is dropped")
         print("[k50] key reused with another embedding: \(computed) prefixes computed (stale entry not reused)")
+    }
+
+    /// Every `voiceEmbedding:` call labels its entry "embedding": two voices used in turn keep their own entries.
+    func testVoicesSharingAKeyKeepTheirEntries() {
+        let cache = VoicePrefixCache()
+        let a = cache.prefix(key: "embedding", embedding: voice(1), compute: compute)
+        let b = cache.prefix(key: "embedding", embedding: voice(2), compute: compute)
+        let a2 = cache.prefix(key: "embedding", embedding: voice(1), compute: compute)
+        let b2 = cache.prefix(key: "embedding", embedding: voice(2), compute: compute)
+        XCTAssertEqual(computed, 2, "A, B, A, B: each voice's prefix computed once")
+        XCTAssertEqual(a.len, a2.len)
+        XCTAssertEqual(b.len, b2.len)
+        XCTAssertNotEqual(a.len, b.len)
+        XCTAssertEqual(cache.entries.count, 2)
     }
 
     func testSameEmbeddingIsReusedWhateverTheKey() {
