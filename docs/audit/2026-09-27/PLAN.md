@@ -2460,7 +2460,8 @@ Statistics:
 - Lecture : le bf16 accélère le codec en batch, mais le codec ne pèse que 0,6 % du batch long et 6 % du streaming
   long depuis K-43 : l'effet de bout en bout est dans le bruit, et le SNR (≈ 36 dB) montre que l'étage final en bf16
   dégrade mesurablement la forme d'onde. ASK-13 (écoute) sans objet : la porte tombe avant l'écoute. Les
-  invariants de P-39 ne  gagnent rien de mesurable. Sondes rapides du matin (sauvegarde en cours) supprimées, jamais une référence. Tests :
+  invariants de P-39 ne gagnent rien de mesurable. Sondes rapides du matin (sauvegarde en cours) supprimées, jamais
+  une référence. Tests :
   suite Debug complète sur `9a1ce03f` (623 tests, 49 sautés, 0 échec) ; `IncrementalCodecDecodeTests` gardé non
   rejoué (note de la fiche) : le code retiré, le codec reste celui de K-43. `BENCHMARKS.md` §« 2026-10-19 — K-58 ».
   Écarts : ASK.md §Dérogations, K-58.
