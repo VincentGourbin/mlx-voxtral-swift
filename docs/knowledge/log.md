@@ -337,3 +337,9 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   seul le test unitaire couvre cette branche). Leçon : en décodage borné
   par la mémoire, le poids d'un module lu à chaque pas prédit le gain (ici aux deux tiers). PLAN.md §7,
   `BENCHMARKS.md` §« 2026-10-19 — K-46 ».
+- 2026-10-19 — **K-65 : la RoPE fusionnée de l'encodeur Realtime est exacte mais ne gagne que 2,5 %** :
+  `MLXFast.RoPE(traditional: true)` sur `[1, H, L, D]` (offset = début de la tranche) remplace la forme explicite
+  (tables cos/sin, ≈ 10 opérations par q et k) : embeddings à 8e-4 de l'ancienne forme, textes identiques, encodage
+  C-moyen − 2,5 % (− 5 % exigé), pas inchangé. Retirée. Leçon : depuis K-38 l'encodeur est en fp16 et dominé par
+  ses matmuls ; une opération élémentaire fusionnée n'y vaut presque rien, et l'encodage ne fait que 9 % du total.
+  PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-65 ».

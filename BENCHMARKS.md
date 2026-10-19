@@ -6115,3 +6115,148 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 11:31:57  51,3 /System/Applications/Music.app/Contents/MacOS/Music (x1/      81)
 ```
 
+
+## 2026-10-19 — K-65 : RoPE de l'encodeur Realtime par le noyau fusionné — retirée
+
+**Protocole.** Une file, `.local-runs/queue-k65.sh` (11:51 → 12:34). A = commit parent `da4cbfff` (worktree
+`convertvoxtral-k65A`, binaire Release construit et lancé depuis lui) ; B = `445439e6` (`perf(K-65)` : RoPE entrelacée
+de l'encodeur par `MLXFast.RoPE(traditional: true, base: θ)` sur `[1, H, L, D]`, offset = position absolue de la
+tranche, au lieu de `interleavedRoPE` et des tables cos/sin), binaire Release du dépôt principal, aucun commit
+pendant la file ; les 10 lignes (6 `EVAL`, 4 `BENCH`) sont `"dirty":false`. Construits avec
+`-onlyUsePackageVersionsFromResolvedFile` : mlx-swift 0.31.6@0bb916c, mlx-swift-lm main@604fae7,
+swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go, secteur. realtime-4b-4bit, `--delay 480`.
+(1) `eval realtime` C-court, C-moyen EN et FR pour A et B ; (2) A/B/B/A sur C-moyen EN
+(`docs/eval/clips/c_moyen_en.wav`), `bench realtime --passes 1 --warmup 1 --cooldown 120`, un processus par passe.
+Avant chaque passe : 180 s de repos, Time Machine et simulateurs arrêtés, `quiet.sh wait` (machine-check,
+refroidissement 120 s ; il vérifie le binaire du dépôt principal, y compris avant les passes A) ; pendant la passe,
+`quiet.sh sample`. Les 6 passes « ok QUIET » à la première tentative, aucun `KO`. `--beacon` partout.
+
+**Parité** (test `RealtimeFusedRoPETests` de `445439e6`, Debug, gardé `TEST_RUNNER_VOXTRAL_REALTIME_ROPE=1`,
+`.local-runs/k65-gated.log`) : sortie de l'encodeur sur C-moyen EN, noyau fusionné contre la forme explicite
+reconstruite depuis les mêmes modules, dans le dtype du modèle (float16) : embeddings L2 relative 8,0e-4
+(realtime-4b-4bit) et 7,2e-4 (realtime-4b-fp16), porte < 1e-2 : tenue. Encodeur aléatoire à 5 fenêtres : fp32
+7,3e-8, fp16 3,0e-4 ; rouge exécuté (offset 0 pour toutes les tranches : fp32 6,4e-3, échec ;
+`.local-runs/k65-red.log`).
+
+**Résultats, C-moyen EN.**
+
+| Mesure | A1 / A2 | B1 / B2 | Écart des moyennes | Porte |
+|---|---|---|---|---|
+| `phases_ms.encode` | 2 207,4 / 2 208,8 | 2 153,1 / 2 152,3 | − 2,5 % (A/A 0,06 %, B/B 0,04 %) | − 5 % : **non tenue** |
+| `encode_ms_per_audio_s` | 15,11 / 15,12 | 14,74 / 14,73 | − 2,5 % | — |
+| `step_ms_p50` | 11,72 / 11,73 | 11,64 / 11,72 | − 0,4 % | — |
+| `total_ms` | 23 929,3 / 23 925,3 | 23 755,4 / 23 864,0 | − 0,5 % | — |
+| `peak_mlx_mb` | 4 247,2 / 4 247,2 | 4 201,2 / 4 201,2 | − 46,0 Mo | — |
+
+WER identiques (C-court 9,09, C-moyen EN 1,05, FR 1,97) et `out_sha256` identiques A/B sur les trois clips
+(`933a5a2e…`, `6573ca6a…`, `3b240f87…`) et dans les 4 passes `bench` (`6573ca6a…`).
+
+**Lecture.**
+- Le noyau fusionné est exact (8e-4) et un peu plus rapide, mais l'encodage ne gagne que 2,5 % : la RoPE explicite
+  (≈ 10 petites opérations × q, k × 32 couches) pèse peu devant les matmuls et l'attention de l'encodeur, déjà en
+  fp16 depuis K-38. Gain < 5 % (PLAN.md §0, étape 4 de la fiche) : code retiré (`89570bdb`, encodeur et tests remis
+  à l'état du parent `da4cbfff`). L'encodage ne pèse que 9 % du temps total sur C-moyen (2,2 s sur 23,9 s).
+- Charge de fond notée par `quiet.sh sample` : corespotlightd, Music, contactsd ; `rope-B1` : mediaanalysisd sur 39
+  des 81 relevés (`top_process` 102,0 %), B1 égal à B2 à 0,04 % près. Aucun autre processus MLX au machine-check.
+
+**Lignes `BENCH` / `EVAL`** (ordre de la file) :
+
+```
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_court_en","clip_language":"en","commit":"da4cbfff8","date":"2026-10-19T09:56:22Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":11,"input":"docs/examples/fluxforge_short_en_6bit.wav","input_s":5.04,"ins":0,"language":"auto","last_sentence_coverage":0.909,"last_sentence_present":false,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"933a5a2ea81bb233076b523c19190c577be130e5d084e6ccc870441c908c6b82","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":11,"reference_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","sub":1,"tag":"K65EVAL-A","top_process":"23,6 /Users/vincent/Developpements/convertvoxtral-k65A/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":9.09}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_en","clip_language":"en","commit":"da4cbfff8","date":"2026-10-19T09:56:46Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":382,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"ins":2,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1.005,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":380,"reference_sha256":"99fb83f1e4c43d7c6c12850dcf72dce4cdefdcb9a906c7dac8c687ca01b55263","sub":2,"tag":"K65EVAL-A","top_process":"26,9 /Users/vincent/Developpements/convertvoxtral-k65A/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":1.05}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_fr","clip_language":"fr","commit":"da4cbfff8","date":"2026-10-19T09:57:08Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":406,"input":"docs/eval/clips/c_moyen_fr.wav","input_s":130.88,"ins":0,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"3b240f87d03822bdfe19653435a4e5fa0d6149bfad389d5ac0e0f313f27f3ee0","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":406,"reference_sha256":"82d03278e2cb52a444e2f05ce4ba1e3f2f648d6aa8f345ad6be87fd1740ad5a7","sub":8,"tag":"K65EVAL-A","top_process":"26,1 /Users/vincent/Developpements/convertvoxtral-k65A/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":1.97}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_court_en","clip_language":"en","commit":"445439e69","date":"2026-10-19T10:02:10Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":11,"input":"docs/examples/fluxforge_short_en_6bit.wav","input_s":5.04,"ins":0,"language":"auto","last_sentence_coverage":0.909,"last_sentence_present":false,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"933a5a2ea81bb233076b523c19190c577be130e5d084e6ccc870441c908c6b82","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":11,"reference_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","sub":1,"tag":"K65EVAL-B","top_process":"27,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":9.09}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_en","clip_language":"en","commit":"445439e69","date":"2026-10-19T10:02:34Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":382,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"ins":2,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1.005,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":380,"reference_sha256":"99fb83f1e4c43d7c6c12850dcf72dce4cdefdcb9a906c7dac8c687ca01b55263","sub":2,"tag":"K65EVAL-B","top_process":"26,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":1.05}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_fr","clip_language":"fr","commit":"445439e69","date":"2026-10-19T10:02:55Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":406,"input":"docs/eval/clips/c_moyen_fr.wav","input_s":130.88,"ins":0,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"3b240f87d03822bdfe19653435a4e5fa0d6149bfad389d5ac0e0f313f27f3ee0","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":406,"reference_sha256":"82d03278e2cb52a444e2f05ce4ba1e3f2f648d6aa8f345ad6be87fd1740ad5a7","sub":8,"tag":"K65EVAL-B","top_process":"32,1 /System/Library/CoreServices/TimeMachine/backupd","truncated":false,"wer":1.97}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"da4cbfff8","date":"2026-10-19T10:10:44Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.11,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":212,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6398.5,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4241.4,"encode":4241.4,"prefill":3018.1},"phases_ms":{"audio":7.8,"decode":21679.9,"encode":2207.4,"post":0,"prefill":33},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1638,"step_ms_p50":11.72,"step_ms_p90":12.24,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K65-A","top_process":"26,0 /Users/vincent/Developpements/convertvoxtral-k65A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23929.3,"truncated":false,"ttft_ms":2272.5,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"445439e69","date":"2026-10-19T10:18:32Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":14.74,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":209.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6350.7,"peak_mlx_mb":4201.2,"peak_mlx_mb_by_phase":{"decode":4201.2,"encode":4201.2,"prefill":3018.1},"phases_ms":{"audio":7.9,"decode":21560.2,"encode":2153.1,"post":0,"prefill":33},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1626,"step_ms_p50":11.64,"step_ms_p90":12.16,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K65-B","top_process":"102,0 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd","total_ms":23755.4,"truncated":false,"ttft_ms":2218.4,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"445439e69","date":"2026-10-19T10:26:21Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":14.73,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":208.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6351.2,"peak_mlx_mb":4201.2,"peak_mlx_mb_by_phase":{"decode":4197.9,"encode":4197.9,"prefill":3018.1},"phases_ms":{"audio":8,"decode":21669.6,"encode":2152.3,"post":0,"prefill":32.9},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1634,"step_ms_p50":11.72,"step_ms_p90":12.22,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K65-B","top_process":"27,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23864,"truncated":false,"ttft_ms":2218,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"da4cbfff8","date":"2026-10-19T10:34:10Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.12,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":207.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6398.5,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4245.4,"encode":4245.4,"prefill":3010.1},"phases_ms":{"audio":8.1,"decode":21673.4,"encode":2208.8,"post":0,"prefill":33.9},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1638,"step_ms_p50":11.73,"step_ms_p90":12.23,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K65-A","top_process":"26,2 /Users/vincent/Developpements/convertvoxtral-k65A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23925.3,"truncated":false,"ttft_ms":2275.9,"warm":true}
+```
+
+Machine-check avant chaque passe (`.local-runs/k65/mc_*.log`) :
+
+```
+# k65/mc_eval-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,6 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k65/mc_eval-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 68,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k65/mc_rope-A1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,0 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 68,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k65/mc_rope-B1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 68,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k65/mc_rope-B2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,0 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 68,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k65/mc_rope-A2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,0 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 68,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+```
+
+Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`, enregistrée, jamais un rejet) :
+
+```
+# k65/eval-A.samples.load (vide)
+# k65/eval-B.samples.load (vide)
+# k65/rope-A1.samples.load
+12:07:58 113,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x2/      81)
+12:10:18  53,8 /sbin/launchd (x2/      81)
+12:09:51  51,1 /System/Applications/Music.app/Contents/MacOS/Music (x1/      81)
+# k65/rope-B1.samples.load
+12:18:32 102,1 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x39/      81)
+12:18:23  77,5 /System/Library/PrivateFrameworks/PhotoLibraryServices.framework/Versions/A/Support/photolibraryd (x1/      81)
+12:18:05  50,5 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x6/      81)
+# k65/rope-B2.samples.load
+12:24:48  57,2 /sbin/launchd (x1/      81)
+12:25:32  52,6 /System/Applications/Music.app/Contents/MacOS/Music (x1/      81)
+# k65/rope-A2.samples.load
+12:32:41 104,7 /System/Library/Frameworks/Contacts.framework/Support/contactsd (x1/      81)
+12:32:47  56,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/      81)
+```
+

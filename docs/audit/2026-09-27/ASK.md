@@ -1183,3 +1183,13 @@ Décisions du planificateur du 2026-10-03 :
   rejetée sur trois clips (porte : C-moyen EN/FR) ; C-long et autres langues à reprendre avant K-76 à K-78.
   (19) `load_active_mb` est en Mio, les lignes de porte écrivent « Mo » : 360 Mio = 377 Mo, porte tenue dans les deux
   unités. (20) « Les deux tiers » repose sur le trafic estimé par P-61 (2,5 Go par pas), non mesuré ici.
+- **K-65 (#650), 2026-10-19, décision de l'agent** (`VERIFY.md` §1 et §2 ; retirée) : (1) passes `--passes 1
+  --warmup 1 --cooldown 120`, un processus par passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38, K-43,
+  K-46). (2) Parité mesurée par un test Debug gardé (`RealtimeFusedRoPETests`, forme explicite reconstruite depuis
+  les mêmes modules dans le même processus) et non entre deux binaires : seule la RoPE diffère. (3) Mesuré sur
+  realtime-4b-4bit seul (pack de la porte, ASK-11) ; parité aussi sur realtime-4b-fp16. (4) Suite Debug complète non
+  rejouée sur `445439e6` (tests ciblés `RealtimeFusedRoPETests` et `RealtimeSlidingWindowTests` verts) : code
+  retiré, `git diff da4cbfff 89570bdb -- Sources Tests` vide. (5) Tolérance fp16 du test aléatoire resserrée de
+  1e-2 à 2e-3 après le rouge (à 1e-2, l'offset faux passait en fp16 : 4,2e-3) ; le rouge n'a pas été rejoué à 2e-3.
+  (6) Deux commits de code (`perf(K-65)` essai, `perf(K-65)` retrait) et un de mesures, comme K-58 ; rapportée
+  `applied` avec la ligne de rejet (convention de K-58, dérogation 10).
