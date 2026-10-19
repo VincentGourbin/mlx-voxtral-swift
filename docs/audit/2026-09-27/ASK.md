@@ -1301,3 +1301,5 @@ Décisions du planificateur du 2026-10-03 :
   préfill de la voix, `--warmup 0` compris (complète la dérogation 22). (40) Aucune API publique pour vider le cache
   ou s'en passer (rejoint (23) et K-79). (41) La couverture sur 11 mots (texte court) discrimine mal ; l'écoute
   anonymisée (ASK-13) est proposée en option C de la question de (34).
+  (42) Question de (34) tranchée par Vincent le 2026-10-19 : A, le cache reste actif par défaut pour toute voix ;
+  dérogations (34) et (35) levées, prévenir FluxForge reste à Vincent (version).

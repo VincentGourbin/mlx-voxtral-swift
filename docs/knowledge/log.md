@@ -353,4 +353,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   [101, 3072]) ; elle seule distingue les voix, l'étiquette n'identifie rien.
   Et `machine-check` ne voit un débranchement que s'il précède son passage : lire aussi le champ `power` de chaque
   ligne `BENCH`. Et en streaming, tout calcul MLX fait avant la `Task` productrice est hors de la frontière K-1 :
-  un embedding mal formé y arrêtait l'hôte. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».
+  un embedding mal formé y arrêtait l'hôte. Défaut gardé par décision de Vincent (2026-10-19, A).
+  PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».
