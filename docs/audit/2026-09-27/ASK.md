@@ -1124,7 +1124,8 @@ Décisions du planificateur du 2026-10-03 :
 - **K-58 (#656), 2026-10-19** (retirée) : (1) passes `--passes 1 --warmup 0 --cooldown 0`, un processus par passe,
   au lieu de `--passes 2 --warmup 1 --cooldown 120` de l'étape 4 : texte long sans amorçage (porte recalée), repos
   de 180 s et refroidissement de 120 s du machine-check avant chaque passe (conduite de K-43). (2) SNR calculé sur
-  les WAV 16 bits de `eval tts-roundtrip` (plancher de quantification ≈ 96 dB, loin des 36 dB mesurés), mêmes codes
+  les WAV 16 bits de `eval tts-roundtrip` (plancher de quantification de deux arrondis 16 bits au niveau réel des
+  WAV : 58,4 / 50,1 / 48,5 dB, corrigé après le contradicteur ; le SNR du seul codec n'en monte que d'≈ 0,25 dB), mêmes codes
   des deux côtés (même graine, mêmes longueurs, mêmes transcriptions). (3) Pas d'A/A batch distinct : la dispersion
   A1/A2 (5,3 % en file 1, 0,5 % en file 2) en tient lieu. (4) `stream-long-B2` (file 1) démarré sur un `KO
   indexation/sauvegarde` toléré (décision du 2026-10-05), valeur égale à B1. (5) `IncrementalCodecDecodeTests` gardé
@@ -1135,3 +1136,14 @@ Décisions du planificateur du 2026-10-03 :
   (SNR déterministe 3 à 4 dB sous le seuil ; en streaming, B dans l'intervalle de A et au-dessus de l'A de la file 2,
   A/A 0,1 %). (8) Le machine-check vérifie le binaire du dépôt principal, y compris avant les passes A lancées depuis
   le worktree (`top_process` de `batch-long-A1` le confirme) : formulation de BENCHMARKS précisée.
+  Après le contradicteur (`verified`, 9 remarques) : (9) décision de l'agent : la clause « sinon ne garder que les
+  invariants (P-39) s'ils laissent la sortie identique » est lue comme une borne (au plus les invariants), non comme
+  une obligation : les invariants, sortie identique, gagnent − 0,6 % / − 0,5 % (< 5 %, PLAN.md §0 ; étape 4 de la
+  fiche « ou < 5 % ⇒ code retiré ») et leur pic est dans la dispersion (+ 0,7 %) : retirés. (10) Décision de l'agent :
+  fiche retirée après mesure rapportée `applied` avec la ligne de rejet (et non `blocked`, qui appelle une question à
+  Vincent : aucune décision réservée n'est en jeu ; « un rejet documenté vaut une technique retenue ») ; convention
+  pour les fiches suivantes. (11) Clause streaming inatteignable par construction depuis K-43 (codec 6,1 % du
+  streaming long : un codec gratuit donnerait − 6 %) : leçon à reporter au prochain replanning des fiches codec / TTS.
+  (12) SNR par segments d'une seconde (long : médiane 31,1 dB, minimum 20,9 ; moyen : 36,0 / 31,8) : plus bas que le
+  SNR global, renforce le retrait. (13) Pic streaming − 12 % du bf16 non exploité : le garder pour un profil « lean »
+  demanderait d'accepter un SNR de 36 dB (garantie de qualité, décision de Vincent) ; non proposé.
