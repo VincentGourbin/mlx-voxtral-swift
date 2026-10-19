@@ -5912,9 +5912,14 @@ de K-38).
 - Le parent n'écrit pas `load_active_mb` (champ ajouté par `b43ce756`) : la clause mémoire est lue entre B0 et B8 du
   même binaire, B0 égal à A en texte, en pic et en temps par pas (dérogation). Pas d'A/A `load_active_mb` distinct :
   la valeur est déterministe (2 979,4 deux fois, 2 619,4 deux fois, 2 427,4 deux fois).
-- Charge de fond notée par `quiet.sh sample` : corespotlightd, mediaanalysisd, Mail, Music ; `head8-A2` :
-  `backupd` (Time Machine) sur 11 des 81 relevés, en fin de passe ; A2 (11,65 ms) est sous A1 (11,73) : la charge ne
-  grossit pas le gain. Jamais une autre charge GPU.
+- Charge de fond notée par `quiet.sh sample` : corespotlightd, mediaanalysisd, photoanalysisd, Mail, Music ;
+  `head8-A2` : `backupd` (Time Machine) sur 11 des 81 relevés, en fin de passe ; A2 (11,65 ms) est sous A1 (11,73) :
+  la charge ne grossit pas le gain ; `b0-2` : photoanalysisd sur 34 des 81 relevés (B0-2 11,68 sous B0-1 11,73) ;
+  `head4-1` : mediaanalysisd sur 39 des 77 relevés (B4-1 9,78 contre B4-2 9,75). Aucun autre processus MLX au
+  machine-check (il ne voit que ceux-là).
+- Lignes `DTYPE` de l'audit (`.local-runs/k46/dtype-audit.log`, hors file), pour les trois variantes :
+  `DTYPE realtime mel=float32 shape=[128, 648]`, `encoder_out=float16 shape=[81, 3072]`,
+  `logits=float16 shape=[131072]`, `kv_cache=float16 shape=[1, 8, 8, 128]`.
 - Passes de rodage (`smoke.log`, `smoke8.log`, `smoke4.log`, arbre non commité, `"dirty":true`) : jamais une
   référence.
 

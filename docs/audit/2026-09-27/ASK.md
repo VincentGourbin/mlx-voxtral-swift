@@ -1147,7 +1147,7 @@ Décisions du planificateur du 2026-10-03 :
   (12) SNR par segments d'une seconde (long : médiane 31,1 dB, minimum 20,9 ; moyen : 36,0 / 31,8) : plus bas que le
   SNR global, renforce le retrait. (13) Pic streaming − 12 % du bf16 non exploité : le garder pour un profil « lean »
   demanderait d'accepter un SNR de 36 dB (garantie de qualité, décision de Vincent) ; non proposé.
-- **K-46 (#642), 2026-10-19** (appliquée) : (1) passes `--passes 1 --warmup 1 --cooldown 120`, un processus par
+- **K-46 (#642), 2026-10-19, décision de l'agent** (`VERIFY.md` §1 et §2 ; appliquée) : (1) passes `--passes 1 --warmup 1 --cooldown 120`, un processus par
   passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38 et K-43 ; repos de 180 s et machine-check avant
   chacune). (2) Clause mémoire lue entre B sans option (B0) et B tête 8 bits (B8) du même binaire, et non contre A :
   le parent n'écrit pas `load_active_mb` (champ ajouté par `b43ce756`) ; B0 égale A en texte (`out_sha256`), en pic
@@ -1161,3 +1161,11 @@ Décisions du planificateur du 2026-10-03 :
   C-court (`.local-runs/k46/dtype-audit.log`), pas une mesure. (8) Le titre de la fiche (« 8 bits en fast, 4 bits en
   lean ») n'est pas appliqué ici : aucun profil ne l'active, c'est K-76 à K-78 et un défaut public (question à
   Vincent).
+  Après le vérificateur (`verified`, 7 remarques) : (9) le cast de K-38 précède la quantification : dans le chargeur,
+  la branche `scales` de `realtimeComputeDType` n'est pas atteinte et l'audit de dtype aurait été fp16 sans elle ;
+  le piège n'est couvert que par `RealtimeQuantizedHeadTests` (assertion `realtimeComputeDType == .float16` sur une
+  table `uint32`, rouge si l'on relit `weight.dtype`, non exécuté en rouge). (10) Charge de fond complétée dans
+  BENCHMARKS (photoanalysisd `b0-2`, mediaanalysisd `head4-1`), sans effet sur les valeurs ; « jamais une autre charge
+  GPU » remplacé (le machine-check ne voit que les processus MLX). (11) CHANGELOG : bases des deux pourcentages
+  précisées, Mio, la variable d'environnement n'y est plus annoncée (interne, pas un réglage) ; commentaire périmé
+  de `realtimeComputeDType` corrigé (commentaire seul, aucune mesure à refaire).

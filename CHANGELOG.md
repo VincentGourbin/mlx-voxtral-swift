@@ -144,10 +144,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-26 — `VoxtralVoiceEnrollment.Config.seed`, `checkpointURL`, `checkpointEvery`** and
   `EnrollmentCheckpointError`: an interrupted enrollment resumes from its checkpoint and ends with the codes of an
   uninterrupted run. CLI `enroll`: `--seed`, `--checkpoint`, `--checkpoint-every`, `--stop-after`.
-- **K-46 — Realtime quantized tied head (opt-in).** With `VOXTRAL_REALTIME_HEAD_BITS=8` (or `4`), the Realtime
-  token table is quantized at load time and the logits use `quantizedMM`: realtime-4b-4bit −10.6 % per step and
-  −360 MB (8 bits), −16.6 % and −552 MB (4 bits), identical text on the evaluation clips. Off by default; CLI `bench
-  realtime` and `eval realtime`: `--head-bits 8|4`, and `bench realtime` reports `load_active_mb`.
+- **K-46 — CLI `bench realtime` and `eval realtime`: `--head-bits 8|4`** (measurement only): the Realtime token table
+  is quantized at load time and the logits use `quantizedMM`. realtime-4b-4bit, medium English clip: −10.6 % per step
+  and −360 MiB loaded with the 8-bit head (against the parent commit), −16.6 % and −552 MiB with the 4-bit head
+  (against the same binary without the option); identical text on the evaluation clips. The library default is
+  unchanged and exposes no setting for it. `bench realtime` also reports `load_active_mb`.
 - **K-32 — `VoxtralCLI bench`** (`stt`, `tts`, `realtime`, `enroll`, `chat`): one JSON line per measured pass, A/A
   dispersion; `--trace` exports a Chrome trace of a separate diagnostic pass (K-32b).
 - **K-32b — `VoxtralRealtimePipeline.lastPadFraction`**: share of the last transcription's decode steps that carry
