@@ -1147,3 +1147,17 @@ Décisions du planificateur du 2026-10-03 :
   (12) SNR par segments d'une seconde (long : médiane 31,1 dB, minimum 20,9 ; moyen : 36,0 / 31,8) : plus bas que le
   SNR global, renforce le retrait. (13) Pic streaming − 12 % du bf16 non exploité : le garder pour un profil « lean »
   demanderait d'accepter un SNR de 36 dB (garantie de qualité, décision de Vincent) ; non proposé.
+- **K-46 (#642), 2026-10-19** (appliquée) : (1) passes `--passes 1 --warmup 1 --cooldown 120`, un processus par
+  passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38 et K-43 ; repos de 180 s et machine-check avant
+  chacune). (2) Clause mémoire lue entre B sans option (B0) et B tête 8 bits (B8) du même binaire, et non contre A :
+  le parent n'écrit pas `load_active_mb` (champ ajouté par `b43ce756`) ; B0 égale A en texte (`out_sha256`), en pic
+  (4 247,2 Mo) et en pas (+ 0,1 %). Pas d'A/A distinct pour `load_active_mb`, valeur déterministe (deux fois la même
+  valeur pour B0, B8 et B4). (3) Tête 4 bits mesurée contre B0 (B0, B4, B4, B0), pas en A/B/B/A contre A : la porte
+  ne lui demande que le WER. (4) Commit de code et commit de mesures séparés (`perf(K-46)` puis `docs(K-46)`), comme
+  K-38 et K-43. (5) Ajout hors fiche, dans le seul outil de mesure : option `--head-bits` de `bench realtime` et `eval
+  realtime` et champ `load_active_mb` ; la variable `VOXTRAL_REALTIME_HEAD_BITS` est lue par le chargeur de
+  `VoxtralCore` (interne, aucun symbole public). (6) `head8-A2` : `backupd` (Time Machine) sur 11 des 81 relevés de
+  charge, sans `KO` au machine-check ; A2 sous A1, le gain n'en est pas grossi. (7) Audit de dtype fait hors file sur
+  C-court (`.local-runs/k46/dtype-audit.log`), pas une mesure. (8) Le titre de la fiche (« 8 bits en fast, 4 bits en
+  lean ») n'est pas appliqué ici : aucun profil ne l'active, c'est K-76 à K-78 et un défaut public (question à
+  Vincent).
