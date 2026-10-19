@@ -1169,3 +1169,17 @@ Décisions du planificateur du 2026-10-03 :
   GPU » remplacé (le machine-check ne voit que les processus MLX). (11) CHANGELOG : bases des deux pourcentages
   précisées, Mio, la variable d'environnement n'y est plus annoncée (interne, pas un réglage) ; commentaire périmé
   de `realtimeComputeDType` corrigé (commentaire seul, aucune mesure à refaire).
+  Après le contradicteur (`verified`, 9 remarques) : (12) le champ `head_bits` des lignes `EVAL` vient de l'option,
+  pas de l'état du modèle ; preuve indirecte que la tête était quantifiée en `eval` : même mécanisme que `bench`
+  (où `load_active_mb` baisse) et durées C-moyen EN 22 / 20 / 18 s (B0 / B8 / B4) ; à dériver de l'état du modèle
+  dans une prochaine fiche qui touche `eval`. (13) Rouge non exécuté pour la branche `scales` (voir (9)) ; phrase de
+  log.md corrigée. (14) CHANGELOG : « −360 MiB » lu entre B0 et B8, non contre le parent (contre le parent : pic
+  MLX 4 247,2 → 3 887,2) ; corrigé. (15) La bibliothèque lit `VOXTRAL_REALTIME_HEAD_BITS` (comme
+  `VOXTRAL_DTYPE_AUDIT`) : un hôte qui en hériterait changerait de tête sans signal ; CHANGELOG le dit de nouveau ;
+  le choix d'un réglage public est dans la question à Vincent. (16) `load_ms` + 15 % avec la tête quantifiée (A 205,4
+  / 207,3, B0 206,3 / 208,2, B8 238,0 / 238,6, B4 235,2 / 238,3) ; pic transitoire du chargement non mesuré (la table
+  fp16 et la quantifiée coexistent ≈ + 408 Mio pendant `quantizeRealtimeHead`). (17) Seul realtime-4b-4bit mesuré
+  avec l'option ; fp16 et bf16 (`realtime-4b`) par raisonnement seulement : à mesurer par K-78. (18) Tête 4 bits non
+  rejetée sur trois clips (porte : C-moyen EN/FR) ; C-long et autres langues à reprendre avant K-76 à K-78.
+  (19) `load_active_mb` est en Mio, les lignes de porte écrivent « Mo » : 360 Mio = 377 Mo, porte tenue dans les deux
+  unités. (20) « Les deux tiers » repose sur le trafic estimé par P-61 (2,5 Go par pas), non mesuré ici.

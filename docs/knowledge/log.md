@@ -332,7 +332,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `QuantizedEmbedding` (groupes de 64) et appliquée par `asLinear` (`quantizedMM`), elle pèse 408 Mio en 8 bits et
   216 en 4 bits : `load_active_mb` − 360 et − 552 Mo, exactement ces écarts ; pas − 10,6 % (8 bits) et − 16,6 %
   (4 bits) sur realtime-4b-4bit ; textes identiques sur C-court et C-moyen EN/FR avec les deux têtes. Derrière
-  `VOXTRAL_REALTIME_HEAD_BITS`, défaut inchangé. Piège évité : une table quantifiée est `uint32`, lire le dtype de
-  calcul sur `scales`, sinon le cast de K-38 est sauté sans bruit et tout repasse en fp32. Leçon : en décodage borné
+  `VOXTRAL_REALTIME_HEAD_BITS`, défaut inchangé. Piège : une table quantifiée est `uint32` ; le dtype de calcul se lit
+  sur `scales`, sinon un cast fait après la quantification serait sauté sans bruit (ici le cast de K-38 la précède :
+  seul le test unitaire couvre cette branche). Leçon : en décodage borné
   par la mémoire, le poids d'un module lu à chaque pas prédit le gain (ici aux deux tiers). PLAN.md §7,
   `BENCHMARKS.md` §« 2026-10-19 — K-46 ».
