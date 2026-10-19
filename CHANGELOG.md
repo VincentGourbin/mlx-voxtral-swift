@@ -55,6 +55,14 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-50 — TTS voice-prefix cache for any voice.** The prefix KV of the last three voices used is kept and matched by
+  the embedding's content (shape, dtype, SHA-256), so `synthesize(text:voiceEmbedding:)` (cloned voices, ZeroVoice,
+  blends) and the streaming overload without `voiceKey` now reuse it like preset voices: the second synthesis of a
+  cloned voice prefills 52 to 55 % faster (tts-4b-6bit and 4-bit short text, 126 → 60 ms) and its first frame comes
+  about 65 ms sooner; output unchanged on the quantized packs. About 27 MB of memory per cached voice. With the bf16
+  pack (`tts-4b-mlx`), the first call with an embedding now prefills the voice and the text separately, as preset
+  voices always did: at the same seed its audio can differ from before (rounding, K-94; same ASR coverage), and the
+  same voice now sounds the same through `voice:` and `voiceEmbedding:`.
 - **K-43 — Streaming TTS decodes each chunk from a bounded left context.** Each chunk now decodes only its new
   frames plus 24 frames of context (the codec's receptive field, computed from its layer kernels, strides and window
   sizes, plus a margin)
@@ -199,6 +207,8 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-32 — the `VoxtralBenchmark` executable** (ASK-26 = B), replaced by `VoxtralCLI bench`.
 
 ### Fixed
+- **K-50 — streaming `voiceKey` reused with another embedding** no longer returns the previous voice's cached prefix:
+  the cache is matched by embedding content and `voiceKey` only labels the entry.
 - **K-86 — original `tts-4b` pack**: its 20 preset voices (`voice_embedding/*.pt`, `torch.save` files) are read
   without Python (before: "0 voices loaded"); a `.pt` that cannot be read makes `loadModel` throw
   `modelLoadingFailed` naming the file. `synthesizeStreaming` sets `lastSynthesisTruncated` (reset at the start of

@@ -345,3 +345,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   P-68 (encodage 2 801 → 2 208 ms), et l'encodage ne fait que 9 % du total : l'ordre de grandeur laissait prévoir
   moins de 5 %, à lire avant de fixer la porte d'une fiche « opération élémentaire fusionnée ».
   PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-65 ».
+- 2026-10-19 — **K-50 : le cache de préfixe TTS sert toute voix, retrouvé par empreinte de l'embedding** : forme,
+  dtype et SHA-256 des octets de l'embedding identifient la voix (trois entrées, LRU, ≈ 27 Mo chacune) ; la surcharge
+  `voiceEmbedding:` en profite : préfill de la 2ᵉ synthèse de `clone_fr` − 52,6 % en 6 bits, − 55 % en 4 bits, audio
+  identique en 6 et 4 bits ; en bf16, le premier appel change d'arrondi (K-94), couverture égale. Leçon : une clé
+  fournie par l'appelant ne garantit pas le contenu ; l'empreinte coûte une copie et un SHA-256 de ≈ 0,6 Mo par appel.
+  Et `machine-check` ne voit un débranchement que s'il précède son passage : lire aussi le champ `power` de chaque
+  ligne `BENCH`. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».

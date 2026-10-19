@@ -1204,3 +1204,22 @@ Décisions du planificateur du 2026-10-03 :
   la clause streaming de K-58 : à reporter au prochain replanning. (14) Tags `K65-A` / `K65-B` partagés par A1/A2 et
   B1/B2 (VERIFY.md §1 : un tag par série) ; passes distinguées par la date et l'ordre de la file. (15) Le corps de
   #650 cite encore 2 860 ms (K-36), l'amendement K-96 (2 801 ms) prime ; sans effet, la porte se juge sur A.
+- **K-50 (#643), 2026-10-19, décision de l'agent** (`VERIFY.md` §1 et §2 ; validée) : (1) passes `--passes 1
+  --warmup 1 --cooldown 120`, un processus par passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38 à K-65) :
+  l'amorçage est la 1ʳᵉ synthèse de la voix, la passe mesurée la 2ᵉ. (2) Pas de paramètre `voiceKey:` sur la
+  surcharge batch (prévu par la fiche, « additif ») : l'empreinte du contenu suffit, aucune signature publique ne
+  change. (3) Rouge prouvé en remplaçant la correspondance par empreinte par une correspondance sur la clé seule
+  (`.local-runs/k50-red.log`), et non par `git stash` des fichiers du correctif (étape 5) : sans `VoicePrefixCache`,
+  le test ne compile pas. (4) Parité ASR mesurée sur la 1ʳᵉ synthèse (un processus par `eval tts-roundtrip`) : B y
+  prefille voix puis texte, A d'un bloc ; la 2ᵉ synthèse est couverte par `out_sha256` identique dans les A/B/B/A
+  (graine 1 seule, trois cellules). (5) bf16 sur le texte court seul (3 graines), pas 3 textes : conformité à K-94
+  lue sur la couverture. (6) Passe `6bit-medium-B2` (information) sur batterie (`"power":"Battery Power"`, Mac
+  débranché 13:54 → 14:13 ; son machine-check, 5 s après le débranchement, affichait encore « sur secteur ») :
+  écartée et refaite (`6bit-medium-B2r`, après la cellule 4 bits, hors de l'ordre A/B/B/A) ; ligne recopiée telle
+  quelle. (7) `KO  indexation/sauvegarde` avant `4bit-short-B2` et `6bit-medium-A2`, tolérés (décision du
+  2026-10-05). (8) Évaluations (non chronométrées) pendant une sauvegarde Time Machine. (9) Binaire B construit à
+  `86899785` (commits `docs(K-65)` après `d8b457d8`), code identique à `d8b457d8`. (10) L'empreinte (copie et
+  SHA-256 de l'embedding) et, au premier appel, le calcul du préfixe se font hors de la phase « Prefill »
+  du modèle (`VoxtralTTSModeling.swift:482`) : `phases_ms.prefill` ne les compte pas ; `total_ms` les compte (− 2,0 %, cohérent avec − 66 ms de
+  préfill), coût de l'empreinte non mesuré seul. (11) Tags `K50-<cellule>-A|B` partagés par A1/A2 et B1/B2 ;
+  passes distinguées par la date et l'ordre de la file.
