@@ -1214,7 +1214,7 @@ Décisions du planificateur du 2026-10-03 :
   prefille voix puis texte, A d'un bloc ; la 2ᵉ synthèse est couverte par `out_sha256` identique dans les A/B/B/A
   (graine 1 seule, trois cellules). (5) bf16 sur le texte court seul (3 graines), pas 3 textes : conformité à K-94
   lue sur la couverture. (6) Passe `6bit-medium-B2` (information) sur batterie (`"power":"Battery Power"`, Mac
-  débranché 13:54 → 14:13 ; son machine-check, 5 s après le débranchement, affichait encore « sur secteur ») :
+  débranché 13:54 → 14:13 ; son machine-check teste le secteur avant ses 120 s de refroidissement, vers 13:52:22, environ 2 min avant le débranchement : « sur secteur ») :
   écartée et refaite (`6bit-medium-B2r`, après la cellule 4 bits, hors de l'ordre A/B/B/A) ; ligne recopiée telle
   quelle. (7) `KO  indexation/sauvegarde` avant `4bit-short-B2` et `6bit-medium-A2`, tolérés (décision du
   2026-10-05). (8) Évaluations (non chronométrées) pendant une sauvegarde Time Machine. (9) Binaire B construit à
@@ -1240,8 +1240,8 @@ Décisions du planificateur du 2026-10-03 :
   par `voiceEmbedding:`, le chemin que K-50 met en cache (`clone_fr` n'est pas une voix prédéfinie). (16) Câblage
   streaming et correction « Fixed » du `voiceKey` couverts par les tests unitaires de `VoicePrefixCache` seuls, sans
   test de pipeline ni mesure du streaming ; coût de l'empreinte non mesuré seul (≈ 1,2 Mo copiés et hachés par appel
-  pour `clone_fr` en fp32). (17) `unload()` vide le cache hors du `gate` (`:864`), même course qu'avant K-50 sur
-  `prefixCacheEntry`. (18) A/A de la cellule d'information 6 bits moyen 4,0 %, au-dessus du seuil de 3 % : lue à
+  pour `clone_fr` en fp32). (17) `unload()` vide le cache hors du `gate` (`:864` à `6580961d`, `:869` à `9004f580`) ;
+  depuis `9004f580`, la course est plus large qu'avant K-50 (dérogation 28). (18) A/A de la cellule d'information 6 bits moyen 4,0 %, au-dessus du seuil de 3 % : lue à
   titre indicatif (BENCHMARKS précisé).
   Après le second vérificateur : (19) correctif de frontière (commit `fix(K-50)`) : `voicePrefix` tourne dans la
   `Task` productrice du streaming, sous `withMLXErrors`, et lève l'erreur MLX interceptée ; `precomputeVoicePrefixCache`
@@ -1256,11 +1256,26 @@ Décisions du planificateur du 2026-10-03 :
   batch mesuré inchangé en succès (aucune erreur) : mesures non rejouées ; la dérogation (14) est levée.
   (20) Charge de fond pendant `6bit-short-B2` (cellule de la porte) : corespotlightd jusqu'à 220 % et mediaanalysisd
   249 % (`6bit-short-B2.samples.load`) ; B1/B2 5,4 % d'écart, au détriment de B, sans effet sur la porte.
-  (21) Logs de test de `d8b457d8` (`k50-unit1`, `k50-red`, `suite`) sans code de sortie (`VERIFY.md` §1) ; ceux du
-  correctif l'ont. (22) Depuis K-50, `bench tts --warmup ≥ 1` mesure le chemin en cache pour toute voix : les
+  (21) Logs de test de `d8b457d8` (`k50-unit1`, `k50-red`, `suite`) sans code de sortie (`VERIFY.md` §1) ; ceux de
+  `6580961d` (`k50-red2`, `k50-unit2`, `suite2`) non plus ; ceux de `9004f580` l'ont. (22) Depuis K-50, `bench tts --warmup ≥ 1` mesure le chemin en cache pour toute voix : les
   valeurs de départ K-35 de préfill et de TTFT citées par d'autres portes (K-66 : TTFT 252 à 258 ms `neutral_female`,
   K-79) ne sont plus comparables : à recaler au prochain replanning. (23) Capacité fixée à 3, sans réglage ;
   `docs/References.md:107` prévoit pour `lean` une entrée : à porter par K-79. (24) Prérequis K-35 encore `open`
   dans le tableau (antérieur à K-50, comme K-41 et K-43). (25) Cinq commits pour la fiche (`perf`, `docs`, deux
   `fix`, `docs` de vérification), contre « une fiche = un commit » ; précédents K-58, K-65. (26) Coût de l'empreinte
   payé à chaque appel, voix prédéfinies comprises (avant : comparaison de chaînes), non mesuré seul.
+  Après le troisième vérificateur (verified) : (27) rouges partiels de `9004f580` : `testFailedPrefixIsNotKept` rouge
+  par compilation seulement ; la garde `hasError` de `precomputeVoicePrefixCache` (`VoxtralTTSModeling.swift:438`)
+  sans rouge par mutation ; la moitié batch de `TTSStreamingPrefixBoundaryTests` jamais exercée en rouge (le test
+  plante avant, sur le streaming). (28) Entrée périmée possible : depuis que le préfixe se calcule dans la `Task`,
+  `synthesizeStreaming(…)` ; `unload()` ; `loadModel(autre pack)` en séquence peut voir le `removeAll` du chargement
+  passer avant que la `Task` ajoute l'entrée de l'ancien modèle (`VoxtralTTSPipeline.swift:707` contre `:191`,
+  `:869`) ; l'annulation ne l'empêche pas. Impact faible (mêmes formes, pas de plantage), cas rare : fiche de suite
+  (n'ajouter l'entrée que si la génération du `gate` n'a pas changé). (29) En streaming, après un raté de cache,
+  `chunk.elapsed` inclut maintenant le calcul du préfixe ; le TTFA de `bench` (mesuré côté appelant) n'est pas
+  touché. (30) `TTSConsecutiveSynthesisReproTests` (gardé) non rejoué ; l'invariant « entrée jamais mutée » est
+  couvert sur `voiceEmbedding:` par les `out_sha256` identiques de la 2ᵉ synthèse. (31) Le machine-check des passes A
+  vérifie le binaire B ; le binaire A n'est attesté que par `top_process` ; `k50B-build.log` (12:44:13) est une
+  reconstruction à vide à `86899785`. (32) Références de ligne des dérogations (10) et (17) écrites à leur commit
+  (`:482` → `:485`, `:864` → `:869` à HEAD). (33) « Gain attendu (non obtenu) » de la fiche est le gabarit commun,
+  laissé tel quel.

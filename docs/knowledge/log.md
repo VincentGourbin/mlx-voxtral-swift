@@ -352,4 +352,5 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   fournie par l'appelant ne garantit pas le contenu ; l'empreinte coûte une copie et un SHA-256 de l'embedding à chaque appel (≈ 1,2 Mo pour `clone_fr` en fp32,
   [101, 3072]) ; elle seule distingue les voix, l'étiquette n'identifie rien.
   Et `machine-check` ne voit un débranchement que s'il précède son passage : lire aussi le champ `power` de chaque
-  ligne `BENCH`. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».
+  ligne `BENCH`. Et en streaming, tout calcul MLX fait avant la `Task` productrice est hors de la frontière K-1 :
+  un embedding mal formé y arrêtait l'hôte. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».

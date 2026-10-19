@@ -6320,10 +6320,13 @@ conclusion (lu sur la couverture, pas sur `out_sha256`).
 - Coût mémoire : une entrée de 26,7 Mo par voix en cache (trois au plus).
 - Après la mesure (vérification) : le retrait par étiquette, qui faisait se chasser deux voix `voiceEmbedding:`
   alternées (même étiquette « embedding »), est supprimé (commit `fix(K-50)`) ; les cellules mesurées n'emploient
-  qu'une voix, ce chemin n'y passait pas : mesures inchangées.
+  qu'une voix, ce chemin n'y passait pas : mesures inchangées. Second `fix(K-50)` (`9004f580`) : en streaming le
+  préfixe se calcule dans la `Task` productrice, sous la frontière d'erreurs MLX, et un préfixe en échec n'est pas
+  gardé ; il ne touche que le chemin d'erreur, le chemin réussi mesuré ne change pas.
 
 **Passe sur batterie, écartée.** Le Mac a été débranché de 13:54:17 à 14:13:55 (`pmset -g log`) ; le machine-check
-de `6bit-medium-B2` (13:54:22, `mc_6bit-medium-B2.log`) affiche encore « OK sur secteur » et `powermode 2`, mais sa
+de `6bit-medium-B2` (`mc_6bit-medium-B2.log`, fini à 13:54:22) teste le secteur avant ses 120 s de refroidissement,
+vers 13:52:22, environ 2 min avant le débranchement : « OK sur secteur » et `powermode 2` ; mais sa
 ligne `BENCH` porte `"power":"Battery Power"` : décodage 36 366,8 ms contre 33 909,6 pour B1, `rtf` 0,5382. La ligne
 est recopiée ci-dessous et n'entre pas dans le tableau ; la passe est refaite sur secteur (`6bit-medium-B2r`,
 `.local-runs/queue-k50b.sh`, 14:57) : préfill 225,9 ms (226,4 sur batterie). Pendant la coupure, `quiet.sh wait`
@@ -6332,9 +6335,10 @@ de `6bit-medium-A2` a refusé de lancer la passe (« KO sur batterie » de 14:02
 
 **Charge.** Machine-check : `KO  indexation/sauvegarde en cours` avant `4bit-short-B2` (168 %) et `6bit-medium-A2`
 (88 %), tolérés par la décision de Vincent du 2026-10-05 ; leurs valeurs (55,1 et 306,0 ms) sont proches de leurs
-jumelles (56,7 et 293,9). Les autres passes : aucun `KO`. Charge de fond pendant les passes :
-corespotlightd, mediaanalysisd, Mail, ScreenTimeAgent, jamais une autre charge GPU. Les évaluations (non
-chronométrées) ont tourné pendant une sauvegarde Time Machine (`top_process` backupd sur trois lignes `EVAL`).
+jumelles (56,7 et 293,9). Les autres passes : aucun `KO`. Charge de fond pendant les passes (relevés CPU,
+ci-dessous) : corespotlightd, mediaanalysisd (jusqu'à 249 % pendant `6bit-short-B2`), Mail, ScreenTimeAgent, Music,
+WindowServer, photolibraryd ; aucune autre app MLX (machine-check). Les évaluations (non chronométrées) ont tourné
+pendant une sauvegarde Time Machine (`top_process` backupd sur quatre lignes `EVAL`).
 
 **Lignes `BENCH` / `EVAL`** (ordre de la file ; `6bit-medium-B2` sur batterie, écartée) :
 
