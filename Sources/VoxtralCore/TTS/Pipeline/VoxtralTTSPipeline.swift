@@ -153,6 +153,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String) throws
         -> (cache: [any KVCache], len: Int)
     {
+        // The fingerprint reads the embedding's bytes: evaluate it first, and stop on an MLX error caught so far
+        // (a lazy blend whose evaluation failed would leave an empty array)
+        voiceEmb.eval()
+        if let error = MLXErrorScope.box?.firstError { throw error }
         let prefix = prefixCaches.prefix(key: key, embedding: voiceEmb, failed: { MLXErrorScope.hasError }) {
             model.precomputeVoicePrefixCache(voiceEmbedding: $0)
         }

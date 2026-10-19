@@ -23,7 +23,7 @@ struct VoiceFingerprint: Hashable {
 /// (preset, cloned, ZeroVoice, blend) reuses its prefix when the same embedding comes back. Entries are matched by
 /// fingerprint, never by key: the key only labels an entry, a key reused with another embedding recomputes, and
 /// voices sharing a key (every `voiceEmbedding:` call uses "embedding") keep their own entries.
-/// Least recently used entry evicted beyond `capacity` (≈ 27 MB per entry in tts-4b, K-50). Entries are never mutated:
+/// Least recently used entry evicted beyond `capacity` (≈ 27 MB per entry in tts-4b for a voice of up to 254 frames, ≈ 54 MB up to 510: the KV cache grows by 256 positions; K-50). Entries are never mutated:
 /// generation clones them (`cloneKVCaches`, KVCacheCloneTests).
 final class VoicePrefixCache {
     struct Entry {

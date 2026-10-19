@@ -1279,3 +1279,25 @@ Décisions du planificateur du 2026-10-03 :
   reconstruction à vide à `86899785`. (32) Références de ligne des dérogations (10) et (17) écrites à leur commit
   (`:482` → `:485`, `:864` → `:869` à HEAD). (33) « Gain attendu (non obtenu) » de la fiche est le gabarit commun,
   laissé tel quel.
+  Après le contradicteur (not verified) : (34) Défaut : le cache est désormais toujours actif pour les voix par
+  embedding (batch, et streaming sans `voiceKey`), sans moyen de le couper ; c'est l'objectif écrit de la fiche (« la
+  surcharge `voiceEmbedding:` utilise le cache… LRU de 2 à 4 entrées ») et sa porte prévoit l'écart bf16 (« sortie
+  conforme à K-94 ») ; mais c'est un comportement par défaut visible de FluxForge (audio bf16 à graine égale, ≈ 27 à
+  81 Mo gardés jusqu'à `unload()`) : question posée à Vincent (`.local-runs/A-DECIDER.md`, K-50 ; A garder, proposé),
+  code gardé en attendant ; la dérogation (2), sur les signatures seules, ne suffisait pas. (35) La dérogation (5)
+  (bf16 sur le court seul) est levée : moyen et long × graines 1 à 3 mesurés (`.local-runs/queue-k50c.sh`,
+  BENCHMARKS §K-50, complément) : couverture moyenne égale (moyen) ou meilleure (long) ; graine 3 du long hors des
+  1,8 point de K-94 (A et B au plafond de 2 500 frames, B WER 252,7 contre 61,7), ajouté à la question de (34).
+  (36) Cellule de la porte : 6 bits court seul, choisie avant la mesure (`queue-k50.sh`, ligne de validation à une
+  cellule) ; la porte recalée de #643 citait aussi 295 ms en 6 bits moyen : celui-ci fait − 26,4 % (toutes les paires
+  A×B entre − 23 et − 29,6 %), sous − 30 % ; consigné, affirmations publiques corrigées (CHANGELOG : 26 % sur le
+  moyen). (37) Garde ajoutée : `voicePrefix` évalue l'embedding et lève une erreur MLX déjà interceptée avant
+  l'empreinte (un mélange paresseux en échec laisserait un tableau vide à lire) ; non testé (aucun moyen simple de
+  fabriquer un tableau dont seule l'évaluation échoue) ; tests ciblés et gardé verts (`.local-runs/k50-unit4.log`,
+  10 tests, code 0), suite `.local-runs/k50/suite4.log` (630 tests, 50 sautés, 0 échec, code 0). (38) Taille d'une entrée : ≈ 27 Mo jusqu'à 254 frames de voix,
+  ≈ 54 Mo jusqu'à 510 (le KV croît par pas de 256 positions ; `Config.numFrames` de l'enrôlement est réglable) ;
+  commentaire et CHANGELOG précisés. (39) Glossaire TTFT-frame (`docs/Benchmarks.md`), README, `docs/tts_benchmark.md`
+  et en-tête de `VoicePathParityTests` mis à jour : depuis K-50, `ttft_ms` et `phases_ms.prefill` excluent toujours le
+  préfill de la voix, `--warmup 0` compris (complète la dérogation 22). (40) Aucune API publique pour vider le cache
+  ou s'en passer (rejoint (23) et K-79). (41) La couverture sur 11 mots (texte court) discrimine mal ; l'écoute
+  anonymisée (ASK-13) est proposée en option C de la question de (34).

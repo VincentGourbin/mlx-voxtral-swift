@@ -142,7 +142,8 @@ Tested with the Fluxforge app description text (short: 1 sentence; long: 163 wor
 > evaluated code frame (`VoxtralTTSModeling.swift:441`, `:496-499`): it is not the first audio sample. At v2.2.2 it
 > excludes the prefill of the voice frames only when that prefix comes from the per-voice cache (preset voices, and
 > streaming with a `voiceKey`: `VoxtralTTSPipeline.swift:210`, `:512`); that cache arrived in `f4fd21c`
-> (2026-07-10), so the TTFT values below, measured before it, include the voice prefill. RTF = generation time ÷
+> (2026-07-10), so the TTFT values below, measured before it, include the voice prefill. Since K-50 (3.0.0) the voice
+> prefill is always excluded, for every voice. RTF = generation time ÷
 > audio duration, **< 1.0 = faster than real time**
 > (`TTSSynthesisResult.realTimeFactor`, `VoxtralTTSProcessor.swift:30-33`); `VoxtralCLI profile` prints the inverse
 > as "RT factor" (`ProfileCommand.swift:274`). Glossary: [docs/Benchmarks.md](docs/Benchmarks.md) §4.

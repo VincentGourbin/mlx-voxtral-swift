@@ -348,7 +348,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-19 — **K-50 : le cache de préfixe TTS sert toute voix, retrouvé par empreinte de l'embedding** : forme,
   dtype et SHA-256 des octets de l'embedding identifient la voix (trois entrées, LRU, ≈ 27 Mo chacune) ; la surcharge
   `voiceEmbedding:` en profite : préfill de la 2ᵉ synthèse de `clone_fr` − 52,6 % en 6 bits, − 55 % en 4 bits, audio
-  identique en 6 et 4 bits ; en bf16, le premier appel change d'arrondi (K-94), couverture égale. Leçon : une clé
+  identique en 6 et 4 bits ; en bf16, tout appel par embedding change d'arrondi (K-94), couverture égale en moyenne (court, moyen, long ; une graine du long, déjà dégénérée avant, l'est davantage). Leçon : une clé
   fournie par l'appelant ne garantit pas le contenu ; l'empreinte coûte une copie et un SHA-256 de l'embedding à chaque appel (≈ 1,2 Mo pour `clone_fr` en fp32,
   [101, 3072]) ; elle seule distingue les voix, l'étiquette n'identifie rien.
   Et `machine-check` ne voit un débranchement que s'il précède son passage : lire aussi le champ `power` de chaque

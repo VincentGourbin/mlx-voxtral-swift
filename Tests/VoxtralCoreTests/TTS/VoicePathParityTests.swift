@@ -3,7 +3,8 @@
  * seed in bf16 only (K-94, constat de K-35).
  *
  * The `voice:` path prefills the voice prefix (BOS, BEGIN_AUDIO, the voice frames) once, caches its KV, and prefills
- * only the text suffix on each call; the `voiceEmbedding:` path prefills the whole prompt in one block. Same tokens,
+ * only the text suffix on each call; the `voiceEmbedding:` path prefilled the whole prompt in one block until K-50
+ * (since K-50 it shares the cached prefix; the test still compares the two prefills directly). Same tokens,
  * same causal attention: the two must agree up to rounding. The test locates where they stop agreeing:
  *  - PROJ: the first layer's k_proj on the prefix rows, alone (M = prefix length) and inside the whole prompt
  *    (M = prompt length): a dense bf16 matmul may change its reduction with M, a quantized one works row by row;

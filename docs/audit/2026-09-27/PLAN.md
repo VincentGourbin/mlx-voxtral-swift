@@ -2552,5 +2552,7 @@ Statistics:
   Après le second vérificateur (commit `fix(K-50)`) : en streaming, le préfixe de la voix se calcule dans la `Task`
   productrice, sous `withMLXErrors` (K-1), et non plus sur le thread de l'appelant ; une erreur MLX y finit le flux
   en `VoxtralError.mlx` (avant : `fatalError`, test `TTSStreamingPrefixBoundaryTests`, rouge par plantage sur
-  l'ancien code) ; un préfixe en échec n'est pas gardé.
+  l'ancien code) ; un préfixe en échec n'est pas gardé. Après le contradicteur : bf16 moyen et long × 3 graines
+  mesurés (couverture moyenne égale ou meilleure ; graine 3 du long dégénérée des deux côtés, pire en WER pour B) ;
+  cache toujours actif par embedding = défaut visible : question à Vincent (A-DECIDER, K-50), dérogations 34 à 41.
   `BENCHMARKS.md` §« 2026-10-19 — K-50 ». Écarts : ASK.md §Dérogations, K-50.
