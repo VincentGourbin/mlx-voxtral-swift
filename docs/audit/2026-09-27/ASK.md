@@ -1130,3 +1130,8 @@ Décisions du planificateur du 2026-10-03 :
   indexation/sauvegarde` toléré (décision du 2026-10-05), valeur égale à B1. (5) `IncrementalCodecDecodeTests` gardé
   non rejoué : code retiré, codec inchangé depuis la vérification de K-43. (6) Deux commits de code (`9a1ce03f`,
   `06aaaa64`) avant le retrait au lieu d'un commit unique : les mesures exigent un commit propre par variante.
+  Après le vérificateur (`verified`, 7 remarques) : (7) A/A de la file 1 au-dessus des 3 % de VERIFY.md (codec batch
+  5,3 %, streaming p50 3,3 %) : le « − 20 % » du codec en bf16 est indicatif, non prouvé ; sans effet sur le retrait
+  (SNR déterministe 3 à 4 dB sous le seuil ; en streaming, B dans l'intervalle de A et au-dessus de l'A de la file 2,
+  A/A 0,1 %). (8) Le machine-check vérifie le binaire du dépôt principal, y compris avant les passes A lancées depuis
+  le worktree (`top_process` de `batch-long-A1` le confirme) : formulation de BENCHMARKS précisée.

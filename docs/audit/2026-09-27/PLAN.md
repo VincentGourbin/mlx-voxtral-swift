@@ -2453,7 +2453,7 @@ Statistics:
   forme d'onde rendue en fp32), avec weight norm et centroïdes sémantiques calculés une fois par jeu de paramètres
   (caches invalidés par `update(parameters:)`) ; (2) les caches seuls, codec en fp32.
 - Porte observée :
-  - `BENCH A/B/B/A batch long phases_ms.codec A=465,7/491,2 B=380,2/382,0 → − 20,3 % (A/A 5,3 %) ; pic codec 3 890,8 → 3 582,8 Mo (− 7,9 %)`
+  - `BENCH A/B/B/A batch long phases_ms.codec A=465,7/491,2 B=380,2/382,0 → − 20,3 % (A/A 5,3 % > 3 % : indicatif) ; pic codec 3 890,8 → 3 582,8 Mo (− 7,9 %)`
   - `BENCH A/B/B/A streaming long stream_frame_ms_p50 A=46,09/44,59 B=45,08/45,01 → − 0,65 % (− 5 % exigé : non tenue)`
   - `SNR bf16 contre fp32 court 36,69 / moyen 36,91 / long 35,95 dB (≥ 40 dB exigé : non tenue) ; couverture ASR identique (0,909 / 0,94 / 0,952, mêmes hyp_sha256)`
   - `Caches seuls (fp32) : codec − 0,6 % (A/A 0,5 %), streaming p50 − 0,5 % ; out_sha256 et WAV identiques au parent : sortie identique, gain < 5 % ⇒ retirés`

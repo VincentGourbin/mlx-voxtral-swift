@@ -5441,8 +5441,8 @@ STREAMSUM tts-4b-6bit: cut mismatches 0/19, late first chunk 0/19
 binaire Release construit et lancé depuis lui) dans les deux files. File 1 `.local-runs/queue-k58.sh` (07:09 →
 08:35) : B = `9a1ce03f` (`perf(K-58)` : codec calculé dans le dtype de ses poids, bf16 dans les packs, plus weight
 norm et centroïdes calculés une fois par jeu de paramètres). File 2 `.local-runs/queue-k58c.sh` (08:39 → 09:48) :
-B = `06aaaa64` (bf16 retiré, codec en fp32, les deux caches seuls). Binaires Release du dépôt principal, lancés depuis
-lui, aucun commit pendant une file ; les 25 lignes `BENCH`/`EVAL` sont `"dirty":false`. Construits avec
+B = `06aaaa64` (bf16 retiré, codec en fp32, les deux caches seuls). B : binaires Release du dépôt principal, lancés
+depuis lui (le machine-check vérifie ce binaire, y compris avant les passes A), aucun commit pendant une file ; les 25 lignes `BENCH`/`EVAL` sont `"dirty":false`. Construits avec
 `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift 0.31.6@0bb916c, mlx-swift-lm main@604fae7,
 swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go, secteur. tts-4b-6bit, `neutral_female`, graine 1.
 `eval tts-roundtrip` sur `docs/eval/tts/{short,medium,long}_en.txt` (A et B en file 1, B seul en file 2 : les WAV de
@@ -5456,7 +5456,7 @@ amorçage), un processus par passe. Avant chaque passe : 180 s de repos, Time Ma
 
 | Mesure (long, graine 1) | A1 / A2 | B1 / B2 | Écart des moyennes | Porte |
 |---|---|---|---|---|
-| `phases_ms.codec`, batch | 465,7 / 491,2 | 380,2 / 382,0 | − 20,3 % (A/A 5,3 %) | − 20 % : tenue, de justesse |
+| `phases_ms.codec`, batch | 465,7 / 491,2 | 380,2 / 382,0 | − 20,3 % (A/A 5,3 %) | − 20 % : indicatif (A/A > 3 %) |
 | `peak_mlx_mb_by_phase.codec`, batch | 3 890,8 / 3 890,8 | 3 582,8 / 3 582,8 | − 7,9 % | rapporté |
 | `rtf`, batch | 0,5433 / 0,5574 | 0,5552 / 0,5451 | + 0,0 % | — |
 | `stream_frame_ms_p50`, streaming | 46,09 / 44,59 | 45,08 / 45,01 | − 0,65 % (A/A 3,3 %) | − 5 % : **non tenue** |
