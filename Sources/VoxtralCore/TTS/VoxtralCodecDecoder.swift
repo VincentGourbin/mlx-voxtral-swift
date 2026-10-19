@@ -587,15 +587,9 @@ class VoxtralCodecDecoder: Module {
 
     /// Decode audio codes to waveform.
     /// codes: (B, T, 37) — with +2 special token offset
-    /// The network runs in the dtype of its weights (bf16 in the packs, K-58): the float32 centroids and FSQ levels are
-    /// cast after the lookup; the waveform comes back in float32.
     func decode(_ codes: MLXArray) -> MLXArray {
-        let embeddings = quantizer.decode(codes).asType(computeDType)
-        return forwardEmbeddings(embeddings, timeChunk: bandedInference ? Self.inferenceTimeChunk : 0).asType(.float32)
+        return forwardEmbeddings(quantizer.decode(codes), timeChunk: bandedInference ? Self.inferenceTimeChunk : 0)
     }
-
-    /// Dtype of the decoder weights (the output projection's direction tensor).
-    var computeDType: DType { outputProj.conv.parametrizations.weight.original1.dtype }
 
     /// Sliding windows of the transformer stages: [2, 4, 8, 16] — encoder reversed
     static let windowSizes = [2, 4, 8, 16]
