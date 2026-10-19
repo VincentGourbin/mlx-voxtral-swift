@@ -6156,8 +6156,14 @@ WER identiques (C-court 9,09, C-moyen EN 1,05, FR 1,97) et `out_sha256` identiqu
   (≈ 10 petites opérations × q, k × 32 couches) pèse peu devant les matmuls et l'attention de l'encodeur, déjà en
   fp16 depuis K-38. Gain < 5 % (PLAN.md §0, étape 4 de la fiche) : code retiré (`89570bdb`, encodeur et tests remis
   à l'état du parent `da4cbfff`). L'encodage ne pèse que 9 % du temps total sur C-moyen (2,2 s sur 23,9 s).
+- `phases_ms.encode` contient aussi le mel (paresseux : la phase « audio » ne dure que 7,8 ms), la convolution
+  d'entrée et l'adaptateur : le gain propre au transformeur est un peu dilué, sans changer la conclusion (il faudrait
+  que la partie hors transformeur fasse la moitié de la phase). Le pack fp16 encode C-moyen en 2 189,4 / 2 201,7 ms
+  après K-38 (§« 2026-10-18 — K-38 ») : ≈ 55 ms gagnés y feraient aussi ≈ 2,5 %.
 - Charge de fond notée par `quiet.sh sample` : corespotlightd, Music, contactsd ; `rope-B1` : mediaanalysisd sur 39
-  des 81 relevés (`top_process` 102,0 %), B1 égal à B2 à 0,04 % près. Aucun autre processus MLX au machine-check.
+  des 81 relevés (`top_process` 102,0 %), B1 égal à B2 à 0,04 % près ; `eval-B` (C-moyen FR) : `top_process`
+  backupd 32,1 % malgré `tmutil stopbackup`, sans effet (sorties déterministes et identiques). Aucun autre processus
+  MLX au machine-check.
 
 **Lignes `BENCH` / `EVAL`** (ordre de la file) :
 

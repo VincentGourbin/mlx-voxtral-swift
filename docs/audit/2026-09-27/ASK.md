@@ -1193,3 +1193,14 @@ Décisions du planificateur du 2026-10-03 :
   1e-2 à 2e-3 après le rouge (à 1e-2, l'offset faux passait en fp16 : 4,2e-3) ; le rouge n'a pas été rejoué à 2e-3.
   (6) Deux commits de code (`perf(K-65)` essai, `perf(K-65)` retrait) et un de mesures, comme K-58 ; rapportée
   `applied` avec la ligne de rejet (convention de K-58, dérogation 10).
+  Après le vérificateur (`verified`, 8 remarques) et le contradicteur (`verified`, 10 remarques) : (7) charge de
+  fond de `eval-B` (backupd) ajoutée à BENCHMARKS. (8) Encodeur aléatoire du test non reproductible d'un processus à
+  l'autre malgré la graine (7,99e-8 / 2,6e-4 puis 7,25e-8 / 2,97e-4 ; ordre de `parameters().mapValues`), marge
+  6,7× sous 2e-3. (9) `encodeFull` sur les packs couvert par `out_sha256` de C-court seulement ; dans l'essai,
+  `bandedReference` de `RealtimeSlidingWindowTests` passait par la nouvelle forme. (10) Tests et rouge joués dans
+  l'arbre principal avant le commit de l'essai, pas dans un worktree jetable. (11) `phases_ms.encode` inclut mel,
+  convolution d'entrée et adaptateur (BENCHMARKS précisé) ; chiffre fp16 ajouté. (12) Leçon de log.md reformulée
+  (aucun profil de l'encodeur, gain réel mais sous la porte). (13) Porte quasi inatteignable par construction, comme
+  la clause streaming de K-58 : à reporter au prochain replanning. (14) Tags `K65-A` / `K65-B` partagés par A1/A2 et
+  B1/B2 (VERIFY.md §1 : un tag par série) ; passes distinguées par la date et l'ordre de la file. (15) Le corps de
+  #650 cite encore 2 860 ms (K-36), l'amendement K-96 (2 801 ms) prime ; sans effet, la porte se juge sur A.
