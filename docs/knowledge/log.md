@@ -317,4 +317,13 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   41 → 6 %. Le gain en temps (10,7×) reste loin du gain en frames (÷ 33) : le coût fixe d'un appel au codec domine.
   Leçon : un décodeur causal se découpe exactement si l'on calcule son champ récepteur ; mesurer le coût par chunk à
   plusieurs positions (trace), pas seulement la moyenne. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-43 ».
-
+- 2026-10-19 — **K-58 : le codec TTS en bf16 gagne 20 % sur sa phase, rien de bout en bout, et perd en SNR** :
+  les packs stockent le codec en bf16, mais il calculait en fp32 (centroïdes et niveaux FSQ en fp32 promeuvent tout).
+  Le calculer dans le dtype de ses poids : codec batch long − 20 %, pic du codec − 8 % ; or le codec ne pèse que
+  0,6 % du batch et 6 % du streaming depuis K-43 : streaming − 0,65 %, dans le bruit ; SNR ≈ 36 dB contre fp32.
+  Les caches du weight norm et des centroïdes (P-39) laissent la sortie identique mais ne gagnent rien (− 0,6 %).
+  Tout est retiré. Pièges vus en route : `Module.update(parameters:)` recopie les nouvelles valeurs dans les
+  `MLXArray` existants (`_updateInternal`), si bien qu'un cache indexé sur l'identité ou le handle de l'array reste
+  périmé ; il faut surcharger `update` pour l'invalider. Leçon : avant d'optimiser une phase, relire sa part du
+  temps total après les fiches précédentes (K-43 avait ramené le codec de 41 à 6 % du streaming). PLAN.md §7,
+  `BENCHMARKS.md` §« 2026-10-19 — K-58 ».

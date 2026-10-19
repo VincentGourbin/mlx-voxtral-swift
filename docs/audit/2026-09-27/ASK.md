@@ -1120,3 +1120,13 @@ Décisions du planificateur du 2026-10-03 :
   `stream-short-A1` : `top_process` corespotlightd 169,7 % sans `KO` au machine-check (A1 40,84 contre A2 41,03 ms) ;
   `trace-stream-long-B` : Music 30,2 %. (22) CHANGELOG : RTF plafonné et batch par défaut côte à côte, corrigé.
 
+
+- **K-58 (#656), 2026-10-19** (retirée) : (1) passes `--passes 1 --warmup 0 --cooldown 0`, un processus par passe,
+  au lieu de `--passes 2 --warmup 1 --cooldown 120` de l'étape 4 : texte long sans amorçage (porte recalée), repos
+  de 180 s et refroidissement de 120 s du machine-check avant chaque passe (conduite de K-43). (2) SNR calculé sur
+  les WAV 16 bits de `eval tts-roundtrip` (plancher de quantification ≈ 96 dB, loin des 36 dB mesurés), mêmes codes
+  des deux côtés (même graine, mêmes longueurs, mêmes transcriptions). (3) Pas d'A/A batch distinct : la dispersion
+  A1/A2 (5,3 % en file 1, 0,5 % en file 2) en tient lieu. (4) `stream-long-B2` (file 1) démarré sur un `KO
+  indexation/sauvegarde` toléré (décision du 2026-10-05), valeur égale à B1. (5) `IncrementalCodecDecodeTests` gardé
+  non rejoué : code retiré, codec inchangé depuis la vérification de K-43. (6) Deux commits de code (`9a1ce03f`,
+  `06aaaa64`) avant le retrait au lieu d'un commit unique : les mesures exigent un commit propre par variante.

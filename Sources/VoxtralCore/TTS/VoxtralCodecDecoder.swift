@@ -14,31 +14,6 @@ import Foundation
 import MLX
 import MLXNN
 
-// MARK: - Invariant cache
-
-/// Value computed from a module's parameters (K-58, P-39), cleared by that module's `update(parameters:)`
-/// override. `update` copies new arrays into the existing `MLXArray` objects (`_updateInternal`), so neither object
-/// identity nor the handle tells that they changed. A class, not an `MLXArray` property: module reflection ignores it.
-final class DerivedArrayCache: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: MLXArray?
-
-    func value(_ compute: () -> MLXArray) -> MLXArray {
-        lock.lock()
-        defer { lock.unlock() }
-        if let value { return value }
-        let computed = compute()
-        value = computed
-        return computed
-    }
-
-    func invalidate() {
-        lock.lock()
-        value = nil
-        lock.unlock()
-    }
-}
-
 // MARK: - Weight-Normalized Conv1d
 
 /// Container for weight norm parameters at the "weight" level.
@@ -47,28 +22,10 @@ class WeightNormParams: Module {
     var original0: MLXArray  // (out_ch, 1, 1) — gain
     var original1: MLXArray  // (out_ch, in_ch, K) — direction
 
-    private let weightCache = DerivedArrayCache()
-
     init(outChannels: Int, inChannels: Int, kernelSize: Int) {
         self.original0 = MLX.ones([outChannels, 1, 1])
         self.original1 = MLX.zeros([outChannels, inChannels, kernelSize])
         super.init()
-    }
-
-    /// w = g * v / ||v||, computed once per set of parameters (K-58)
-    var weight: MLXArray {
-        weightCache.value {
-            let vNorm = MLX.sqrt((original1 * original1).sum(axes: [1, 2], keepDims: true) + 1e-12)
-            return original0 * original1 / vNorm
-        }
-    }
-
-    @discardableResult
-    override func update(
-        parameters: ModuleParameters, verify: VerifyUpdate, path: [String] = [], modulePath: [String] = []
-    ) throws -> Self {
-        weightCache.invalidate()
-        return try super.update(parameters: parameters, verify: verify, path: path, modulePath: modulePath)
     }
 }
 
@@ -98,8 +55,13 @@ class WeightNormConv: Module {
         super.init()
     }
 
-    /// Reconstruct weight from weight norm: w = g * v / ||v|| (cached by the parameters' module, K-58)
-    private func getWeight() -> MLXArray { parametrizations.weight.weight }
+    /// Reconstruct weight from weight norm: w = g * v / ||v||
+    private func getWeight() -> MLXArray {
+        let g = parametrizations.weight.original0  // (out, 1, 1)
+        let v = parametrizations.weight.original1  // (out, in, K)
+        let vNorm = MLX.sqrt((v * v).sum(axes: [1, 2], keepDims: true) + 1e-12)
+        return g * v / vNorm
+    }
 
     /// Apply causal or transposed convolution.
     /// Reference: audio_tokenizer.py lines 97-142
@@ -118,7 +80,7 @@ class WeightNormConv: Module {
         if K > 1 {
             let B = x.dim(0)
             let C = x.dim(2)
-            padded = MLX.concatenated([MLX.zeros([B, K - 1, C], dtype: x.dtype), x], axis: 1)
+            padded = MLX.concatenated([MLX.zeros([B, K - 1, C]), x], axis: 1)
         }
         // mx.conv1d weight: (out_ch, K, in_ch)
         let w = weight.transposed(0, 2, 1)
@@ -259,7 +221,7 @@ class CodecAttention: Module {
             return wo(out.transposed(0, 2, 1, 3).reshaped(B, T, -1))
         }
 
-        var scores = MLX.matmul(qh, kh.transposed(0, 1, 3, 2)) * scale
+        var scores = MLX.matmul(qh, kh.transposed(0, 1, 3, 2)) * MLXArray(scale)
 
         // ALiBi bias: dist[i,j] = j - i (negative for past)
         let positions = MLXArray(0..<Int32(T))
@@ -313,7 +275,7 @@ class CodecAttention: Module {
         let kb = window(kh)
         let vb = window(vh)
 
-        var scores = MLX.matmul(qb, kb.transposed(0, 1, 2, 4, 3)) * scale  // (B, H, nb, Bq, W + Bq)
+        var scores = MLX.matmul(qb, kb.transposed(0, 1, 2, 4, 3)) * MLXArray(scale)  // (B, H, nb, Bq, W + Bq)
 
         // Query i of block b sits at b·Bq + i, key j at b·Bq − W + j: dist = j − W − i, as in the full path.
         let i = MLX.expandedDimensions(MLXArray(0..<Int32(Bq)), axis: 1)
@@ -466,30 +428,18 @@ class SemanticCodebook: Module {
         super.init()
     }
 
-    private let codebookCache = DerivedArrayCache()
-
-    /// Centroid table (codebookSize, dim) in float32, computed once per set of parameters (K-58).
+    /// Centroid table (codebookSize, dim) in float32.
     /// Exposed for voice enrollment, which needs a differentiable
     /// soft lookup (probabilities × codebook) alongside the hard one.
     var codebook: MLXArray {
-        codebookCache.value {
-            embedding_sum.asType(.float32) / MLX.maximum(
-                MLX.expandedDimensions(cluster_usage.asType(.float32), axis: -1),
-                MLXArray(Float(1e-8))
-            )
-        }
+        embedding_sum.asType(.float32) / MLX.maximum(
+            MLX.expandedDimensions(cluster_usage.asType(.float32), axis: -1),
+            MLXArray(Float(1e-8))
+        )
     }
 
     func decode(_ indices: MLXArray) -> MLXArray {
         return codebook[indices]
-    }
-
-    @discardableResult
-    override func update(
-        parameters: ModuleParameters, verify: VerifyUpdate, path: [String] = [], modulePath: [String] = []
-    ) throws -> Self {
-        codebookCache.invalidate()
-        return try super.update(parameters: parameters, verify: verify, path: path, modulePath: modulePath)
     }
 }
 
