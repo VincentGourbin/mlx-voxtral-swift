@@ -138,23 +138,21 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// Registry id of the loaded model (for the activity beacon manifests).
     private var loadedModelID: String?
 
-    // Cached voice-conditioned prefill KV for the last-used voice. The voice
-    // frames precede the text in the prompt, so their KV depends only on the
-    // voice — reusing it skips the voice prefill on repeated syntheses.
-    // Invariant: this entry is never mutated by generation — generate() and
-    // generateStreaming() clone it (cloneKVCaches) before prefilling, so
-    // consecutive syntheses always start from the pristine voice prefix
-    // (guarded by KVCacheCloneTests + TTSConsecutiveSynthesisReproTests).
-    private var prefixCacheEntry: (key: String, cache: [any KVCache], len: Int)?
+    // Cached voice-conditioned prefill KV of the last voices used, matched by
+    // embedding content (K-50). The voice frames precede the text in the
+    // prompt, so their KV depends only on the voice — reusing it skips the
+    // voice prefill on repeated syntheses, for any voice (preset, cloned,
+    // ZeroVoice, blend). Invariant: entries are never mutated by generation —
+    // generate() and generateStreaming() clone them (cloneKVCaches) before
+    // prefilling, so consecutive syntheses always start from the pristine
+    // voice prefix (guarded by KVCacheCloneTests + TTSConsecutiveSynthesisReproTests).
+    let prefixCaches = VoicePrefixCache()
 
-    /// Get-or-compute the voice prefix KV cache for `key`.
+    /// Get-or-compute the voice prefix KV cache of `voiceEmb` (`key` labels the entry).
     private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String)
         -> (cache: [any KVCache], len: Int)
     {
-        if let e = prefixCacheEntry, e.key == key { return (e.cache, e.len) }
-        let (cache, len) = model.precomputeVoicePrefixCache(voiceEmbedding: voiceEmb)
-        prefixCacheEntry = (key, cache, len)
-        return (cache, len)
+        prefixCaches.prefix(key: key, embedding: voiceEmb) { model.precomputeVoicePrefixCache(voiceEmbedding: $0) }
     }
 
     public typealias ProgressCallback = @Sendable (Double, String) -> Void
@@ -185,7 +183,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 "loading", accepts: { current in current.isUnloaded || { if case .error = current { return true }; return false }() },
                 refusal: VoxtralTTSError.invalidConfiguration("Model already loaded or loading"),
                 busy: VoxtralTTSError.busy, state: .loading, newGeneration: true)
-            prefixCacheEntry = nil  // a new model invalidates any cached voice prefix
+            prefixCaches.removeAll()  // a new model invalidates any cached voice prefix
 
             let resolvedInfo = modelInfo ?? VoxtralTTSRegistry.defaultModel
             let beacon = VoxtralRuntimeBeacon.begin(task: "load-tts-model", model: resolvedInfo.id)
@@ -244,17 +242,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// Synthesize speech with a preset voice.
     ///
     /// The voice prefix (its frames' KV) is prefilled once and reused while
-    /// the same voice is used (only the last voice is kept), so each call
-    /// prefills only the text suffix. With the bf16 pack
-    /// (`tts-4b-mlx`) this can give a different waveform, at the same seed, than
-    /// `synthesize(text:voiceEmbedding:)` with the same voice's embedding, which
-    /// prefills the whole prompt in one block: the acoustic codes can differ
-    /// from the first frame on, and the outputs drift apart from there. K-94
-    /// traced this, by elimination on the short text, to a dense bf16 matmul
-    /// rounding differently with the number of rows. Both are correct; ASR
-    /// coverage was the same on average over 3 seeds in K-94's measurements
-    /// (within 1.8 points per seed on the long text), and the quantized packs
-    /// gave the same output by both paths.
+    /// the voice stays among the last three used, so each call prefills only
+    /// the text suffix. `synthesize(text:voiceEmbedding:)` shares the same
+    /// cache (K-50): the same embedding gives the same output by both paths.
+    /// The first call with a voice prefills the voice and the text separately;
+    /// with the bf16 pack (`tts-4b-mlx`) this can differ, at the same seed,
+    /// from a one-block prefill of the whole prompt (K-94: a dense bf16 matmul
+    /// rounds differently with the number of rows; both are correct, same ASR
+    /// coverage on average).
     public func synthesize(
         text: String,
         voice: VoxtralVoice = .neutralFemale,
@@ -388,6 +383,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// `warmUpLeadInFrames` keeps that many 80 ms frames of the carrier's
     /// terminal silence before the content — 0 (tight cut) is the recommended
     /// default (blind-test winner); 3 (~0.24 s) adds a small breath.
+    ///
+    /// The voice prefix is cached by embedding content, like the preset
+    /// overload (K-50): a second call with the same embedding prefills only
+    /// the text.
     public func synthesize(
         text: String,
         voiceEmbedding: MLXArray,
@@ -427,6 +426,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 genText = text
             }
 
+            let prefix = voicePrefix(model, for: voiceEmbedding, key: "embedding")
             do {
                 profiler.startSemanticGen()
                 let cap = frameCap(forText: genText)
@@ -436,7 +436,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     tokenizer: tokenizer,
                     maxTokens: cap,
                     sanitize: configuration.sanitizeText,
-                    seed: seed
+                    seed: seed,
+                    prefixCache: prefix.cache,
+                    prefixLen: prefix.len
                 )
                 profiler.endSemanticGen(frameCount: numFrames)
                 try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)
@@ -597,7 +599,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
     /// Streaming synthesis with an arbitrary `[T, 3072]` voice embedding
     /// (e.g. a cloned voice), mirroring the preset overload above.
-    /// Pass a stable `voiceKey` to enable voice-prefix KV caching across calls.
+    /// The voice prefix is cached by embedding content (K-50); `voiceKey`
+    /// only labels the entry (a key reused with another embedding recomputes).
     ///
     /// `seed`, `warmUpText` and `warmUpLeadInFrames` mirror the batch
     /// `synthesize(...)` overload: `seed` makes the flow-matching sampling
@@ -636,10 +639,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let voiceEmb = voiceEmbedding
         lastSynthesisTruncated = false
 
-        // Reuse (or compute) the voice-conditioned prefix KV when we have a key.
-        let prefix: (cache: [any KVCache], len: Int)? = voiceKey.map {
-            voicePrefix(model, for: voiceEmb, key: $0)
-        }
+        // Reuse (or compute) the voice-conditioned prefix KV, matched by embedding content (K-50)
+        let prefix: (cache: [any KVCache], len: Int)? = voicePrefix(model, for: voiceEmb, key: voiceKey ?? "embedding")
 
         let startTime = Date()
         let beacon = VoxtralRuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
@@ -860,7 +861,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         ttsModel = nil
         tokenizer = nil
         voiceEmbeddings = [:]
-        prefixCacheEntry = nil
+        prefixCaches.removeAll()
         modelDirectory = nil
         loadedModelID = nil
         gate.reset(.unloaded)
