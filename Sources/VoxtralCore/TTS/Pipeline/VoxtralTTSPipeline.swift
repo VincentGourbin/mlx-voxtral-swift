@@ -148,11 +148,16 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     // voice prefix (guarded by KVCacheCloneTests + TTSConsecutiveSynthesisReproTests).
     let prefixCaches = VoicePrefixCache()
 
-    /// Get-or-compute the voice prefix KV cache of `voiceEmb` (`key` labels the entry).
-    private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String)
+    /// Get-or-compute the voice prefix KV cache of `voiceEmb` (`key` labels the entry). Called inside an MLX error
+    /// boundary: an MLX error caught while computing it is thrown here, and the failed prefix is not kept.
+    private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String) throws
         -> (cache: [any KVCache], len: Int)
     {
-        prefixCaches.prefix(key: key, embedding: voiceEmb) { model.precomputeVoicePrefixCache(voiceEmbedding: $0) }
+        let prefix = prefixCaches.prefix(key: key, embedding: voiceEmb, failed: { MLXErrorScope.hasError }) {
+            model.precomputeVoicePrefixCache(voiceEmbedding: $0)
+        }
+        if let error = MLXErrorScope.box?.firstError { throw error }
+        return prefix
     }
 
     public typealias ProgressCallback = @Sendable (Double, String) -> Void
@@ -246,9 +251,10 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     /// the text suffix. `synthesize(text:voiceEmbedding:)` shares the same
     /// cache (K-50): the same embedding gives the same output by both paths.
     /// The first call with a voice prefills the voice and the text separately;
-    /// with the bf16 pack (`tts-4b-mlx`) this can differ, at the same seed,
-    /// from a one-block prefill of the whole prompt (K-94: a dense bf16 matmul
-    /// rounds differently with the number of rows; both are correct, same ASR
+    /// with the bf16 pack (`tts-4b-mlx`), the `voiceEmbedding:` output can
+    /// differ, at the same seed, from its output before K-50, which prefilled
+    /// the whole prompt in one block (K-94: a dense bf16 matmul rounds
+    /// differently with the number of rows; both are correct, same ASR
     /// coverage on average).
     public func synthesize(
         text: String,
@@ -280,7 +286,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let beacon = VoxtralRuntimeBeacon.begin(task: "tts", model: loadedModelID)
             defer { beacon?.end() }
 
-            let prefix = voicePrefix(model, for: voiceEmb, key: voice.rawValue)
+            let prefix = try voicePrefix(model, for: voiceEmb, key: voice.rawValue)
             do {
                 // Generate audio codes (semantic code generation + flow matching inside)
                 profiler.startSemanticGen()
@@ -426,7 +432,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 genText = text
             }
 
-            let prefix = voicePrefix(model, for: voiceEmbedding, key: "embedding")
+            let prefix = try voicePrefix(model, for: voiceEmbedding, key: "embedding")
             do {
                 profiler.startSemanticGen()
                 let cap = frameCap(forText: genText)
@@ -639,9 +645,6 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         let voiceEmb = voiceEmbedding
         lastSynthesisTruncated = false
 
-        // Reuse (or compute) the voice-conditioned prefix KV, matched by embedding content (K-50)
-        let prefix: (cache: [any KVCache], len: Int)? = voicePrefix(model, for: voiceEmb, key: voiceKey ?? "embedding")
-
         let startTime = Date()
         let beacon = VoxtralRuntimeBeacon.begin(task: "tts-streaming", model: loadedModelID)
 
@@ -668,19 +671,18 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             let tokenizer: TekkenTokenizer
             let voiceEmb: MLXArray
             let pipeline: VoxtralTTSPipeline
-            let prefixCache: [any KVCache]?
-            let prefixLen: Int
+            let voiceKey: String
             let genText: String
             let seed: UInt64?
             let hasWarmUp: Bool
             let warmUpLeadInFrames: Int
-            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline, prefixCache: [any KVCache]?, prefixLen: Int, genText: String, seed: UInt64?, hasWarmUp: Bool, warmUpLeadInFrames: Int) {
+            init(model: VoxtralTTSModel, tokenizer: TekkenTokenizer, voiceEmb: MLXArray, pipeline: VoxtralTTSPipeline, voiceKey: String, genText: String, seed: UInt64?, hasWarmUp: Bool, warmUpLeadInFrames: Int) {
                 self.model = model; self.tokenizer = tokenizer; self.voiceEmb = voiceEmb; self.pipeline = pipeline
-                self.prefixCache = prefixCache; self.prefixLen = prefixLen
+                self.voiceKey = voiceKey
                 self.genText = genText; self.seed = seed; self.hasWarmUp = hasWarmUp; self.warmUpLeadInFrames = warmUpLeadInFrames
             }
         }
-        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, prefixCache: prefix?.cache, prefixLen: prefix?.len ?? 0, genText: genText, seed: seed, hasWarmUp: hasWarmUp, warmUpLeadInFrames: warmUpLeadInFrames)
+        let ctx = StreamContext(model: model, tokenizer: tokenizer, voiceEmb: voiceEmb, pipeline: self, voiceKey: voiceKey ?? "embedding", genText: genText, seed: seed, hasWarmUp: hasWarmUp, warmUpLeadInFrames: warmUpLeadInFrames)
 
         // K-12: the producing Task is cancelled when the consumer stops (MLX-003)
         let (stream, continuation) = AsyncThrowingStream<TTSStreamingChunk, Error>.makeStream()
@@ -702,6 +704,9 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             do {
                 // The MLX error handler is task-local: the boundary lives in this producing Task (K-1)
                 try await withMLXErrors { errors in
+                    // Reuse (or compute) the voice-conditioned prefix KV, matched by embedding content (K-50); computed
+                    // here, inside the boundary and off the caller's thread (the gate is held until this Task ends)
+                    let prefix = try ctx.pipeline.voicePrefix(ctx.model, for: ctx.voiceEmb, key: ctx.voiceKey)
                     let codeStream = ctx.model.generateStreaming(
                         text: ctx.genText,
                         voiceEmbedding: ctx.voiceEmb,
@@ -710,8 +715,8 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                         chunkSize: chunkSize,
                         sanitize: capturedSanitize,
                         seed: ctx.seed,
-                        prefixCache: ctx.prefixCache,
-                        prefixLen: ctx.prefixLen
+                        prefixCache: prefix.cache,
+                        prefixLen: prefix.len
                     )
 
                     for try await chunk in codeStream {

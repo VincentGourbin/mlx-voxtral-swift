@@ -41,8 +41,11 @@ final class VoicePrefixCache {
         self.capacity = capacity
     }
 
+    /// Cached prefix of `embedding`, else `compute`'s; not kept when `failed()` is true after computing (an MLX error
+    /// caught in the enclosing boundary leaves empty arrays).
     func prefix(
-        key: String, embedding: MLXArray, compute: (MLXArray) -> (cache: [any KVCache], prefixLen: Int)
+        key: String, embedding: MLXArray, failed: () -> Bool = { false },
+        compute: (MLXArray) -> (cache: [any KVCache], prefixLen: Int)
     ) -> (cache: [any KVCache], len: Int) {
         let fingerprint = VoiceFingerprint(embedding)
         if let index = entries.firstIndex(where: { $0.fingerprint == fingerprint }) {
@@ -51,6 +54,7 @@ final class VoicePrefixCache {
             return (entry.cache, entry.len)
         }
         let (cache, len) = compute(embedding)
+        if failed() { return (cache, len) }
         entries.append(Entry(key: key, fingerprint: fingerprint, cache: cache, len: len))
         if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
         return (cache, len)

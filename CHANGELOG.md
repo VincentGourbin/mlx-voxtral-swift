@@ -209,6 +209,9 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 ### Fixed
 - **K-50 — streaming `voiceKey` reused with another embedding** no longer returns the previous voice's cached prefix:
   the cache is matched by embedding content and `voiceKey` only labels the entry.
+- **K-50 — streaming: an MLX error while prefilling the voice ends the stream with `VoxtralError.mlx`** instead of
+  stopping the host app: the voice prefix (preset voices and any `voiceKey`) is now computed inside the producing
+  task's error boundary, off the caller's thread, and a prefix that failed is not cached.
 - **K-86 — original `tts-4b` pack**: its 20 preset voices (`voice_embedding/*.pt`, `torch.save` files) are read
   without Python (before: "0 voices loaded"); a `.pt` that cannot be read makes `loadModel` throw
   `modelLoadingFailed` naming the file. `synthesizeStreaming` sets `lastSynthesisTruncated` (reset at the start of

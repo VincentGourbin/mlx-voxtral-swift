@@ -2543,10 +2543,14 @@ Statistics:
   - `PARITY ASR 9/9 identiques ; RED/GREEN VoicePrefixCacheKeyTests` (6 bits, 3 textes × 3 graines : mêmes `hyp_sha256` et `out_sha256` ; rouge par correspondance sur la clé seule : 1 ≠ 2 calculs)
   - `bf16 (tts-4b-mlx) court, graines 1 à 3 : audio différent (K-94), couverture 0,909 = 0,909 aux trois graines`
   - `Information : 4 bits court − 55,4 % (A/A 1,1 %) ; 6 bits moyen − 26,4 % (A/A 4,0 %) ; TTFT 6 bits court 157,3 → 91,6 ms ; pic MLX + 26,7 Mo`
-  - `Tests : VoicePrefixCacheKeyTests 4/4, KVCacheCloneTests verts ; suite Debug complète 627 tests, 49 sautés, 0 échec`
+  - `Tests : VoicePrefixCacheKeyTests 6/6, KVCacheCloneTests 3/3, TTSStreamingPrefixBoundaryTests 1/1 (gardé, tts-4b-6bit) ; suite Debug complète 630 tests, 50 sautés, 0 échec (HEAD ; 627 / 49 à d8b457d8)`
 - Lecture : le préfill de la 2ᵉ synthèse passe de 120 + 1 positions à 17 + 1 ; le plancher de lecture des poids
   retient le gain à − 53 % (K-94 extrapolait − 65 % hors plage). Effet sur le temps total ≈ − 2 % sur le texte court.
   Une passe d'information (`6bit-medium-B2`) a tourné sur batterie (Mac débranché 13:54 → 14:13) : écartée, refaite
   sur secteur. Après le vérificateur (commit `fix(K-50)`) : le retrait par étiquette, qui faisait se chasser deux voix
   `voiceEmbedding:` alternées, est supprimé (test `testVoicesSharingAKeyKeepTheirEntries`, rouge sur l'ancien code).
+  Après le second vérificateur (commit `fix(K-50)`) : en streaming, le préfixe de la voix se calcule dans la `Task`
+  productrice, sous `withMLXErrors` (K-1), et non plus sur le thread de l'appelant ; une erreur MLX y finit le flux
+  en `VoxtralError.mlx` (avant : `fatalError`, test `TTSStreamingPrefixBoundaryTests`, rouge par plantage sur
+  l'ancien code) ; un préfixe en échec n'est pas gardé.
   `BENCHMARKS.md` §« 2026-10-19 — K-50 ». Écarts : ASK.md §Dérogations, K-50.

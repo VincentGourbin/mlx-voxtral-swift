@@ -75,6 +75,16 @@ final class VoicePrefixCacheKeyTests: XCTestCase {
         XCTAssertNotEqual(VoiceFingerprint(a), VoiceFingerprint(MLXArray(values, a.shape).asType(.float16)))
     }
 
+    /// A prefix computed while an MLX error was caught is not kept: the next call recomputes
+    func testFailedPrefixIsNotKept() {
+        let cache = VoicePrefixCache()
+        _ = cache.prefix(key: "embedding", embedding: voice(1), failed: { true }, compute: compute)
+        XCTAssertTrue(cache.entries.isEmpty)
+        _ = cache.prefix(key: "embedding", embedding: voice(1), compute: compute)
+        XCTAssertEqual(computed, 2)
+        XCTAssertEqual(cache.entries.count, 1)
+    }
+
     func testLeastRecentlyUsedEviction() {
         let cache = VoicePrefixCache(capacity: 3)
         for seed in UInt64(1) ... 3 { _ = cache.prefix(key: "v\(seed)", embedding: voice(seed), compute: compute) }

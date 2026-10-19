@@ -6272,7 +6272,8 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 **Protocole.** A = commit parent `cab77314` (worktree `convertvoxtral-k50A`, binaire Release construit et lancé
 depuis lui), B = `d8b457d8` (`perf(K-50)` : cache de préfixe retrouvé par empreinte du contenu de l'embedding —
 forme, dtype, SHA-256 — LRU de 3 entrées, utilisé aussi par la surcharge batch `voiceEmbedding:`), binaire Release du
-dépôt principal à `86899785` (code identique à `d8b457d8`, documentation seule après), lancé depuis lui, aucun commit
+dépôt principal construit à `d8b457d8` (12:43) et lancé depuis lui ; ses lignes portent `86899785`, le HEAD lu à
+l'exécution (un commit de documentation K-65 de plus, aucun fichier de `Sources` changé) ; aucun commit
 pendant la file. File `.local-runs/queue-k50.sh` (12:44 → 14:49) puis `.local-runs/queue-k50b.sh` (14:49 → 14:57,
 reprise d'une passe, voir plus bas). Construits avec `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift
 0.31.6@0bb916c, mlx-swift-lm main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go ; les 37

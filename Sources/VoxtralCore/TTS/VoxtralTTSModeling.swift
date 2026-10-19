@@ -433,6 +433,9 @@ class VoxtralTTSModel: Module {
         let inputIdsMx = MLXArray(prefixIds).reshaped(1, prefixLen)
         let embeddings = buildInputEmbeddings(inputIds: inputIdsMx, voiceEmbedding: voiceEmbedding)
         let cache = createCache()
+        // A caught MLX error (voice embedding of the wrong width) leaves an empty array: stop before the layers read
+        // its shape; the caller's boundary throws it (K-1, K-50)
+        if MLXErrorScope.hasError { return (cache, prefixLen) }
         _ = llmForward(inputEmbeds: embeddings, cache: cache)
         MLX.eval(cache.flatMap { $0.state })  // materialize so clones don't re-run the prefix
         return (cache, prefixLen)

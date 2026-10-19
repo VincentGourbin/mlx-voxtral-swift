@@ -1218,7 +1218,8 @@ Décisions du planificateur du 2026-10-03 :
   écartée et refaite (`6bit-medium-B2r`, après la cellule 4 bits, hors de l'ordre A/B/B/A) ; ligne recopiée telle
   quelle. (7) `KO  indexation/sauvegarde` avant `4bit-short-B2` et `6bit-medium-A2`, tolérés (décision du
   2026-10-05). (8) Évaluations (non chronométrées) pendant une sauvegarde Time Machine. (9) Binaire B construit à
-  `86899785` (commits `docs(K-65)` après `d8b457d8`), code identique à `d8b457d8`. (10) L'empreinte (copie et
+  `d8b457d8` (12:43:09) ; ses lignes portent `86899785`, le HEAD lu à l'exécution (`BenchCommand.swift:262`), un commit
+  `docs(K-65)` de plus, sans changement de `Sources`. (10) L'empreinte (copie et
   SHA-256 de l'embedding) et, au premier appel, le calcul du préfixe se font hors de la phase « Prefill »
   du modèle (`VoxtralTTSModeling.swift:482`) : `phases_ms.prefill` ne les compte pas ; `total_ms` les compte (− 2,0 %, cohérent avec − 66 ms de
   préfill), coût de l'empreinte non mesuré seul. (11) Tags `K50-<cellule>-A|B` partagés par A1/A2 et B1/B2 ;
@@ -1242,3 +1243,24 @@ Décisions du planificateur du 2026-10-03 :
   pour `clone_fr` en fp32). (17) `unload()` vide le cache hors du `gate` (`:864`), même course qu'avant K-50 sur
   `prefixCacheEntry`. (18) A/A de la cellule d'information 6 bits moyen 4,0 %, au-dessus du seuil de 3 % : lue à
   titre indicatif (BENCHMARKS précisé).
+  Après le second vérificateur : (19) correctif de frontière (commit `fix(K-50)`) : `voicePrefix` tourne dans la
+  `Task` productrice du streaming, sous `withMLXErrors`, et lève l'erreur MLX interceptée ; `precomputeVoicePrefixCache`
+  s'arrête avant les couches sur une erreur interceptée ; un préfixe en échec n'est pas gardé
+  (`testFailedPrefixIsNotKept`, rouge par compilation seulement sur l'ancien code : le paramètre `failed` n'existait
+  pas). Test gardé `TTSStreamingPrefixBoundaryTests` (embedding de largeur 100 en streaming puis en batch) : rouge
+  sur `6580961d` (worktree jetable, `.local-runs/k50-red3.log`, pile `k50-red3.stack.txt` : `fatalError` du
+  gestionnaire par défaut dans `buildInputEmbeddings`), vert à HEAD (`.local-runs/k50-unit3.log`, code de sortie 0) ;
+  suite Debug `.local-runs/k50/suite3.log` : 630 tests, 50 sautés, 0 échec, code de sortie 0. Avant K-50, les voix
+  prédéfinies et un `voiceKey` fourni calculaient déjà le préfixe hors de la frontière : corrigé aussi (CHANGELOG
+  Fixed). Le préfixe batch était déjà dans la frontière ; il lève maintenant l'erreur avant `generate`. Chemin
+  batch mesuré inchangé en succès (aucune erreur) : mesures non rejouées ; la dérogation (14) est levée.
+  (20) Charge de fond pendant `6bit-short-B2` (cellule de la porte) : corespotlightd jusqu'à 220 % et mediaanalysisd
+  249 % (`6bit-short-B2.samples.load`) ; B1/B2 5,4 % d'écart, au détriment de B, sans effet sur la porte.
+  (21) Logs de test de `d8b457d8` (`k50-unit1`, `k50-red`, `suite`) sans code de sortie (`VERIFY.md` §1) ; ceux du
+  correctif l'ont. (22) Depuis K-50, `bench tts --warmup ≥ 1` mesure le chemin en cache pour toute voix : les
+  valeurs de départ K-35 de préfill et de TTFT citées par d'autres portes (K-66 : TTFT 252 à 258 ms `neutral_female`,
+  K-79) ne sont plus comparables : à recaler au prochain replanning. (23) Capacité fixée à 3, sans réglage ;
+  `docs/References.md:107` prévoit pour `lean` une entrée : à porter par K-79. (24) Prérequis K-35 encore `open`
+  dans le tableau (antérieur à K-50, comme K-41 et K-43). (25) Cinq commits pour la fiche (`perf`, `docs`, deux
+  `fix`, `docs` de vérification), contre « une fiche = un commit » ; précédents K-58, K-65. (26) Coût de l'empreinte
+  payé à chaque appel, voix prédéfinies comprises (avant : comparaison de chaînes), non mesuré seul.
