@@ -310,7 +310,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
 - 2026-10-19 — **K-43 : le streaming TTS re-décodait tout l'accumulé ; un contexte gauche de 24 frames suffit** : le
   codec est causal à champ récepteur borné, calculable depuis sa configuration en remontant les couches (conv de
   projection K − 1 ; chaque étage de transformer n × W ; conv de pas 1 r + K − 1 ; conv transposée causale de pas s
-  ⌈(r + K − 1) / s⌉) : 22 frames pour le pack, 7 suffisent en pratique (test à poids aléatoires). Chaque chunk décode
+  ⌈(r + K − 1) / s⌉) : 22 frames pour le pack (21 exactement : le code arrondit au plafond) ; sur un codec à poids aléatoires l'erreur
+  tombe dès 5 à 7 frames, ce qui ne dit rien des poids réels. Chaque chunk décode
   ses nouvelles frames + 24 de contexte : streaming = batch à 4,9e-6, codec par chunk 27-29 ms du début à la fin au
   lieu de 34 → 666 ms, streaming long − 36 % par frame (RTF 0,85 → 0,56, au niveau du batch 0,55), part du codec
   41 → 6 %. Le gain en temps (10,7×) reste loin du gain en frames (÷ 33) : le coût fixe d'un appel au codec domine.

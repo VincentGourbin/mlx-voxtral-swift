@@ -5054,7 +5054,8 @@ pendant la passe, `quiet.sh sample` ; les 22 passes « ok QUIET » à la premiè
 - RTF du long en profil par défaut : streaming 0,5759 contre batch 0,5492, + 4,86 % (≤ + 5 %, de peu ; une passe
   chacun, sans A/A). En `--cache-limit-mb 2048`, le streaming B fait 0,5562 / 0,5714.
 - Pic du long en profil par défaut : `peak_footprint_mb` (champ de la porte, celui des 75 899 Mo de K-35) streaming
-  7 192,1 contre batch 7 969,4 (≤ + 10 %) ; sans plafond de cache, le streaming passe de 75 899 Mo (K-35) à 7 192 Mo.
+  7 192,1 contre batch 7 969,4 (≤ + 10 %) ; sans plafond de cache, le streaming passe de 75 899 Mo (K-35) à 7 192 Mo,
+  effet cumulé de K-41 et K-43 (A n'est pas mesuré sans plafond).
   `peak_mlx_mb` streaming 4 419,7 contre batch 3 890,8 (+ 13,6 %), hors porte, consigné.
 - Part du codec : 41,1 % → 6,1 % du temps de génération du streaming long, sous 50 % : K-71 n'est pas rouverte. Le
   travail du codec baisse de 10,7× (58,7 → 5,5 s) et non de 33× (gain attendu de la fiche) : chaque chunk décode 10 +
@@ -5415,4 +5416,21 @@ Charge de fond notable pendant les passes (`.local-runs/k43/*.samples.load` ; vi
 04:32:22 121,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x1/     132)
 04:31:53  84,1 /System/Library/CoreServices/osanalyticshelper (x3/     132)
 # trace-stream-long-B.samples.load (vide)
+```
+
+### K-43, tests gardés du chemin avec amorçage (2026-10-19, après le vérificateur, `69bb2727` + docs)
+
+`TEST_RUNNER_VOXTRAL_TTS_CARRIER_EARLY=1` (+ `_EMB` = `.local-runs/voices/clone_fr.safetensors`) et
+`TEST_RUNNER_VOXTRAL_TTS_STREAM_SEED=1`, Debug, tts-4b-6bit : `TTSCarrierEarlyCutTests` 2/2 et
+`TTSStreamingSeedReproTests.testStreamingSeedIsDeterministic` (`gated2.log`), puis
+`testWarmUpCarrierTrimmedLongText` avec `TEST_RUNNER_VOXTRAL_TTS_REPRO_EMB` (`gated3.log`) : 4 tests, 0 échec. Le
+premier essai (`carrier.log`) échoue sur `XCTUnwrap` (`_EMB` absente), aucune assertion jugée.
+
+```
+CUTSUM tts-4b-6bit margin 0: mismatches 0/10, frames generated before the cut median 23 max 33
+CUTSUM tts-4b-6bit margin 1: mismatches 0/10, frames generated before the cut median 23 max 33
+CUTSUM tts-4b-6bit margin 2: mismatches 0/10, frames generated before the cut median 23 max 33
+CUTSUM tts-4b-6bit margin 3: mismatches 0/10, frames generated before the cut median 23 max 33
+CUTSUM tts-4b-6bit margin 4: mismatches 0/10, frames generated before the cut median 23 max 33
+STREAMSUM tts-4b-6bit: cut mismatches 0/19, late first chunk 0/19
 ```

@@ -1095,4 +1095,16 @@ Décisions du planificateur du 2026-10-03 :
   (9) Passes `stream-medium-B1` et `B2` démarrées sur un `KO` « indexation/sauvegarde » (corespotlightd), toléré par
   la décision du 2026-10-05 ; valeurs égales aux graines 2 et 3 sans `KO`. (10) `perf(K-43)` et `docs(K-43)` : deux
   commits.
+- **K-43 (#639), 2026-10-19, après le vérificateur** (`verified`, 7 remarques non bloquantes) : (11) chemin avec
+  amorçage (`warmUpText`, tampon `head` du pipeline) non couvert par les tests de K-43 : rejoué après coup sur
+  `69bb2727`, tests gardés `TTSCarrierEarlyCutTests` (2/2, `STREAMSUM cut mismatches 0/19, late first chunk 0/19`) et
+  `TTSStreamingSeedReproTests` (2/2, dont `testWarmUpCarrierTrimmedLongText`), voix `clone_fr`
+  (`.local-runs/k43/gated2.log`, `gated3.log` ; le premier essai `carrier.log` échoue sur `XCTUnwrap`, variable
+  `_EMB` absente, aucune assertion jugée). (12) Le test à poids aléatoires ne distingue pas un champ récepteur
+  sous-estimé entre 7 et 21 frames : seule l'assertion `receptiveFieldFrames == 22` protège le calcul ; le recul exact
+  est 21 (plafond conservateur). (13) `VoxtralCodecDecoder.swift` est modifié (ajouts : `windowSizes`,
+  `samplesPerFrame`, `receptiveFieldFrames`, `decode(_:from:context:)`) alors que la note de replanification ne
+  l'annonçait pas. (14) Le pic sans plafond « 75 899 → 7 192 Mo » cumule K-41 et K-43 (A n'a pas été mesuré sans
+  plafond) ; CHANGELOG corrigé. (15) La trace dure plus que `total_ms` de sa passe (A 144 contre 128 s, B 91 contre
+  84 s, coût du profileur) ; rapportée à `total_ms`, la part du codec vaut 45,8 → 6,6 %, toujours sous 50 %.
 
