@@ -61,6 +61,9 @@ func loadVoxtralRealtimeModel(
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
     try model.updateVerified(parameters: parameters)
     castRealtimeParameters(model, to: realtimeComputeDType(model))
+    if let bits = realtimeHeadBits() {
+        quantizeRealtimeHead(model.decoder, bits: bits)
+    }
 
     progressCallback?(1.0, "Model loaded successfully")
     return model
@@ -71,8 +74,34 @@ func loadVoxtralRealtimeModel(
 /// The dtype the Realtime path computes in: the tied token table's. It is never quantized (it is also the LM head,
 /// `tok_embeddings` is skipped by the quantizer) and holds the 16-bit dtype of every pack's matrices. Not `norm` or
 /// `ada_down`: the mlx-community packs store norms, biases and the Ada MLP in fp32 (300 tensors).
-func realtimeComputeDType(_ model: VoxtralRealtimeModel) -> DType {
-    model.decoder.tokEmbeddings.weight.dtype
+func realtimeComputeDType(_ model: VoxtralRealtimeModel) -> DType { realtimeComputeDType(model.decoder) }
+
+func realtimeComputeDType(_ decoder: VoxtralRealtimeDecoder) -> DType {
+    // A quantized table (K-46) holds packed uint32 weights: its scales keep the 16-bit dtype
+    if let quantized = decoder.tokEmbeddings as? QuantizedEmbedding { return quantized.scales.dtype }
+    return decoder.tokEmbeddings.weight.dtype
+}
+
+// MARK: - Quantized tied head (K-46)
+
+/// Bits of the tied head quantized at load time: `VOXTRAL_REALTIME_HEAD_BITS` = 8 or 4; unset (default) keeps the
+/// pack's 16-bit table. Internal switch for the measurement (P-61 step 2), not a public option.
+func realtimeHeadBits(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Int? {
+    guard let value = environment["VOXTRAL_REALTIME_HEAD_BITS"], let bits = Int(value), [4, 8].contains(bits) else {
+        return nil
+    }
+    return bits
+}
+
+/// Replace the tied token table by a `QuantizedEmbedding` (affine, group size 64, as mlx-audio): the logits go
+/// through `quantizedMM` and a token embedding de-quantizes one row; the 16-bit table is released. Run after
+/// `castRealtimeParameters`, which reads the compute dtype on this table.
+func quantizeRealtimeHead(_ decoder: VoxtralRealtimeDecoder, bits: Int, groupSize: Int = 64) {
+    let table = decoder.tokEmbeddings
+    guard !(table is QuantizedEmbedding) else { return }
+    let quantized = QuantizedEmbedding(table, groupSize: groupSize, bits: bits)
+    decoder.update(modules: ModuleChildren.unflattened(["tok_embeddings": quantized]))
+    MLX.eval(quantized)
 }
 
 /// Cast the fp32 parameters (norms, biases, Ada MLP) to `dtype`, a 16-bit float: each one would otherwise promote the

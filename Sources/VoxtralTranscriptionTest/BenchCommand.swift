@@ -571,21 +571,25 @@ struct BenchRealtime: AsyncParsableCommand {
     @Option(name: .long) var model: String = "realtime-4b-4bit"
     @Option(name: .long) var input: String
     @Option(name: .long, help: "Transcription delay (ms)") var delay: Int = 480
+    @Option(name: .long, help: "Quantize the tied head at load (8 or 4 bits; K-46, sets VOXTRAL_REALTIME_HEAD_BITS)")
+    var headBits: Int?
     @OptionGroup var common: BenchCommonOptions
 
     func run() async throws {
         try BenchRunner.guardBuild()
+        try RealtimeHeadOption.apply(headBits)
         let pipeline = VoxtralRealtimePipeline(configuration: .init(transcriptionDelayMs: delay, cacheLimitBytes: common.cacheLimitBytes))
         let loadStart = CFAbsoluteTimeGetCurrent()
         try await pipeline.loadModel(modelId: model)
         let loadMs = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
+        let loadActiveMB = Double(Memory.activeMemory) / 1_048_576  // resident weights after load (K-46)
         let url = URL(fileURLWithPath: input)
         let seconds = BenchRunner.audioSeconds(input)
         let base: [String: Any] = [
             "pipeline": "realtime", "model": model, "input": input, "input_s": BenchJSON.round(seconds, 2) ?? 0,
             "delay_ms": delay, "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default",
-            "load_ms": BenchJSON.round(loadMs) ?? 0,
-        ]
+            "load_ms": BenchJSON.round(loadMs) ?? 0, "load_active_mb": BenchJSON.round(loadActiveMB, 1) ?? 0,
+        ].merging(RealtimeHeadOption.fields(headBits)) { $1 }
         try await BenchRunner.run(common, base: base) { _, _ in
             var text = ""
             let m = try await PassMeasurement.run { text = try await pipeline.transcribe(audio: url) }
@@ -602,6 +606,17 @@ struct BenchRealtime: AsyncParsableCommand {
         }
         pipeline.unload()
     }
+}
+
+/// `--head-bits` of `bench realtime` and `eval realtime` (K-46): the loader reads `VOXTRAL_REALTIME_HEAD_BITS`.
+enum RealtimeHeadOption {
+    static func apply(_ bits: Int?) throws {
+        guard let bits else { return }
+        guard bits == 8 || bits == 4 else { throw ValidationError("--head-bits must be 8 or 4") }
+        setenv("VOXTRAL_REALTIME_HEAD_BITS", String(bits), 1)
+    }
+
+    static func fields(_ bits: Int?) -> [String: Any] { bits.map { ["head_bits": $0] } ?? [:] }
 }
 
 // MARK: - tts

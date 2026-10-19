@@ -175,9 +175,9 @@ class VoxtralRealtimeDecoder: Module {
         }
     }
 
-    /// Embed a single token ID.
+    /// Embed a single token ID: through the module, so a quantized table de-quantizes that row only (K-46).
     func embedToken(_ tokenId: Int) -> MLXArray {
-        tokEmbeddings.weight[tokenId]
+        tokEmbeddings(MLXArray([Int32(tokenId)]))[0]
     }
 
     /// Embed token IDs.
@@ -185,9 +185,9 @@ class VoxtralRealtimeDecoder: Module {
         tokEmbeddings(tokenIds)
     }
 
-    /// Compute logits via tied embeddings: h @ tok_embeddings^T
+    /// Compute logits via tied embeddings: h @ tok_embeddings^T (`quantizedMM` when the table is quantized, K-46)
     func logits(_ h: MLXArray) -> MLXArray {
-        MLX.matmul(h, tokEmbeddings.weight.transposed())
+        tokEmbeddings.asLinear(h)
     }
 
     /// Create fresh KV caches for all layers: a ring buffer sized to the decoder sliding window

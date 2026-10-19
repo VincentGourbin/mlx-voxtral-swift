@@ -155,10 +155,12 @@ struct EvalRealtime: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "realtime", abstract: "VoxtralRealtimePipeline.transcribe (greedy)")
     @Option(name: .long) var model: String = "realtime-4b-4bit"
     @Option(name: .long, help: "Transcription delay (ms)") var delay: Int = 480
+    @Option(name: .long, help: "Quantize the tied head at load (8 or 4 bits; K-46)") var headBits: Int?
     @OptionGroup var common: EvalCommonOptions
 
     func run() async throws {
         try BenchRunner.guardBuild()
+        try RealtimeHeadOption.apply(headBits)
         let clips = try EvalCorpus.load(path: common.corpus, ids: common.clips)
         try BenchRunner.prepare(pass: 1, cooldown: 0)
         if common.beacon { VoxtralRuntimeBeacon.isEnabled = true }
@@ -167,6 +169,7 @@ struct EvalRealtime: AsyncParsableCommand {
         for (clip, reference) in clips {
             let text = try await pipeline.transcribe(audio: URL(fileURLWithPath: clip.audio))
             let base: [String: Any] = ["pipeline": "realtime", "model": model, "delay_ms": delay, "language": "auto"]
+                .merging(RealtimeHeadOption.fields(headBits)) { $1 }
             EvalRunner.report(base, clip: clip, reference: reference, hypothesis: text,
                               truncated: pipeline.lastTranscriptionTruncated, common: common)
         }
