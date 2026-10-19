@@ -111,30 +111,35 @@ class VoxtralRealtimeModel: Module {
 
         // Prefill
         session?.beginPhase("Prefill", category: .prefill)
-        var hidden = decoder.forward(embeds: prefixEmbeds, cache: cache)
+        let hidden = decoder.forward(embeds: prefixEmbeds, cache: cache)
         if MLXErrorScope.hasError { return ([], adapterOut) }
-        var logits = decoder.logits(hidden[hidden.dim(0) - 1])
+        let logits = decoder.logits(hidden[hidden.dim(0) - 1])
         MLX.eval(logits)
         DTypeAudit.report("realtime", "logits", logits)
         DTypeAudit.report("realtime", cache: cache)
         if MLXErrorScope.hasError { return ([], adapterOut) }
         session?.endPhase("Prefill", category: .prefill)
 
-        // Autoregressive decode: one step per audio frame after the prompt (K-5)
+        // Autoregressive decode: one step per audio frame after the prompt (K-5). Pipelined (K-47, T15): the token
+        // stays an MLXArray, step N+1 is built from it and queued by asyncEval before step N's token is read, so the
+        // GPU runs step N+1 while the CPU reads token N; on EOS or the text budget one queued step is dropped.
+        var pending = sampleToken(logits: logits, temperature: temperature)
+        var pos = promptLen
         var stepStart = CFAbsoluteTimeGetCurrent()
         let loop = Self.decodeLoop(
             promptLen: promptLen, nAudioTotal: nAudioTotal, maxTextTokens: maxTokens, eosTokenId: config.eosTokenId,
-            sample: { nextToken(logits: logits, temperature: temperature) },
-            advance: { pos, token, count in
+            sample: {
+                let token = pending
+                // Next input: audio_embed[pos] + tok_embed[token], built before the token is read
+                let embed = adapterOut[pos] + decoder.embedTokens(token.reshaped([1]))
+                let hidden = decoder.forward(embeds: embed, cache: cache)
+                pending = sampleToken(logits: decoder.logits(hidden[0]), temperature: temperature)
+                if !MLXErrorScope.hasError { MLX.asyncEval(pending) }
+                pos += 1
+                return token.item(Int.self)
+            },
+            advance: { _, _, count in
                 if VoxtralCancellation.isCancelled { return false }  // the pipeline throws CancellationError (K-15)
-                // Build next input: audio_embed[pos] + tok_embed[token]
-                let audioEmb = adapterOut[pos]
-                let tokEmb = decoder.embedToken(token)
-                let embed = audioEmb + tokEmb
-
-                hidden = decoder.forward(embeds: embed.expandedDimensions(axis: 0), cache: cache)
-                logits = decoder.logits(hidden[0])
-                MLX.eval(logits)
                 if MLXErrorScope.hasError { return false }
 
                 let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)
@@ -150,9 +155,9 @@ class VoxtralRealtimeModel: Module {
         lastGenerationTruncated = loop.truncated
         if MLXErrorScope.hasError { return (generated, adapterOut) }
 
-        // Read final pending positions (audio exhausted, text-only generation)
+        // Read final pending positions (audio exhausted, text-only generation): the last queued step's token
         if generated.isEmpty || (generated.last != config.eosTokenId && !loop.stopped) {
-            let token = nextToken(logits: logits, temperature: temperature)
+            let token = pending.item(Int.self)
             if token != config.eosTokenId {
                 generated.append(token)
             }
@@ -195,10 +200,11 @@ class VoxtralRealtimeModel: Module {
         return (generated, steps, false, false)
     }
 
-    private func nextToken(logits: MLXArray, temperature: Float) -> Int {
+    /// Next token, lazy (K-47): read with `.item()` once its step has been queued
+    private func sampleToken(logits: MLXArray, temperature: Float) -> MLXArray {
         if temperature == 0 {
-            return MLX.argMax(logits).item(Int.self)
+            return MLX.argMax(logits)
         }
-        return MLXRandom.categorical(logits * (1.0 / temperature)).item(Int.self)
+        return MLXRandom.categorical(logits * (1.0 / temperature))
     }
 }
