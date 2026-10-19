@@ -50,7 +50,8 @@ class RealtimeCausalConv1d: Module {
 
 // MARK: - Interleaved RoPE Helper
 
-/// Apply interleaved (GPT-J style) RoPE to a 2D tensor.
+/// Apply interleaved (GPT-J style) RoPE to a 2D tensor. The encoder uses the fused kernel since K-65
+/// (`MLXFast.RoPE(traditional: true)`); this explicit form stays as the tests' reference.
 /// Rotates consecutive pairs: (x[0], x[1]), (x[2], x[3]), ...
 /// x: [seq, n_heads * head_dim], cos/sin: [seq, head_dim / 2]
 func interleavedRoPE(_ x: MLXArray, cos: MLXArray, sin: MLXArray, nHeads: Int, headDim: Int) -> MLXArray {
@@ -120,32 +121,27 @@ class RealtimeEncoderAttention: Module {
     }
 
     /// Forward pass.
-    /// x: [seq, dim], ropeCos/ropeSin: precomputed [seq, head_dim/2]
+    /// x: [seq, dim], ropeOffset: absolute position of the first row (the chunk start, K-13)
     /// mask: precomputed additive mask [seq, kv_len] or nil
     /// cache: optional (keys, values) for streaming
     /// maskMode: explicit mask (sliding-window chunks, K-13); takes precedence over `mask`
     func callAsFunction(
         _ x: MLXArray,
-        ropeCos: MLXArray,
-        ropeSin: MLXArray,
+        ropeOffset: Int,
         mask: MLXArray? = nil,
         cache: (any KVCache)? = nil,
         maskMode explicitMask: MLXFast.ScaledDotProductAttentionMaskMode? = nil
     ) -> MLXArray {
         let seqLen = x.dim(0)
 
-        var q = wq(x)
-        var k = wk(x)
-        let v = wv(x)
-
-        // Apply interleaved RoPE
-        q = interleavedRoPE(q, cos: ropeCos, sin: ropeSin, nHeads: nHeads, headDim: headDim)
-        k = interleavedRoPE(k, cos: ropeCos, sin: ropeSin, nHeads: nHeads, headDim: headDim)
-
         // Reshape for SDPA: [1, heads, seq, head_dim]
-        var qh = q.reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
-        var kh = k.reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
-        var vh = v.reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
+        var qh = wq(x).reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
+        var kh = wk(x).reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
+        var vh = wv(x).reshaped(1, seqLen, nHeads, headDim).transposed(0, 2, 1, 3)
+
+        // Interleaved (GPT-J) RoPE by the fused kernel, in the activations' dtype (K-65)
+        qh = MLXFast.RoPE(qh, dimensions: headDim, traditional: true, base: ropeTheta, scale: 1, offset: ropeOffset)
+        kh = MLXFast.RoPE(kh, dimensions: headDim, traditional: true, base: ropeTheta, scale: 1, offset: ropeOffset)
 
         // Update KV cache if provided
         if let cache {
@@ -223,15 +219,14 @@ class RealtimeEncoderLayer: Module {
 
     func callAsFunction(
         _ x: MLXArray,
-        ropeCos: MLXArray,
-        ropeSin: MLXArray,
+        ropeOffset: Int,
         mask: MLXArray? = nil,
         cache: (any KVCache)? = nil,
         maskMode: MLXFast.ScaledDotProductAttentionMaskMode? = nil
     ) -> MLXArray {
         // Attention with pre-norm
         var h = attentionNorm(x)
-        h = attention(h, ropeCos: ropeCos, ropeSin: ropeSin, mask: mask, cache: cache, maskMode: maskMode)
+        h = attention(h, ropeOffset: ropeOffset, mask: mask, cache: cache, maskMode: maskMode)
         var out = x + h
 
         // SwiGLU FFN with pre-norm
@@ -389,15 +384,11 @@ class VoxtralRealtimeEncoder: Module {
             // A cancelled caller stops at a chunk boundary (≈ 0,4 s); the pipeline then throws (K-15)
             if !chunks.isEmpty, VoxtralCancellation.isCancelled { break }
             let end = min(start + window, seqLen)
-            let (ropeCos, ropeSin) = computeRoPEFreqs(
-                positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta,
-                dtype: convOut.dtype
-            )
             // The mask depends only on the chunk length and the cache offset: shared by every layer
             let maskMode = caches[0].makeMask(n: end - start, windowSize: window, returnArray: false)
             var x = convOut[start ..< end]
             for (layer, cache) in zip(layers, caches) {
-                x = layer(x, ropeCos: ropeCos, ropeSin: ropeSin, cache: cache, maskMode: maskMode)
+                x = layer(x, ropeOffset: start, cache: cache, maskMode: maskMode)
             }
             x = transformerNorm(x)
             MLX.eval(x)
@@ -409,15 +400,9 @@ class VoxtralRealtimeEncoder: Module {
     /// Encode using full-sequence causal attention (for audio within sliding window).
     /// convOut: [seq, dim] → [seq/4, decoder_dim]
     func encodeFull(_ convOut: MLXArray) -> MLXArray {
-        let seqLen = convOut.dim(0)
-        let positions = MLXArray(0..<Int32(seqLen))
-        let (ropeCos, ropeSin) = computeRoPEFreqs(
-            positions: positions, headDim: config.headDim, theta: config.ropeTheta, dtype: convOut.dtype
-        )
-
         var x = convOut
         for layer in layers {
-            x = layer(x, ropeCos: ropeCos, ropeSin: ropeSin)
+            x = layer(x, ropeOffset: 0)
         }
         x = transformerNorm(x)
         return downsampleAndProject(x)

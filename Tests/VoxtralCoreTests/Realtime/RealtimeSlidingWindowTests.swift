@@ -34,7 +34,6 @@ final class RealtimeSlidingWindowTests: XCTestCase {
     private func bandedReference(_ encoder: VoxtralRealtimeEncoder, mel: MLXArray) -> MLXArray {
         let convOut = encoder.convStem(mel)
         let n = convOut.dim(0)
-        let (cos, sin) = computeRoPEFreqs(positions: MLXArray(0 ..< Int32(n)), headDim: 8, theta: 1_000_000)
         var maskValues = [Float](repeating: -Float.infinity, count: n * n)
         for i in 0 ..< n {
             for j in max(0, i - window + 1) ... i { maskValues[i * n + j] = 0 }
@@ -42,7 +41,7 @@ final class RealtimeSlidingWindowTests: XCTestCase {
         let mask = MLXArray(maskValues, [n, n])
         var x = convOut
         for layer in encoder.layers {
-            x = layer(x, ropeCos: cos, ropeSin: sin, mask: mask)
+            x = layer(x, ropeOffset: 0, mask: mask)
         }
         return encoder.downsampleAndProject(encoder.transformerNorm(x))
     }
