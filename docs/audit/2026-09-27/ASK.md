@@ -1094,7 +1094,7 @@ Décisions du planificateur du 2026-10-03 :
   + 13,6 % sur le batch (4 420 contre 3 891 Mo), hors porte (champ de la porte : `peak_footprint_mb`, − 9,8 %).
   (9) Passes `stream-medium-B1` et `B2` démarrées sur un `KO` « indexation/sauvegarde » (corespotlightd), toléré par
   la décision du 2026-10-05 ; valeurs égales aux graines 2 et 3 sans `KO`. (10) `perf(K-43)` et `docs(K-43)` : deux
-  commits.
+  commits (trois avec `9af2c6ac`, remarques du vérificateur ; quatre avec la vérification).
 - **K-43 (#639), 2026-10-19, après le vérificateur** (`verified`, 7 remarques non bloquantes) : (11) chemin avec
   amorçage (`warmUpText`, tampon `head` du pipeline) non couvert par les tests de K-43 : rejoué après coup sur
   `69bb2727`, tests gardés `TTSCarrierEarlyCutTests` (2/2, `STREAMSUM cut mismatches 0/19, late first chunk 0/19`) et
@@ -1107,4 +1107,16 @@ Décisions du planificateur du 2026-10-03 :
   l'annonçait pas. (14) Le pic sans plafond « 75 899 → 7 192 Mo » cumule K-41 et K-43 (A n'a pas été mesuré sans
   plafond) ; CHANGELOG corrigé. (15) La trace dure plus que `total_ms` de sa passe (A 144 contre 128 s, B 91 contre
   84 s, coût du profileur) ; rapportée à `total_ms`, la part du codec vaut 45,8 → 6,6 %, toujours sous 50 %.
+- **K-43 (#639), 2026-10-19, après le contradicteur** (`verified`, 9 remarques non bloquantes) : (16) avec amorçage,
+  les tests rejoués (11) contrôlent la position de la coupe par la longueur, le déterminisme et l'absence de silence,
+  pas l'égalité des échantillons au batch : un décalage de `head` / `fullStart` à longueur constante passerait
+  (relecture : aucun). (17) `frameSize = sampleRate * 2 / 25` du pipeline (`VoxtralTTSPipeline.swift:693`) doit
+  égaler `samplesPerFrame` du codec (1 920 pour tous les packs) : couplage nouveau, non vérifié par le code ; à
+  aligner (lire `samplesPerFrame`) avec la prochaine fiche qui touche le pipeline TTS. (18) Les fenêtres [2, 4, 8, 16]
+  sont codées en dur comme dans le forward (`attn_sliding_window_size` ignoré des deux côtés) : « calculé depuis la
+  configuration » vaut pour noyaux, pas et longueurs ; CHANGELOG précisé. (19) Clause RTF : marge 0,14 point sous la
+  dispersion B/B du même texte plafonné (2,7 %) : tenue, non robuste à une nouvelle mesure (3). (20) K-58 (codec bf16)
+  doit relancer `IncrementalCodecDecodeTests` gardé et revoir la tolérance 1e-4 (note dans sa fiche). (21) Passe
+  `stream-short-A1` : `top_process` corespotlightd 169,7 % sans `KO` au machine-check (A1 40,84 contre A2 41,03 ms) ;
+  `trace-stream-long-B` : Music 30,2 %. (22) CHANGELOG : RTF plafonné et batch par défaut côte à côte, corrigé.
 

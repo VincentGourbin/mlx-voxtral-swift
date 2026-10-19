@@ -56,9 +56,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 
 ### Changed
 - **K-43 — Streaming TTS decodes each chunk from a bounded left context.** Each chunk now decodes only its new
-  frames plus 24 frames of context (the codec's receptive field, computed from its configuration, plus a margin)
+  frames plus 24 frames of context (the codec's receptive field, computed from its layer kernels, strides and window
+  sizes, plus a margin)
   instead of re-decoding everything generated so far. Streamed audio equals batch audio within 5e-6; the per-frame
-  cost no longer grows with the text: tts-4b-6bit long text 68.4 → 43.7 ms per frame, RTF 0.85 → 0.56 (batch 0.55),
+  cost no longer grows with the text: tts-4b-6bit long text 68.4 → 43.7 ms per frame and RTF 0.85 → 0.56 with a 2 GB cache limit; in the default
+  profile the long stream runs at RTF 0.58 against 0.55 in batch,
   and, together with K-41, the streaming peak without a cache limit is 7.2 GB (about 76 GB before both, K-35). Unchanged behaviour: the
   stream still keeps the leading silence that batch synthesis trims.
 - **K-38 — Realtime computes in the model's 16-bit dtype.** At load time the pack's fp32 parameters (norms, biases,
