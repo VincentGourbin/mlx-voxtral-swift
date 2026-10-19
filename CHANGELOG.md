@@ -55,6 +55,12 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-43 — Streaming TTS decodes each chunk from a bounded left context.** Each chunk now decodes only its new
+  frames plus 24 frames of context (the codec's receptive field, computed from its configuration, plus a margin)
+  instead of re-decoding everything generated so far. Streamed audio equals batch audio within 5e-6; the per-frame
+  cost no longer grows with the text: tts-4b-6bit long text 68.4 → 43.7 ms per frame, RTF 0.85 → 0.56 (batch 0.55),
+  and the streaming peak without a cache limit drops from about 76 GB (K-35) to 7.2 GB. Unchanged behaviour: the
+  stream still keeps the leading silence that batch synthesis trims.
 - **K-38 — Realtime computes in the model's 16-bit dtype.** At load time the pack's fp32 parameters (norms, biases,
   Ada MLP) are cast to the dtype of the tied token table; the mel, RoPE tables, delay conditioning and causal-conv
   padding follow the activations. Encoder output, KV cache and logits are no longer fp32: realtime-4b-4bit 26.9 →

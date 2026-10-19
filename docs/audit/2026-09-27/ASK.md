@@ -1079,3 +1079,20 @@ Décisions du planificateur du 2026-10-03 :
   (défaut 0 = argmax, non concerné ; cast fp32 avant la division à faire avec K-47) ; pas d'`EVAL` C-long après K-38
   (K-78 le mesure) ; tests gardés Realtime non rejoués (`RealtimeOriginalRepoTests`,
   `CancellationTests.testCancelRealtimeOnCLong`, `UnloadFootprintTests.testRealtimeUnloadReturnsFootprint`).
+- **K-43 (#639), 2026-10-19, décision de l'agent** (`VERIFY.md` §1 et §2) : (1) pas de champ `newCodes` sur
+  `GenerationChunk` (fiche : additif) : le pipeline découpe `accumulatedCodes` à partir de la première frame neuve,
+  aucune API publique ne change. (2) Contexte = champ récepteur calculé (22) + 2 = 24 frames, et non le minimal
+  mesuré (7 frames sur le codec aléatoire) : borne exacte par construction, la marge coûte peu (coût fixe par appel).
+  (3) `--cache-limit-mb 2048` pour l'A/B/B/A streaming (condition des cellules streaming de K-35) ; clauses pic et
+  RTF lues en profil par défaut sur B seul (une passe streaming, une batch, sans A/A) ; RTF + 4,86 % pour un seuil de
+  + 5 %, tenu de peu. (4) `--passes 1` par processus, quatre processus par cellule, au lieu de `--passes 2` (fiche) :
+  protocole K-96. (5) Pas de « rouge avant » pour la parité : l'ancien chemin était exact aussi (il re-décodait
+  tout) ; les tests unitaires utilisent des API nouvelles (`receptiveFieldFrames`, `decode(_:from:context:)`). (6) En
+  configuration par défaut, le streaming garde le silence de tête que le batch rogne (0 à 0,32 s) : écart documenté
+  (le streaming émet avant de connaître la fin du silence), aucune correction. (7) `out_sha256` du streaming change
+  A → B (arrondis du décodage par fenêtres), borné par la parité 4,9e-6. (8) `peak_mlx_mb` du streaming long
+  + 13,6 % sur le batch (4 420 contre 3 891 Mo), hors porte (champ de la porte : `peak_footprint_mb`, − 9,8 %).
+  (9) Passes `stream-medium-B1` et `B2` démarrées sur un `KO` « indexation/sauvegarde » (corespotlightd), toléré par
+  la décision du 2026-10-05 ; valeurs égales aux graines 2 et 3 sans `KO`. (10) `perf(K-43)` et `docs(K-43)` : deux
+  commits.
+
