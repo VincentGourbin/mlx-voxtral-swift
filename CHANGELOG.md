@@ -58,14 +58,14 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-50 — TTS voice-prefix cache for any voice.** The prefix KV of the last three voices used is kept and matched by
   the embedding's content (shape, dtype, SHA-256), so `synthesize(text:voiceEmbedding:)` (cloned voices, ZeroVoice,
   blends) and the streaming overload without `voiceKey` now reuse it like preset voices: the second synthesis of a
-  cloned voice prefills 52 to 55 % faster on a short text (126 → 60 ms in 6-bit, 125 → 56 ms in 4-bit) and 26 % on a
-  medium text (300 → 221 ms, 6-bit), and its first frame comes about 65 ms sooner (short text); output unchanged on
+  cloned voice prefills 52 to 55 % faster on a short text (126 → 60 ms in 6-bit, 125 → 56 ms in 4-bit) and about 26 % on a
+  medium text (300 → 221 ms, 6-bit; noisier measurement), and its first frame comes about 65 ms sooner (short text); output unchanged on
   the quantized packs. About 27 MB of memory per cached voice (54 MB for a voice of more than 254 frames), up to
   three voices, until `unload()`. With the bf16
   pack (`tts-4b-mlx`), every call with an embedding now prefills the voice and the text separately, as preset voices
-  always did: at the same seed its audio can differ from before (rounding, K-94; ASR coverage the same on average over
-  3 seeds on short, medium and long text, but one long-text seed that already ran away to the frame cap before K-50
-  ran away worse after), and the same voice now sounds the same through `voice:` and `voiceEmbedding:`.
+  always did: at the same seed its audio can differ from before (rounding, K-94; ASR coverage over 3 seeds the same on short
+  text, the same on average on medium text and higher on long text, but one long-text seed that already ran away to the frame cap before K-50
+  ran away worse after), and the same voice now goes through the same prefill path with `voice:` and `voiceEmbedding:`.
 - **K-43 — Streaming TTS decodes each chunk from a bounded left context.** Each chunk now decodes only its new
   frames plus 24 frames of context (the codec's receptive field, computed from its layer kernels, strides and window
   sizes, plus a margin)

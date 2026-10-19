@@ -2556,5 +2556,7 @@ Statistics:
   mesurés (couverture moyenne égale ou meilleure ; graine 3 du long dégénérée des deux côtés, pire en WER pour B) ;
   cache toujours actif par embedding = défaut visible : question à Vincent (A-DECIDER, K-50), dérogations 34 à 41.
   Décision de Vincent du 2026-10-19 : A, cache gardé actif par défaut (CHANGELOG « Changed », FluxForge à prévenir
-  par Vincent à la version) ; dérogation 42.
+  par Vincent à la version) ; dérogation 42. Contradicteur final : verified (2026-10-19) ; suite à planifier :
+  course de `unload()` / `loadModel()` avec l'ajout d'une entrée par la `Task` de streaming (dérogations 17 et 28 ;
+  n'ajouter que si la génération du `gate` n'a pas changé).
   `BENCHMARKS.md` §« 2026-10-19 — K-50 ». Écarts : ASK.md §Dérogations, K-50.
