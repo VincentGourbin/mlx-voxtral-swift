@@ -16,11 +16,12 @@ final class MalformedQuantizationLoadingTests: XCTestCase {
 
     private let fm = FileManager.default
 
-    /// The malformed blocks: not an object, `bits` missing, `group_size` of the wrong type
+    /// The malformed blocks: not an object, `bits` missing, `group_size` of the wrong type, empty
     private let blocks: [(name: String, value: Any)] = [
         ("not an object", "8bit"),
         ("without bits", ["group_size": 64]),
         ("group_size as text", ["group_size": "64", "bits": 4]),
+        ("empty object", [String: Any]()),
     ]
 
     /// A copy of `source` whose `config.json` has `block` as its quantization (the original keys otherwise)
