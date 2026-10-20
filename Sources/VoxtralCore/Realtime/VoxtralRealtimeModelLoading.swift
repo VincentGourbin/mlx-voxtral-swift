@@ -88,9 +88,9 @@ func loadVoxtralRealtimeModel(
 
 // MARK: - Compute dtype (K-38)
 
-/// The dtype the Realtime path computes in: the tied token table's. The packs never quantize it (it is also the LM
-/// head, `tok_embeddings` is skipped by the quantizer; K-46 may quantize it after load, then its scales carry the
-/// dtype) and it holds the 16-bit dtype of every pack's matrices. Not `norm` or
+/// The dtype the Realtime path computes in: the tied token table's. The mlx-audio and Mistral packs never quantize it
+/// (it is also the LM head, `tok_embeddings` is skipped by the quantizer); a voxmlx pack does (K-91) and K-46 may after
+/// load: then its scales carry the dtype. It holds the 16-bit dtype of every pack's matrices. Not `norm` or
 /// `ada_down`: the mlx-community packs store norms, biases and the Ada MLP in fp32 (300 tensors).
 func realtimeComputeDType(_ model: VoxtralRealtimeModel) -> DType { realtimeComputeDType(model.decoder) }
 

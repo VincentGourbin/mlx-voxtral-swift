@@ -1341,3 +1341,15 @@ Décisions du planificateur du 2026-10-03 :
   (décision du 2026-10-05). (8) Aide de la CLI (`realtime --model`, `profile`) complétée des deux ids. (9) Suite
   notée : `load_ms` / `load_active_mb` des packs voxmlx ne mesurent pas le chargement (rien n'est évalué avant le
   premier encodage) ; évaluer les paramètres en fin de chargement rendrait la mesure comparable (à mesurer, K-78).
+  (10) Tags identiques entre la file 1 (écartée) et la file 2 (`K91EVAL-<pack>`, `K91-<pack>`, contre « un tag
+  distinct par série » de `VERIFY.md` §1) : la file 2 refait la file 1 à l'identique ; les séries se distinguent par
+  `commit` (`f1e4cc44f` / `de78332da`), `date` et le bloc de `BENCHMARKS.md`. (11) Diagnostic de la file 1 : la
+  comparaison des poids 6 bits au fp16 est conservée (`.local-runs/k91r/weights-vs-fp16-6bit.txt`, refaite après coup,
+  script `.local-runs/tools/k91_cmp_weights.py` ; convolutions voxmlx au format MLX, comparées sans transposition :
+  `SHAPE`) ; l'essai sur 8 s de C-moyen (texte vide en 6 bits, texte en 4 bits) a été lu à l'écran, sans log conservé.
+  (12) Charge de fond de la file 2 enregistrée (`.samples.load`) : `photoanalysisd` / `photolibraryd` pendant `bench`
+  4 bits, Mail pendant `bench` 6 bits, `backupd` pendant `eval` 6 bits (Time Machine relancé malgré `tmutil
+  stopbackup`) ; sans effet sur le texte, et les `step_ms_p50` sont une passe sans A/A (annoncé). (13) Prémisse de la
+  fiche inexacte : avant K-91, un pack voxmlx complet levait une erreur non typée (`missingWeights`), il ne se chargeait
+  pas en poids aléatoires ; le refus typé et les clés en trop restent l'objet du rouge. (14) Suite `k91/suite3.log`
+  lancée sur l'arbre de `de78332d` avant son commit (mêmes fichiers, commit 8 s après la fin de la suite).
