@@ -17,7 +17,7 @@
 > `Pipeline/`, `CoreML/`).
 > Which pack each reference profile uses: [References.md](References.md).
 
-## 1. Registry entries (15 ids)
+## 1. Registry entries (16 ids)
 
 The ids a caller can pass today. ★ = default of its registry (`modeles:92`). Declared sizes and precisions in the
 registries are wrong for several entries (M-03, `modeles:272-297`); K-24 corrects them.
@@ -39,6 +39,7 @@ registries are wrong for several entries (M-03, `modeles:272-297`); K-24 correct
 | TTS · `tts-4b` | [`mistralai/Voxtral-4B-TTS-2603`](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603) | `consolidated.safetensors` (+ 20 voice `.pt` files, not counted) | 8 004 752 248 | 2026-03-31 | cc-by-nc-4.0 | Mistral `consolidated` · bf16 | yes | to record (K-82) | `VoxtralTTSRegistry.swift:39-47` ; `modeles:88` |
 | TTS · `tts-4b-4bit` | [`mlx-community/Voxtral-4B-TTS-2603-mlx-4bit`](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-4bit) | `model.safetensors` | 2 509 879 373 | 2026-03-27 | cc-by-nc-4.0 | mlx-audio · affine 4 b g64; codec (116 tensors) bf16 | yes | to record (K-82) | `VoxtralTTSRegistry.swift:48-56` ; `modeles:89` |
 | TTS · `tts-4b-6bit` | [`mlx-community/Voxtral-4B-TTS-2603-mlx-6bit`](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-6bit) | `model.safetensors` | 3 465 520 393 | 2026-03-27 | cc-by-nc-4.0 | mlx-audio · affine 6 b g64 | yes | to record (K-82) | `VoxtralTTSRegistry.swift:57-65` ; `modeles:90` |
+| TTS · `tts-4b-8bit` | [`VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit`](https://huggingface.co/VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit) | `model.safetensors` | 4 421 161 388 | not yet published (K-90) | cc-by-nc-4.0 | MLX · affine 8 b g64 (LLM, flow matching); codec bf16 | yes | `47b15c20a916204508bda1d1ccc6e9c4bc0a1130984f110375ab30a75c20cd87` (export, reproduced bit for bit) | `VoxtralTTSRegistry.swift` ; K-90, `Scripts/export_tts_8bit.py` |
 
 Licence: the TTS weights are CC BY-NC 4.0 (non-commercial); their use in a commercial app is a legal question
 (ASK-18, `modeles:594-596`).

@@ -73,6 +73,18 @@ public enum VoxtralTTSRegistry {
             parameters: "4B",
             approximateBytes: 3_465_520_393
         ),
+        // Exported by Scripts/export_tts_8bit.py (K-90, ASK-19 = A): mlx-community bf16 @dd85c02a, LLM and flow-matching
+        // transformer 8-bit g64 affine on the 6-bit pack's layers, codec bf16; published under VincentGOURBIN (ASK-22)
+        VoxtralTTSModelInfo(
+            id: "tts-4b-8bit",
+            repoId: "VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit",
+            name: "Voxtral TTS 4B (8-bit)",
+            description: "MLX 8-bit quantized, closest to bf16",
+            size: "4.42 GB",
+            quantization: "8-bit",
+            parameters: "4B",
+            approximateBytes: 4_421_161_388
+        ),
     ]
 
     public static var defaultModel: VoxtralTTSModelInfo {

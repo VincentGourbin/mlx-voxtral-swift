@@ -34,7 +34,7 @@ final class RegistrySizesTests: XCTestCase {
 
     func testEveryEntryMatchesTheHubBytes() throws {
         let hub = try hubBytes()
-        XCTAssertEqual(hub.count, 15, "15 registry ids in docs/Weights.md §1")
+        XCTAssertEqual(hub.count, 16, "16 registry ids in docs/Weights.md §1")
         let entries: [(String, String, Int64?)] =
             VoxtralModelRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
             + VoxtralTTSRegistry.models.map { ($0.id, $0.size, $0.approximateBytes) }
