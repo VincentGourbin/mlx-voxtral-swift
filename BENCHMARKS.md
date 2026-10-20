@@ -6625,8 +6625,8 @@ A puis B ; (2) A/B/B/A sur C-moyen EN (`docs/eval/clips/c_moyen_en.wav`) ; (3) t
   machine-check ne l'a pas vu (débranchement après son passage). Écartée, recopiée ci-dessous pour mémoire ; refaite
   en A1r sur secteur le lendemain matin (10 h après B1/B2). Pour garder l'ordre A/B/B/A dans une même plage, un second
   A/B/B/A complet (file 3) a été mesuré : c'est la cellule de la porte.
-- B3, première tentative (06:56) : refusée par `bench` (`REFUSED busy: MLX process yue2 (pid 25796)`), une autre
-  charge MLX ; `quiet.sh` a attendu sa fin, B3 refaite à 07:21. `yue2` n'apparaît dans aucun `.samples.raw` des passes
+- B3, première tentative (06:56) : refusée par `bench` (`REFUSED busy: MLX process yue2 (pid 25796); MLX process VoxtralCLI (pid 25830)`) :
+  deux autres charges MLX, `yue2` et un second `VoxtralCLI` non identifié (`bench` exclut son propre pid) ; `quiet.sh` a attendu sa fin, B3 refaite à 07:21. `yue2` n'apparaît dans aucun `.samples.raw` des passes
   retenues.
 - Machine-check : `KO  indexation/sauvegarde en cours (29 %)` avant A1r et `(75 %)` avant B3, tolérés par la décision
   de Vincent du 2026-10-05 ; aucune autre ligne `KO`. Les autres passes « ok QUIET » à la première tentative.
@@ -6643,7 +6643,7 @@ A puis B ; (2) A/B/B/A sur C-moyen EN (`docs/eval/clips/c_moyen_en.wav`) ; (3) t
 | Mesure | File 1 (+ A1r) : A1r / A2 | B1 / B2 | Écart des moyennes |
 |---|---|---|---|
 | `step_ms_p50` | 11,68 / 12,04 | 10,61 / 10,61 | − 10,5 % (A/A 3,0 %) ; contre A2 seule (même soir) − 11,9 % |
-| `rtf` | 0,1635 / 0,1704 | 0,1500 / 0,1495 | − 10,4 % |
+| `rtf` | 0,1635 / 0,1704 | 0,1500 / 0,1495 | − 10,3 % |
 
 `out_sha256` `6573ca6a…` identique dans les 9 passes `bench`, A1 comprise.
 
@@ -6651,7 +6651,9 @@ A puis B ; (2) A/B/B/A sur C-moyen EN (`docs/eval/clips/c_moyen_en.wav`) ; (3) t
 `6573ca6a…`, C-moyen FR `3b240f87…` ; WER 9,09 / 1,05 / 1,97 des deux côtés (référence de K-46 retrouvée).
 
 **Occupation GPU du décodage** (xctrace, phase « Realtime Generation », `c_20s_en`, passe tracée non retenue comme
-mesure) : A 86,9 % (`ioreg` 91,2 %), B 98,3 % (`ioreg` 98,9 %) ; trace entière 87,0 → 98,4 %. Branche asynchrone
+mesure) : A 86,9 % (`ioreg` 91,2 %), B 98,3 % (`ioreg` 98,9 %) ; trace entière 87,0 → 98,4 %. La phase
+« Realtime Generation » couvre aussi l'encodage et le préfill (même phase que la borne de K-36 et K-96) ; sur le
+décodage seul (Audio Encoding et Prefill retirés des lignes `GPUOCC`), ≈ 86,1 → ≈ 98,8 % (vérificateur). Branche asynchrone
 prouvée : le GPU ne chôme plus entre deux pas. La borne de la porte (92,3 % avant K-38, 93,1 % refaite en K-96) est
 dépassée par B ; A (86,9 %) est sous elle : le pas a raccourci depuis K-96 (K-38 et suivantes), la part fixe du CPU
 entre deux pas pèse davantage (lecture, cause non mesurée).

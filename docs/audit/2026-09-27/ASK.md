@@ -1312,4 +1312,9 @@ Décisions du planificateur du 2026-10-03 :
   indexation/sauvegarde` avant A1r (29 %) et B3 (75 %), tolérés (décision du 2026-10-05). (5) En `temperature > 0`,
   un tirage `MLXRandom` de plus est consommé après un arrêt anticipé (pas jeté) : l'état global du générateur après
   l'appel diffère, la transcription non ; non mesuré (le défaut est 0).
+  (6) Après le vérificateur (`verified`) : une erreur MLX levée en construisant le pas qui sera jeté (sur EOS) fait
+  échouer la transcription, ce que l'ancienne boucle évitait en ne le construisant pas ; théorique (une erreur de
+  construction est déterministe et serait survenue aux pas précédents), non testé. Occupation relue sur le décodage
+  seul (≈ 86,1 → 98,8 %), citation `REFUSED` complétée (second `VoxtralCLI` non identifié), `rtf` file 1 − 10,3 %,
+  commentaire de `decodeLoop` mis à jour.
 

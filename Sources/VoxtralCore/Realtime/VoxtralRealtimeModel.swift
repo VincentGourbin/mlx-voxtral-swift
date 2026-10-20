@@ -175,9 +175,9 @@ class VoxtralRealtimeModel: Module {
     private(set) var lastGenerationTruncated = false
 
     /// The decode loop's bounds, separated from the model so they can be tested: one step per
-    /// audio frame after the prompt; `sample()` gives the next token, `advance(pos, token, count)`
-    /// feeds it back (false stops, e.g. on an MLX error). `stopped` is true when the loop ended
-    /// before the audio did.
+    /// audio frame after the prompt; `sample()` gives the next token (in `generate`, it also queues the step that
+    /// feeds it back, K-47), `advance(pos, token, count)` runs after it (false stops, e.g. on an MLX error).
+    /// `stopped` is true when the loop ended before the audio did.
     static func decodeLoop(
         promptLen: Int, nAudioTotal: Int, maxTextTokens: Int, eosTokenId: Int,
         sample: () -> Int, advance: (_ pos: Int, _ token: Int, _ count: Int) -> Bool

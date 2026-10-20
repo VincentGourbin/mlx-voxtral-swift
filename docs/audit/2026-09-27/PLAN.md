@@ -2577,3 +2577,4 @@ Statistics:
   lendemain matin porte la porte. B3 refusée une fois par une autre charge MLX (`yue2`), refaite. Le plafond de ≈ 7 %
   des leviers de recouvrement (§5) supposait 93,1 % d'occupation ; A en est à 86,9 % ce jour-là. `BENCHMARKS.md`
   §« 2026-10-20 — K-47 ». Écarts : ASK.md §Dérogations, K-47.
+  Vérificateur : `verified` (2026-10-20), remarques appliquées (dérogation 6).
