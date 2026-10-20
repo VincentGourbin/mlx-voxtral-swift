@@ -1,0 +1,332 @@
+{
+ "source": "mistral_common 1.12.0, Tekkenizer.from_file(tekken.json).encode(text, bos=False, eos=False); tekken.json of mini-3b-8bit, tts-4b-6bit and realtime-4b-4bit give the same ids (2026-10-20, K-88)",
+ "cases": [
+  {
+   "text": "Capital Gains and Capital One are two different things.",
+   "ids": [
+    100416,
+    1461,
+    3365,
+    1321,
+    32000,
+    5661,
+    1584,
+    2295,
+    2801,
+    5705,
+    1046
+   ]
+  },
+  {
+   "text": "The capital of France is Paris.",
+   "ids": [
+    1784,
+    8961,
+    1307,
+    5498,
+    1395,
+    6993,
+    1046
+   ]
+  },
+  {
+   "text": "Flux Forge Studio turns your Mac into a complete AI creative studio.",
+   "ids": [
+    20961,
+    2428,
+    127475,
+    19404,
+    19685,
+    2143,
+    8225,
+    2203,
+    1261,
+    7662,
+    26554,
+    27214,
+    15541,
+    1046
+   ]
+  },
+  {
+   "text": "Generate high-quality images and videos from text.",
+   "ids": [
+    66249,
+    2738,
+    43243,
+    8061,
+    1321,
+    26612,
+    1562,
+    3403,
+    1046
+   ]
+  },
+  {
+   "text": "Train your own custom models, all locally on your Mac.",
+   "ids": [
+    73554,
+    2143,
+    3754,
+    5936,
+    6056,
+    1044,
+    1747,
+    26296,
+    1408,
+    2143,
+    8225,
+    1046
+   ]
+  },
+  {
+   "text": "No data is sent to the cloud.",
+   "ids": [
+    4753,
+    2181,
+    1395,
+    4108,
+    1317,
+    1278,
+    16152,
+    1046
+   ]
+  },
+  {
+   "text": "Hello, world! How are you today?",
+   "ids": [
+    22177,
+    1044,
+    4304,
+    1033,
+    3075,
+    1584,
+    1636,
+    9406,
+    1063
+   ]
+  },
+  {
+   "text": "The quick brown fox jumps over the lazy dog.",
+   "ids": [
+    1784,
+    7586,
+    22980,
+    94137,
+    72993,
+    2136,
+    1278,
+    42757,
+    10575,
+    1046
+   ]
+  },
+  {
+   "text": "It costs $12.50, or roughly €11.",
+   "ids": [
+    2757,
+    12889,
+    1659,
+    1049,
+    1050,
+    1046,
+    1053,
+    1048,
+    1044,
+    1505,
+    28586,
+    20340,
+    1049,
+    1049,
+    1046
+   ]
+  },
+  {
+   "text": "Transcribe this audio, please: 3, 2, 1, go.",
+   "ids": [
+    6881,
+    13089,
+    1593,
+    16023,
+    1044,
+    10678,
+    1058,
+    1032,
+    1051,
+    1044,
+    1032,
+    1050,
+    1044,
+    1032,
+    1049,
+    1044,
+    1974,
+    1046
+   ]
+  },
+  {
+   "text": "Bonjour, ceci est un test de transcription.",
+   "ids": [
+    48227,
+    47010,
+    1044,
+    92819,
+    1709,
+    1457,
+    2688,
+    1311,
+    15661,
+    1046
+   ]
+  },
+  {
+   "text": "Le capital de la société a augmenté de 10 %.",
+   "ids": [
+    3277,
+    8961,
+    1311,
+    1427,
+    22298,
+    1261,
+    128296,
+    1311,
+    1032,
+    1049,
+    1048,
+    33415
+   ]
+  },
+  {
+   "text": "Où est la gare ? À gauche, après le café.",
+   "ids": [
+    1079,
+    3774,
+    1709,
+    1427,
+    36961,
+    3082,
+    11165,
+    26598,
+    1044,
+    8486,
+    1459,
+    35858,
+    1046
+   ]
+  },
+  {
+   "text": "Fluxforge Studio transforme votre Mac en studio de création IA complet.",
+   "ids": [
+    20961,
+    2428,
+    81357,
+    19404,
+    118070,
+    20779,
+    8225,
+    1418,
+    15541,
+    1311,
+    27791,
+    52726,
+    4989,
+    1046
+   ]
+  },
+  {
+   "text": "Aucune donnée envoyée dans le cloud.",
+   "ids": [
+    1065,
+    2359,
+    2471,
+    73068,
+    34013,
+    2267,
+    2367,
+    1459,
+    16152,
+    1046
+   ]
+  },
+  {
+   "text": "L'été dernier, nous sommes allés à Montréal.",
+   "ids": [
+    1076,
+    54902,
+    16828,
+    1044,
+    6807,
+    36279,
+    1747,
+    1924,
+    1755,
+    47207,
+    1046
+   ]
+  },
+  {
+   "text": "Il était une fois un garçon qui aimait les mathématiques.",
+   "ids": [
+    6319,
+    5657,
+    2415,
+    9011,
+    1457,
+    50573,
+    2556,
+    113322,
+    1849,
+    120989,
+    1046
+   ]
+  },
+  {
+   "text": "Voxtral transcrit et comprend l'audio.",
+   "ids": [
+    1086,
+    3155,
+    104810,
+    2148,
+    18485,
+    1568,
+    26509,
+    1295,
+    8490,
+    9383,
+    1046
+   ]
+  },
+  {
+   "text": "Émile a reçu 42 messages — c'est beaucoup !",
+   "ids": [
+    7904,
+    58353,
+    1261,
+    45833,
+    1032,
+    1052,
+    1050,
+    14193,
+    2251,
+    1272,
+    5839,
+    18849,
+    2662
+   ]
+  },
+  {
+   "text": "Ça marche très bien, merci beaucoup.",
+   "ids": [
+    60297,
+    1097,
+    46475,
+    8638,
+    5593,
+    1044,
+    92503,
+    18849,
+    1046
+   ]
+  }
+ ]
+}

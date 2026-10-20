@@ -73,10 +73,23 @@ class TekkenTokenizer {
         let special_tokens: [TekkenSpecialToken]?
     }
     
-    private struct GenerationConfig: Codable {
+    private struct GenerationConfig: Decodable {
         let bos_token_id: Int?
-        let eos_token_id: Int?
+        let eos_token_id: TokenIds?
         let pad_token_id: Int?
+    }
+
+    /// One token id, or a list of them (Hugging Face writes `eos_token_id` either way, K-88): the first one is kept
+    private struct TokenIds: Decodable {
+        let first: Int?
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let single = try? container.decode(Int.self) {
+                first = single
+            } else {
+                first = try container.decode([Int].self).first
+            }
+        }
     }
 
     private struct ModelConfig: Codable {
@@ -381,7 +394,7 @@ class TekkenTokenizer {
         }
         if let generationConfig = try decode(GenerationConfig.self, "generation_config.json") {
             if let bos = generationConfig.bos_token_id { bosTokenId = bos }
-            if let eos = generationConfig.eos_token_id { eosTokenId = eos }
+            if let eos = generationConfig.eos_token_id?.first { eosTokenId = eos }
             if let pad = generationConfig.pad_token_id { padTokenId = pad }
         }
         if let modelConfig = try decode(ModelConfig.self, "config.json"), let audio = modelConfig.audio_token_id {

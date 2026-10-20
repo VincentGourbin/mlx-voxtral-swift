@@ -555,7 +555,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
             guard let model = ttsModel else {
                 throw VoxtralTTSError.invalidConfiguration("Model not loaded")
             }
-            let enroller = VoxtralVoiceEnrollment(model: model, config: config)
+            let enroller = VoxtralVoiceEnrollment(model: model, config: config, modelID: loadedModelID)
             let reference = try enroller.prepareReference(url: referenceURL)
             // Always go through the throwing overload (a nil `shouldContinue`
             // becomes a never-cancel poll) so a diverged run surfaces as an error

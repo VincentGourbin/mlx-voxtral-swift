@@ -30,6 +30,7 @@
 
 import Foundation
 import AVFoundation
+import CryptoKit
 import MLX
 import MLXRandom
 
@@ -128,9 +129,15 @@ public final class VoxtralVoiceEnrollment {
     let nAcoustic: Int       // number of acoustic codebooks, e.g. 36
     let acousticLevels: Int  // FSQ levels per acoustic codebook, e.g. 21
 
-    init(model: VoxtralTTSModel, config: Config = Config()) {
+    /// Registry id of the loaded model, part of the checkpoint fingerprint (K-88); `nil` outside the pipeline
+    let modelID: String?
+    /// SHA-256 of the prepared reference being optimized, set by `optimize` (checkpoint fingerprint, K-88)
+    private var referenceSHA256 = ""
+
+    init(model: VoxtralTTSModel, config: Config = Config(), modelID: String? = nil) {
         self.model = model
         self.config = config
+        self.modelID = modelID
         self.numSamples = config.numFrames * Self.samplesPerFrame
         self.semanticVocab = model.config.audioModel.semanticCodebookSize
         self.nAcoustic = model.config.audioModel.nAcousticCodebook
@@ -514,6 +521,7 @@ public final class VoxtralVoiceEnrollment {
             throw VoxtralTTSError.invalidConfiguration(
                 "reference must have at least \(numSamples) samples (\(config.numFrames) frames), got \(reference.dim(0))")
         }
+        referenceSHA256 = Self.sha256(reference[0 ..< numSamples])
         let resume = try config.checkpointURL.flatMap { try loadCheckpoint(from: $0) }
         let (codes, cancelled, failed) = optimizeCore(
             reference: reference, progress: progress, shouldContinue: shouldContinue,
@@ -545,9 +553,20 @@ public final class VoxtralVoiceEnrollment {
         return z ^ (z >> 31)
     }
 
-    /// The run's configuration fingerprint: a checkpoint resumes only the run it came from
+    /// SHA-256 of the samples as float32
+    static func sha256(_ samples: MLXArray) -> String {
+        let floats = samples.asType(.float32).asArray(Float.self)
+        let digest = floats.withUnsafeBytes { SHA256.hash(data: $0) }
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The run's fingerprint: a checkpoint resumes only the run it came from — same prepared reference, model and
+    /// loss weights (K-88), same configuration
     private var checkpointFingerprint: [String: String] {
-        ["numFrames": "\(config.numFrames)", "epochs": "\(config.epochs)",
+        ["reference": referenceSHA256, "model": modelID ?? "unnamed",
+         "reconstructionWeight": "\(config.reconstructionWeight.bitPattern)",
+         "perceptualWeight": "\(config.perceptualWeight.bitPattern)", "melWeight": "\(config.melWeight.bitPattern)",
+         "numFrames": "\(config.numFrames)", "epochs": "\(config.epochs)",
          "learningRate": "\(config.learningRate.bitPattern)", "temperature": "\(config.temperature.bitPattern)",
          "temperatureDecay": "\(config.temperatureDecay.bitPattern)", "minTemperature": "\(config.minTemperature.bitPattern)",
          "gradClip": "\(config.gradClip.bitPattern)", "semanticVocab": "\(semanticVocab)", "nAcoustic": "\(nAcoustic)"]

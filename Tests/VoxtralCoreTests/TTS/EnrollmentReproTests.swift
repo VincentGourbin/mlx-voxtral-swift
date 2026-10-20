@@ -4,7 +4,8 @@
  * Voice enrollment is reproducible and resumable: same seed → same codes, another seed → other codes; a run
  * stopped and resumed from its checkpoint ends with the codes of the uninterrupted run, bit for bit. The
  * divergence guard (#44) and the cancellation are tested: NaN at epoch 0 → EnrollmentDivergedError, NaN at
- * epoch k → codes of the best step, cancellation → CancellationError.
+ * epoch k → codes of the best step, cancellation → CancellationError. A checkpoint resumes only its own run: another
+ * reference, another model or other loss weights → EnrollmentCheckpointError (K-88).
  *
  * Short runs (2 s reference, 12 epochs) through the real frozen codec of tts-4b-4bit.
  * Heavy: skipped unless VOXTRAL_ENROLL_REPRO=1 (`TEST_RUNNER_VOXTRAL_ENROLL_REPRO=1 xcodebuild test …`).
@@ -61,12 +62,13 @@ final class EnrollmentReproTests: XCTestCase {
         VoxtralVoiceEnrollment(model: try XCTUnwrap(Self.model), config: config)
     }
 
-    private func run(_ config: VoxtralVoiceEnrollment.Config, stopAt: Int? = nil,
+    private func run(_ config: VoxtralVoiceEnrollment.Config, stopAt: Int? = nil, modelID: String? = nil,
+                     reference custom: MLXArray? = nil,
                      setUp: (VoxtralVoiceEnrollment) -> Void = { _ in }) throws -> MLXArray {
-        let enroller = try enroller(config)
+        let enroller = VoxtralVoiceEnrollment(model: try XCTUnwrap(Self.model), config: config, modelID: modelID)
         setUp(enroller)
         var polls = 0
-        return try enroller.optimize(reference: reference(frames: config.numFrames), shouldContinue: {
+        return try enroller.optimize(reference: custom ?? reference(frames: config.numFrames), shouldContinue: {
             defer { polls += 1 }
             return stopAt.map { polls < $0 } ?? true
         })
@@ -95,6 +97,34 @@ final class EnrollmentReproTests: XCTestCase {
         print("[enroll] RESUME stop 6/12 then resume: identical=\(identical(continuous, resumed))")
         XCTAssertTrue(identical(continuous, resumed), "resumed codes must equal the uninterrupted run")
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "a completed run removes its checkpoint")
+    }
+
+    func testCheckpointOfAnotherRunIsRefused() throws {
+        let url = sandbox.appendingPathComponent("other.safetensors")
+        func stopped() throws {
+            try? FileManager.default.removeItem(at: url)
+            XCTAssertThrowsError(try run(config(seed: 7, checkpoint: url), stopAt: 6, modelID: "tts-4b-4bit"))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        }
+        func refused(_ what: String, _ key: String, _ resume: () throws -> MLXArray) {
+            XCTAssertThrowsError(try resume(), what) { error in
+                guard let error = error as? VoxtralVoiceEnrollment.EnrollmentCheckpointError else {
+                    return XCTFail("\(what): \(error)")
+                }
+                XCTAssertTrue(error.description.contains("(\(key):"), "\(what): \(error.description)")
+                print("[k88] CHECKPOINT \(what) : refused (\(key))")
+            }
+        }
+        try stopped()
+        let louder = reference(frames: 25) * 1.01
+        refused("another reference", "reference") {
+            try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-4bit", reference: louder)
+        }
+        refused("another model", "model") { try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-6bit") }
+        var weights = config(seed: 7, checkpoint: url)
+        weights.melWeight = 2
+        refused("other loss weights", "melWeight") { try run(weights, modelID: "tts-4b-4bit") }
+        XCTAssertNoThrow(try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-4bit"), "its own run resumes")
     }
 
     func testNaNAtEpochZeroThrowsDiverged() throws {
