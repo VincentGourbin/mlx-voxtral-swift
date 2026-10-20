@@ -40,9 +40,17 @@ public enum VoxtralDebug {
         }
     }
 
+    /// Tests (K-87): receives every `always` message, as sent to the unified log
+    static var noticeObserver: ((String) -> Void)? {
+        get { _noticeObserver.get() }
+        set { _noticeObserver.set(newValue) }
+    }
+    private static let _noticeObserver = Locked<((String) -> Void)?>(nil)
+
     /// Important message (fallback, error): always in the unified log, on stdout only when enabled
     static func always(_ message: String) {
         logger.notice("\(message, privacy: .public)")
+        noticeObserver?(message)
         if enabled { print(message) }
     }
 

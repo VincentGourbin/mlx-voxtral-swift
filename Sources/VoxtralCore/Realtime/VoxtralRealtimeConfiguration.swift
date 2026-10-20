@@ -199,16 +199,40 @@ extension VoxtralRealtimeConfiguration {
 extension VoxtralRealtimeConfiguration {
 
     /// Load from a config.json or params.json file
+    /// The file is a JSON object in the mlx-community schema (a `decoder` object); an invalid JSON throws, naming it
+    static func isMLXSchema(at url: URL) throws -> Bool {
+        try jsonObject(Data(contentsOf: url), url)["decoder"] is [String: Any]
+    }
+
+    private static func jsonObject(_ data: Data, _ url: URL) throws -> [String: Any] {
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw VoxtralRealtimeError.invalidConfiguration("\(url.path): not a JSON object")
+        }
+        return object
+    }
+
+    /// An mlx-community config.json (a `decoder` object), else the Mistral params.json format (also voxmlx's
+    /// config.json); a file that is neither throws `invalidConfiguration` naming it and the first missing field (K-87)
     static func load(from url: URL) throws -> VoxtralRealtimeConfiguration {
         let data = try Data(contentsOf: url)
-
-        // Try mlx-community config.json format first (has "decoder" key)
-        if let _ = try? JSONDecoder().decode(VoxtralRealtimeConfiguration.self, from: data) {
-            return try JSONDecoder().decode(VoxtralRealtimeConfiguration.self, from: data)
+        let isMLX = try jsonObject(data, url)["decoder"] is [String: Any]
+        do {
+            return isMLX ? try JSONDecoder().decode(VoxtralRealtimeConfiguration.self, from: data) : try loadFromParamsJSON(data: data)
+        } catch let error as DecodingError {
+            throw VoxtralRealtimeError.invalidConfiguration(
+                "\(url.path): unreadable \(isMLX ? "mlx" : "Mistral params") configuration (\(Self.describe(error)))")
         }
+    }
 
-        // Fall back to Mistral params.json format
-        return try loadFromParamsJSON(data: data)
+    private static func describe(_ error: DecodingError) -> String {
+        switch error {
+        case .keyNotFound(let key, let context):
+            return "missing \((context.codingPath.map(\.stringValue) + [key.stringValue]).joined(separator: "."))"
+        case .typeMismatch(_, let context), .valueNotFound(_, let context), .dataCorrupted(let context):
+            return "\(context.codingPath.map(\.stringValue).joined(separator: ".")): \(context.debugDescription)"
+        @unknown default:
+            return "\(error)"
+        }
     }
 
     /// Parse Mistral params.json format into our config structure

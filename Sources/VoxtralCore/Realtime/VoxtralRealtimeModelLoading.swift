@@ -143,11 +143,10 @@ func loadRealtimeConfig(from directory: URL) throws -> VoxtralRealtimeConfigurat
     let configURL = directory.appendingPathComponent("config.json")
     let paramsURL = directory.appendingPathComponent("params.json")
     if FileManager.default.fileExists(atPath: configURL.path) {
-        if let config = try? JSONDecoder().decode(VoxtralRealtimeConfiguration.self, from: Data(contentsOf: configURL)) {
-            return config
-        }
-        if !FileManager.default.fileExists(atPath: paramsURL.path) {
-            return try VoxtralRealtimeConfiguration.load(from: configURL)  // reports why config.json is unreadable
+        // An mlx config.json (or an unreadable one) is read or reported, never replaced by params.json (K-87);
+        // another schema (transformers in the original Mistral repo, K-9) gives way to params.json when there is one
+        if try VoxtralRealtimeConfiguration.isMLXSchema(at: configURL) || !FileManager.default.fileExists(atPath: paramsURL.path) {
+            return try VoxtralRealtimeConfiguration.load(from: configURL)
         }
     }
     if FileManager.default.fileExists(atPath: paramsURL.path) {

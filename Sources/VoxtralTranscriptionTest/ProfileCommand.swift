@@ -79,7 +79,7 @@ struct ProfileRun: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable Chrome Trace export")
     var noChromeTrace: Bool = false
 
-    @Option(name: .long, help: "Output directory for trace files")
+    @Option(name: .long, help: "Trace output: a directory, or a .json file path (missing folders are created)")
     var output: String?
 
     @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
@@ -162,10 +162,12 @@ struct ProfileRun: AsyncParsableCommand {
         // Export Chrome Trace
         if !noChromeTrace {
             let traceData = ChromeTraceExporter.export(session: session)
-            let outputDir = output.map { URL(fileURLWithPath: $0) }
-                ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            let target = output.map { URL(fileURLWithPath: $0) }
             let fileName = "voxtral_\(pipeline.rawValue)_trace.json"
-            let traceURL = outputDir.appendingPathComponent(fileName)
+            let traceURL = target.flatMap { $0.pathExtension.lowercased() == "json" ? $0 : nil }
+                ?? (target ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).appendingPathComponent(fileName)
+            // A folder that does not exist yet is created, not an error (K-87)
+            try FileManager.default.createDirectory(at: traceURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try traceData.write(to: traceURL)
             print("\nChrome Trace: \(traceURL.path)")
             print("Open in https://ui.perfetto.dev/")

@@ -316,6 +316,20 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
     }
 
+    /// The Core ML encoder (from the cache, else downloaded), or the MLX encoder when it cannot be had: the public
+    /// `.auto` / `.hybrid` behaviour (no error), announced at `notice` level in the unified log whatever
+    /// `VoxtralDebug.enabled` (K-87)
+    static func encoder<Encoder>(
+        download: () async throws -> Encoder, fallback: () -> Encoder
+    ) async -> Encoder {
+        do {
+            return try await download()
+        } catch {
+            VoxtralDebug.always("Core ML encoder unavailable (\(error.localizedDescription)); using the MLX encoder")
+            return fallback()
+        }
+    }
+
     /// Setup encoder based on backend preference
     /// Downloads Core ML model from HuggingFace if hybrid mode is requested
     private func setupEncoder() async throws {
@@ -326,18 +340,10 @@ public class VoxtralPipeline: @unchecked Sendable {
         switch backend {
         case .hybrid, .auto:
             // Download Core ML model from HuggingFace (same cache as MLX models)
-            do {
-                hybridEncoder = try await voxtralModel.createHybridEncoderWithDownload(
-                    preferredBackend: backend == .hybrid ? .coreML : .auto
-                )
-                VoxtralDebug.log("Hybrid encoder created with Core ML: \(hybridEncoder?.status.description ?? "nil")")
-            } catch {
-                // If Core ML download fails, fall back to pure MLX (said, not silent)
-                VoxtralDebug.always("Core ML encoder unavailable (\(error.localizedDescription)); using the MLX encoder")
-                hybridEncoder = voxtralModel.createHybridEncoder(
-                    preferredBackend: .mlx
-                )
-            }
+            let preferred: VoxtralEncoderBackend = backend == .hybrid ? .coreML : .auto
+            hybridEncoder = await Self.encoder(
+                download: { try await voxtralModel.createHybridEncoderWithDownload(preferredBackend: preferred) },
+                fallback: { voxtralModel.createHybridEncoder(preferredBackend: .mlx) })
             if let status = hybridEncoder?.status {
                 VoxtralDebug.always("Encoder: \(status.backend.displayName), Core ML available: \(status.coreMLAvailable)")
             }

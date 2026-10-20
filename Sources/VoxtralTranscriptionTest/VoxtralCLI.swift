@@ -185,7 +185,8 @@ struct Transcribe: AsyncParsableCommand {
     @Option(name: [.customShort("l"), .long], help: "Language code (e.g., 'en', 'fr')")
     var language: String = "en"
 
-    @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
+    @Option(name: .shortAndLong,
+            help: "Backend: 'mlx' (GPU only), 'auto' (the library default: Core ML encoder when available, else MLX) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
     @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
@@ -209,7 +210,7 @@ struct Transcribe: AsyncParsableCommand {
         }
 
         // Parse backend option
-        let pipelineBackend: VoxtralPipeline.Backend = backend.lowercased() == "hybrid" ? .hybrid : .mlx
+        let pipelineBackend = try parseBackend(backend.lowercased())
         print("\nModel: \(pipelineModel.displayName)")
         print("Backend: \(pipelineBackend.displayName)")
 
@@ -247,6 +248,7 @@ struct Transcribe: AsyncParsableCommand {
         print("\n" + String(repeating: "-", count: 60))
         print(transcription)
         print(String(repeating: "-", count: 60))
+        print("out_sha256: \(BenchJSON.sha256(Data(transcription.utf8)))")  // same digest as `bench` (K-87)
 
         // Statistics
         let tokenCount = transcription.split(separator: " ").count  // Approximate
@@ -296,7 +298,8 @@ struct Chat: AsyncParsableCommand {
     @Option(name: [.customShort("t"), .long], help: "Temperature for generation (0.0 = deterministic)")
     var temperature: Float = 0.7
 
-    @Option(name: .shortAndLong, help: "Backend: 'mlx' (GPU only) or 'hybrid' (Core ML encoder + MLX decoder)")
+    @Option(name: .shortAndLong,
+            help: "Backend: 'mlx' (GPU only), 'auto' (the library default: Core ML encoder when available, else MLX) or 'hybrid' (Core ML encoder + MLX decoder)")
     var backend: String = "mlx"
 
     @Flag(name: .long, help: "Advertise activity to external monitors like SiliconScope (see README)")
@@ -320,7 +323,7 @@ struct Chat: AsyncParsableCommand {
         }
 
         // Parse backend option
-        let pipelineBackend: VoxtralPipeline.Backend = backend.lowercased() == "hybrid" ? .hybrid : .mlx
+        let pipelineBackend = try parseBackend(backend.lowercased())
         print("\nModel: \(pipelineModel.displayName)")
         print("Backend: \(pipelineBackend.displayName)")
         print("Prompt: \(prompt)")
