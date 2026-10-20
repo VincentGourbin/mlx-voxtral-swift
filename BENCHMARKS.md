@@ -6654,8 +6654,9 @@ A puis B ; (2) A/B/B/A sur C-moyen EN (`docs/eval/clips/c_moyen_en.wav`) ; (3) t
 mesure) : A 86,9 % (`ioreg` 91,2 %), B 98,3 % (`ioreg` 98,9 %) ; trace entière 87,0 → 98,4 %. La phase
 « Realtime Generation » couvre aussi l'encodage et le préfill (même phase que la borne de K-36 et K-96) ; sur le
 décodage seul (Audio Encoding et Prefill retirés des lignes `GPUOCC`), ≈ 86,1 → ≈ 98,8 % (vérificateur). Branche asynchrone
-prouvée : le GPU ne chôme plus entre deux pas. La borne de la porte (92,3 % avant K-38, 93,1 % refaite en K-96) est
-dépassée par B ; A (86,9 %) est sous elle : le pas a raccourci depuis K-96 (K-38 et suivantes), la part fixe du CPU
+prouvée : le GPU ne chôme plus entre deux pas. La borne de la porte (92,3 % avant K-38, 93,1 % refaite en K-96) est un
+plafond de gain, non un seuil : 1 − 86,9 / 98,3 = 11,6 % de temps GPU inactif retiré, pour − 11,7 % mesurés sur
+`c_20s` et − 12,1 % sur C-moyen ; A (86,9 %) est sous elle : le pas a raccourci depuis K-96 (K-38 et suivantes), la part fixe du CPU
 entre deux pas pèse davantage (lecture, cause non mesurée).
 
 **Lecture.**

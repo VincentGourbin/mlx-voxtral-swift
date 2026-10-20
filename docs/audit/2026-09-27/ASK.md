@@ -1306,7 +1306,7 @@ Décisions du planificateur du 2026-10-03 :
 - **K-47 (#652), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; appliquée) : (1) passes `--passes 1 --warmup 1
   --cooldown 120`, un processus par passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38, K-43, K-46).
   (2) A1 sur batterie écartée ; A1r refaite 10 h après B1/B2 ; la porte est lue sur un second A/B/B/A complet
-  (`queue-k47c.sh`), la file 1 donnée pour information (A/A 3,0 %, au seuil). (3) Aucun test unitaire nouveau : le
+  (`queue-k47c.sh`), la file 1 donnée pour information (A/A 3,04 %, au-dessus du seuil de 3 % : invalide comme porte). (3) Aucun test unitaire nouveau : le
   pipeline n'est pas séparable du modèle sans réécrire `generate` ; la parité se prouve par `out_sha256` sur les trois
   clips (porte) et la branche asynchrone par l'occupation xctrace (porte), pas par un test rouge. (4) `KO
   indexation/sauvegarde` avant A1r (29 %) et B3 (75 %), tolérés (décision du 2026-10-05). (5) En `temperature > 0`,
@@ -1317,4 +1317,13 @@ Décisions du planificateur du 2026-10-03 :
   construction est déterministe et serait survenue aux pas précédents), non testé. Occupation relue sur le décodage
   seul (≈ 86,1 → 98,8 %), citation `REFUSED` complétée (second `VoxtralCLI` non identifié), `rtf` file 1 − 10,3 %,
   commentaire de `decodeLoop` mis à jour.
+  (7) Après le contradicteur (`verified`) : le cast fp32 des logits avant la division par la température, renvoyé à
+  K-47 par K-38 (dérogation de K-38, après son contradicteur), n'est pas fait : `sampleToken` garde `logits * (1 /
+  temperature)` dans le dtype de calcul ; défaut `temperature = 0` (argMax, non concerné), risque en fp16 pour une
+  température d'environ 5e-4 seulement ; renvoyé à une fiche de suite (PLAN.md §7, K-47). (8) La parité couvre la
+  lecture finale (C-moyen va au bout de l'audio : 1 835 pas, `truncated:false`), pas l'arrêt anticipé sur EOS ou budget
+  avec un pas jeté, prouvé par lecture du code seulement. (9) L'occupation de 92,3 / 93,1 % est un plafond de gain
+  (PLAN.md §5), non un seuil : 1 − 86,9 / 98,3 = 11,6 % de temps GPU inactif retiré, pour − 11,7 % (c_20s) et − 12,1 %
+  (C-moyen) mesurés. (10) `embedToken(Int)` ne sert plus qu'aux tests (`RealtimeDTypeTests`) ; la production passe par
+  `embedTokens` sur un `MLXArray` [1] uint32 (même ligne de la table, `RealtimeQuantizedHeadTests`).
 
