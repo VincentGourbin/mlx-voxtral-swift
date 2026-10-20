@@ -1,5 +1,7 @@
 # K-29 — build and unit tests without models on every push and pull request.
-# Tests that need a downloaded model or a real-audio run skip themselves (XCTSkip / TEST_RUNNER_ guards).
+# Tests that need a downloaded model or a real-audio run skip themselves (XCTSkip / TEST_RUNNER_ guards);
+# they run on the Mac with Scripts/run-guarded-tests.sh (K-89).
+# K-89 — the three executables are built in Release, no step masks a failure, the warning count may not grow.
 name: CI
 
 on:
@@ -14,9 +16,9 @@ concurrency:
 jobs:
   test:
     runs-on: macos-26          # Apple Silicon; swift-tools 6.2 needs Xcode 26
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6          # Node 24
 
       - name: Xcode
         run: |
@@ -29,12 +31,45 @@ jobs:
           xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
             -derivedDataPath .build/xcode-test -parallel-testing-enabled NO \
             -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation -skipMacroValidation \
-            | tee xcodebuild.log | grep -E "Test Suite|Executed|error:|BUILD|\*\* TEST" || true
-          grep -q "\*\* TEST SUCCEEDED \*\*" xcodebuild.log
+            > xcodebuild.log 2>&1
+          status=$?
+          # summary of the full log (uploaded below), [K- lines of the tests kept
+          awk '/Test Suite|Executed|error:|BUILD|\*\* TEST|\[K-/' xcodebuild.log
+          exit $status
 
-      - name: Upload log
+      - name: Build executables (Release)
+        run: |
+          set -o pipefail
+          for scheme in VoxtralCLI VoxtralApp VoxtralTTSStreamingDemo; do
+            xcodebuild -scheme "$scheme" -configuration Release -derivedDataPath .build/xcode \
+              -destination 'platform=macOS' -onlyUsePackageVersionsFromResolvedFile \
+              -skipPackagePluginValidation -skipMacroValidation build > "build-$scheme.log" 2>&1
+            status=$?
+            awk '/error:|\*\* BUILD/' "build-$scheme.log"
+            [ $status -eq 0 ] || exit $status
+            grep -q '\*\* BUILD SUCCEEDED \*\*' "build-$scheme.log"
+          done
+
+      - name: Demo process runner (check-demo-ffmpeg.sh)
+        run: Scripts/check-demo-ffmpeg.sh
+
+      - name: Warning count
+        run: |
+          # distinct warnings of this package's sources (dependencies excluded), against the versioned baseline
+          count=$(cat xcodebuild.log build-*.log | grep -E '^/[^ ]+:[0-9]+:[0-9]+: warning:' \
+            | grep -v '/SourcePackages/checkouts/' | sed "s|^$GITHUB_WORKSPACE/||" | sort -u | tee warnings.txt | wc -l | tr -d ' ')
+          baseline=$(tr -d ' \n' < .github/ci-warning-baseline.txt)
+          echo "warnings: $count (baseline $baseline)"
+          if [ "$count" -gt "$baseline" ]; then
+            echo "::error::warning count rose: $count > $baseline (see warnings.txt)"; exit 1
+          fi
+
+      - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6    # Node 24
         with:
           name: xcodebuild-log
-          path: xcodebuild.log
+          path: |
+            xcodebuild.log
+            build-*.log
+            warnings.txt
