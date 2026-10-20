@@ -175,18 +175,9 @@ struct PassMeasurement {
                 }
             }
         }
-        let intervals = phases.map { (start: $0.startUs, end: $0.endUs) }
-        for (index, phase) in phases.enumerated() {
+        m.phases = BenchJSON.exclusivePhaseMs(phases.map { (name: $0.name, start: $0.startUs, end: $0.endUs) })
+        for phase in phases {
             let key = BenchJSON.phaseKey(phase.name)
-            // Exclusive time: a phase that contains others (STT "Generation" around the LLM prefill and decode,
-            // Realtime "Realtime Generation" around encode and prefill) counts only its own time, so the
-            // phases add up to at most total_ms (K-32b; before, decode was counted twice)
-            let inner = intervals.enumerated().filter { other in
-                other.offset != index && other.element.start >= phase.startUs && other.element.end <= phase.endUs
-                    && (other.element.start, other.element.end) != (phase.startUs, phase.endUs)
-            }.map(\.element)
-            let exclusiveUs = Double(phase.endUs - phase.startUs) - BenchJSON.unionLength(inner)
-            m.phases[key, default: 0] += max(0, exclusiveUs) / 1000
             let inPhase = samples.filter { $0.us >= phase.startUs && $0.us <= phase.endUs }.map(\.activeMB)
             if let peak = inPhase.max() { m.phasePeakMLX[key] = max(m.phasePeakMLX[key] ?? 0, peak) }
         }
@@ -319,6 +310,22 @@ enum BenchJSON {
         }
         if let c = current { total += Double(c.end - c.start) }
         return total
+    }
+
+    /// Exclusive time per phase key, in ms: a phase that contains others (STT "Generation" around the MLX encoder,
+    /// the LLM prefill and decode; Realtime "Realtime Generation" around encode and prefill) counts only its own
+    /// time, so the phases add up to at most total_ms (K-32b; before, decode was counted twice; K-89: tested)
+    static func exclusivePhaseMs<T: BinaryInteger>(_ phases: [(name: String, start: T, end: T)]) -> [String: Double] {
+        var result: [String: Double] = [:]
+        for (index, phase) in phases.enumerated() {
+            let inner = phases.enumerated().filter { other in
+                other.offset != index && other.element.start >= phase.start && other.element.end <= phase.end
+                    && (other.element.start, other.element.end) != (phase.start, phase.end)
+            }.map { (start: $0.element.start, end: $0.element.end) }
+            let exclusive = Double(phase.end - phase.start) - unionLength(inner)
+            result[phaseKey(phase.name), default: 0] += max(0, exclusive) / 1000
+        }
+        return result
     }
 
     static func phaseKey(_ name: String) -> String {

@@ -94,5 +94,12 @@ let package = Package(
                 "VoxtralCore"
             ]
         ),
+        // Tests of the measurement instrument (`VoxtralCLI bench`, K-89)
+        .testTarget(
+            name: "VoxtralCLITests",
+            dependencies: [
+                "VoxtralTranscriptionTest"
+            ]
+        ),
     ]
 )

@@ -183,10 +183,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 // Steps whose token carries no text: control tokens ([STREAMING_PAD], [STREAMING_WORD]…),
                 // which `decode` skips (K-13)
                 let silent = Set(Set(tokens).filter { tokenizer.decode([$0]).isEmpty })
-                lastPadFraction = tokens.isEmpty ? nil : Double(tokens.filter { silent.contains($0) }.count) / Double(tokens.count)
-                let streamingPad = Int32(model.config.tekkenStreamingPadTokenId)
-                lastStreamingPadFraction = tokens.isEmpty
-                    ? nil : Double(tokens.filter { $0 == streamingPad }.count) / Double(tokens.count)
+                (lastPadFraction, lastStreamingPadFraction) = Self.padFractions(
+                    tokens, silent: silent, streamingPad: Int(model.config.tekkenStreamingPadTokenId))
 
                 session?.beginPhase("Token Decoding", category: .decoding)
                 let text = tokenizer.decode(tokens).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -250,6 +248,14 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
     /// Share of the last transcription's decode steps whose token is [STREAMING_PAD] alone (K-36, input of K-73)
     public private(set) var lastStreamingPadFraction: Double?
+
+    /// (`lastPadFraction`, `lastStreamingPadFraction`) of a decoded token sequence; nil for an empty one (K-89: tested)
+    static func padFractions(_ tokens: [Int], silent: Set<Int>, streamingPad: Int) -> (pad: Double?, streamingPad: Double?) {
+        guard !tokens.isEmpty else { return (nil, nil) }
+        let count = Double(tokens.count)
+        return (Double(tokens.filter { silent.contains($0) }.count) / count,
+                Double(tokens.filter { $0 == streamingPad }.count) / count)
+    }
 
     // MARK: - Audio Preparation
 
