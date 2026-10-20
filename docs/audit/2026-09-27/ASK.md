@@ -1428,3 +1428,26 @@ Décisions du planificateur du 2026-10-03 :
     contournée en lançant A depuis son worktree ; reportée en suite.
   - (12) Les tests couvrent l'arithmétique, pas le câblage (retirer la phase `encode` ou mal appeler `padFractions`
     n'en rougit aucun) : seul le bench Release, comme la porte le demande, couvre la phase.
+- **K-88 (#629), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; `applied`) :
+  - (1) « Les 9 packs de K-7 » : 15 packs chargés (les 9, plus Small 8 et 4 bits, tts-4b-8bit, realtime-4b-6bit et -8bit,
+    realtime-4b) par un test gardé `TEST_RUNNER_VOXTRAL_ALL_PACKS=1` (garde ajoutée à `Scripts/run-guarded-tests.sh`).
+  - (2) « Chaque conversion `fatalError` → `throw` de K-27 » : celles des chargeurs (clés en trop, manquantes, forme)
+    vivaient dans `loadWeights(_:strict:)`, code mort retiré par la même fiche ; le cast du modèle quantifié
+    (`as? VoxtralStandardModel`) n'est pas atteignable par un test. Testées : quantification mal formée dans les trois
+    chargeurs ; les arrêts de modèle restent couverts par `PublicAPIHonestyTests` (K-27).
+  - (3) Mutation survivante : la garde « `quantization` sans group_size/bits » de `PackQuantization.decode` n'est
+    atteinte par aucun `config.json` (le décodeur de MLXLMCommon lève avant, branche « unreadable », elle rougie) ;
+    garde gardée, défensive.
+  - (4) Messages inégaux pour une quantification mal formée : TTS `invalidConfiguration` qui la nomme ; STT, erreur de
+    décodage de la configuration (`Path: quantization`) ; Realtime, raison trompeuse (`Key 'dim' not found`, repli sur
+    le format Mistral). Erreur dans les trois cas (la porte) ; messages à améliorer en suite.
+  - (5) Deux corrections hors de la liste de la fiche, trouvées par ses tests : complétude d'un téléchargement neuf
+    (`requireComplete` vérifie la structure ; `downloadByRepoId` la vérifie aussi, un dépôt nu sans `tekken.json` est
+    refusé) et `eos_token_id` en liste. Comportement : un dépôt cassé échoue au téléchargement au lieu du chargement.
+  - (6) Référence des ids Tekken : `mistral_common` 1.12.0 installé dans un venv jetable hors du dépôt (aucune
+    dépendance du projet) ; fixture `Tests/VoxtralCoreTests/Fixtures/tekken/reference-ids.json`.
+  - (7) Le point de contrôle nommé « id du modèle » est `loadedModelID` du pipeline ; `nil` hors du pipeline
+    (`unnamed`) : deux modèles différents utilisés hors pipeline ne se distinguent pas.
+  - (8) `lastTokenCount` rendu avec le résultat (champ additif, cité dans la source de la fiche, hors porte) : non fait,
+    en suite.
+  - (9) Famille héritée `internal` (`K-31-liste-api.md` §E) : gardée, le modèle vivant la référence (hors porte).

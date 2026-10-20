@@ -377,3 +377,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   de référence de non-régression, le A du jour la remplace ; les tests gardés se lancent par
   `Scripts/run-guarded-tests.sh`, deux en échec à corriger (référence de K-3 périmée, course de `.ready` en streaming
   TTS). PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-89 ».
+- 2026-10-20 — **K-88 : les chargeurs refusent les clés en trop, et les tests manquants des fiches de stabilité
+  existent** : 15 packs chargés sans clé manquante ni en trop. Leçons : un manifeste écrit à la fin d'un téléchargement
+  ne prouve que ce qui a été reçu, pas ce que le dépôt devait contenir (la complétude vérifie aussi la structure) ; un
+  champ JSON que Hugging Face écrit en id ou en liste (`eos_token_id`) se décode sous les deux formes ; une garde
+  défensive qu'aucune entrée n'atteint se voit à la mutation qui survit. PLAN.md §7.

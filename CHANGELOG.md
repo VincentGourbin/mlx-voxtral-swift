@@ -58,6 +58,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-88 — stricter loading and downloads.** A pack whose weights include a key the model does not have is refused
+  with that key named (all 15 packs of the registries load unchanged). A fresh download that lacks its weights,
+  `tekken.json` or (TTS) its voices now fails at download time instead of at load time. An `eos_token_id` given as a
+  list in `generation_config.json` is read (first id) instead of failing. A voice-enrollment checkpoint resumes only
+  the run it came from (same prepared reference, model and loss weights).
 - **K-89 — `VoxtralCLI bench stt --backend mlx` reports the audio encoder as `phases_ms.encode`** (and its peak in
   `peak_mlx_mb_by_phase.encode`); before, its time was counted in `decode`. Same output, same speed; on mini-3b-8bit and the medium
   English clip, `audio + encode + prefill` now accounts for `ttft_ms` to 1.2 ms (0.04 %). CI builds the three executables in Release, fails on any test failure and
