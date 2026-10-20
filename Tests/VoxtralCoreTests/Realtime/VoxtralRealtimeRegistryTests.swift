@@ -12,7 +12,7 @@ final class VoxtralRealtimeRegistryTests: XCTestCase {
     }
 
     func testRegistryHasExpectedCount() {
-        XCTAssertEqual(VoxtralRealtimeRegistry.models.count, 3)
+        XCTAssertEqual(VoxtralRealtimeRegistry.models.count, 5)
     }
 
     func testAllModelsHaveRequiredFields() {
@@ -33,6 +33,19 @@ final class VoxtralRealtimeRegistryTests: XCTestCase {
         let model = VoxtralRealtimeRegistry.model(withId: "realtime-4b-4bit")
         XCTAssertNotNil(model)
         XCTAssertEqual(model?.repoId, "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit")
+    }
+
+    /// voxmlx packs referenced at a pinned revision (the downloader checks each file's SHA-256 at that revision; K-91)
+    func testVoxmlxPacksArePinned() {
+        let six = VoxtralRealtimeRegistry.model(withId: "realtime-4b-6bit")
+        XCTAssertEqual(six?.repoId, "mlx-community/Voxtral-Mini-4B-Realtime-6bit")
+        XCTAssertEqual(six?.revision, "02eb0caeb9dafb554c17a72b93dbf40cd3736c31")
+        XCTAssertEqual(six?.approximateBytes, 3_609_304_614)
+        let eight = VoxtralRealtimeRegistry.model(withId: "realtime-4b-8bit")
+        XCTAssertEqual(eight?.repoId, "ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx")
+        XCTAssertEqual(eight?.revision, "50e90282809c024a2b7b9b4718882e1dd69efb69")
+        XCTAssertEqual(eight?.approximateBytes, 4_714_618_595)
+        XCTAssertEqual(VoxtralRealtimeRegistry.defaultModel.id, "realtime-4b-4bit", "default unchanged")
     }
 
     func testLookupByIdFP16() {

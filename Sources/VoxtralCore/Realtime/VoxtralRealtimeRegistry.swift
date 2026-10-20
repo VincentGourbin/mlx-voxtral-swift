@@ -46,6 +46,30 @@ public enum VoxtralRealtimeRegistry {
             recommended: true,
             approximateBytes: 3_133_798_126
         ),
+        // voxmlx packs (format C), referenced at a pinned revision, not republished (ASK-16, ASK-22; K-91): every
+        // module quantized, tied head and Ada MLP included; bf16 otherwise
+        VoxtralRealtimeModelInfo(
+            id: "realtime-4b-6bit",
+            repoId: "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
+            name: "Voxtral Realtime 4B (6-bit, voxmlx)",
+            description: "6-bit quantized (voxmlx), tied head quantized too",
+            size: "3.61 GB",
+            quantization: "6-bit",
+            parameters: "4B",
+            revision: "02eb0caeb9dafb554c17a72b93dbf40cd3736c31",
+            approximateBytes: 3_609_304_614
+        ),
+        VoxtralRealtimeModelInfo(
+            id: "realtime-4b-8bit",
+            repoId: "ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx",
+            name: "Voxtral Realtime 4B (8-bit, voxmlx)",
+            description: "8-bit quantized (voxmlx), tied head quantized too",
+            size: "4.71 GB",
+            quantization: "8-bit",
+            parameters: "4B",
+            revision: "50e90282809c024a2b7b9b4718882e1dd69efb69",
+            approximateBytes: 4_714_618_595
+        ),
         VoxtralRealtimeModelInfo(
             id: "realtime-4b-fp16",
             repoId: "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
