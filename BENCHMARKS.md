@@ -7241,3 +7241,668 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 08:32:22  52,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x1/      51)
 ```
 
+
+## 2026-10-20 — K-90 : pack TTS 8 bits pré-quantifié (`tts-4b-8bit`), couverture ASR et matrice K-35 — en attente (écoute, carte, porte de couverture)
+
+**Protocole.** B seul : il n'existe pas de pack 8 bits A à comparer. Le 6 bits du jour est la référence de vitesse ; la couverture se compare au 6 bits et au bf16 mesurés dans la même file.
+- **Pack.** `VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit`, non publié, installé dans le cache local.
+  - Exporté par `Scripts/export_tts_8bit.py` (`57af9660`) depuis `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16@dd85c02a`.
+  - Il reprend les 208 couches que quantifie `mlx-community/Voxtral-4B-TTS-2603-mlx-6bit@11682c79`, en 8 bits g64 `affine` ; le codec reste en bf16.
+  - `model.safetensors` : 4 421 161 388 octets, SHA-256 `47b15c20…cd87`. Deux exports donnent les mêmes octets (`.local-runs/k90/export.log`, `export2.log`).
+- **Binaire.** Release du dépôt principal, construit à `127bc333`. Les sources Swift sont identiques à `ef79d6ac` : les lignes de la file 2 portent `"commit":"ef79d6ac1"` (HEAD lu à l'exécution, docs seules entre les deux).
+- **Conditions.** Aucun commit pendant les files. Toutes les lignes portent `"dirty":false` et `"power":"AC Power"`.
+- **Versions.** Construit avec `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift 0.31.6@0bb916c, mlx-swift-lm main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8. macOS 27.0.1, M3 Max 96 Go.
+
+**File 1 : qualité** (`.local-runs/queue-k90.sh`, 10:09 → 10:59, non chronométrée, sans repos ni machine-check).
+- Commande : `eval tts-roundtrip`, voix `neutral_female`, `--language en|fr`, juge ASR `mini-3b-8bit`, tags `K90RT-<pack>`.
+- tts-4b-8bit et tts-4b-6bit : court, moyen et long EN (`docs/eval/tts/`), graines 1 à 5.
+- Long FR (`.local-runs/corpus/long_fr.txt`, 213 mots) : graines 1 à 3 en 8 bits, graine 1 en 6 bits.
+- tts-4b-mlx (bf16) : les quatre textes, graine 1.
+- Les WAV et les transcriptions sont dans `.local-runs/k90/eval/` ; les paires d'écoute anonymisées dans `.local-runs/listen/k90-vs-bf16/` et `k90-vs-6bit/`.
+
+**File 2 : matrice K-35** (`.local-runs/queue-k90b.sh`, 11:01 → 15:51). Matrice réduite (Vincent, 2026-10-06) : court × graines 1 à 3, moyen et long × graine 1, `neutral_female` et `clone_fr`, batch et streaming. Mêmes réglages que K-35 :
+- **Court** : un processus, `--passes 2 --warmup 1 --cooldown 120` (A/A de `bench`).
+- **Moyen et long** : un processus par passe, deux passes (A/A par `aa.py`).
+  - Moyen : `--warmup 1 --cooldown 120`.
+  - Long : `--warmup 0 --cooldown 0`.
+  - Streaming : `--cache-limit-mb 2048`.
+- **Référence 6 bits du jour** : court graine 1 `neutral_female` batch et streaming, moyen batch et streaming, long batch.
+- **Avant chaque processus** : 180 s de repos, Time Machine et simulateurs arrêtés, `quiet.sh wait` (machine-check, refroidissement 120 s). Pendant la passe : `quiet.sh sample`. `--beacon` partout.
+- **Tags** : `K90-<bits>-<texte>-s<graine>-<voix>-<mode>`.
+
+**Passes.** Toutes « ok QUIET » à la première tentative, aucune passe chargée ni refaite.
+- Une ligne `KO` : `KO  indexation/sauvegarde en cours (100 %)` avant `K90-6bit-medium-s1-preset-batch-p2`, tolérée (décision du 2026-10-05). L'A/A de cette cellule est à 0,05 % (`step_ms_p50`).
+- `photoanalysisd` était à 100 % CPU sur 75 des 119 échantillons de `K90-8bit-short-s1-clone-streaming` (charge CPU enregistrée). Son A/A reste à 0,56 % (`total_ms`), et ses 37,74 / 37,82 ms/frame valent ceux des graines 2 et 3 (37,84 à 37,89).
+
+**Couverture ASR (file 1 ; part des mots source retrouvés, `eval tts-roundtrip`).**
+
+| Texte (mots) | 8 bits, graines 1 à 5 | moyenne 8 bits | 6 bits, graines 1 à 5 | moyenne 6 bits | bf16, graine 1 |
+|---|---|---|---|---|---|
+| court EN (11) | 0,909 ×5 | 0,909 | 0,909 / 0,909 / 0,909 / 0,818 / 0,909 | 0,891 | 0,909 |
+| moyen EN (167) | 0,952 / 0,952 / 0,958 / 0,952 / 0,952 | 0,953 | 0,940 / 0,946 / 0,964 / 0,958 / 0,958 | 0,953 | 0,952 |
+| long EN (334) | 0,940 / 0,940 / 0,949 / 0,940 / 0,940 | 0,942 | 0,952 / 0,958 / 0,946 / 0,958 / 0,952 | 0,953 | 0,931 |
+| long FR (213) | 0,859 / 0,906 / 0,845 (3 graines) | 0,870 | 0,779 (graine 1) | — | 0,732 |
+
+`"truncated":false` sur les 38 synthèses : aucune n'atteint le plafond de frames, dont le long FR sur 3 graines.
+
+**Vitesse (file 2).** Toutes les cellules passent l'A/A (≤ 3 %), sorties identiques entre passes (`out_sha256`).
+- Mesure : `step_ms_p50` en batch, `stream_frame_ms_p50` en streaming (court compris).
+- TTFT en batch, TTFA en streaming : consignés, pas jugés (comme K-35).
+
+| Pack | Texte | Voix | Mode | graines | ms/pas ou ms/frame p50 | TTFT ou TTFA ms | RTF | frames | pic MLX Mo | A/A |
+|---|---|---|---|---|---|---|---|---|---|---|
+| tts-4b-8bit | court | neutral_female | batch | 1,2,3 | 35,31 à 35,35 | 90 à 95 | 0,489 à 0,503 | 71 à 100 | 5126 à 5234 | PASS |
+| tts-4b-8bit | court | neutral_female | streaming | 1,2,3 | 37,77 à 37,96 | 188 à 200 | 0,487 à 0,493 | 71 à 100 | 5068 | PASS |
+| tts-4b-8bit | court | clone_fr | batch | 1,2,3 | 35,15 à 35,28 | 90 à 95 | 0,489 à 0,510 | 58 à 72 | 5115 à 5116 | PASS |
+| tts-4b-8bit | court | clone_fr | streaming | 1,2,3 | 37,74 à 37,89 | 186 à 199 | 0,489 à 0,497 | 58 à 72 | 5051 à 5055 | PASS |
+| tts-4b-8bit | moyen | neutral_female | batch | 1 | 35,70 à 35,73 | 253 à 260 | 0,465 à 0,470 | 1037 | 4713 | PASS |
+| tts-4b-8bit | moyen | neutral_female | streaming | 1 | 38,56 à 38,95 | 363 à 364 | 0,491 à 0,493 | 1037 | 5199 | PASS |
+| tts-4b-8bit | moyen | clone_fr | batch | 1 | 35,61 à 35,65 | 248 à 256 | 0,465 à 0,466 | 857 | 4682 | PASS |
+| tts-4b-8bit | moyen | clone_fr | streaming | 1 | 38,33 à 38,38 | 364 à 366 | 0,484 à 0,485 | 857 | 5167 à 5181 | PASS |
+| tts-4b-8bit | long | neutral_female | batch | 1 | 36,10 à 36,20 | 603 à 611 | 0,500 | 1910 | 4829 | PASS |
+| tts-4b-8bit | long | neutral_female | streaming | 1 | 39,44 à 39,57 | 730 à 737 | 0,524 à 0,526 | 1910 | 5354 | PASS |
+| tts-4b-8bit | long | clone_fr | batch | 1 | 36,07 à 36,09 | 529 à 533 | 0,494 à 0,496 | 1753 | 4802 | PASS |
+| tts-4b-8bit | long | clone_fr | streaming | 1 | 38,93 à 39,22 | 658 à 661 | 0,515 à 0,516 | 1753 | 5311 | PASS |
+| tts-4b-6bit | court | neutral_female | batch | 1 | 38,13 à 38,19 | 95 à 96 | 0,536 | 92 | 4288 | PASS |
+| tts-4b-6bit | court | neutral_female | streaming | 1 | 40,74 à 40,78 | 199 à 200 | 0,523 | 92 | 4157 | PASS |
+| tts-4b-6bit | moyen | neutral_female | batch | 1 | 38,50 à 38,52 | 259 à 263 | 0,507 à 0,510 | 998 | 3795 | PASS |
+| tts-4b-6bit | moyen | neutral_female | streaming | 1 | 41,37 à 41,38 | 369 à 371 | 0,532 à 0,533 | 998 | 4286 | PASS |
+| tts-4b-6bit | long | neutral_female | batch | 1 | 39,01 à 39,02 | 608 à 617 | 0,548 à 0,549 | 1903 | 3917 | PASS |
+
+**Lecture.**
+- **Chargement.** Le pack se charge avec 0 clé manquante et 0 clé en trop, 208 modules quantifiés en 8 bits, codec en bf16 (`TTS8bitPackTests`, `.local-runs/k90/suite1.log`). La taille réelle est de 4,42 Go, pour 4,37 Go estimés (PK-2).
+- **Couverture, porte de la fiche non tranchée** (question à Vincent).
+  - Seuil « ≥ 99 % » : aucun pack ne l'atteint, bf16 compris (0,909 sur le court, 0,93 à 0,95 sur le moyen et le long EN). Le juge ASR plafonne sous ce seuil.
+  - Seuil « ≥ 6 bits − 0,5 pt » : tenu sur le court (+ 1,8 pt) et le moyen (0,0 pt) ; manqué sur le long EN (− 1,1 pt). Sur ce texte, le 8 bits dépasse pourtant le bf16 de la graine 1 (0,940 contre 0,931).
+  - Long FR : 8 bits 0,870 sur 3 graines, contre 0,779 (6 bits) et 0,732 (bf16) à la graine 1.
+  - Moyenne pondérée par les mots (EN, 5 graines) : 94,48 % en 8 bits contre 95,19 % en 6 bits ; par texte : 93,47 contre 93,24.
+  - C'est la question de référence d'ASK-35, encore ouverte.
+- **Parité de la référence.** Le 6 bits du jour rend la couverture de K-35 à la graine 1 (court 0,909, moyen 0,940), et le bf16 aussi (0,909, 0,952).
+- **Vitesse : le 8 bits est plus rapide que le 6 bits du jour**, de 7,3 à 7,4 % par pas en batch :
+
+  | Texte | 8 bits (ms/pas) | 6 bits (ms/pas) |
+  |---|---|---|
+  | court | 35,31 à 35,35 | 38,13 à 38,19 |
+  | moyen | 35,70 à 35,73 | 38,50 à 38,52 |
+  | long | 36,10 à 36,20 | 39,01 à 39,02 |
+
+  - Streaming, par frame : 6,3 à 7,1 % plus rapide (court 37,77 à 37,96 contre 40,74 à 40,78 ; moyen 38,56 à 38,95 contre 41,37 à 41,38).
+  - L'écart dépasse le seuil de bruit de 5 % et la dispersion A/A (≤ 1,1 %). RTF batch 0,465 à 0,510, contre 0,507 à 0,549 en 6 bits.
+  - Hypothèse non mesurée : le noyau de dé-quantification 8 bits est plus simple que le 6 bits, dont les valeurs chevauchent les mots de 32 bits.
+  - Aucun 4 bits du jour : la comparaison au 4 bits de K-35 (24,8 à 25,9 ms/pas, `m3max-tts-baseline-2026-10.md`) n'est qu'indicative, d'une autre date.
+- **Mémoire.** Pic MLX + 911 à 946 Mo par rapport au 6 bits sur les mêmes cellules : 5 234 contre 4 288 (court batch), 4 713 contre 3 795 (moyen batch), 4 829 contre 3 917 (long batch), 5 199 contre 4 286 (moyen streaming).
+- **Écarts avec K-35, sans effet sur la comparaison du jour.** Les TTFT et les pics du 6 bits sont nettement plus bas qu'en K-35 (court batch 95 contre 252 ms ; moyen batch 3,7 contre 8,7 Go), comme le streaming moyen (41,4 contre 58,1 ms/frame). Ce sont les fiches appliquées depuis K-35 : la comparaison 8 / 6 bits se fait donc sur la référence du jour, pas sur la ligne K-35.
+- **`load_ms` ≈ 0,11 s sur les deux packs** : chargement paresseux, les poids se matérialisent à la première passe (suite notée en K-91). Ce n'est pas une mesure du chargement.
+
+**Lignes `EVAL`, file 1** (`.local-runs/k90/eval/eval.jsonl`, ordre de la file) :
+
+```
+EVAL {"audio_s":7.84,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:09:16Z","dirty":false,"frames":100,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"cf0a830d33c805972b2336c8eaa9d6048171a761cdea0a0b1ddc027d7bcda1b0","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"130,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":5.44,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:09:20Z","dirty":false,"frames":71,"hyp_sha256":"f0aa45b4bae2751ec33017a81d161c311e4630a8fa6c3162e510422f2c8760ed","hyp_words":11,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"8393f425d0b8b1163d75876883aba6c2829c8946d64064c6321f790a55fe8b70","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"203,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd","truncated":false,"voice":"neutral_female","warm_up":false,"wer":9.09}
+EVAL {"audio_s":6.48,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:09:25Z","dirty":false,"frames":84,"hyp_sha256":"a366f8f51472b696e83d8a34de53a611e4144fe16df0f18124429a4e0ce12980","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5b9200a9d9e3e06c16f2bb4b8d8253de8a28fae6cf502dd4ab1f5a874b93d84c","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"63,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":5.6,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:09:29Z","dirty":false,"frames":70,"hyp_sha256":"da45395f756f20630672231baa628da6fd16686dbfcdf64714660cf46e56702d","hyp_words":11,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a9abf3e86156c6b0c2bff2bb9d9c375ba4e4cbe255349f50f8c09da2d4fa72ed","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"75,8 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":9.09}
+EVAL {"audio_s":7.44,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:09:34Z","dirty":false,"frames":93,"hyp_sha256":"70f7ec45a63845d6187482736eca30f5f01ac3d2ca1c2bb08efa35992062e5ca","hyp_words":11,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"25a46898d73dc61b1b9e87f80ff6270e2fa25b4aad0e2c66e9d2c686af095d44","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"65,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":9.09}
+EVAL {"audio_s":82.8,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:10:23Z","dirty":false,"frames":1037,"hyp_sha256":"12767bc98fd947d767aa4335f3a7191daa4c379f7cebcc4c255913ed333a73a7","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"bf16e10721e5b28def43698798ede935252722712f191b98519e7b2ee9a93e81","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"37,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":82.64,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:11:18Z","dirty":false,"frames":1035,"hyp_sha256":"57eb5e4b7c6fd1fa8b965f4343955ce6c8657135f934868bf06efdb29c9d3c8d","hyp_words":171,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"fc1e069c09c87d977483010f6fc370a8c49165d33da72c0352f56cdbc1aaf7c4","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"34,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.19}
+EVAL {"audio_s":77.36,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.958,"date":"2026-10-20T08:12:07Z","dirty":false,"frames":967,"hyp_sha256":"7c74f441c514ca2855e79ad0ca80bbdf2290a5ee76bb52c0de0a0ce4501cf97d","hyp_words":171,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"cb5d969c5628f4ad60cc1f12be57f9ea4edfc5d2b40a5cfd6c0a70949cdb9b31","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"31,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":6.59}
+EVAL {"audio_s":84.96,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:13:03Z","dirty":false,"frames":1062,"hyp_sha256":"7a7c7e7f55a1226b1f5801394494f9c2a13da33df5f89d40872c1f39fb76ce82","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"876f3cf85549e1b3cefac4134f9a6144874ccc4b367668f48b318188146a0705","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"30,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":85.68,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:14:21Z","dirty":false,"frames":1071,"hyp_sha256":"5548b6c67cf1d93c24649ec1d332f5e4b09a1efc32ffca54bb9113cd5fba5236","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"e3040d5f601f1882be1700e90abf4142702ac3e0abe956f0a50dcdf494d8ac65","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"135,7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":152.8,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.94,"date":"2026-10-20T08:18:07Z","dirty":false,"frames":1910,"hyp_sha256":"f5bb037afc0440afb738fe0cedda534468caa510a6378d0e84f900842df7752b","hyp_words":342,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"f6740c13d9bb9f37d5f74c8e3264b09125b8363885fc9e7cbeff62e62607235e","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"28,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.98}
+EVAL {"audio_s":161.36,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.94,"date":"2026-10-20T08:20:20Z","dirty":false,"frames":2017,"hyp_sha256":"4edc6b769fe9c169202fdc855c4a9092d8d2366e9dc60522c44b93918cc8435c","hyp_words":342,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5820ef310cec66876b3f996a997ef5383652891cb2a566a5d659c7a84f6f9d09","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"36,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.98}
+EVAL {"audio_s":148.32,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.949,"date":"2026-10-20T08:22:09Z","dirty":false,"frames":1854,"hyp_sha256":"81049a3d89dd858df8e520230d2b8a227d7970800cba12f5b06f04e9e49fc48b","hyp_words":343,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"2f4e9ced501c9cedb4665972acafcbe54b369ff12a7cc2bf5b1556b134555a18","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"22,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":164.24,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.94,"date":"2026-10-20T08:24:19Z","dirty":false,"frames":2053,"hyp_sha256":"cc4a0cb01e21bb269ed58acf46563a33998cf423802f0ed1a9aba7eb2a0f6c1b","hyp_words":342,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"6a7b98b879c4382f31bac0fe57afba6f8815a2870b455d3960c027890651e9cc","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"16,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.98}
+EVAL {"audio_s":167.92,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.94,"date":"2026-10-20T08:27:06Z","dirty":false,"frames":2099,"hyp_sha256":"27050a74847de2c2e6e7b40977ecaa167acd515bf40e66a4b6d79bb7addbcbe4","hyp_words":365,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"305404995e623ec814e4e202f6c7d1db429eb47339476a27b48310ab445d8a70","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"17,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":15.87}
+EVAL {"audio_s":7.12,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:27:18Z","dirty":false,"frames":92,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"9a8d2a3412e6b1be131e703e6f4d1a30020b3aa1f261db0ebb78e5ca29c995f6","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"41,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":7.92,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:27:27Z","dirty":false,"frames":99,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"a6f7f1b3c4ab44078b4a571bdb7adb094a95188f1462316fac46f775996aeb3e","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"36,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":5.52,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:27:34Z","dirty":false,"frames":71,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"350e4d73286671c31f58125a43de48ca3899878cf0a9cc5488d1fb4cf251d6c9","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"38,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":8.24,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.818,"date":"2026-10-20T08:27:42Z","dirty":false,"frames":103,"hyp_sha256":"f5085298a705cc95109cdca0273aa01c5828c4ce067f3c8e75ae9b927db1c719","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"5bb89bea2d39c421426f3ac650120d249b58eb334f2bd708443135112648711f","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"36,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":27.27}
+EVAL {"audio_s":8.16,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:27:51Z","dirty":false,"frames":102,"hyp_sha256":"933a5a2ea81bb233076b523c19190c577be130e5d084e6ccc870441c908c6b82","hyp_words":11,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"9ec2f0b10de9a7a859fdbf5f560c17691d598277d3a415f371ce22edbb9ccf44","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"39,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":9.09}
+EVAL {"audio_s":79.6,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.94,"date":"2026-10-20T08:29:05Z","dirty":false,"frames":998,"hyp_sha256":"e4a927376b134e39a20924c82e1ce7667a6f825d55589ec49f7ddf4dd8cd228b","hyp_words":170,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"6f32538fdc9f8795ea3fd72204538a18109371a65534d37cdddb81cd0cef3b75","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"18,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.38}
+EVAL {"audio_s":81.44,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.946,"date":"2026-10-20T08:30:17Z","dirty":false,"frames":1019,"hyp_sha256":"a8923d0259d023a4ddab0d28f58561f249d959710cf71f0bcd3bc9f87cf51dd0","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"0e009d75f74e9ec1b72ddf08dbd3696bba0bd104b95e619d56c661b181f51027","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"22,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.38}
+EVAL {"audio_s":80.88,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.964,"date":"2026-10-20T08:31:27Z","dirty":false,"frames":1015,"hyp_sha256":"c79b5e972ec87053bbe2d75cdee5d7a4ca3964a3be2dcc663ea4568f6badb287","hyp_words":171,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"02f5e811d40bcfffa9b64013c5178200e9385c53ccc01f9ccedc0c015201592a","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"19,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":5.99}
+EVAL {"audio_s":84.64,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.958,"date":"2026-10-20T08:32:38Z","dirty":false,"frames":1058,"hyp_sha256":"f97233db95a39a6406317cf804e90439696f9d5d542f396bda2da2a79ab372b9","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"4dfc7b3c84d128bd1f8a26bb32439ee9da8dad5d42fd03f71299094d0d7ab87f","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"20,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.19}
+EVAL {"audio_s":88.88,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.958,"date":"2026-10-20T08:33:52Z","dirty":false,"frames":1111,"hyp_sha256":"51f1e806d6fab6708964b82bc870a7327089ba6821b74d41f102e015a4e316e1","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"147512e2a00c9aa0700e0e79a9cbb85da2d7010636c43222f63f1ea1d8f155cf","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"20,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.19}
+EVAL {"audio_s":152.24,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:36:10Z","dirty":false,"frames":1903,"hyp_sha256":"6f380908d07976edc7d7089601a0cf6486356e557823c1a078e701f78a4305f5","hyp_words":343,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"1d71e593aaf43c8c6af84cb5699876e9466fd567653ff6946b693a2f23e3abf3","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"26,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":158.72,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.958,"date":"2026-10-20T08:38:35Z","dirty":false,"frames":1984,"hyp_sha256":"166098f59b5379a848d538e14c168910e11b73b3cd125d4c6d0ef63f77d9e004","hyp_words":344,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"85af2dd90de094c4c18466d37fbf8a7cbffdec9352d8e1d79438ed738efe32c8","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"28,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.19}
+EVAL {"audio_s":151.44,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.946,"date":"2026-10-20T08:40:52Z","dirty":false,"frames":1893,"hyp_sha256":"d1e41fd4474ede33331a61c3646dea3e5207b482f05a4cab76dfca1406c27c9a","hyp_words":340,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"b244d91e555c2ec2a83964c5ff5d379af526bbc80420bebaaa8d887e509f718a","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"24,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":8.08}
+EVAL {"audio_s":175.52,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.958,"date":"2026-10-20T08:43:27Z","dirty":false,"frames":2194,"hyp_sha256":"ec5e2d2656de2d9d51d52fc3d01c81553dab6058aaaf613857f040f24485c3be","hyp_words":367,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"7a436ce0669e0ed299aae39e9c23803f0eb84b1cb90897a3ca7a98a6ab4e0d1c","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":4,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"18,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":14.07}
+EVAL {"audio_s":172.24,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:45:59Z","dirty":false,"frames":2153,"hyp_sha256":"780c321ce6277a3e4e46895f30e02f5931563c50a94fde2dafcf4c8dc0ee4acf","hyp_words":344,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"603d3302006fefdfa7251aca0d2d0a4c4709c4160a1cb038f1ccf5dc12b9fe1a","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":5,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"18,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":110.32,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.859,"date":"2026-10-20T08:47:32Z","dirty":false,"frames":1379,"hyp_sha256":"073927f73d1042c9eddf0ea3305e2f74e3f82dd53c127422acceca69452dfc04","hyp_words":224,"language":"fr","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"3be872b00b0c2c0ee12190c813c4d71961c2c08437fbe0c0ceef33b368354333","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":213,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_fr","text_sha256":"e931334b5960434d0c69aa8d6765b73c6c83996d2a2d41957e5c766dd1890d8f","top_process":"26,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":21.13}
+EVAL {"audio_s":106,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.906,"date":"2026-10-20T08:49:00Z","dirty":false,"frames":1325,"hyp_sha256":"3cc0f733a0c5617a6ebcd7c670d8bd275a187b47f9737029bf7abc98dddc7533","hyp_words":219,"language":"fr","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a2fd31d873bb824fe0b55964d08c6066af45b8d26294eda3f802e4c8eb6d7903","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":213,"seed":2,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_fr","text_sha256":"e931334b5960434d0c69aa8d6765b73c6c83996d2a2d41957e5c766dd1890d8f","top_process":"27,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":12.68}
+EVAL {"audio_s":109.52,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.845,"date":"2026-10-20T08:50:33Z","dirty":false,"frames":1369,"hyp_sha256":"8c1930d433cb3a8662d499037b152be8a57a8ae7538f3810bb884b9e90480df4","hyp_words":219,"language":"fr","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"0ec6d12f8ad39e62daa485ab6c06ba79052642fa19a680630ec98a23c6b1c21a","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":213,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-8bit","text":"long_fr","text_sha256":"e931334b5960434d0c69aa8d6765b73c6c83996d2a2d41957e5c766dd1890d8f","top_process":"23,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":19.72}
+EVAL {"audio_s":98.48,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.779,"date":"2026-10-20T08:52:04Z","dirty":false,"frames":1231,"hyp_sha256":"4ecba03a683aec1bd2c08f711e769b240ee10cc6e67bdb3c8c660a990f1c5f9f","hyp_words":213,"language":"fr","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"9b2b441fb04c818def9a0d4cec69d2dfdd00fd767eb1c6056f268931ce56a113","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":213,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-6bit","text":"long_fr","text_sha256":"e931334b5960434d0c69aa8d6765b73c6c83996d2a2d41957e5c766dd1890d8f","top_process":"18,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":25.35}
+EVAL {"audio_s":8.64,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.909,"date":"2026-10-20T08:52:26Z","dirty":false,"frames":112,"hyp_sha256":"391a702c7ff8c5881a907a35a2bb0d5057d14ec36ec4ab00c2920350bc0f0f35","hyp_words":12,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"192519ecd7fcd1b9999789b00ca604fabbf8da290884e9e21bd07c92a2afbcdf","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":11,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-bf16","text":"short_en","text_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","top_process":"40,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":18.18}
+EVAL {"audio_s":84.16,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.952,"date":"2026-10-20T08:54:14Z","dirty":false,"frames":1054,"hyp_sha256":"94f34ef3b3d0f674533b505a37dc8abc174a4c84e503da74898bc5e521dbdea2","hyp_words":172,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"206c7d3e827ca205797b427afd942a235bd05ab28b9e9ae06b1d73a51d1766a8","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":167,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-bf16","text":"medium_en","text_sha256":"a16c8b78c2df9324acd1f486c4e24de9788d595d0c1ae8aab9f361212de8d518","top_process":"21,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":7.78}
+EVAL {"audio_s":156.32,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.931,"date":"2026-10-20T08:57:20Z","dirty":false,"frames":1954,"hyp_sha256":"b71118d6410d33094d5f5608358ff5013f15c57ffce037accc92eda560baad5f","hyp_words":339,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"f83d73a60a792d937661ee6fe66c4ba8f11386b24092ad63df84c128c9f8e2e8","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-bf16","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"25,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":9.88}
+EVAL {"audio_s":114.48,"build":"Release","chip":"Apple M3 Max","commit":"127bc3333","coverage":0.732,"date":"2026-10-20T08:59:40Z","dirty":false,"frames":1432,"hyp_sha256":"5b0059f9d3eefa41646b400c0672c1e51fb25c88627f537dd5c20aaa53e62b63","hyp_words":221,"language":"fr","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"99ab1ee8fe065be3a96d902865acc7cb5edc1b16496fd3c230433403425067d7","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":213,"seed":1,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K90RT-bf16","text":"long_fr","text_sha256":"e931334b5960434d0c69aa8d6765b73c6c83996d2a2d41957e5c766dd1890d8f","top_process":"22,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"voice":"neutral_female","warm_up":false,"wer":32.39}
+```
+
+**Lignes `BENCH`, file 2** (ordre de la file, amorçages compris) :
+
+```
+BENCH {"audio_s":7.84,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:08:11Z","dirty":false,"frame_cap":216,"frames":100,"input":"docs/eval/tts/short_en.txt","load_ms":114,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"cf0a830d33c805972b2336c8eaa9d6048171a761cdea0a0b1ddc027d7bcda1b0","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5910.1,"peak_mlx_mb":5234.5,"peak_mlx_mb_by_phase":{"codec":5177,"decode":4491.8,"prefill":4334.5},"phases_ms":{"codec":27.1,"decode":3739.3,"post":0.8,"prefill":64.1,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.489,"seed":1,"step_ms_p50":35.33,"step_ms_p90":35.46,"steps":103,"streaming":false,"tag":"K90-8bit-short-s1-preset-batch","text_tokens":14,"top_process":"22,9 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3833.8,"truncated":false,"ttfa_ms":90.2,"ttft_ms":92,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":7.84,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:10:15Z","dirty":false,"frame_cap":216,"frames":100,"input":"docs/eval/tts/short_en.txt","load_ms":114,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"cf0a830d33c805972b2336c8eaa9d6048171a761cdea0a0b1ddc027d7bcda1b0","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":6108.7,"peak_mlx_mb":5234.5,"peak_mlx_mb_by_phase":{"decode":4491.1,"prefill":4334.5},"phases_ms":{"codec":26.2,"decode":3741.1,"post":0.9,"prefill":65.6,"text_tokenization":0.1,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4893,"seed":1,"step_ms_p50":35.31,"step_ms_p90":35.81,"steps":103,"streaming":false,"tag":"K90-8bit-short-s1-preset-batch","text_tokens":14,"top_process":"24,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3836,"truncated":false,"ttfa_ms":91.8,"ttft_ms":93.4,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:17:24Z","dirty":false,"frame_cap":216,"frames":100,"input":"docs/eval/tts/short_en.txt","load_ms":114.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"61f89b124afb70d6779fd62f5c61559c009e4de65152703bf1dd78a0c5e1f52b","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6188.2,"peak_mlx_mb":5068.4,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4879,"seed":1,"steps":0,"stream_frame_ms_p50":37.93,"stream_frame_ms_p90":41.83,"streaming":true,"tag":"K90-8bit-short-s1-preset-streaming","text_tokens":14,"top_process":"22,9 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3903.2,"ttfa_ms":200.5,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:19:28Z","dirty":false,"frame_cap":216,"frames":100,"input":"docs/eval/tts/short_en.txt","load_ms":114.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"61f89b124afb70d6779fd62f5c61559c009e4de65152703bf1dd78a0c5e1f52b","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":6190,"peak_mlx_mb":5068.4,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4873,"seed":1,"steps":0,"stream_frame_ms_p50":37.95,"stream_frame_ms_p90":41.92,"streaming":true,"tag":"K90-8bit-short-s1-preset-streaming","text_tokens":14,"top_process":"23,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3898.7,"ttfa_ms":193.6,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":5.52,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:26:35Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":114.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"e16abbb65b7a33c91c47ba799bea14ddcd95b9f239f6f39f9cde4cddc766c567","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5712.5,"peak_mlx_mb":5115.8,"peak_mlx_mb_by_phase":{"codec":4419.2,"decode":4478.9,"prefill":4328.7},"phases_ms":{"codec":23.3,"decode":2713.6,"post":1.2,"prefill":67.3,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5087,"seed":1,"step_ms_p50":35.15,"step_ms_p90":35.36,"steps":75,"streaming":false,"tag":"K90-8bit-short-s1-clone-batch","text_tokens":14,"top_process":"108,5 /System/Applications/Mail.app/Contents/MacOS/Mail","total_ms":2807.9,"truncated":false,"ttfa_ms":92.9,"ttft_ms":94.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.52,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:28:38Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":114.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"e16abbb65b7a33c91c47ba799bea14ddcd95b9f239f6f39f9cde4cddc766c567","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5712.9,"peak_mlx_mb":5115.8,"peak_mlx_mb_by_phase":{"decode":4478.5,"prefill":4332.8},"phases_ms":{"codec":22.1,"decode":2728,"post":1.3,"prefill":63.4,"text_tokenization":0.2,"voice_embedding_merge":0},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5103,"seed":1,"step_ms_p50":35.25,"step_ms_p90":35.45,"steps":75,"streaming":false,"tag":"K90-8bit-short-s1-clone-batch","text_tokens":14,"top_process":"24,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2816.8,"truncated":false,"ttfa_ms":89.3,"ttft_ms":90.9,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:35:44Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":113.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"35c5c96e15639ccd30cbff79c91b29db69a1d080c777ca9dd436a8bd8c93f7a7","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5841.6,"peak_mlx_mb":5054.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4887,"seed":1,"steps":0,"stream_frame_ms_p50":37.74,"stream_frame_ms_p90":40.36,"streaming":true,"tag":"K90-8bit-short-s1-clone-streaming","text_tokens":14,"top_process":"99,3 /System/Library/PrivateFrameworks/PhotoAnalysis.framework/Versions/A/Support/photoanalysisd","total_ms":2814.7,"ttfa_ms":192.2,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:37:47Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":113.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"35c5c96e15639ccd30cbff79c91b29db69a1d080c777ca9dd436a8bd8c93f7a7","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5842.3,"peak_mlx_mb":5051.3,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4914,"seed":1,"steps":0,"stream_frame_ms_p50":37.82,"stream_frame_ms_p90":40.58,"streaming":true,"tag":"K90-8bit-short-s1-clone-streaming","text_tokens":14,"top_process":"21,8 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2830.6,"ttfa_ms":199.1,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.44,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:44:54Z","dirty":false,"frame_cap":216,"frames":71,"input":"docs/eval/tts/short_en.txt","load_ms":114.1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"8393f425d0b8b1163d75876883aba6c2829c8946d64064c6321f790a55fe8b70","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5825.9,"peak_mlx_mb":5125.6,"peak_mlx_mb_by_phase":{"decode":4491.1,"prefill":4347.9},"phases_ms":{"codec":21.9,"decode":2588.3,"post":1.1,"prefill":67.2,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4928,"seed":2,"step_ms_p50":35.35,"step_ms_p90":35.49,"steps":71,"streaming":false,"tag":"K90-8bit-short-s2-preset-batch","text_tokens":14,"top_process":"21,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2680.9,"truncated":false,"ttfa_ms":93.2,"ttft_ms":95,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":5.44,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:46:57Z","dirty":false,"frame_cap":216,"frames":71,"input":"docs/eval/tts/short_en.txt","load_ms":114.1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"8393f425d0b8b1163d75876883aba6c2829c8946d64064c6321f790a55fe8b70","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5953,"peak_mlx_mb":5125.6,"peak_mlx_mb_by_phase":{"decode":4491.7,"prefill":4349.9},"phases_ms":{"codec":22,"decode":2590.9,"post":1.1,"prefill":63.8,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4927,"seed":2,"step_ms_p50":35.35,"step_ms_p90":35.52,"steps":71,"streaming":false,"tag":"K90-8bit-short-s2-preset-batch","text_tokens":14,"top_process":"22,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2680,"truncated":false,"ttfa_ms":89.8,"ttft_ms":91.5,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":5.68,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:54:03Z","dirty":false,"frame_cap":216,"frames":71,"input":"docs/eval/tts/short_en.txt","load_ms":113.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"c122545ea3e9772da8b732019d48dfd34a52ab7410ea8fd9a34dbb569c48458f","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6185,"peak_mlx_mb":5067.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4924,"seed":2,"steps":0,"stream_frame_ms_p50":37.95,"stream_frame_ms_p90":41.03,"streaming":true,"tag":"K90-8bit-short-s2-preset-streaming","text_tokens":14,"top_process":"22,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2796.9,"ttfa_ms":195.4,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":5.68,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T09:56:06Z","dirty":false,"frame_cap":216,"frames":71,"input":"docs/eval/tts/short_en.txt","load_ms":113.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"c122545ea3e9772da8b732019d48dfd34a52ab7410ea8fd9a34dbb569c48458f","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":6185.4,"peak_mlx_mb":5067.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.493,"seed":2,"steps":0,"stream_frame_ms_p50":37.96,"stream_frame_ms_p90":40.94,"streaming":true,"tag":"K90-8bit-short-s2-preset-streaming","text_tokens":14,"top_process":"21,9 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2800.2,"ttfa_ms":198.9,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:03:13Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":115.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a7a7296d49bcb4d4cca90025beb4c3fda882b14266cbd0448e2ecd559eb448ae","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5621.5,"peak_mlx_mb":5115.8,"peak_mlx_mb_by_phase":{"codec":4279.8,"decode":4478.5,"prefill":4320.1},"phases_ms":{"codec":22,"decode":2728.9,"post":0.5,"prefill":64.5,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4893,"seed":2,"step_ms_p50":35.28,"step_ms_p90":35.45,"steps":75,"streaming":false,"tag":"K90-8bit-short-s2-clone-batch","text_tokens":14,"top_process":"23,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2818.2,"truncated":false,"ttfa_ms":90.2,"ttft_ms":92,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:05:16Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":115.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a7a7296d49bcb4d4cca90025beb4c3fda882b14266cbd0448e2ecd559eb448ae","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5720.6,"peak_mlx_mb":5115.8,"peak_mlx_mb_by_phase":{"decode":4478.9,"prefill":4330.3},"phases_ms":{"codec":21.7,"decode":2728.5,"post":0.5,"prefill":62.8,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4888,"seed":2,"step_ms_p50":35.26,"step_ms_p90":35.41,"steps":75,"streaming":false,"tag":"K90-8bit-short-s2-clone-batch","text_tokens":14,"top_process":"21,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2815.7,"truncated":false,"ttfa_ms":88.4,"ttft_ms":90.1,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:12:22Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":114.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a2a692bc432f2aa6baf633b63e419194f440fd80860a8f874a0c53ed8429f64b","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5847.5,"peak_mlx_mb":5054.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4906,"seed":2,"steps":0,"stream_frame_ms_p50":37.89,"stream_frame_ms_p90":40.52,"streaming":true,"tag":"K90-8bit-short-s2-clone-streaming","text_tokens":14,"top_process":"21,9 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2825.7,"ttfa_ms":194.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":5.76,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:14:25Z","dirty":false,"frame_cap":216,"frames":72,"input":"docs/eval/tts/short_en.txt","load_ms":114.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"a2a692bc432f2aa6baf633b63e419194f440fd80860a8f874a0c53ed8429f64b","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5847.8,"peak_mlx_mb":5054.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4893,"seed":2,"steps":0,"stream_frame_ms_p50":37.84,"stream_frame_ms_p90":40.57,"streaming":true,"tag":"K90-8bit-short-s2-clone-streaming","text_tokens":14,"top_process":"21,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2818.6,"ttfa_ms":185.8,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":6.48,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:21:33Z","dirty":false,"frame_cap":216,"frames":84,"input":"docs/eval/tts/short_en.txt","load_ms":112.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5b9200a9d9e3e06c16f2bb4b8d8253de8a28fae6cf502dd4ab1f5a874b93d84c","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5891.9,"peak_mlx_mb":5173.7,"peak_mlx_mb_by_phase":{"codec":5153.1,"decode":4491.1,"prefill":4324},"phases_ms":{"codec":24.2,"decode":3159.8,"post":1.2,"prefill":62,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5015,"seed":3,"step_ms_p50":35.33,"step_ms_p90":35.45,"steps":87,"streaming":false,"tag":"K90-8bit-short-s3-preset-batch","text_tokens":14,"top_process":"24,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3249.4,"truncated":false,"ttfa_ms":88,"ttft_ms":89.8,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":6.48,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:23:36Z","dirty":false,"frame_cap":216,"frames":84,"input":"docs/eval/tts/short_en.txt","load_ms":112.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5b9200a9d9e3e06c16f2bb4b8d8253de8a28fae6cf502dd4ab1f5a874b93d84c","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":6031.3,"peak_mlx_mb":5173.7,"peak_mlx_mb_by_phase":{"decode":4491.8,"post":4244.4,"prefill":4347.9},"phases_ms":{"codec":24.2,"decode":3166.3,"post":1.3,"prefill":67.3,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5033,"seed":3,"step_ms_p50":35.32,"step_ms_p90":35.58,"steps":87,"streaming":false,"tag":"K90-8bit-short-s3-preset-batch","text_tokens":14,"top_process":"24,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3261.4,"truncated":false,"ttfa_ms":93.3,"ttft_ms":95.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":6.72,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:30:44Z","dirty":false,"frame_cap":216,"frames":84,"input":"docs/eval/tts/short_en.txt","load_ms":114.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"b522ef2e0eb03131ba76eae1e7b358e773eaa62eb18e079c9ba1885e95f44064","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6175.6,"peak_mlx_mb":5068.2,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4897,"seed":3,"steps":0,"stream_frame_ms_p50":37.9,"stream_frame_ms_p90":73.08,"streaming":true,"tag":"K90-8bit-short-s3-preset-streaming","text_tokens":14,"top_process":"22,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3290.8,"ttfa_ms":188.5,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":6.72,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:32:47Z","dirty":false,"frame_cap":216,"frames":84,"input":"docs/eval/tts/short_en.txt","load_ms":114.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"b522ef2e0eb03131ba76eae1e7b358e773eaa62eb18e079c9ba1885e95f44064","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":6175.8,"peak_mlx_mb":5068.1,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4902,"seed":3,"steps":0,"stream_frame_ms_p50":37.77,"stream_frame_ms_p90":72.51,"streaming":true,"tag":"K90-8bit-short-s3-preset-streaming","text_tokens":14,"top_process":"236,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd","total_ms":3294,"ttfa_ms":199,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":4.56,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:39:53Z","dirty":false,"frame_cap":216,"frames":58,"input":"docs/eval/tts/short_en.txt","load_ms":110.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"639a98aa382012d4a9074bc0cc9e4a751fea6f3069340b58e372f7191d4b479f","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5693.3,"peak_mlx_mb":5115.2,"peak_mlx_mb_by_phase":{"decode":4478.9,"post":4244.6,"prefill":4311.6},"phases_ms":{"codec":20,"decode":2152.7,"post":0.7,"prefill":64.2,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4912,"seed":3,"step_ms_p50":35.28,"step_ms_p90":35.53,"steps":59,"streaming":false,"tag":"K90-8bit-short-s3-clone-batch","text_tokens":14,"top_process":"21,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2239.8,"truncated":false,"ttfa_ms":89.9,"ttft_ms":91.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":4.56,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:41:55Z","dirty":false,"frame_cap":216,"frames":58,"input":"docs/eval/tts/short_en.txt","load_ms":110.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"639a98aa382012d4a9074bc0cc9e4a751fea6f3069340b58e372f7191d4b479f","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5693.6,"peak_mlx_mb":5115.2,"peak_mlx_mb_by_phase":{"codec":4365.1,"decode":4478.9,"prefill":4329.6},"phases_ms":{"codec":20.1,"decode":2153.8,"post":0.7,"prefill":62.1,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.491,"seed":3,"step_ms_p50":35.28,"step_ms_p90":35.81,"steps":59,"streaming":false,"tag":"K90-8bit-short-s3-clone-batch","text_tokens":14,"top_process":"22,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2238.9,"truncated":false,"ttfa_ms":87.9,"ttft_ms":89.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":4.64,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:49:01Z","dirty":false,"frame_cap":216,"frames":58,"input":"docs/eval/tts/short_en.txt","load_ms":116.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5ce0d296385954882f456ae5a00abe522a1029a1c1de4f6ed3e63bbc66acd1e8","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":5931.8,"peak_mlx_mb":5054.4,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4967,"seed":3,"steps":0,"stream_frame_ms_p50":37.83,"stream_frame_ms_p90":43.66,"streaming":true,"tag":"K90-8bit-short-s3-clone-streaming","text_tokens":14,"top_process":"21,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2304.9,"ttfa_ms":198.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":4.64,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:51:03Z","dirty":false,"frame_cap":216,"frames":58,"input":"docs/eval/tts/short_en.txt","load_ms":116.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"5ce0d296385954882f456ae5a00abe522a1029a1c1de4f6ed3e63bbc66acd1e8","pack_sha256":"1f62c7a80ed7ac0c","pass":2,"peak_footprint_mb":5932.3,"peak_mlx_mb":5054.1,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4964,"seed":3,"steps":0,"stream_frame_ms_p50":37.89,"stream_frame_ms_p90":43.76,"streaming":true,"tag":"K90-8bit-short-s3-clone-streaming","text_tokens":14,"top_process":"22,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":2303.3,"ttfa_ms":193.2,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":82.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T10:59:21Z","dirty":false,"frame_cap":2379,"frames":1037,"input":"docs/eval/tts/medium_en.txt","load_ms":115.7,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"bf16e10721e5b28def43698798ede935252722712f191b98519e7b2ee9a93e81","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6996,"peak_mlx_mb":4713.4,"peak_mlx_mb_by_phase":{"codec":4535.4,"decode":4596.2,"prefill":4550.9},"phases_ms":{"codec":222.4,"decode":38085.5,"post":1.2,"prefill":222.4,"text_tokenization":0.5,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4654,"seed":1,"step_ms_p50":35.7,"step_ms_p90":36.57,"steps":1039,"streaming":false,"tag":"K90-8bit-medium-s1-preset-batch","text_tokens":222,"top_process":"20,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":38537.4,"truncated":false,"ttfa_ms":250.7,"ttft_ms":252.8,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":82.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:07:40Z","dirty":false,"frame_cap":2379,"frames":1037,"input":"docs/eval/tts/medium_en.txt","load_ms":114.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"bf16e10721e5b28def43698798ede935252722712f191b98519e7b2ee9a93e81","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6941.8,"peak_mlx_mb":4713.4,"peak_mlx_mb_by_phase":{"codec":4595.3,"decode":4596.2,"prefill":4556.5},"phases_ms":{"codec":237.8,"decode":38469.2,"post":1.4,"prefill":229.1,"text_tokenization":0.6,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4703,"seed":1,"step_ms_p50":35.73,"step_ms_p90":38.04,"steps":1039,"streaming":false,"tag":"K90-8bit-medium-s1-preset-batch","text_tokens":222,"top_process":"16,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":38943.6,"truncated":false,"ttfa_ms":257.7,"ttft_ms":260.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":82.96,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:16:02Z","dirty":false,"frame_cap":2379,"frames":1037,"input":"docs/eval/tts/medium_en.txt","load_ms":117.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"28298fec4dd13c47713db5c5240e98b4e7b9ca8c348ad792187f702d6eeb5e47","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6492.4,"peak_mlx_mb":5198.7,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.4932,"seed":1,"steps":0,"stream_frame_ms_p50":38.95,"stream_frame_ms_p90":41.32,"streaming":true,"tag":"K90-8bit-medium-s1-preset-streaming","text_tokens":222,"top_process":"55,6 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd","total_ms":40911.8,"ttfa_ms":364.3,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":82.96,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:24:24Z","dirty":false,"frame_cap":2379,"frames":1037,"input":"docs/eval/tts/medium_en.txt","load_ms":115.7,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"28298fec4dd13c47713db5c5240e98b4e7b9ca8c348ad792187f702d6eeb5e47","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6553.6,"peak_mlx_mb":5199,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.4908,"seed":1,"steps":0,"stream_frame_ms_p50":38.56,"stream_frame_ms_p90":40.48,"streaming":true,"tag":"K90-8bit-medium-s1-preset-streaming","text_tokens":222,"top_process":"23,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":40720.7,"ttfa_ms":362.7,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":68.32,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:32:29Z","dirty":false,"frame_cap":2379,"frames":857,"input":"docs/eval/tts/medium_en.txt","load_ms":114.1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"3f927df63c4b9cfde93257c5bd964647d27870ce34ebf85d2b2dd51ce56e0f71","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6742.5,"peak_mlx_mb":4682.1,"peak_mlx_mb_by_phase":{"codec":4682.1,"decode":4583.8,"prefill":4536},"phases_ms":{"codec":180.3,"decode":31387.6,"post":1.5,"prefill":225.4,"text_tokenization":0.6,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4655,"seed":1,"step_ms_p50":35.65,"step_ms_p90":36.33,"steps":859,"streaming":false,"tag":"K90-8bit-medium-s1-clone-batch","text_tokens":222,"top_process":"17,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":31800.1,"truncated":false,"ttfa_ms":254.1,"ttft_ms":256.4,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":68.32,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:40:33Z","dirty":false,"frame_cap":2379,"frames":857,"input":"docs/eval/tts/medium_en.txt","load_ms":114.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"3f927df63c4b9cfde93257c5bd964647d27870ce34ebf85d2b2dd51ce56e0f71","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6751,"peak_mlx_mb":4682.1,"peak_mlx_mb_by_phase":{"codec":4682.1,"decode":4583.8,"prefill":4537.4},"phases_ms":{"codec":178.1,"decode":31376.4,"post":1.4,"prefill":216.6,"text_tokenization":0.5,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4651,"seed":1,"step_ms_p50":35.61,"step_ms_p90":36.39,"steps":859,"streaming":false,"tag":"K90-8bit-medium-s1-clone-batch","text_tokens":222,"top_process":"19,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":31777.9,"truncated":false,"ttfa_ms":245.5,"ttft_ms":247.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":68.56,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:48:41Z","dirty":false,"frame_cap":2379,"frames":857,"input":"docs/eval/tts/medium_en.txt","load_ms":116,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"4004a4ee0c50b109d64bd55a302aa0467ea13c73cdcacd01104a0eb39d1aec01","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6446.5,"peak_mlx_mb":5180.6,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.4843,"seed":1,"steps":0,"stream_frame_ms_p50":38.38,"stream_frame_ms_p90":38.78,"streaming":true,"tag":"K90-8bit-medium-s1-clone-streaming","text_tokens":222,"top_process":"25,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":33201.4,"ttfa_ms":364.1,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":68.56,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T11:56:48Z","dirty":false,"frame_cap":2379,"frames":857,"input":"docs/eval/tts/medium_en.txt","load_ms":114.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"4004a4ee0c50b109d64bd55a302aa0467ea13c73cdcacd01104a0eb39d1aec01","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6454,"peak_mlx_mb":5166.9,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.4853,"seed":1,"steps":0,"stream_frame_ms_p50":38.33,"stream_frame_ms_p90":39.13,"streaming":true,"tag":"K90-8bit-medium-s1-clone-streaming","text_tokens":222,"top_process":"26,5 /sbin/launchd","total_ms":33271.5,"ttfa_ms":366.3,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":152.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:03:05Z","dirty":false,"frame_cap":2500,"frames":1910,"input":"docs/eval/tts/long_en.txt","load_ms":114.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"f6740c13d9bb9f37d5f74c8e3264b09125b8363885fc9e7cbeff62e62607235e","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":8967.3,"peak_mlx_mb":4829.4,"peak_mlx_mb_by_phase":{"codec":4829.4,"decode":4438.6,"prefill":3881.1},"phases_ms":{"codec":521.8,"decode":75345.8,"post":2.1,"prefill":345.8,"text_tokenization":1.4,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5003,"seed":1,"step_ms_p50":36.2,"step_ms_p90":43.42,"steps":1911,"streaming":false,"tag":"K90-8bit-long-s1-preset-batch","text_tokens":444,"top_process":"17,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":76444.2,"truncated":false,"ttfa_ms":390.6,"ttft_ms":611.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:09:23Z","dirty":false,"frame_cap":2500,"frames":1910,"input":"docs/eval/tts/long_en.txt","load_ms":115.7,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"f6740c13d9bb9f37d5f74c8e3264b09125b8363885fc9e7cbeff62e62607235e","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":8950.6,"peak_mlx_mb":4829.4,"peak_mlx_mb_by_phase":{"codec":4829.4,"decode":4438.6,"prefill":3953.2},"phases_ms":{"codec":511.3,"decode":75340.3,"post":2.1,"prefill":345.8,"text_tokenization":1.4,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5001,"seed":1,"step_ms_p50":36.1,"step_ms_p90":43.64,"steps":1911,"streaming":false,"tag":"K90-8bit-long-s1-preset-batch","text_tokens":444,"top_process":"17,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":76421.7,"truncated":false,"ttfa_ms":390.4,"ttft_ms":603.4,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:15:44Z","dirty":false,"frame_cap":2500,"frames":1910,"input":"docs/eval/tts/long_en.txt","load_ms":117.1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"ec73098c6f961a201d8965b8df7d1f8014157af707f594ed6f1f3e34bcbb9948","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6855.7,"peak_mlx_mb":5354,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.5258,"seed":1,"steps":0,"stream_frame_ms_p50":39.57,"stream_frame_ms_p90":47.42,"streaming":true,"tag":"K90-8bit-long-s1-preset-streaming","text_tokens":444,"top_process":"19,3 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":80347.9,"ttfa_ms":736.8,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.8,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:22:05Z","dirty":false,"frame_cap":2500,"frames":1910,"input":"docs/eval/tts/long_en.txt","load_ms":117.6,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"ec73098c6f961a201d8965b8df7d1f8014157af707f594ed6f1f3e34bcbb9948","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6832.5,"peak_mlx_mb":5354,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.524,"seed":1,"steps":0,"stream_frame_ms_p50":39.44,"stream_frame_ms_p90":46.77,"streaming":true,"tag":"K90-8bit-long-s1-preset-streaming","text_tokens":444,"top_process":"21,8 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":80071,"ttfa_ms":730.3,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":140.08,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:28:15Z","dirty":false,"frame_cap":2500,"frames":1753,"input":"docs/eval/tts/long_en.txt","load_ms":114.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"3ef3d910addde4a14d59007293b88b54c1efd5841e00675e45ed4895bde84f5d","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":8105.9,"peak_mlx_mb":4802.1,"peak_mlx_mb_by_phase":{"codec":4802.1,"decode":4400.2,"prefill":3910.1},"phases_ms":{"codec":482.4,"decode":68449.6,"post":2.6,"prefill":340.8,"text_tokenization":1,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4956,"seed":1,"step_ms_p50":36.07,"step_ms_p90":43.07,"steps":1755,"streaming":false,"tag":"K90-8bit-long-s1-clone-batch","text_tokens":444,"top_process":"20,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":69430.3,"truncated":false,"ttfa_ms":385.1,"ttft_ms":532.6,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":140.08,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:34:25Z","dirty":false,"frame_cap":2500,"frames":1753,"input":"docs/eval/tts/long_en.txt","load_ms":117.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"3ef3d910addde4a14d59007293b88b54c1efd5841e00675e45ed4895bde84f5d","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":8090.7,"peak_mlx_mb":4802.1,"peak_mlx_mb_by_phase":{"codec":4802.1,"decode":4400.1,"prefill":3923.4},"phases_ms":{"codec":474.8,"decode":68178.2,"post":2.6,"prefill":341.1,"text_tokenization":1,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.4936,"seed":1,"step_ms_p50":36.09,"step_ms_p90":42.59,"steps":1755,"streaming":false,"tag":"K90-8bit-long-s1-clone-batch","text_tokens":444,"top_process":"18,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":69147.3,"truncated":false,"ttfa_ms":385.3,"ttft_ms":529,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":140.24,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:40:38Z","dirty":false,"frame_cap":2500,"frames":1753,"input":"docs/eval/tts/long_en.txt","load_ms":114.7,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"75c535e27e9a837103dd172927f11a1ca7d5db0d74e7157277a2f15e1fead1cc","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6868.1,"peak_mlx_mb":5310.9,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.5162,"seed":1,"steps":0,"stream_frame_ms_p50":39.22,"stream_frame_ms_p90":46.31,"streaming":true,"tag":"K90-8bit-long-s1-clone-streaming","text_tokens":444,"top_process":"22,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":72391.6,"ttfa_ms":661.2,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":140.24,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:46:51Z","dirty":false,"frame_cap":2500,"frames":1753,"input":"docs/eval/tts/long_en.txt","load_ms":113.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-8bit","out_sha256":"75c535e27e9a837103dd172927f11a1ca7d5db0d74e7157277a2f15e1fead1cc","pack_sha256":"1f62c7a80ed7ac0c","pass":1,"peak_footprint_mb":6785.7,"peak_mlx_mb":5310.8,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.5152,"seed":1,"steps":0,"stream_frame_ms_p50":38.93,"stream_frame_ms_p90":46.12,"streaming":true,"tag":"K90-8bit-long-s1-clone-streaming","text_tokens":444,"top_process":"28,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":72246.3,"ttfa_ms":657.8,"voice":"/Users/vincent/Developpements/convertvoxtral/.local-runs/voices/clone_fr.safetensors","warm":true,"warm_up":false}
+BENCH {"audio_s":7.12,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:54:03Z","dirty":false,"frame_cap":216,"frames":92,"input":"docs/eval/tts/short_en.txt","load_ms":132.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"9a8d2a3412e6b1be131e703e6f4d1a30020b3aa1f261db0ebb78e5ca29c995f6","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":4929.4,"peak_mlx_mb":4288.4,"peak_mlx_mb_by_phase":{"codec":3460.2,"decode":3588.5,"prefill":3425.1},"phases_ms":{"codec":25.3,"decode":3723.3,"post":1.1,"prefill":62.6,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5358,"seed":1,"step_ms_p50":38.13,"step_ms_p90":38.32,"steps":95,"streaming":false,"tag":"K90-6bit-short-s1-preset-batch","text_tokens":14,"top_process":"20,0 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3814.8,"truncated":false,"ttfa_ms":93.2,"ttft_ms":95.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":7.12,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T12:56:07Z","dirty":false,"frame_cap":216,"frames":92,"input":"docs/eval/tts/short_en.txt","load_ms":132.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"9a8d2a3412e6b1be131e703e6f4d1a30020b3aa1f261db0ebb78e5ca29c995f6","pack_sha256":"e8e2ff5a7a5b715e","pass":2,"peak_footprint_mb":4929.7,"peak_mlx_mb":4288.4,"peak_mlx_mb_by_phase":{"decode":3588.5,"prefill":3423.1},"phases_ms":{"codec":25,"decode":3726.9,"post":1.1,"prefill":63.9,"text_tokenization":0.2,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5364,"seed":1,"step_ms_p50":38.19,"step_ms_p90":38.33,"steps":95,"streaming":false,"tag":"K90-6bit-short-s1-preset-batch","text_tokens":14,"top_process":"18,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3818.8,"truncated":false,"ttfa_ms":94.7,"ttft_ms":96.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":7.36,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:03:16Z","dirty":false,"frame_cap":216,"frames":92,"input":"docs/eval/tts/short_en.txt","load_ms":112.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"dddd933ff58ea75b346f72da83592db9c4e42db4d73a4a002553d31ff1cd5d37","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":5272.6,"peak_mlx_mb":4156.8,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5235,"seed":1,"steps":0,"stream_frame_ms_p50":40.74,"stream_frame_ms_p90":44.22,"streaming":true,"tag":"K90-6bit-short-s1-preset-streaming","text_tokens":14,"top_process":"20,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3852.7,"ttfa_ms":199.6,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":7.36,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:05:20Z","dirty":false,"frame_cap":216,"frames":92,"input":"docs/eval/tts/short_en.txt","load_ms":112.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"dddd933ff58ea75b346f72da83592db9c4e42db4d73a4a002553d31ff1cd5d37","pack_sha256":"e8e2ff5a7a5b715e","pass":2,"peak_footprint_mb":5273.3,"peak_mlx_mb":4156.8,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5235,"seed":1,"steps":0,"stream_frame_ms_p50":40.78,"stream_frame_ms_p90":44.14,"streaming":true,"tag":"K90-6bit-short-s1-preset-streaming","text_tokens":14,"top_process":"20,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3853.2,"ttfa_ms":198.9,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":79.6,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:13:41Z","dirty":false,"frame_cap":2379,"frames":998,"input":"docs/eval/tts/medium_en.txt","load_ms":113.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"6f32538fdc9f8795ea3fd72204538a18109371a65534d37cdddb81cd0cef3b75","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":6366,"peak_mlx_mb":3795.3,"peak_mlx_mb_by_phase":{"codec":3795.3,"decode":3693.1,"prefill":3666.2},"phases_ms":{"codec":220.7,"decode":39937,"post":1.3,"prefill":225.2,"text_tokenization":0.6,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5074,"seed":1,"step_ms_p50":38.52,"step_ms_p90":41.06,"steps":999,"streaming":false,"tag":"K90-6bit-medium-s1-preset-batch","text_tokens":222,"top_process":"14,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":40390.1,"truncated":false,"ttfa_ms":257.1,"ttft_ms":259.4,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":79.6,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:22:03Z","dirty":false,"frame_cap":2379,"frames":998,"input":"docs/eval/tts/medium_en.txt","load_ms":113.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"6f32538fdc9f8795ea3fd72204538a18109371a65534d37cdddb81cd0cef3b75","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":6366.5,"peak_mlx_mb":3795.3,"peak_mlx_mb_by_phase":{"codec":3795.3,"decode":3693.1,"prefill":3676.5},"phases_ms":{"codec":228,"decode":40125.5,"post":1.4,"prefill":229.4,"text_tokenization":0.6,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5099,"seed":1,"step_ms_p50":38.5,"step_ms_p90":41.85,"steps":999,"streaming":false,"tag":"K90-6bit-medium-s1-preset-batch","text_tokens":222,"top_process":"14,1 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":40590.8,"truncated":false,"ttfa_ms":260.9,"ttft_ms":263.3,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":79.84,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:30:28Z","dirty":false,"frame_cap":2379,"frames":998,"input":"docs/eval/tts/medium_en.txt","load_ms":115.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"c1ee57a871110bdbd7d5ab54b236ed443798f61d3f4b759af31fb11b57c557b1","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":5625.7,"peak_mlx_mb":4286.5,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.5324,"seed":1,"steps":0,"stream_frame_ms_p50":41.38,"stream_frame_ms_p90":45.86,"streaming":true,"tag":"K90-6bit-medium-s1-preset-streaming","text_tokens":222,"top_process":"17,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":42509.3,"ttfa_ms":371,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":79.84,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:38:54Z","dirty":false,"frame_cap":2379,"frames":998,"input":"docs/eval/tts/medium_en.txt","load_ms":114.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"c1ee57a871110bdbd7d5ab54b236ed443798f61d3f4b759af31fb11b57c557b1","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":5709.4,"peak_mlx_mb":4286.5,"peak_mlx_mb_by_phase":{},"phases_ms":{},"pipeline":"tts","power":"AC Power","profile":"cacheLimit=2048MB","ram_gb":96,"rtf":0.5335,"seed":1,"steps":0,"stream_frame_ms_p50":41.37,"stream_frame_ms_p90":46.09,"streaming":true,"tag":"K90-6bit-medium-s1-preset-streaming","text_tokens":222,"top_process":"17,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":42596.6,"ttfa_ms":369.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.24,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:45:19Z","dirty":false,"frame_cap":2500,"frames":1903,"input":"docs/eval/tts/long_en.txt","load_ms":114.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"1d71e593aaf43c8c6af84cb5699876e9466fd567653ff6946b693a2f23e3abf3","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":8272.8,"peak_mlx_mb":3916.8,"peak_mlx_mb_by_phase":{"codec":3916.8,"decode":3535.6,"prefill":3226},"phases_ms":{"codec":482.8,"decode":82567.7,"post":2.1,"prefill":350.8,"text_tokenization":1.4,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5493,"seed":1,"step_ms_p50":39.01,"step_ms_p90":48.09,"steps":1903,"streaming":false,"tag":"K90-6bit-long-s1-preset-batch","text_tokens":444,"top_process":"18,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":83622.2,"truncated":false,"ttfa_ms":397.1,"ttft_ms":608.1,"voice":"neutral_female","warm":true,"warm_up":false}
+BENCH {"audio_s":152.24,"build":"Release","chip":"Apple M3 Max","commit":"ef79d6ac1","date":"2026-10-20T13:51:43Z","dirty":false,"frame_cap":2500,"frames":1903,"input":"docs/eval/tts/long_en.txt","load_ms":113.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-6bit","out_sha256":"1d71e593aaf43c8c6af84cb5699876e9466fd567653ff6946b693a2f23e3abf3","pack_sha256":"e8e2ff5a7a5b715e","pass":1,"peak_footprint_mb":8161.4,"peak_mlx_mb":3916.8,"peak_mlx_mb_by_phase":{"codec":3916.8,"decode":3535.7,"prefill":3226},"phases_ms":{"codec":478.6,"decode":82435.8,"post":2,"prefill":350.8,"text_tokenization":1.5,"voice_embedding_merge":0.1},"pipeline":"tts","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.5484,"seed":1,"step_ms_p50":39.02,"step_ms_p90":47.95,"steps":1903,"streaming":false,"tag":"K90-6bit-long-s1-preset-batch","text_tokens":444,"top_process":"17,7 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":83494.7,"truncated":false,"ttfa_ms":396.6,"ttft_ms":616.6,"voice":"neutral_female","warm":true,"warm_up":false}
+```
+
+Machine-check avant chaque processus de la file 2 (`.local-runs/k90/matrix/mc_*.log`) :
+
+```
+# k90/matrix/mc_K90-6bit-long-s1-preset-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,4 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-long-s1-preset-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 8,7 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-medium-s1-preset-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-medium-s1-preset-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 100,7 mediaanalysisd
+KO  indexation/sauvegarde en cours (100 %) : refaire plus tard
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-medium-s1-preset-streaming-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,1 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-medium-s1-preset-streaming-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 14,6 coresymbolicationd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-short-s1-preset-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 8,2 Browser
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-6bit-short-s1-preset-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,9 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-clone-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,9 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-clone-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,6 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-clone-streaming-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,3 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-clone-streaming-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,4 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-preset-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 12,4 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,5 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-preset-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,1 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,5 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-preset-streaming-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,4 com.apple.DriverKit-AppleBCMWLAN
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 63,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-long-s1-preset-streaming-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,1 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-clone-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-clone-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,3 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-clone-streaming-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,6 simdiskimaged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-clone-streaming-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,4 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-preset-batch-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-preset-batch-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,2 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-preset-streaming-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,2 coresymbolicationd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-medium-s1-preset-streaming-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 7,5 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s1-clone-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s1-clone-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s1-preset-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,0 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,3 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s1-preset-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 67,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s2-clone-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,4 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s2-clone-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,5 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s2-preset-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 11,0 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s2-preset-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,8 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 66,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s3-clone-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 11,0 launchd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s3-clone-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,0 opendirectoryd
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s3-preset-batch.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,6 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k90/matrix/mc_K90-8bit-short-s3-preset-streaming.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 6,3 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 64,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+```
+
+Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`, enregistrée, jamais un rejet) :
+
+```
+# k90/matrix/K90-6bit-long-s1-preset-batch-p1.samples.load (vide)
+# k90/matrix/K90-6bit-long-s1-preset-batch-p2.samples.load
+15:51:32 164,3 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      41)
+# k90/matrix/K90-6bit-medium-s1-preset-batch-p1.samples.load
+15:13:33  84,4 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x3/      96)
+15:13:37 162,1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/      96)
+# k90/matrix/K90-6bit-medium-s1-preset-batch-p2.samples.load (vide)
+# k90/matrix/K90-6bit-medium-s1-preset-streaming-p1.samples.load (vide)
+# k90/matrix/K90-6bit-medium-s1-preset-streaming-p2.samples.load
+15:37:45 134,3 /usr/libexec/PerfPowerServices (x1/      98)
+15:37:45  69,4 /usr/libexec/runningboardd (x1/      98)
+15:36:15 193,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/      98)
+15:37:18  50,5 /sbin/launchd (x1/      98)
+# k90/matrix/K90-6bit-short-s1-preset-batch.samples.load
+14:52:48  60,1 /sbin/launchd (x1/     122)
+# k90/matrix/K90-6bit-short-s1-preset-streaming.samples.load
+15:01:33 139,2 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     121)
+15:02:38 223,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     121)
+15:04:48  50,2 /sbin/launchd (x2/     121)
+# k90/matrix/K90-8bit-long-s1-clone-batch-p1.samples.load
+14:28:02 233,1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x8/      34)
+# k90/matrix/K90-8bit-long-s1-clone-batch-p2.samples.load (vide)
+# k90/matrix/K90-8bit-long-s1-clone-streaming-p1.samples.load (vide)
+# k90/matrix/K90-8bit-long-s1-clone-streaming-p2.samples.load
+14:46:33 161,3 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      35)
+# k90/matrix/K90-8bit-long-s1-preset-batch-p1.samples.load (vide)
+# k90/matrix/K90-8bit-long-s1-preset-batch-p2.samples.load (vide)
+# k90/matrix/K90-8bit-long-s1-preset-streaming-p1.samples.load
+14:15:36  66,6 /usr/libexec/textunderstandingd (x2/      39)
+14:15:38  62,1 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x7/      39)
+# k90/matrix/K90-8bit-long-s1-preset-streaming-p2.samples.load
+14:22:02  88,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      39)
+# k90/matrix/K90-8bit-medium-s1-clone-batch-p1.samples.load (vide)
+# k90/matrix/K90-8bit-medium-s1-clone-batch-p2.samples.load (vide)
+# k90/matrix/K90-8bit-medium-s1-clone-streaming-p1.samples.load (vide)
+# k90/matrix/K90-8bit-medium-s1-clone-streaming-p2.samples.load
+13:54:36  65,5 /System/Library/PrivateFrameworks/CoreEmbeddedSpeechRecognition.framework/Versions/A/XPCServices/com.apple.siri.embeddedspeech.xpc/Contents/MacOS/com.apple.siri.embeddedspeech (x2/      90)
+13:53:56  60,9 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      90)
+13:54:46 128,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x6/      90)
+13:53:56  68,8 /System/Library/PrivateFrameworks/SafariSafeBrowsing.framework/com.apple.Safari.SafeBrowsing.Service (x1/      90)
+13:55:18  59,1 /sbin/launchd (x1/      90)
+# k90/matrix/K90-8bit-medium-s1-preset-batch-p1.samples.load
+12:56:33 143,3 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      95)
+12:56:04 213,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x1/      95)
+12:58:18  50,6 /sbin/launchd (x1/      95)
+# k90/matrix/K90-8bit-medium-s1-preset-batch-p2.samples.load
+13:06:09 195,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x3/      95)
+# k90/matrix/K90-8bit-medium-s1-preset-streaming-p1.samples.load
+13:15:55  51,4 /usr/libexec/textunderstandingd (x1/      97)
+13:16:02  58,0 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x11/      97)
+13:15:14 212,4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/      97)
+13:13:10  95,6 /usr/libexec/mobileassetd (x1/      97)
+13:13:08  58,5 /System/Library/PrivateFrameworks/CoreSuggestions.framework/Versions/A/Support/suggestd (x1/      97)
+13:13:14  58,6 /System/Library/CoreServices/TimeMachine/backupd-helper (x2/      97)
+13:14:40  53,3 /usr/libexec/sysmond (x1/      97)
+13:13:08  70,0 /usr/libexec/spotlightknowledged.updater (x1/      97)
+13:13:10  71,6 /System/Library/PrivateFrameworks/CacheDelete.framework/deleted (x1/      97)
+# k90/matrix/K90-8bit-medium-s1-preset-streaming-p2.samples.load
+13:22:18  57,9 /sbin/launchd (x1/      97)
+# k90/matrix/K90-8bit-short-s1-clone-batch.samples.load
+11:26:35 108,5 /System/Applications/Mail.app/Contents/MacOS/Mail (x2/     119)
+# k90/matrix/K90-8bit-short-s1-clone-streaming.samples.load
+11:36:16 100,0 /System/Library/PrivateFrameworks/PhotoAnalysis.framework/Versions/A/Support/photoanalysisd (x75/     119)
+11:36:20 100,2 /System/Library/PrivateFrameworks/PhotoLibraryServices.framework/Versions/A/Support/photolibraryd (x5/     119)
+11:34:31  69,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/managedcorespotlightd (x1/     119)
+# k90/matrix/K90-8bit-short-s1-preset-batch.samples.load
+11:08:05  81,1 /System/Library/PrivateFrameworks/GeoServices.framework/Versions/A/XPCServices/com.apple.geod.xpc/Contents/MacOS/com.apple.geod (x1/     121)
+11:06:35  85,0 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     121)
+# k90/matrix/K90-8bit-short-s1-preset-streaming.samples.load
+11:16:36 100,4 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x31/     121)
+11:16:19  88,8 /System/Library/PrivateFrameworks/PhotoLibraryServices.framework/Versions/A/Support/photolibraryd (x1/     121)
+11:16:13 175,7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x3/     121)
+# k90/matrix/K90-8bit-short-s2-clone-batch.samples.load
+12:02:45 146,4 /usr/libexec/PerfPowerServices (x1/     119)
+12:05:08 108,3 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x3/     119)
+# k90/matrix/K90-8bit-short-s2-clone-streaming.samples.load
+12:13:25 106,3 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x3/     119)
+12:11:34 159,6 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     119)
+12:13:11 144,0 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x1/     119)
+# k90/matrix/K90-8bit-short-s2-preset-batch.samples.load
+11:44:39 169,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/     119)
+11:46:18  55,9 /sbin/launchd (x1/     119)
+# k90/matrix/K90-8bit-short-s2-preset-streaming.samples.load
+11:53:21  53,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     119)
+11:54:53 152,1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     119)
+11:53:29  53,6 /System/Library/ExtensionKit/Extensions/TGOnDeviceInferenceProviderService.appex/Contents/MacOS/TGOnDeviceInferenceProviderService (x1/     119)
+# k90/matrix/K90-8bit-short-s3-clone-batch.samples.load
+12:41:33 154,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     118)
+12:40:00 173,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     118)
+12:39:18  56,1 /sbin/launchd (x2/     118)
+# k90/matrix/K90-8bit-short-s3-clone-streaming.samples.load
+12:50:13 107,0 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/     118)
+12:49:48  53,9 /sbin/launchd (x2/     118)
+# k90/matrix/K90-8bit-short-s3-preset-batch.samples.load
+12:22:43 118,1 /System/Library/Frameworks/Contacts.framework/Support/contactsd (x2/     120)
+12:22:43 114,7 /System/Applications/Phone.app/Contents/MacOS/Phone (x2/     120)
+12:22:41 120,7 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/     120)
+12:22:35  83,4 /System/Library/PrivateFrameworks/SafariSafeBrowsing.framework/com.apple.Safari.SafeBrowsing.Service (x1/     120)
+12:22:50  96,1 /usr/libexec/mobileassetd (x3/     120)
+12:22:50  78,0 /System/Library/CoreServices/TimeMachine/backupd-helper (x3/     120)
+12:22:47  82,7 /System/Library/PrivateFrameworks/CacheDelete.framework/deleted (x1/     120)
+# k90/matrix/K90-8bit-short-s3-preset-streaming.samples.load
+12:31:37 103,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     120)
+12:32:47 139,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     120)
+```

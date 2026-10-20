@@ -366,3 +366,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   empaqueté) ; convertir une entrée dans `module.weight.dtype` la tronque sans erreur. Ici l'échelle Ada valait 0, le
   décodeur n'émettait que des pads au-delà de quelques secondes, et le clip court passait : la qualité se juge sur
   C-moyen, pas sur un clip de 5 s. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-91 ».
+- 2026-10-20 — **K-90 : le pack TTS 8 bits va plus vite que le 6 bits (− 7,3 % par pas) et couvre autant** : 35,3 contre 38,2 ms/pas sur le texte court, pic MLX + 0,9 Go. Couverture ASR 0,909 / 0,953 / 0,942 contre 0,891 / 0,953 / 0,953 ; long FR 0,870 contre 0,779.
+  - Leçon : plus de bits n'est pas plus lent sur ce GPU. Le noyau 8 bits rattrape la bande passante en plus, et il est plus rapide que le 6 bits, sans doute parce que les valeurs 6 bits chevauchent les mots de 32 bits (hypothèse non mesurée).
+  - Leçon : une clause de couverture absolue (« ≥ 99 % ») se vérifie d'abord sur le bf16. Ici il plafonne à 0,91-0,95 avec le juge ASR : la clause se fixe par rapport à une référence mesurée (ASK-35, ASK-40).
+  - PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-90 ».

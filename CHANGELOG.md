@@ -147,6 +147,9 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **K-90 — 8-bit TTS pack `tts-4b-8bit`** (`VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit`, 4.42 GB, CC BY-NC 4.0):
+  LLM and flow-matching transformer in 8-bit, codec bf16, exported by `Scripts/export_tts_8bit.py`. It is 7 % faster per
+  step than the 6-bit pack for 0.9 GB more peak memory. It is downloadable once the repository is published; the default is unchanged.
 - **K-91 — Realtime 6-bit and 8-bit packs.** `realtime-4b-6bit` (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`,
   3.61 GB) and `realtime-4b-8bit` (`ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx`, 4.71 GB), voxmlx layout, pinned
   revisions; same word error rate as the 4-bit default on the medium English and French clips. The default is

@@ -665,6 +665,31 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 - **Fiches** : ⛔ K-68 (#618, `blocked` jusqu'à la réponse ; vérification : vérificateur `verified` au 3e passage,
   contradicteur `not verified` sur ce seul point).
 
+### ASK-40 — K-90 : comment juger la clause de couverture du pack TTS 8 bits ?
+
+- **Contexte** : la porte de K-90 (#631) demande une couverture ASR (outil K-33, 3 textes × 5 graines) « ≥ 99 % et
+  ≥ 6 bits − 0,5 pt ». Mesures du 2026-10-20 (`BENCHMARKS.md` §« 2026-10-20 — K-90 », même file pour les trois packs) :
+
+  | Texte | 8 bits | 6 bits | bf16 (graine 1) |
+  |---|---|---|---|
+  | court | 0,909 | 0,891 | 0,909 |
+  | moyen | 0,953 | 0,953 | 0,952 |
+  | long EN | 0,942 | 0,953 | 0,931 |
+  | long FR | 0,870 (3 graines) | 0,779 (graine 1) | 0,732 |
+
+- **Ce qui a été constaté** :
+  - « ≥ 99 % » n'est atteint par aucun pack, bf16 compris : le juge ASR plafonne à 0,91-0,95 sur ces textes.
+  - « ≥ 6 bits − 0,5 pt » est tenu sur le court et le moyen, manqué sur le long EN (− 1,1 pt), où le 8 bits dépasse pourtant le bf16.
+  - En moyenne pondérée par les mots, 94,48 % contre 95,19 % ; en moyenne par texte, 93,47 contre 93,24.
+  - Vitesse : 8 bits 7,3 % plus rapide par pas que le 6 bits, pic + 0,9 Go.
+- **Question** : quelle lecture de la clause tranche K-90 ?
+- **Options** :
+  - **A)** « ≥ 99 % » retiré (hors d'atteinte du bf16) ; « ≥ 6 bits − 0,5 pt » jugé sur la moyenne des textes (tenue, + 0,2 pt). K-90 passe à l'écoute et à la carte.
+  - **B)** « ≥ 99 % » remplacé par « ≥ bf16 − 0,5 pt » par texte (tenu sur les quatre textes), en gardant la clause 6 bits par texte. Le long EN échoue : 10 graines sur le long EN avant de conclure.
+  - **C)** Lecture à la lettre : la porte échoue, le pack n'est ni enregistré ni publié ; l'entrée `tts-4b-8bit` est retirée et la fiche est « retirée ».
+- **Proposé** : A. Même question de référence qu'ASK-35, à trancher de la même façon.
+- **Fiches** : ⛔ K-90 (#631, `blocked` jusqu'à la réponse, l'écoute et la relecture de la carte) ; K-79 et K-80 en dépendent.
+
 ---
 
 ## Réponses
@@ -713,6 +738,7 @@ réponse datée ici.
 | ASK-37 | | | |
 | ASK-38 | | | |
 | ASK-39 | | | |
+| ASK-40 | | | |
 
 ### Dérogations
 
@@ -1363,3 +1389,14 @@ Décisions du planificateur du 2026-10-03 :
   lève `loadingFailed` (forme) et non l'erreur dédiée ; `findRealtimeModelPath` ignore la révision épinglée ;
   message « loaded without error » des tests trompeur pour une erreur d'un autre type ; aucun journal du build
   Release gardé (correctif prouvé par le comportement).
+
+- **K-90 (#631), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; `blocked`) :
+  - (1) Mesures en B seul, sans binaire A : aucun pack 8 bits n'existait avant. La référence est le 6 bits mesuré le même jour, dans la même file, sur un sous-ensemble : court graine 1, moyen et long `neutral_female`, batch et streaming (sans le streaming long). Le 6 bits de K-35 n'est pas comparable : des fiches appliquées depuis ont baissé ses TTFT et ses pics.
+  - (2) Matrice réduite de K-35 (Vincent, 2026-10-06), mêmes réglages qu'en K-35. Moyen et long : un processus par passe, A/A par `aa.py`. Long : sans amorçage ni repos. Streaming moyen et long : `--cache-limit-mb 2048`.
+  - (3) File 1 (qualité) sans repos ni machine-check : elle n'est pas chronométrée, et ses champs de temps ne servent pas.
+  - (4) Le 6 bits n'a qu'une graine sur le long FR (la porte n'en demande qu'au 8 bits), et le bf16 une seule graine partout (paires d'écoute).
+  - (5) Entrée de registre `tts-4b-8bit` ajoutée avant la publication, révision `nil` : la fiche demande l'entrée à l'étape 4. Tant que le dépôt n'est pas envoyé, ce modèle ne se télécharge pas ; seul le cache local le fournit.
+  - (6) Une ligne `KO  indexation/sauvegarde` avant `K90-6bit-medium-s1-preset-batch-p2`, tolérée (2026-10-05). `photoanalysisd` à 100 % sur 75/119 échantillons de `K90-8bit-short-s1-clone-streaming` : A/A 0,56 %, valeurs égales aux graines 2 et 3.
+  - (7) Binaire construit à `127bc333`, lignes de la file 2 marquées `ef79d6ac1` (HEAD à l'exécution) : seuls des documents ont changé entre les deux.
+  - (8) Tags `K90RT-<pack>` partagés par les graines et les textes de la file 1 (les champs `seed` et `text` les distinguent) ; tags uniques par cellule en file 2.
+  - (9) `load_ms` ≈ 0,11 s : chargement paresseux, pas une mesure (suite de K-91).
