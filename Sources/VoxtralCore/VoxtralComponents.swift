@@ -133,24 +133,6 @@ class TekkenTokenizer {
         self.modelPath = modelPath
     }
 
-    private func loadTokenizerData(progress: TokenizerProgressCallback? = nil) {
-        if let modelPath = modelPath {
-            loadTekkenTokenizerFromFile(modelPath: modelPath, progress: progress)
-        } else {
-            loadDemoTokenizerData()
-        }
-    }
-
-    /// Non-throwing load kept for the deprecated `init`: on failure it falls back to the demo tokenizer.
-    func loadTekkenTokenizerFromFile(modelPath: String, progress: TokenizerProgressCallback? = nil) {
-        do {
-            try loadTekkenStrict(modelPath: modelPath, progress: progress)
-        } catch {
-            VoxtralDebug.log("Cannot load \(modelPath)/tekken.json (\(error)), using demo tokenizer")
-            loadDemoTokenizerData()
-        }
-    }
-
     /// Loads the vocabulary from `tekken.cache` or `tekken.json`, throwing on an unreadable file.
     func loadTekkenStrict(modelPath: String, progress: TokenizerProgressCallback? = nil) throws {
         // Reset tokenizer state before loading new data
