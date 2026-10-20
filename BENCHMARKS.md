@@ -7907,7 +7907,7 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 12:32:47 139,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     120)
 ```
 
-## 2026-10-20 — K-89 : phase `encode` de l'encodeur MLX, CI Release des trois exécutables, tests de l'instrument — faite
+## 2026-10-20 — K-89 : phase `encode` de l'encodeur MLX, CI Release des trois exécutables, tests de l'instrument — validée
 
 **Protocole.** A = commit parent `40f8186a` (worktree `.local-runs/k89/wtA`, binaire Release construit et lancé depuis
 lui) ; B = `81209522` (`fix(K-89)` `5d48fe74` : dans `generateStream`, `mergeInputEmbeddings` sous la phase « Audio
