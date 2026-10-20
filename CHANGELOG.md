@@ -61,7 +61,8 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 - **K-87 — `VoxtralCLI transcribe` and `chat` honour `-b auto`** (it was silently run as `mlx`); an unknown backend is
   refused; `transcribe` prints the `out_sha256` digest used by `bench`. A Realtime `config.json` that cannot be read
   (invalid JSON, or the mlx layout with a field missing) now fails naming the file instead of being replaced by
-  `params.json`. The `.auto` fallback to the MLX encoder (Core ML encoder unavailable) is always logged at notice level.
+  `params.json`. The `.auto` fallback to the MLX encoder (Core ML encoder unavailable, logged at notice level since
+  K-25) is now covered by a test.
   `profile run --output` accepts a `.json` path and creates missing folders.
 - **K-88 — stricter loading and downloads.** A pack whose weights include a key the model does not have is refused
   with that key named (the 15 registry packs on disk, out of 16, load unchanged; `small-24b` bf16 was not tested). A fresh download that lacks its weights,

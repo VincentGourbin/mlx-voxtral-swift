@@ -1491,3 +1491,10 @@ Décisions du planificateur du 2026-10-03 :
     aucun test) ; `--output` : un dossier existant nommé `*.json` serait pris pour un fichier (CLI seulement) ;
     `sandbox-exec` `(allow default)` laisse passer les appels XPC : un démon pourrait en théorie sortir pour le CLI ;
     sur ce chemin, l'encodeur du cache est lu sans aucun appel (`VoxtralCoreMLEncoder.swift:452-456`).
+  - (8) Contradicteur (2026-10-20) : l'annonce du repli existait depuis K-25 (`c28a4450`) ; K-87 la rend testable
+    (CHANGELOG corrigé). Plus large que la porte : tout `config.json` Realtime qui n'est pas un objet JSON (vide,
+    tableau) lève désormais même avec un `params.json` ; une erreur de lecture du fichier reste une `CocoaError`. Reste
+    ouvert : un `"decoder"` qui n'est pas un objet n'est pas reconnu comme mlx (repli silencieux sur `params.json`) ;
+    message « Mistral params » pour un `config.json` transformers sans `params.json`. Le CLI refuse un backend inconnu
+    (avant : `mlx`) ; `bench` et `eval` ne mettent pas la valeur en minuscules (antérieur). Le rouge de `profile` à A
+    vient aussi du sens nouveau de `--output` (dérogation 4). Suites : messages et cas `decoder` non objet.
