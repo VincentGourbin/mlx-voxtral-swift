@@ -7906,3 +7906,196 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 12:31:37 103,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/     120)
 12:32:47 139,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     120)
 ```
+
+## 2026-10-20 — K-89 : phase `encode` de l'encodeur MLX, CI Release des trois exécutables, tests de l'instrument — validée
+
+**Protocole.** A = commit parent `40f8186a` (worktree `.local-runs/k89/wtA`, binaire Release construit et lancé depuis
+lui) ; B = `81209522` (`fix(K-89)` `5d48fe74` : dans `generateStream`, `mergeInputEmbeddings` sous la phase « Audio
+Encoding (MLX) », catégorie `.audioEncode`, seulement si `inputFeatures != nil` ; aucun changement de calcul ; plus
+`test(K-89)` : tests de l'instrument), binaire Release du dépôt principal, aucun commit pendant la file ; lignes
+`"dirty":false`. Construits avec `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift 0.31.6@0bb916c, mlx-swift-lm
+main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go. File `.local-runs/queue-k89.sh`
+(16:09 → 16:41) : builds Release B (VoxtralCLI, VoxtralApp, VoxtralTTSStreamingDemo : `** BUILD SUCCEEDED **` × 3) et A ;
+puis A/B/B/A `bench stt --model mini-3b-8bit --backend mlx`, C-moyen EN (`docs/eval/clips/c_moyen_en.wav`),
+`--passes 1 --warmup 1 --cooldown 120`, un processus par passe, tags `K89-A` / `K89-B` ; avant chaque passe
+`quiet.sh wait` (machine-check, refroidissement 120 s), pendant la passe `quiet.sh sample`. Toutes les passes « ok
+QUIET » à la première tentative, toutes sur secteur (`"power":"AC Power"`).
+
+**Machine.** Une ligne `KO  indexation/sauvegarde en cours (141 %)` avant B-p2 (`corespotlightd`), tolérée par la
+décision de Vincent du 2026-10-05 ; aucune autre ligne `KO`. `spotlightknowledged` à ≈ 99 % sur tous les échantillons
+des quatre passes, `knowledgeconstructiond` sur 63 à 65 échantillons sur 68 de B-p2 et A-p2 : charge CPU, la même des
+deux côtés ; A/A 0,5 %.
+
+**Résultats.**
+
+| Passe | `step_ms_p50` | `ttft_ms` | `phases_ms.encode` | audio + encode + prefill | ÷ `ttft_ms` | `decode` | `out_sha256` |
+|---|---|---|---|---|---|---|---|
+| A-p1 | 17,19 | 3 084,9 | absente | 1 726,9 | 0,560 | 8 609,9 | `fcec405c…` |
+| B-p1 | 17,11 | 3 085,0 | 1 356,8 | 3 083,8 | 0,9996 | 7 225,3 | `fcec405c…` |
+| B-p2 | 17,18 | 3 087,5 | 1 359,2 | 3 086,3 | 0,9996 | 7 252,2 | `fcec405c…` |
+| A-p2 | 17,10 | 3 082,7 | absente | 1 725,2 | 0,560 | 8 573,0 | `fcec405c…` |
+
+- Porte « `phases_ms.encode` présent, `audio + encode + prefill` = `ttft_ms` ± 5 % » : tenue (écart 0,04 %).
+- `step_ms_p50` : A 17,19 / 17,10, B 17,11 / 17,18, écart des moyennes − 0,0 % (A/A 0,5 %, B/B 0,4 %) : inchangé
+  contre le A du jour. Contre `BASE-mini-3b-8bit-mlx-c_moyen_en` (21,24 / 21,32, K-96), A et B sont tous deux à
+  − 19 % : les fiches appliquées depuis (K-40 et suivantes) ont accéléré le STT ; la base de K-96 n'est plus la
+  référence du jour (dérogation 1). `out_sha256` identique aux quatre passes et à la BASE (`fcec405c…`).
+- Le temps de l'encodeur passe de `decode` à `encode` : `decode` A − B ≈ 1 353 ms ≈ `encode` ; `total_ms` et
+  `ttft_ms` inchangés. Pic MLX de la phase `encode` 4 995,6 / 5 032,2 Mo ; pic total inchangé (5 552,3 Mo).
+
+**Lignes `BENCH`.**
+```
+BENCH {"backend":"mlx","build":"Release","chars":2204,"chip":"Apple M3 Max","commit":"40f8186a5","date":"2026-10-20T14:19:38Z","dirty":false,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"language":"auto","load_ms":124.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b-8bit","out_sha256":"fcec405c171930fdd59467660fac48129f5a1694e91710bca93eacc7929f4cde","pass":1,"peak_footprint_mb":7209.6,"peak_mlx_mb":5552.3,"peak_mlx_mb_by_phase":{"decode":5505.3,"prefill":5505.3},"phases_ms":{"audio":17.7,"decode":8609.9,"post":0.1,"prefill":1709.2},"pipeline":"stt","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.0708,"step_ms_p50":17.19,"step_ms_p90":17.33,"steps":420,"tag":"K89-A","top_process":"99,5 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged","total_ms":10338.2,"truncated":false,"ttft_ms":3084.9,"warm":true}
+BENCH {"backend":"mlx","build":"Release","chars":2204,"chip":"Apple M3 Max","commit":"812095222","date":"2026-10-20T14:27:00Z","dirty":false,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"language":"auto","load_ms":124.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b-8bit","out_sha256":"fcec405c171930fdd59467660fac48129f5a1694e91710bca93eacc7929f4cde","pass":1,"peak_footprint_mb":7283.9,"peak_mlx_mb":5552.3,"peak_mlx_mb_by_phase":{"decode":5552.3,"encode":4995.6,"prefill":5552.3},"phases_ms":{"audio":17.8,"decode":7225.3,"encode":1356.8,"post":0.1,"prefill":1709.2},"pipeline":"stt","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.0706,"step_ms_p50":17.11,"step_ms_p90":17.27,"steps":420,"tag":"K89-B","top_process":"99,5 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged","total_ms":10310.4,"truncated":false,"ttft_ms":3085,"warm":true}
+BENCH {"backend":"mlx","build":"Release","chars":2204,"chip":"Apple M3 Max","commit":"812095222","date":"2026-10-20T14:34:21Z","dirty":false,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"language":"auto","load_ms":117.3,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b-8bit","out_sha256":"fcec405c171930fdd59467660fac48129f5a1694e91710bca93eacc7929f4cde","pass":1,"peak_footprint_mb":7301.4,"peak_mlx_mb":5552.3,"peak_mlx_mb_by_phase":{"decode":5552.3,"encode":5032.2,"prefill":5552.3},"phases_ms":{"audio":17.6,"decode":7252.2,"encode":1359.2,"post":0.1,"prefill":1709.5},"pipeline":"stt","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.0708,"step_ms_p50":17.18,"step_ms_p90":17.34,"steps":420,"tag":"K89-B","top_process":"98,7 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged","total_ms":10339.9,"truncated":false,"ttft_ms":3087.5,"warm":true}
+BENCH {"backend":"mlx","build":"Release","chars":2204,"chip":"Apple M3 Max","commit":"40f8186a5","date":"2026-10-20T14:41:43Z","dirty":false,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"language":"auto","load_ms":117.9,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"mini-3b-8bit","out_sha256":"fcec405c171930fdd59467660fac48129f5a1694e91710bca93eacc7929f4cde","pass":1,"peak_footprint_mb":7209.5,"peak_mlx_mb":5552.3,"peak_mlx_mb_by_phase":{"decode":5505.3,"prefill":5505.3},"phases_ms":{"audio":17.4,"decode":8573,"post":0.1,"prefill":1707.8},"pipeline":"stt","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.0705,"step_ms_p50":17.1,"step_ms_p90":17.26,"steps":420,"tag":"K89-A","top_process":"99,0 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged","total_ms":10299.5,"truncated":false,"ttft_ms":3082.7,"warm":true}
+```
+
+**Machine-check et échantillons.**
+```
+# k89/bench/mc_A-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 99,4 spotlightknowledged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 58,9 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k89/bench/mc_B-p1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 98,7 spotlightknowledged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 58,5 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k89/bench/mc_B-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 141,7 corespotlightd
+KO  indexation/sauvegarde en cours (141 %) : refaire plus tard
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 57,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k89/bench/mc_A-p2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 98,4 spotlightknowledged
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 57,7 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k89/bench/A-p1.samples.load
+16:18:19  52,8 /usr/libexec/textunderstandingd (x2/      69)
+16:18:26  64,2 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x9/      69)
+16:18:45 158,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x2/      69)
+16:19:37  99,6 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged (x69/      69)
+16:18:30  88,3 /usr/libexec/duetexpertd (x3/      69)
+# k89/bench/B-p1.samples.load
+16:26:34  94,8 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      68)
+16:25:58 142,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x4/      68)
+16:26:59  99,6 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged (x67/      68)
+16:25:18  54,5 /sbin/launchd (x1/      68)
+16:24:51  67,0 /usr/libexec/mobileassetd (x1/      68)
+# k89/bench/B-p2.samples.load
+16:34:13  57,7 /System/Library/PrivateFrameworks/IntelligencePlatformCore.framework/Versions/A/knowledgeconstructiond (x63/      68)
+16:34:21  64,6 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x4/      68)
+16:32:09  93,6 /usr/libexec/icloudmailagent (x1/      68)
+16:34:21  98,5 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged (x68/      68)
+16:33:45  93,0 /System/Library/CoreServices/osanalyticshelper (x3/      68)
+# k89/bench/A-p2.samples.load
+16:41:43  99,1 /System/Library/PrivateFrameworks/IntelligencePlatformCore.framework/Versions/A/knowledgeconstructiond (x65/      68)
+16:40:31  98,4 /usr/sbin/spindump (x2/      68)
+16:39:26  55,9 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x3/      68)
+16:41:34 162,5 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      68)
+16:41:43  99,4 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged (x68/      68)
+16:40:52 119,4 /Applications/Arc.app/Contents/Frameworks/ArcCore.framework/Helpers/Browser Helper (Renderer).app/Contents/MacOS/Browser Helper (Renderer) (x1/      68)
+```
+
+**CI (`.github/workflows/ci.yml`, commit `a3c3e6e1`).** `actions/checkout@v6` et `actions/upload-artifact@v6`
+(Node 24) ; plus de `|| true` : le journal complet va dans un fichier, un résumé `awk` garde les lignes `[K-` ; étape
+« Build executables (Release) » : VoxtralCLI, VoxtralApp, VoxtralTTSStreamingDemo, chacun vérifié par
+`grep '** BUILD SUCCEEDED **'` ; étape `Scripts/check-demo-ffmpeg.sh` ; étape « Warning count » : lignes
+`chemin:ligne:col: warning:` distinctes hors `/SourcePackages/checkouts/`, comparées à
+`.github/ci-warning-baseline.txt` (11, Xcode 26.6 du runner, run 39437754926 ; échec si hausse).
+- Vert : run 39443094814 (branche de travail, `a3c3e6e1`), toutes les étapes `success` : VoxtralCoreTests 641 tests,
+  56 sautés (50 gardés + 6 modèles non téléchargés), 0 échec ; VoxtralCLITests 4 tests ; `** BUILD SUCCEEDED **` × 3 ;
+  `check-demo-ffmpeg.sh` : 7 lignes `OK` ; warnings 11 = base.
+- Rouge prouvé (branche jetable `claude/k89-ci-probe`, supprimée ensuite) : run 39443132722 (`56298b84`, erreur de
+  compilation volontaire ajoutée à `Sources/VoxtralTTSStreamingDemo/FFmpeg.swift`) : `failure` à « Build and test »
+  (le schéma du package compile aussi la démo), étapes suivantes `skipped`. Run 39437754926 (base de warnings à 0) :
+  « Warning count » `failure` (`11 (baseline 0)`), toutes les autres étapes `success` : la porte des warnings rougit.
+  Run 39436588505 : échec de construction des tests (la CI, Xcode 26.6, n'importe pas une cible exécutable dans un
+  test, `unable to resolve module dependency: 'VoxtralTranscriptionTest'`) : d'où la cible `VoxtralBenchSupport`.
+
+**Tests de l'instrument.** `Sources/VoxtralBenchSupport/BenchIntervals.swift` (cible bibliothèque interne, pas un
+produit : `unionLength`, `exclusivePhaseMs`, `phaseKey` ; `BenchJSON` garde des enveloppes) et
+`VoxtralRealtimePipeline.padFractions(_:silent:streamingPad:)` (extrait, même calcul) ;
+`Tests/VoxtralCLITests/BenchInstrumentTests.swift` (4 tests : union d'intervalles chevauchants et imbriqués, somme des
+phases exclusives ≤ total de la passe, phases exclusives d'une passe Realtime, clés des phases profilées) et `Tests/VoxtralCoreTests/Realtime/PadFractionTests.swift`
+(2 tests : `lastPadFraction` et `streaming_pad_fraction` sur une séquence fixe, séquence vide → `nil`). Mutations (`.local-runs/k89/mutate.sh`, sur
+le code déplacé) : toutes rouges.
+```
+MUTATION union-nested : 1 assertion(s) failed ; ** TEST FAILED **
+MUTATION exclusive-inner : 4 assertion(s) failed ; ** TEST FAILED **
+MUTATION pad-silent : 1 assertion(s) failed ; ** TEST FAILED **
+MUTATION pad-streaming : 1 assertion(s) failed ; ** TEST FAILED **
+```
+Suite Debug (`-parallel-testing-enabled NO`) à `a3c3e6e1` : `Executed 641 tests, with 50 tests skipped and 0 failures
+(0 unexpected)` ; VoxtralCLITests 4 tests, 0 échec.
+
+**Tests gardés sur le Mac (`Scripts/run-guarded-tests.sh`, Debug, sans parallélisme).** File 1
+(`.local-runs/queue-k89b.sh`, dépôt principal à `a3c3e6e1`, 16:53 → 18:52) : les 19 gardes de régression ; file 2
+(`.local-runs/queue-k89c.sh`, worktree à `b1147ecc`, 18:54 → 19:54) : les gardes à voix, une fois le script doté de
+valeurs par défaut (`VOXTRAL_TTS_*_EMB` → `.local-runs/voices/clone_fr.safetensors`, `VOXTRAL_TTS_*_OUT` →
+`.local-runs/guarded/out`). Tests de passe/échec, aucun chronométrage. Lignes telles quelles :
+```
+GUARDED CANCEL (CancellationTests) : Executed 4 tests, with 0 failures (0 unexpected) in 18.637 (18.640) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED COREML (CoreMLEncoderPathTests) : Executed 3 tests, with 0 failures (0 unexpected) in 16.113 (16.115) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED CROSS_ACTOR (CrossActorWaveformTests) : Executed 1 test, with 0 failures (0 unexpected) in 93.888 (93.890) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED ENROLL_EXCLUSION (EnrollInferenceExclusionTests) : Executed 1 test, with 0 failures (0 unexpected) in 60.503 (60.505) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED ENROLL_REPRO (EnrollmentReproTests) : Executed 5 tests, with 0 failures (0 unexpected) in 4.515 (4.518) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED K8_PACK_DIR (QuantizedThirdPartyPackTests) : Executed 2 tests, with 0 failures (0 unexpected) in 7.699 (7.701) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED LONG_AUDIO (LongPromptKVCacheTests MaxTokensForDurationTests) : Executed 6 tests, with 0 failures (0 unexpected) in 388.034 (388.037) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED PARITY (STTMaskParityTests) : Executed 1 test, with 4 failures (0 unexpected) in 18.369 (18.370) seconds ; skipped 0 ; xcodebuild exit 65
+GUARDED RT_ORIGINAL_DIR (RealtimeOriginalRepoTests) : Executed 5 tests, with 0 failures (0 unexpected) in 0.765 (0.767) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_CARRIER (TTSWarmUpCarrierTrimTests) : Executed 1 test, with 1 test skipped and 0 failures (0 unexpected) in 0.792 (0.794) seconds ; skipped 1 ; xcodebuild exit 0
+GUARDED TTS_CARRIER_EARLY (TTSCarrierEarlyCutTests) : Executed 2 tests, with 2 failures (0 unexpected) in 0.355 (0.356) seconds ; skipped 0 ; xcodebuild exit 65
+GUARDED TTS_CLONE_OVERRUN (CloneOverrunTests) : Executed 2 tests, with 2 failures (0 unexpected) in 0.357 (0.359) seconds ; skipped 0 ; xcodebuild exit 65
+GUARDED TTS_CODEC_BANDED (CodecBandedAttentionTests) : Executed 6 tests, with 0 failures (0 unexpected) in 281.678 (281.681) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_PARITY (FlowMatchingTeacherForcedParityTests VoicePathParityTests) : Executed 3 tests, with 0 failures (0 unexpected) in 2357.195 (2357.197) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_REPRO (TTSBlindValidationTests TTSConsecutiveSynthesisReproTests TTSGenerateStabilityReproTests TTSReEnrollExperimentTests) : Executed 4 tests, with 4 tests skipped and 0 failures (0 unexpected) in 0.606 (0.610) seconds ; skipped 4 ; xcodebuild exit 0
+GUARDED TTS_STREAM (IncrementalCodecDecodeTests TTSStreamingCancellationTests TTSStreamingPrefixBoundaryTests TTSStreamingTruncationTests) : Executed 11 tests, with 2 failures (0 unexpected) in 3471.048 (3471.053) seconds ; skipped 0 ; xcodebuild exit 65
+GUARDED TTS_STREAM_FINAL (TTSStreamingFinalChunkTests) : Executed 3 tests, with 0 failures (0 unexpected) in 13.095 (13.097) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_STREAM_SEED (TTSStreamingSeedReproTests) : Executed 2 tests, with 1 test skipped and 0 failures (0 unexpected) in 120.081 (120.083) seconds ; skipped 1 ; xcodebuild exit 0
+GUARDED UNLOAD_FOOTPRINT (UnloadFootprintTests) : Executed 2 tests, with 0 failures (0 unexpected) in 22.508 (22.510) seconds ; skipped 0 ; xcodebuild exit 0
+# file 2 (voix par défaut)
+GUARDED TTS_CARRIER (TTSWarmUpCarrierTrimTests) : Executed 1 test, with 0 failures (0 unexpected) in 40.212 (40.214) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_CARRIER_EARLY (TTSCarrierEarlyCutTests) : Executed 2 tests, with 0 failures (0 unexpected) in 386.273 (386.275) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_CLONE_OVERRUN (CloneOverrunTests) : Executed 2 tests, with 0 failures (0 unexpected) in 1595.489 (1595.491) seconds ; skipped 0 ; xcodebuild exit 0
+GUARDED TTS_REPRO (TTSBlindValidationTests TTSConsecutiveSynthesisReproTests TTSGenerateStabilityReproTests TTSReEnrollExperimentTests) : Executed 4 tests, with 1 test skipped and 0 failures (0 unexpected) in 641.828 (641.831) seconds ; skipped 1 ; xcodebuild exit 0
+GUARDED TTS_STREAM_SEED (TTSStreamingSeedReproTests) : Executed 2 tests, with 0 failures (0 unexpected) in 277.926 (277.928) seconds ; skipped 0 ; xcodebuild exit 0
+```
+Bilan : 17 gardes sur 19 sans échec (52 tests, 1 sauté : `TTSReEnrollExperimentTests`, expérience qui demande un
+modèle, une référence et un dossier d'enrôlement). Deux gardes en échec, antérieurs à K-89 (aucun fichier TTS ni du
+calcul STT touché par K-89) :
+- **PARITY** (`STTMaskParityTests`) : L2 des logits 0,0107 / 0,0084 / 0,0173 > 1e-3 et transcription greedy de
+  C-moyen EN changée contre `.local-runs/k3_before`, référence figée par K-3 avant le calcul en bf16 de K-40 (ASK-38).
+  Référence périmée, pas une régression ; à régénérer quand ASK-38 sera tranchée (suite).
+- **TTS_STREAM** (`IncrementalCodecDecodeTests.testStreamingEqualsBatch`) : 9 tests sur 11 passent, la parité
+  flux = batch tient (|Δ|max 1,7e-6) ; l'assertion « aucun bloc reçu après `.ready` » échoue par intermittence
+  (court graine 3 deux fois, long graine 3 une fois sur deux). Course du test : le producteur fait `finish()` puis
+  `gate.end(…, .ready)` (`VoxtralTTSPipeline.swift:834-842`) pendant que le consommateur lit encore le dernier bloc
+  en tampon. Elle existe déjà à A (`40f8186a`) : court graine 3 × 5 par processus, ordre A/B/B/A ; le journal de
+  la 2ᵉ passe de chaque côté a écrasé la 1ʳᵉ (même nom) : A-p2 1 échec sur 5, B-p2 0 sur 5
+  (`.local-runs/k89/ready-A-23499.log`, `ready-B-23499.log`). Suite à planifier (lire `isReady` avant le bloc final, ou garder `.synthesizing`
+  jusqu'à la fin de la consommation).

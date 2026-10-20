@@ -1400,3 +1400,24 @@ Décisions du planificateur du 2026-10-03 :
   - (7) Binaire construit à `127bc333`, lignes de la file 2 marquées `ef79d6ac1` (HEAD à l'exécution) : seuls des documents ont changé entre les deux.
   - (8) Tags `K90RT-<pack>` partagés par les graines et les textes de la file 1 (les champs `seed` et `text` les distinguent) ; tags uniques par cellule en file 2.
   - (9) `load_ms` ≈ 0,11 s : chargement paresseux, pas une mesure (suite de K-91).
+- **K-89 (#630), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; `applied`) :
+  - (1) `step_ms_p50` jugé contre le A du jour (`40f8186a`, 17,19 / 17,10 ms), pas contre `BASE-mini-3b-8bit-mlx-c_moyen_en`
+    (21,24 / 21,32, K-96) : A et B sont à − 19 % de cette base depuis K-40 et les fiches suivantes. `out_sha256`
+    identique à la BASE.
+  - (2) « 40 tests gardés » : la CI du jour en saute 56, dont 50 gardés par variable (le script en couvre 19 gardes de
+    régression, 5 sondes en `--all`) et 6 modèles non téléchargés ; les sondes (`--all`) n'ont pas été lancées.
+  - (3) Rouge prouvé par une erreur de compilation, qui échoue à « Build and test » (le schéma du package compile la
+    démo) et non à l'étape Release ; la porte des warnings a aussi été vue rouge (base 0, run 39437754926).
+  - (4) Tests de l'instrument sur une cible bibliothèque interne `VoxtralBenchSupport` (pas un produit, aucune API
+    publique) : la CI ne sait pas importer la cible exécutable. Base de warnings prise sur le runner (Xcode 26.6 : 11),
+    pas sur le Mac (Xcode 27.1).
+  - (5) Branche jetable `claude/k89-ci-probe` poussée pour les preuves rouges, supprimée ensuite.
+  - (6) B mesuré à `81209522` ; `0cc9117c` et `a3c3e6e1` ensuite ne déplacent que l'arithmétique de la CLI et la CI ;
+    la phase `encode` n'a pas changé depuis `5d48fe74`. Suite Debug refaite à `a3c3e6e1` (641 tests, 0 échec).
+  - (7) Une ligne `KO  indexation/sauvegarde (141 %)` avant B-p2, tolérée (2026-10-05) ; `spotlightknowledged` ≈ 99 %
+    sur les quatre passes, A/A 0,5 %.
+  - (8) Tests gardés : PARITY en échec (référence `.local-runs/k3_before` d'avant K-40, à régénérer après ASK-38) et
+    TTS_STREAM (course de `.ready`, reproduite à A) ; gardes à voix relancées sur un worktree à `b1147ecc` une fois
+    le script corrigé. Deux suites à planifier.
+  - (9) Tag unique `K89-A` / `K89-B` par côté pour les deux passes (une passe par processus, `pass` = 1 dans chaque
+    ligne ; l'ordre se lit à `date`).

@@ -370,3 +370,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   - Leçon : plus de bits n'est pas plus lent sur ce GPU. Le noyau 8 bits rattrape la bande passante en plus, et il est plus rapide que le 6 bits, sans doute parce que les valeurs 6 bits chevauchent les mots de 32 bits (hypothèse non mesurée).
   - Leçon : une clause de couverture absolue (« ≥ 99 % ») se vérifie d'abord sur le bf16. Ici il plafonne à 0,91-0,95 avec le juge ASR : la clause se fixe par rapport à une référence mesurée (ASK-35, ASK-40).
   - PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-90 ».
+- 2026-10-20 — **K-89 : l'encodeur MLX a sa phase, la CI construit en Release et ne masque plus d'échec** : en
+  `.mlx`, `phases_ms.encode` (1 357 ms sur C-moyen EN) que `decode` comptait avant ; audio + encode + prefill =
+  `ttft_ms` à 0,04 %. Leçons : la CI (Xcode 26.6) n'importe pas une cible exécutable dans un test, l'arithmétique
+  testée vit dans une bibliothèque ; une base de mesure d'avant une fiche qui accélère (K-96 avant K-40) ne sert plus
+  de référence de non-régression, le A du jour la remplace ; les tests gardés se lancent par
+  `Scripts/run-guarded-tests.sh`, deux en échec à corriger (référence de K-3 périmée, course de `.ready` en streaming
+  TTS). PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-89 ».

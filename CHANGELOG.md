@@ -58,6 +58,10 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-89 — `VoxtralCLI bench stt --backend mlx` reports the audio encoder as `phases_ms.encode`** (and its peak in
+  `peak_mlx_mb_by_phase.encode`); before, its time was counted in `decode`. Same output, same speed; `ttft_ms` is now
+  `audio + encode + prefill` within 0.1 %. CI builds the three executables in Release, fails on any test failure and
+  on a rise of the compiler warning count.
 - **K-91 — a Realtime pack that does not match the model is refused** instead of loading with keys ignored.
 - **K-47 — Realtime transcription decodes ahead.** The next decoding step is queued on the GPU before the current
   token is read, one synchronization per step instead of two: realtime-4b-4bit, medium English clip, −12 % per step
