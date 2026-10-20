@@ -64,7 +64,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   `params.json`. The `.auto` fallback to the MLX encoder (Core ML encoder unavailable) is always logged at notice level.
   `profile run --output` accepts a `.json` path and creates missing folders.
 - **K-88 — stricter loading and downloads.** A pack whose weights include a key the model does not have is refused
-  with that key named (all 15 packs of the registries load unchanged). A fresh download that lacks its weights,
+  with that key named (the 15 registry packs on disk, out of 16, load unchanged; `small-24b` bf16 was not tested). A fresh download that lacks its weights,
   `tekken.json` or (TTS) its voices now fails at download time instead of at load time (all the registry packs pass). An `eos_token_id` given as a
   list in `generation_config.json` is read (first id) instead of failing. A voice-enrollment checkpoint resumes only
   the run it came from (same prepared reference, model and loss weights).

@@ -51,7 +51,7 @@ final class StrictKeysLoadingTests: XCTestCase {
     func testEveryPresentPackLoadsStrictly() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["VOXTRAL_ALL_PACKS"] == "1",
                           "Set VOXTRAL_ALL_PACKS=1 to load every pack on disk")
-        var loaded: [String] = [], failed: [String] = []
+        var loaded: [String] = [], failed: [String] = [], absent: [String] = []
         func attempt(_ id: String, _ load: () throws -> Void) {
             do {
                 try autoreleasepool { try load() }
@@ -64,18 +64,18 @@ final class StrictKeysLoadingTests: XCTestCase {
             Memory.clearCache()
         }
         for info in VoxtralModelRegistry.models {
-            guard let path = VoxtralModelDownloader.findModelPath(for: info) else { continue }
+            guard let path = VoxtralModelDownloader.findModelPath(for: info) else { absent.append(info.id); continue }
             attempt(info.id) { _ = try loadVoxtralStandardModel(modelPath: path.path) }
         }
         for info in VoxtralTTSRegistry.models {
-            guard let path = VoxtralModelDownloader.findTTSModelPath(for: info) else { continue }
+            guard let path = VoxtralModelDownloader.findTTSModelPath(for: info) else { absent.append(info.id); continue }
             attempt(info.id) { _ = try loadVoxtralTTSModel(from: path) }
         }
         for info in VoxtralRealtimeRegistry.models {
-            guard let path = VoxtralModelDownloader.findRealtimeModelPath(for: info) else { continue }
+            guard let path = VoxtralModelDownloader.findRealtimeModelPath(for: info) else { absent.append(info.id); continue }
             attempt(info.id) { _ = try loadVoxtralRealtimeModel(from: path) }
         }
-        print("[k88] STRICT LOAD \(loaded.count) packs ok, \(failed.count) failed: \(failed)")
+        print("[k88] STRICT LOAD \(loaded.count) packs ok, \(failed.count) failed: \(failed) ; not on disk: \(absent)")
         XCTAssertEqual(failed, [])
         XCTAssertGreaterThanOrEqual(loaded.count, 9, "the 9 packs of K-7 at least")
     }

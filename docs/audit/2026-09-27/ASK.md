@@ -1463,6 +1463,12 @@ Décisions du planificateur du 2026-10-03 :
     un ancien dossier `tts-4b-mlx` sans manifeste repart donc au téléchargement (fichiers de même taille sautés,
     rien de perdu), limite antérieure à K-88, en suite. `tts-4b-8bit` (non publié) : à l'envoi, `model.safetensors`
     seul ou avec un index cohérent (note ajoutée à la carte, K-90).
+  - (13) Contradicteur (2026-10-20) : 16 entrées de registre, 15 sur le disque ; `small-24b` (bf16) jamais chargé en
+    `verify: [.all]` (même format HF que `mini-3b`, qui passe) ; la garde `ALL_PACKS` journalise désormais les packs
+    absents. Un dossier refusé perd son manifeste : au téléchargement suivant, les fichiers de même taille sont
+    gardés sans contrôle SHA-256 (comportement d'avant K-6 pour un dossier sans manifeste). Un dépôt STT nu qui n'a que
+    `consolidated.safetensors` passe le contrôle de téléchargement puis échoue au chargement (le chargeur STT
+    l'ignore) : cas marginal, aucun pack du registre ; suite.
 - **K-87 (#628), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; `applied`) :
   - (1) Hors ligne : ni mode avion ni `networksetup` (le réseau du Mac de Vincent reste en service) ; le réseau est
     interdit au seul processus par `sandbox-exec -p '(version 1)(allow default)(deny network*)'`, preuve équivalente à
@@ -1480,3 +1486,8 @@ Décisions du planificateur du 2026-10-03 :
   - (6) Le message de repli passe par `VoxtralDebug.always` (`os.Logger` `notice`, sur stdout seulement si
     `VoxtralDebug.enabled`) : c'est le canal « hors `VoxtralDebug` » demandé (le journal unifié reçoit le message
     quel que soit `enabled`) ; `noticeObserver` interne pour le test.
+  - (7) Vérificateur (2026-10-20) : une 4ᵉ mutation (`rt-config-fallback`) écrite puis non lancée, équivalente (`load`
+    lève quand même) ; le test du repli observe `noticeObserver`, pas `os.Logger` (retirer `logger.notice` ne rougirait
+    aucun test) ; `--output` : un dossier existant nommé `*.json` serait pris pour un fichier (CLI seulement) ;
+    `sandbox-exec` `(allow default)` laisse passer les appels XPC : un démon pourrait en théorie sortir pour le CLI ;
+    sur ce chemin, l'encodeur du cache est lu sans aucun appel (`VoxtralCoreMLEncoder.swift:452-456`).
