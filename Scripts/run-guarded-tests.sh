@@ -47,6 +47,7 @@ GUARDS=(
   "TTS_STREAM_FINAL|1|regression|TTSStreamingFinalChunkTests"
   "TTS_STREAM_SEED|1|regression|TTSStreamingSeedReproTests"
   "UNLOAD_FOOTPRINT|1|regression|UnloadFootprintTests"
+  "ALL_PACKS|1|regression|StrictKeysLoadingTests"
   "TTS_CAMPAIGN|1|probe|TTSQuantizationCampaignTests"
   "TTS_COMPARE|1|probe|TTSEmbeddingComparisonTests"
   "TTS_DEFICIT|1|probe|TTSFundamentalDeficitProbeTests"

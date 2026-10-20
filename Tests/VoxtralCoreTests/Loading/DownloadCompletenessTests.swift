@@ -21,6 +21,8 @@ final class HubStubProtocol: URLProtocol {
     nonisolated(unsafe) static var files: [String: Data] = [:]
     /// Files whose tree entry advertises a wrong SHA-256 (`lfs.oid`)
     nonisolated(unsafe) static var corruptSHA: Set<String> = []
+    /// Paths requested since the last reset (K-88: which files and which revision each call site asks for)
+    nonisolated(unsafe) static var requested: [String] = []
 
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "huggingface.co" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -28,6 +30,7 @@ final class HubStubProtocol: URLProtocol {
 
     override func startLoading() {
         let path = request.url?.path ?? ""
+        Self.requested.append(path)
         let body: Data?
         if path.hasPrefix("/api/models/\(Self.repoId)/tree/") {
             let entries: [[String: Any]] = Self.files.keys.sorted().map { name in

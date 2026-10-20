@@ -189,6 +189,29 @@ public class VoxtralModelDownloader {
         guard isComplete(folder: folder, requiresVoices: requiresVoices) else {
             throw VoxtralError.loadingFailed("Download of \(repoId) is incomplete (\(folder.path)); run it again to resume")
         }
+        // Just after a download the manifest lists what was fetched, so it cannot see what the repo lacks (K-88)
+        let missing = missingModelFiles(folder, requiresVoices: requiresVoices)
+        guard missing.isEmpty else {
+            throw VoxtralError.loadingFailed("\(repoId) lacks \(missing.joined(separator: ", ")) (\(folder.path))")
+        }
+    }
+
+    /// What a model folder needs whatever its manifest says: its weights (every shard of the index, a single
+    /// `model.safetensors`, or Mistral's `consolidated.safetensors`), `tekken.json`, and a voice when `requiresVoices`
+    static func missingModelFiles(_ folder: URL, requiresVoices: Bool) -> [String] {
+        var missing: [String] = []
+        let shards = verifyShardedModel(at: folder)
+        if !shards.complete && fileSize(at: folder.appendingPathComponent("consolidated.safetensors")) == nil {
+            missing += shards.missing
+        }
+        if fileSize(at: folder.appendingPathComponent("tekken.json")) == nil { missing.append("tekken.json") }
+        if requiresVoices {
+            let voices = (try? FileManager.default.contentsOfDirectory(
+                atPath: folder.appendingPathComponent("voice_embedding").path))?
+                .filter { $0.hasSuffix(".safetensors") || $0.hasSuffix(".pt") } ?? []
+            if voices.isEmpty { missing.append("voice_embedding/*") }
+        }
+        return missing
     }
 
     private static func fraction(_ done: Int, _ total: Int) -> Double {
@@ -478,6 +501,7 @@ public class VoxtralModelDownloader {
             excluding: exclusions,
             progress: progress
         )
+        try requireComplete(modelUrl, repoId: repoId)
 
         progress?(1.0, "Download complete!")
         VoxtralDebug.log("Model available at: \(modelUrl.path)")
