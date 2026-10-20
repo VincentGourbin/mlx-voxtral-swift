@@ -2653,14 +2653,16 @@ Statistics:
   régénérer, course `.ready` du streaming TTS, base de warnings en ensemble, `commit` du binaire (K-93).
 
 ## K-88 — Chargeurs `verify: [.all]`, code mort retiré, tests manquants (suites de K-7, K-23, K-26, K-27) — 2026-10-20 — faite
-- Fait (commits `1fcbc2fa` `chore(K-88)`, `cea3fc2d` `fix(K-88)`, `e13afb46` et `989a77d6` `test(K-88)` ; commit
-  `docs(K-88)`) :
+- Fait (commits `1fcbc2fa` `chore(K-88)`, `cea3fc2d` et `06845723` `fix(K-88)`, `e13afb46` et `989a77d6` `test(K-88)` ;
+  commits `docs(K-88)`) :
   - `updateVerified` : `verify: [.all]`, une clé sans paramètre du modèle → `VoxtralError.loadingFailed` qui la nomme ;
   - code mort retiré : `loadWeights(_:strict:)` (190 lignes), `loadTokenizerData` et `loadTekkenTokenizerFromFile`
     (aucun appelant depuis K-31) ;
   - trouvé par les tests et corrigé : juste après un téléchargement, le manifeste ne liste que ce qui a été reçu ; un
     dépôt sans ses shards ou sans voix passait pour complet. `requireComplete` vérifie aussi la structure (poids,
-    `tekken.json`, voix) ; `downloadByRepoId` l'appelle aussi ;
+    `tekken.json`, voix ; poids = index complet, `model.safetensors`, `consolidated.safetensors` ou tous les
+    `model-<i>-of-<n>` sans index, forme de `tts-4b-mlx`) ; un dossier refusé perd son manifeste ; `downloadByRepoId`
+    l'appelle aussi ;
   - trouvé et corrigé : `eos_token_id` en liste (forme Hugging Face) faisait échouer le chargement du tokenizer depuis
     K-27 ; lu en id ou en liste (premier id gardé) ;
   - point de contrôle d'enrôlement : SHA-256 de la référence préparée, id du modèle (`loadedModelID`), poids des pertes.
@@ -2671,8 +2673,13 @@ Statistics:
   - `Téléchargement : download, resolveModel (repo nu), downloadTTSModel, downloadRealtimeModel testés (révision, fichiers, exclusions, complétude)`
   - `Quantification mal formée (4 formes) → erreur dans les 3 chargeurs ; EOS id / [id] / [a, b] sur les 5 packs STT ; point de contrôle d'une autre référence, d'un autre modèle, d'autres poids → EnrollmentCheckpointError`
   - `SILENT stdout 0 bytes` (chargement + synthèse tts-4b-4bit, chargement + transcription mini-3b-4bit)
-  - `Mutations : 12/13 rouges` ; la 13ᵉ vise une garde injoignable depuis un `config.json` (dérogation 3)
+  - `STRUCTURE 15 packs on disk pass` (chaque pack du registre présent passe le contrôle de complétude d'un téléchargement neuf)
+  - `Mutations : 17/18 rouges` ; la 18ᵉ vise une garde injoignable depuis un `config.json` (dérogation 3)
   - `Suite : Executed 658 tests, with 52 tests skipped and 0 failures (0 unexpected)` ; VoxtralCLITests 4/4
 - Lecture : aucune mesure de temps (fiche qualitative, Mac sur batterie une partie du temps). Les conversions
   `fatalError` → `throw` de K-27 propres aux chargeurs étaient dans `loadWeights(_:strict:)`, retiré ; celles qui restent
   (quantification, configuration) sont testées. Écarts : ASK.md §Dérogations, K-88.
+  Vérificateur : `refuted` (2026-10-20) : le contrôle de structure de `cea3fc2d` refusait un téléchargement neuf de
+  `tts-4b-mlx` (pack TTS recommandé : deux shards sans index), et un dossier refusé gardait son manifeste. Corrigé
+  (`06845723`), test sur les 15 packs du disque et test « shards sans index », mutations 5 rouges de plus ; garde
+  `ALL_PACKS` et `ENROLL_REPRO` relancées sur le code commité (vertes).

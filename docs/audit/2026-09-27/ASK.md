@@ -1451,3 +1451,10 @@ Décisions du planificateur du 2026-10-03 :
   - (8) `lastTokenCount` rendu avec le résultat (champ additif, cité dans la source de la fiche, hors porte) : non fait,
     en suite.
   - (9) Famille héritée `internal` (`K-31-liste-api.md` §E) : gardée, le modèle vivant la référence (hors porte).
+  - (10) Clause « `eos_token_id` en liste pour chaque pack du registre présent » : les 5 packs STT ; les packs TTS et
+    Realtime n'ont pas de `generation_config.json` (sans objet). D'une liste, seul le premier id est gardé comme fin de
+    génération (le décodeur STT n'a qu'un id d'arrêt) ; les suivants ne sont pas des arrêts.
+  - (11) Remarques du vérificateur appliquées : chaque champ du point de contrôle (référence, modèle, poids) muté
+    séparément, chaque cas sur un point de contrôle neuf ; « rouge avant » de la fixture clé en trop rejoué avec l'état
+    d'avant (`verify: [.allModelKeysSet, .shapeMismatch]` sans la garde) : rouge. `downloadRealtimeModel` sans liste de
+    fichiers (exclusion de `consolidated*`) : couvert par `ConsolidatedExclusionTests` (K-24), non muté ici.
