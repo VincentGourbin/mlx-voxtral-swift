@@ -1451,10 +1451,32 @@ Décisions du planificateur du 2026-10-03 :
   - (8) `lastTokenCount` rendu avec le résultat (champ additif, cité dans la source de la fiche, hors porte) : non fait,
     en suite.
   - (9) Famille héritée `internal` (`K-31-liste-api.md` §E) : gardée, le modèle vivant la référence (hors porte).
-  - (10) Clause « `eos_token_id` en liste pour chaque pack du registre présent » : les 5 packs STT ; les packs TTS et
-    Realtime n'ont pas de `generation_config.json` (sans objet). D'une liste, seul le premier id est gardé comme fin de
+  - (10) Clause « `eos_token_id` en liste pour chaque pack du registre présent » : les 5 packs STT ; aucun pack TTS ou
+    Realtime téléchargé n'a de `generation_config.json` (celui du dépôt Mistral Realtime n'est pas dans sa liste
+    `files`) : sans objet. D'une liste, seul le premier id est gardé comme fin de
     génération (le décodeur STT n'a qu'un id d'arrêt) ; les suivants ne sont pas des arrêts.
   - (11) Remarques du vérificateur appliquées : chaque champ du point de contrôle (référence, modèle, poids) muté
     séparément, chaque cas sur un point de contrôle neuf ; « rouge avant » de la fixture clé en trop rejoué avec l'état
     d'avant (`verify: [.allModelKeysSet, .shapeMismatch]` sans la garde) : rouge. `downloadRealtimeModel` sans liste de
     fichiers (exclusion de `consolidated*`) : couvert par `ConsolidatedExclusionTests` (K-24), non muté ici.
+  - (12) Second vérificateur (2026-10-20) : `isComplete` sans manifeste (dossiers d'avant K-6) exige toujours un index ;
+    un ancien dossier `tts-4b-mlx` sans manifeste repart donc au téléchargement (fichiers de même taille sautés,
+    rien de perdu), limite antérieure à K-88, en suite. `tts-4b-8bit` (non publié) : à l'envoi, `model.safetensors`
+    seul ou avec un index cohérent (note ajoutée à la carte, K-90).
+- **K-87 (#628), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; `applied`) :
+  - (1) Hors ligne : ni mode avion ni `networksetup` (le réseau du Mac de Vincent reste en service) ; le réseau est
+    interdit au seul processus par `sandbox-exec -p '(version 1)(allow default)(deny network*)'`, preuve équivalente à
+    « 0 octet réseau » (toute tentative échoue ; sonde `curl` dans le même bac : `Could not resolve host`). `nettop`
+    non lancé.
+  - (2) « Encodeur absent du cache » : prouvé par le test unitaire du choix (`EncoderFallbackTests`), pas en vrai : le
+    cache Core ML du Mac n'a pas été déplacé.
+  - (3) `transcribe` imprime `out_sha256` (ligne de sortie ajoutée au CLI) pour comparer à `bench` ; C-court EN, langue
+    `en` des deux côtés.
+  - (4) `profile run --output` : l'option désignait un dossier ; elle accepte aussi un chemin `.json` (forme de la
+    porte), additif.
+  - (5) « Rouge avant » : `profile` et `-b auto` par le binaire A (worktree au parent `b2c2a6d1`) ; tests unitaires
+    par mutation (3/3 rouges). Codes de sortie de la file faussés par le script (`$(date)` lu avant `$?`) : résultats
+    lus dans les sorties (`.local-runs/k87/*.txt`).
+  - (6) Le message de repli passe par `VoxtralDebug.always` (`os.Logger` `notice`, sur stdout seulement si
+    `VoxtralDebug.enabled`) : c'est le canal « hors `VoxtralDebug` » demandé (le journal unifié reçoit le message
+    quel que soit `enabled`) ; `noticeObserver` interne pour le test.

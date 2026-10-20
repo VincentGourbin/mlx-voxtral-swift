@@ -58,6 +58,11 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-87 — `VoxtralCLI transcribe` and `chat` honour `-b auto`** (it was silently run as `mlx`); an unknown backend is
+  refused; `transcribe` prints the `out_sha256` digest used by `bench`. A Realtime `config.json` that cannot be read
+  (invalid JSON, or the mlx layout with a field missing) now fails naming the file instead of being replaced by
+  `params.json`. The `.auto` fallback to the MLX encoder (Core ML encoder unavailable) is always logged at notice level.
+  `profile run --output` accepts a `.json` path and creates missing folders.
 - **K-88 — stricter loading and downloads.** A pack whose weights include a key the model does not have is refused
   with that key named (all 15 packs of the registries load unchanged). A fresh download that lacks its weights,
   `tekken.json` or (TTS) its voices now fails at download time instead of at load time (all the registry packs pass). An `eos_token_id` given as a

@@ -382,3 +382,7 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   ne prouve que ce qui a été reçu, pas ce que le dépôt devait contenir (la complétude vérifie aussi la structure) ; un
   champ JSON que Hugging Face écrit en id ou en liste (`eos_token_id`) se décode sous les deux formes ; une garde
   défensive qu'aucune entrée n'atteint se voit à la mutation qui survit. PLAN.md §7.
+- 2026-10-20 — **K-87 : `-b auto` du CLI était ignoré, il est maintenant le défaut public réellement exercé** :
+  `transcribe` et `chat` passaient toute valeur autre que `hybrid` en `.mlx`. Hors ligne en `.auto` prouvé sans couper
+  le réseau du Mac : `sandbox-exec` interdit le réseau au seul processus (encodeur Core ML du cache, même texte). Leçon :
+  une option CLI analysée par un ternaire avale les valeurs inconnues ; passer par l'analyseur commun qui refuse. PLAN.md §7.
