@@ -7907,7 +7907,7 @@ Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`
 12:32:47 139,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/     120)
 ```
 
-## 2026-10-20 — K-89 : phase `encode` de l'encodeur MLX, CI Release des trois exécutables, tests de l'instrument — validée
+## 2026-10-20 — K-89 : phase `encode` de l'encodeur MLX, CI Release des trois exécutables, tests de l'instrument — faite
 
 **Protocole.** A = commit parent `40f8186a` (worktree `.local-runs/k89/wtA`, binaire Release construit et lancé depuis
 lui) ; B = `81209522` (`fix(K-89)` `5d48fe74` : dans `generateStream`, `mergeInputEmbeddings` sous la phase « Audio
@@ -8089,8 +8089,9 @@ Bilan : 17 gardes sur 19 sans échec (52 tests, 1 sauté : `TTSReEnrollExperimen
 modèle, une référence et un dossier d'enrôlement). Deux gardes en échec, antérieurs à K-89 (aucun fichier TTS ni du
 calcul STT touché par K-89) :
 - **PARITY** (`STTMaskParityTests`) : L2 des logits 0,0107 / 0,0084 / 0,0173 > 1e-3 et transcription greedy de
-  C-moyen EN changée contre `.local-runs/k3_before`, référence figée par K-3 avant le calcul en bf16 de K-40 (ASK-38).
-  Référence périmée, pas une régression ; à régénérer quand ASK-38 sera tranchée (suite).
+  C-moyen EN changée contre `.local-runs/k3_before` (K-3, 2026-10-01, `docs/examples/fluxforge_long_en_6bit.wav`). Antérieur à
+  K-89 par le diff (profilage seul, aucun calcul STT touché) ; la cause la plus probable est le calcul en bf16 de K-40
+  (ASK-38), non prouvée (garde non relancée à A ni avant K-40). À régénérer quand ASK-38 sera tranchée (suite).
 - **TTS_STREAM** (`IncrementalCodecDecodeTests.testStreamingEqualsBatch`) : 9 tests sur 11 passent, la parité
   flux = batch tient (|Δ|max 1,7e-6) ; l'assertion « aucun bloc reçu après `.ready` » échoue par intermittence
   (court graine 3 deux fois, long graine 3 une fois sur deux). Course du test : le producteur fait `finish()` puis

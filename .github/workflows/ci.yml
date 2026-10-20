@@ -31,8 +31,7 @@ jobs:
           xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
             -derivedDataPath .build/xcode-test -parallel-testing-enabled NO \
             -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation -skipMacroValidation \
-            > xcodebuild.log 2>&1
-          status=$?
+            > xcodebuild.log 2>&1 && status=0 || status=$?  # the runner shell is bash -e
           # summary of the full log (uploaded below), [K- lines of the tests kept
           awk '/Test Suite|Executed|error:|BUILD|\*\* TEST|\[K-/' xcodebuild.log
           exit $status
@@ -43,8 +42,7 @@ jobs:
           for scheme in VoxtralCLI VoxtralApp VoxtralTTSStreamingDemo; do
             xcodebuild -scheme "$scheme" -configuration Release -derivedDataPath .build/xcode \
               -destination 'platform=macOS' -onlyUsePackageVersionsFromResolvedFile \
-              -skipPackagePluginValidation -skipMacroValidation build > "build-$scheme.log" 2>&1
-            status=$?
+              -skipPackagePluginValidation -skipMacroValidation build > "build-$scheme.log" 2>&1 && status=0 || status=$?
             awk '/error:|\*\* BUILD/' "build-$scheme.log"
             [ $status -eq 0 ] || exit $status
             grep -q '\*\* BUILD SUCCEEDED \*\*' "build-$scheme.log"
