@@ -1,20 +1,20 @@
 /**
- * BenchInstrumentTests — K-89: the pure parts of `VoxtralCLI bench` on fixed inputs (interval union, exclusive
+ * BenchInstrumentTests — K-89: the pure parts of `VoxtralCLI bench` (`VoxtralBenchSupport`) on fixed inputs (interval union, exclusive
  * phases adding up to at most the pass, phase keys). The pad fractions of the Realtime pipeline are tested in
  * `VoxtralCoreTests/Realtime/PadFractionTests.swift`.
  */
 
 import XCTest
-@testable import VoxtralTranscriptionTest
+import VoxtralBenchSupport
 
 final class BenchInstrumentTests: XCTestCase {
 
     func testUnionLengthMergesOverlapsAndNestedIntervals() {
-        XCTAssertEqual(BenchJSON.unionLength([(start: 0, end: 10), (start: 5, end: 15), (start: 20, end: 25)]), 20)
-        XCTAssertEqual(BenchJSON.unionLength([(start: 0, end: 10), (start: 2, end: 3)]), 10)
-        XCTAssertEqual(BenchJSON.unionLength([(start: 30, end: 40), (start: 0, end: 10)]), 20, "unsorted input")
-        XCTAssertEqual(BenchJSON.unionLength([(start: 0, end: 10), (start: 10, end: 12)]), 12, "touching intervals")
-        XCTAssertEqual(BenchJSON.unionLength([(start: UInt64, end: UInt64)]()), 0)
+        XCTAssertEqual(BenchIntervals.unionLength([(start: 0, end: 10), (start: 5, end: 15), (start: 20, end: 25)]), 20)
+        XCTAssertEqual(BenchIntervals.unionLength([(start: 0, end: 10), (start: 2, end: 3)]), 10)
+        XCTAssertEqual(BenchIntervals.unionLength([(start: 30, end: 40), (start: 0, end: 10)]), 20, "unsorted input")
+        XCTAssertEqual(BenchIntervals.unionLength([(start: 0, end: 10), (start: 10, end: 12)]), 12, "touching intervals")
+        XCTAssertEqual(BenchIntervals.unionLength([(start: UInt64, end: UInt64)]()), 0)
     }
 
     /// STT `.mlx` pass as the pipeline records it (µs): features, then "Generation" around the MLX encoder, the
@@ -28,7 +28,7 @@ final class BenchInstrumentTests: XCTestCase {
     ]
 
     func testExclusivePhasesAddUpToAtMostThePass() {
-        let phases = BenchJSON.exclusivePhaseMs(sttPass)
+        let phases = BenchIntervals.exclusivePhaseMs(sttPass)
         XCTAssertEqual(phases["audio"], 20)
         XCTAssertEqual(phases["encode"], 170)
         XCTAssertEqual(phases["prefill"], 210)
@@ -40,7 +40,7 @@ final class BenchInstrumentTests: XCTestCase {
 
     func testExclusivePhasesOfARealtimePass() {
         // Realtime: "Realtime Generation" around the encoder and the prefill, one after the other
-        let phases = BenchJSON.exclusivePhaseMs([
+        let phases = BenchIntervals.exclusivePhaseMs([
             (name: "Realtime Generation", start: 0, end: 1_000_000),
             (name: "Realtime Encoding", start: 0, end: 300_000),
             (name: "Prefill", start: 300_000, end: 400_000),
@@ -50,10 +50,10 @@ final class BenchInstrumentTests: XCTestCase {
     }
 
     func testPhaseKeysOfTheProfiledPhases() {
-        XCTAssertEqual(BenchJSON.phaseKey("Audio Feature Extraction"), "audio")
-        XCTAssertEqual(BenchJSON.phaseKey("Audio Encoding (MLX)"), "encode")
-        XCTAssertEqual(BenchJSON.phaseKey("Audio Encoding (CoreML)"), "encode")
-        XCTAssertEqual(BenchJSON.phaseKey("Generation"), "decode")
-        XCTAssertEqual(BenchJSON.phaseKey("Token Decoding"), "post")
+        XCTAssertEqual(BenchIntervals.phaseKey("Audio Feature Extraction"), "audio")
+        XCTAssertEqual(BenchIntervals.phaseKey("Audio Encoding (MLX)"), "encode")
+        XCTAssertEqual(BenchIntervals.phaseKey("Audio Encoding (CoreML)"), "encode")
+        XCTAssertEqual(BenchIntervals.phaseKey("Generation"), "decode")
+        XCTAssertEqual(BenchIntervals.phaseKey("Token Decoding"), "post")
     }
 }

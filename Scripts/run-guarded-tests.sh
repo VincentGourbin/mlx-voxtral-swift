@@ -47,7 +47,7 @@ GUARDS=(
 ALL=0; ONLY=()
 for a in "$@"; do [[ $a == --all ]] && ALL=1 || ONLY+=($a); done
 
-status=0
+rc=0
 for entry in $GUARDS; do
   IFS='|' read -r flag value tier classes <<< "$entry"
   if (( ${#ONLY} )); then (( ${ONLY[(Ie)$flag]} )) || continue
@@ -61,6 +61,6 @@ for entry in $GUARDS; do
   summary=$(grep -E '^\s*Executed [0-9]+ test' $log | tail -1 | sed -E 's/^[[:space:]]*//')
   skipped=$(grep -c "' skipped (" $log)
   echo "GUARDED $flag ($classes) : ${summary:-no test run} ; skipped $skipped ; xcodebuild exit $code"
-  (( code == 0 )) || status=1
+  (( code == 0 )) || rc=1
 done
-exit $status
+exit $rc

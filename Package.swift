@@ -71,11 +71,14 @@ let package = Package(
             // The Core ML encoder is downloaded at run time (VoxtralHybridEncoder), never bundled (ASK-27, K-28)
             exclude: ["Resources/Info.plist"]
         ),
+        // Pure arithmetic of the bench instrument, tested by VoxtralCLITests (K-89; internal, not a product)
+        .target(name: "VoxtralBenchSupport"),
         // CLI transcription tool
         .executableTarget(
             name: "VoxtralTranscriptionTest",
             dependencies: [
                 "VoxtralCore",
+                "VoxtralBenchSupport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "MLXProfiler", package: "swift-mlx-profiler")
             ]
@@ -98,7 +101,7 @@ let package = Package(
         .testTarget(
             name: "VoxtralCLITests",
             dependencies: [
-                "VoxtralTranscriptionTest"
+                "VoxtralBenchSupport"
             ]
         ),
     ]
