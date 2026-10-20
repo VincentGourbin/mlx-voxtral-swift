@@ -41,7 +41,10 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   an old `mzbac/Voxtral-Small-24B-2507-8bit` folder (≈ 28 GB) is no longer used and can be deleted.
 - **K-9 — a `realtime-4b` folder downloaded with an intermediate build** (between `3756545`, K-24, and `3345dc2`,
   K-9) holds only the transformers `model.safetensors`: `findRealtimeModelPath` takes it for complete and loading
-  fails with `missingWeights`. Delete the folder and download it again.
+  fails (`VoxtralRealtimePackError` since K-91). Delete the folder and download it again.
+- **K-91 — a Realtime pack that does not match the model throws `VoxtralRealtimePackError`**, where an incomplete
+  pack used to throw `VoxtralError.missingWeights` and keys the model lacks were ignored: code catching
+  `missingWeights` around `VoxtralRealtimePipeline.loadModel` must also catch the new error.
 - **Exhaustive `switch` over the public error enums** needs a `default:` or the new cases: `VoxtralError.mlx`,
   `.unsupported`, `.missingWeights`, `.invalidTokenizer`, `.contextTooLong`; `busy` in `VoxtralPipelineError`,
   `VoxtralTTSError` and `VoxtralRealtimeError`.
@@ -49,7 +52,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   `Int` must unwrap. `nil` (the default) sizes the budget from the audio duration.
 - **Calls may now throw** where they used to crash, hang or return a wrong result: `CancellationError` (cancelled
   Task), `busy` (another operation running on the same pipeline), `contextTooLong`, `missingWeights`,
-  `invalidTokenizer`, `VoxtralError.mlx`.
+  `invalidTokenizer`, `VoxtralError.mlx`, `VoxtralRealtimePackError`.
 - **Core ML encoder runs on the Neural Engine** by default (`.auto`, the default STT backend, used to hang on the GPU).
 - **Dependencies**: `VoxtralCore` no longer pulls `MLXLLM`, `MLXOptimizers`, `ArgumentParser` nor the `Transformers`
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.

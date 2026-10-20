@@ -1350,6 +1350,16 @@ Décisions du planificateur du 2026-10-03 :
   (12) Charge de fond de la file 2 enregistrée (`.samples.load`) : `photoanalysisd` / `photolibraryd` pendant `bench`
   4 bits, Mail pendant `bench` 6 bits, `backupd` pendant `eval` 6 bits (Time Machine relancé malgré `tmutil
   stopbackup`) ; sans effet sur le texte, et les `step_ms_p50` sont une passe sans A/A (annoncé). (13) Prémisse de la
-  fiche inexacte : avant K-91, un pack voxmlx complet levait une erreur non typée (`missingWeights`), il ne se chargeait
-  pas en poids aléatoires ; le refus typé et les clés en trop restent l'objet du rouge. (14) Suite `k91/suite3.log`
+  fiche inexacte : avant K-91, un pack voxmlx complet levait `VoxtralError.missingWeights` (sans format ni clé en
+  trop nommés), il ne se chargeait pas en poids aléatoires ; le rouge porte sur l'erreur dédiée (format, clés en
+  écart) et sur les clés en trop ignorées. (14) Suite `k91/suite3.log`
   lancée sur l'arbre de `de78332d` avant son commit (mêmes fichiers, commit 8 s après la fin de la suite).
+  (15) Vérification (2026-10-20 ; vérificateur rejeté puis vérifié, contradicteur vérifié) : dérogation (12) complétée
+  (Mail pendant `bench` 4 bits, `textunderstandingd` et `mediaanalysisd` pendant `eval` 8 bits) ; écart maximal des
+  poids 6 bits au fp16 2,45 % (et non ≤ 2,4 %) ; `encode` 2 387 ms (6 bits) contre 2 213 ms (4 bits), part de la
+  matérialisation non mesurée. Suites notées, sans effet sur les deux packs du registre : surcharge de quantification
+  par couche lue sous le nom interne (un pack voxmlx mixte écrit en noms voxmlx serait mal lu, erreur de forme) ;
+  `sanitizeVoxmlxWeights` ne filtre pas `rotary_emb` / `position_ids` ; une couche privée de `.scales` et `.biases`
+  lève `loadingFailed` (forme) et non l'erreur dédiée ; `findRealtimeModelPath` ignore la révision épinglée ;
+  message « loaded without error » des tests trompeur pour une erreur d'un autre type ; aucun journal du build
+  Release gardé (correctif prouvé par le comportement).

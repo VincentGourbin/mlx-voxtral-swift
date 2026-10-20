@@ -6961,7 +6961,7 @@ realtime-4b-6bit (`mlx-community/Voxtral-Mini-4B-Realtime-6bit@02eb0cae`), realt
 autres packs sont à l'identique. Cause : voxmlx quantifie aussi le MLP Ada (`ada_down`), dont le `weight` est en
 `uint32` empaqueté ; `precomputeAdaScales` convertissait le conditionnement temporel dans ce dtype, le tronquant en
 entiers (échelle Ada nulle) : le décodeur n'émettait plus que des pads (jeton 32), dès 8 s de C-moyen. Les poids
-eux-mêmes étaient justes : dé-quantifiés et comparés au pack fp16 tenseur par tenseur, écart relatif ≤ 2,4 % (6 bits),
+eux-mêmes étaient justes : dé-quantifiés et comparés au pack fp16 tenseur par tenseur, écart relatif ≤ 2,5 % (6 bits ; 2,45 %, `.local-runs/k91r/weights-vs-fp16-6bit.txt`),
 aucune clé manquante, convolutions déjà au format MLX. Corrigé en `de78332d` (test `testQuantizedAdaMLPKeepsTheTimeConditioning`,
 rouge avant : écart relatif 1,0 ; vert : 2,2·10⁻⁷) ; sans effet sur les autres packs (MLP Ada déjà au dtype de calcul
 au moment du précalcul). Lignes recopiées ci-dessous pour mémoire.
@@ -6990,7 +6990,7 @@ C-court `933a5a2e…` et C-moyen FR `3b240f87…` identiques sur les cinq packs.
 - Coût : une passe par pack, sans A/A (la matrice reste à K-78) ; 6 bits + 13 % par pas, 8 bits + 40 % par rapport au
   4 bits, pic MLX + 438 et + 1 458 Mo ; tête liée quantifiée dans les deux (voxmlx), 16 bits dans le 4 bits.
 - `load_active_mb` 0 et `load_ms` ≈ 0,1 s sur les packs voxmlx : aucun paramètre fp32 à convertir, rien n'est évalué
-  au chargement ; les poids se matérialisent au premier encodage (`encode` 2 387 contre 2 213 ms en 6 bits). Artefact de
+  au chargement ; les poids se matérialisent au premier encodage (`encode` 2 387 ms en 6 bits contre 2 213 ms en 4 bits, part non mesurée). Artefact de
   mesure du chargement, pas un gain (suite notée).
 **Lignes `EVAL` / `BENCH`, file 2** (ordre de la file ; porte) :
 
