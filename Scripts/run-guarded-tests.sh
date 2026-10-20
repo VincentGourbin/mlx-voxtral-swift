@@ -7,7 +7,9 @@
 #   Scripts/run-guarded-tests.sh FLAG…      only those guards (e.g. TTS_STREAM CANCEL)
 #
 # Path guards default to the local model cache: VOXTRAL_K8_PACK_DIR (MarkusKaemmerer 8-bit dense-encoder pack),
-# VOXTRAL_RT_ORIGINAL_DIR (mistralai/Voxtral-Mini-4B-Realtime-2602). Logs: .local-runs/guarded/<flag>.log.
+# VOXTRAL_RT_ORIGINAL_DIR (mistralai/Voxtral-Mini-4B-Realtime-2602). Voice inputs (VOXTRAL_TTS_*_EMB) default to
+# VOXTRAL_GUARD_VOICE (an enrolled voice, .local-runs/voices/clone_fr.safetensors), WAV outputs (VOXTRAL_TTS_*_OUT)
+# to .local-runs/guarded/out; every guard receives them. Logs: .local-runs/guarded/<flag>.log.
 # Prints one `GUARDED` line per guard; exit status 1 if any guard has a failure or did not build.
 set -u
 cd "$(dirname "$0")/.."
@@ -15,6 +17,14 @@ OUT=.local-runs/guarded; mkdir -p $OUT
 CACHE=$HOME/Library/Caches/models
 : ${VOXTRAL_K8_PACK_DIR:=$CACHE/MarkusKaemmerer/Voxtral-Mini-3B-2507-8bit-dense-encoder}
 : ${VOXTRAL_RT_ORIGINAL_DIR:=$CACHE/mistralai/Voxtral-Mini-4B-Realtime-2602}
+: ${VOXTRAL_GUARD_VOICE:=$PWD/.local-runs/voices/clone_fr.safetensors}
+WAVS=$PWD/$OUT/out; mkdir -p $WAVS
+INPUTS=()
+for v in TTS_REPRO_EMB TTS_CARRIER_EARLY_EMB TTS_CLONE_OVERRUN_EMB TTS_CODEC_BANDED_EMB; do
+  INPUTS+=("TEST_RUNNER_VOXTRAL_$v=${(P)${:-VOXTRAL_$v}:-$VOXTRAL_GUARD_VOICE}")
+done
+for v in TTS_REPRO_OUT TTS_CARRIER_EARLY_OUT; do INPUTS+=("TEST_RUNNER_VOXTRAL_$v=${(P)${:-VOXTRAL_$v}:-$WAVS}"); done
+[[ -f $VOXTRAL_GUARD_VOICE ]] || echo "warning: no voice at $VOXTRAL_GUARD_VOICE, the voice guards will skip or fail" >&2
 
 # guard | value | tier | test classes (VoxtralCoreTests) — the 50 tests CI skipped on 2026-10-20 (run 39397564658)
 GUARDS=(
@@ -54,7 +64,7 @@ for entry in $GUARDS; do
   elif [[ $tier == probe && $ALL == 0 ]]; then continue; fi
   only=(); for c in ${=classes}; do only+=(-only-testing:VoxtralCoreTests/$c); done
   log=$OUT/$flag.log
-  env "TEST_RUNNER_VOXTRAL_$flag=$value" xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
+  env $INPUTS "TEST_RUNNER_VOXTRAL_$flag=$value" xcodebuild test -scheme MLXVoxtralSwift-Package -destination 'platform=macOS' \
     -derivedDataPath .build/xcode-test -parallel-testing-enabled NO -onlyUsePackageVersionsFromResolvedFile \
     $only > $log 2>&1
   code=$?
