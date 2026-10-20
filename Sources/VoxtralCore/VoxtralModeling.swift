@@ -895,7 +895,12 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
 
             let stopTokens = stopTokenIds
 
+            // The MLX encoder runs here (getAudioEmbeds evaluates its output): its own phase, so that bench reports
+            // `phases_ms.encode` in `.mlx` as in `.auto` instead of leaving it unattributed (K-89)
+            let encodeSession = inputFeatures == nil ? nil : MLXProfiler.shared.activeSession
+            encodeSession?.beginPhase("Audio Encoding (MLX)", category: .audioEncode)
             let inputsEmbeds = mergeInputEmbeddings(inputIds: inputIds, inputFeatures: inputFeatures)
+            encodeSession?.endPhase("Audio Encoding (MLX)", category: .audioEncode)
             DTypeAudit.report("stt", "mel", inputFeatures)
             DTypeAudit.report("stt", "encoder_embeddings", inputsEmbeds)
 
