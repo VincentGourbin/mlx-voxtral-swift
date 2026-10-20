@@ -360,3 +360,9 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   86,9 → 98,3 %. Leçon : un plafond de recouvrement se lit sur l'occupation du jour du A (86,9 %), pas sur une trace
   plus ancienne (93,1 %, K-96). Et une passe sur batterie se voit au champ `power` de sa ligne `BENCH`, pas au
   machine-check : A1 écartée. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-47 ».
+- 2026-10-20 — **K-91 : les packs voxmlx Realtime 6 et 8 bits se lisent, tout pack mal lu est refusé** : WER C-moyen
+  EN/FR 1,05 / 1,97 comme le 4 bits ; `VoxtralRealtimePackError` nomme le format et les premières clés en écart (avant,
+  une clé en trop passait en silence). Leçon : un module quantifié n'a plus de dtype flottant dans `weight` (`uint32`
+  empaqueté) ; convertir une entrée dans `module.weight.dtype` la tronque sans erreur. Ici l'échelle Ada valait 0, le
+  décodeur n'émettait que des pads au-delà de quelques secondes, et le clip court passait : la qualité se juge sur
+  C-moyen, pas sur un clip de 5 s. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-91 ».

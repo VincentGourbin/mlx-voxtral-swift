@@ -1327,3 +1327,17 @@ Décisions du planificateur du 2026-10-03 :
   (C-moyen) mesurés. (10) `embedToken(Int)` ne sert plus qu'aux tests (`RealtimeDTypeTests`) ; la production passe par
   `embedTokens` sur un `MLXArray` [1] uint32 (même ligne de la table, `RealtimeQuantizedHeadTests`).
 
+- **K-91 (#632), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; appliquée) : (1) refus et lecture dans un
+  seul commit `feat(K-91)` (`f1e4cc44`) au lieu de `fix(K-91)` puis `feat(K-91)` de l'étape 7 : la détection du format
+  sert au refus et à la lecture, les séparer aurait demandé un état intermédiaire non testé ; le commit `fix(K-91)`
+  (`de78332d`) corrige le conditionnement temporel trouvé par les mesures. (2) Test rouge prouvé dans un worktree
+  jetable sur l'ancien chargeur, avec des bouchons pour les symboles nouveaux (`.local-runs/k91-red.diff.txt`) : 5/6 en
+  échec, mlx-audio en témoin vert (`.local-runs/k91-red.log`). (3) Packs téléchargés sur le disque interne
+  (`~/Library/Caches/models`), pas sur le disque Lexar (94 % plein). (4) Mesures en B seul, sans binaire A : A ne lit pas
+  voxmlx ; la parité des trois packs déjà lus est jugée sur leurs `out_sha256` consignés (K-38, K-47). (5) Une passe
+  `bench` par pack (`--passes 1`), sans A/A : la porte demande une ligne par pack, la matrice reste à K-78. (6) Première
+  file écartée (texte vide sur C-moyen en 6 et 8 bits), lignes gardées dans `BENCHMARKS.md` ; file refaite à
+  l'identique après le correctif. (7) `KO indexation/sauvegarde (103 %)` avant une passe de la file 1, toléré
+  (décision du 2026-10-05). (8) Aide de la CLI (`realtime --model`, `profile`) complétée des deux ids. (9) Suite
+  notée : `load_ms` / `load_active_mb` des packs voxmlx ne mesurent pas le chargement (rien n'est évalué avant le
+  premier encodage) ; évaluer les paramètres en fin de chargement rendrait la mesure comparable (à mesurer, K-78).

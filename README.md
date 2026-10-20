@@ -356,6 +356,8 @@ pipeline.unload()
 | Model ID | HuggingFace Repo | Download (GB)¹ | Notes |
 |----------|------------------|------|-------|
 | `realtime-4b-4bit` (default) | `mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit` | 3.13 | |
+| `realtime-4b-6bit` | `mlx-community/Voxtral-Mini-4B-Realtime-6bit` | 3.61 | voxmlx layout, pinned revision (K-91) |
+| `realtime-4b-8bit` | `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` | 4.71 | voxmlx layout, pinned revision (K-91) |
 | `realtime-4b-fp16` | `mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16` | 8.87 | |
 | `realtime-4b` | `mistralai/Voxtral-Mini-4B-Realtime-2602` | 8.86 (+ 8.86 `model.safetensors`: 17.72) | does not load at v2.2.2 (audit M-01, fiche K-9) |
 

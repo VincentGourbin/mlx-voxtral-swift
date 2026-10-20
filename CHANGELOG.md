@@ -55,6 +55,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-91 — a Realtime pack that does not match the model is refused** instead of loading with keys ignored.
 - **K-47 — Realtime transcription decodes ahead.** The next decoding step is queued on the GPU before the current
   token is read, one synchronization per step instead of two: realtime-4b-4bit, medium English clip, −12 % per step
   (11.7 → 10.3 ms), same text on the short and medium English and French clips, same memory.
@@ -143,6 +144,12 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **K-91 — Realtime 6-bit and 8-bit packs.** `realtime-4b-6bit` (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`,
+  3.61 GB) and `realtime-4b-8bit` (`ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx`, 4.71 GB), voxmlx layout, pinned
+  revisions; same word error rate as the 4-bit default on the medium English and French clips. The default is
+  unchanged.
+- **K-91 — `VoxtralRealtimePackError`**: thrown when a Realtime pack's layout is unknown, its keys do not cover the
+  model, or it holds keys the model does not have; names the detected format and the first keys apart.
 - **K-86 — `VoxtralTTSPipeline.synthesize(text:voiceCoordinate:seed:)`**: ZeroVoice with a seed (the CLI's
   `--voice-xyz` now honours `--seed`); the overload without `seed` is unchanged.
 - **K-1 — `VoxtralError.mlx(String)`**: an MLX error raised inside a public entry point (transcribe, chat,
