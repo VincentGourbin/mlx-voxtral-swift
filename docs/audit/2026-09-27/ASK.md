@@ -1303,3 +1303,13 @@ Décisions du planificateur du 2026-10-03 :
   anonymisée (ASK-13) est proposée en option C de la question de (34).
   (42) Question de (34) tranchée par Vincent le 2026-10-19 : A, le cache reste actif par défaut pour toute voix ;
   dérogations (34) et (35) levées, prévenir FluxForge reste à Vincent (version).
+- **K-47 (#652), 2026-10-20, décision de l'agent** (`VERIFY.md` §1 et §2 ; appliquée) : (1) passes `--passes 1 --warmup 1
+  --cooldown 120`, un processus par passe, au lieu de `--passes 2` de l'étape 4 (conduite de K-38, K-43, K-46).
+  (2) A1 sur batterie écartée ; A1r refaite 10 h après B1/B2 ; la porte est lue sur un second A/B/B/A complet
+  (`queue-k47c.sh`), la file 1 donnée pour information (A/A 3,0 %, au seuil). (3) Aucun test unitaire nouveau : le
+  pipeline n'est pas séparable du modèle sans réécrire `generate` ; la parité se prouve par `out_sha256` sur les trois
+  clips (porte) et la branche asynchrone par l'occupation xctrace (porte), pas par un test rouge. (4) `KO
+  indexation/sauvegarde` avant A1r (29 %) et B3 (75 %), tolérés (décision du 2026-10-05). (5) En `temperature > 0`,
+  un tirage `MLXRandom` de plus est consommé après un arrêt anticipé (pas jeté) : l'état global du générateur après
+  l'appel diffère, la transcription non ; non mesuré (le défaut est 0).
+

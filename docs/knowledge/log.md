@@ -355,3 +355,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   ligne `BENCH`. Et en streaming, tout calcul MLX fait avant la `Task` productrice est hors de la frontière K-1 :
   un embedding mal formé y arrêtait l'hôte. Défaut gardé par décision de Vincent (2026-10-19, A).
   PLAN.md §7, `BENCHMARKS.md` §« 2026-10-19 — K-50 ».
+- 2026-10-20 — **K-47 : le décodage Realtime en pipeline (`asyncEval`) gagne 12,1 % par pas, même texte** : le jeton
+  reste un `MLXArray`, le pas suivant part avant la lecture `.item()` du jeton courant ; occupation GPU du décodage
+  86,9 → 98,3 %. Leçon : un plafond de recouvrement se lit sur l'occupation du jour du A (86,9 %), pas sur une trace
+  plus ancienne (93,1 %, K-96). Et une passe sur batterie se voit au champ `power` de sa ligne `BENCH`, pas au
+  machine-check : A1 écartée. PLAN.md §7, `BENCHMARKS.md` §« 2026-10-20 — K-47 ».

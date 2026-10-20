@@ -55,6 +55,9 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **K-47 — Realtime transcription decodes ahead.** The next decoding step is queued on the GPU before the current
+  token is read, one synchronization per step instead of two: realtime-4b-4bit, medium English clip, −12 % per step
+  (11.7 → 10.3 ms), same text on the short and medium English and French clips, same memory.
 - **K-50 — TTS voice-prefix cache for any voice.** The prefix KV of the last three voices used is kept and matched by
   the embedding's content (shape, dtype, SHA-256), so `synthesize(text:voiceEmbedding:)` (cloned voices, ZeroVoice,
   blends) and the streaming overload without `voiceKey` now reuse it like preset voices: the second synthesis of a

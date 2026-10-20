@@ -6602,3 +6602,338 @@ EVAL {"audio_s":158.8,"build":"Release","chip":"Apple M3 Max","commit":"21077dd2
 EVAL {"audio_s":200,"build":"Release","chip":"Apple M3 Max","commit":"cab77314a","coverage":0.596,"date":"2026-10-19T14:12:41Z","dirty":false,"frames":2500,"hyp_sha256":"3591f8be83d5d7230657dae01423c0157ed542e7728516345794bedf87e28f73","hyp_words":356,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"eeb6cb5d1b4e9fe2005f639d900c5af2b47e0c4541d57df4fc5dd06ad38179f2","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K50RT-A","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"33,1 /Users/vincent/Developpements/convertvoxtral-k50A/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":true,"voice":"clone_fr","warm_up":false,"wer":61.68}
 EVAL {"audio_s":200,"build":"Release","chip":"Apple M3 Max","commit":"21077dd2c","coverage":0.731,"date":"2026-10-19T14:17:10Z","dirty":false,"frames":2500,"hyp_sha256":"d8b6738473298f6dd57b453c17489ea94da058ed8eb47093d923b0dee1e83b0e","hyp_words":1064,"language":"en","macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"tts-4b-mlx","out_sha256":"028596d3cd4a4a2de743054d74660c3e1b3fb15bd83f87cc7c0aee153006a711","pipeline":"tts-roundtrip","power":"AC Power","ram_gb":96,"ref_words":334,"seed":3,"stt_backend":"mlx","stt_model":"mini-3b-8bit","tag":"K50RT-B","text":"long_en","text_sha256":"fae5920f2b50a14460286e8651d6c5acad70f40a2192d4f3ff172d02401c7d2a","top_process":"82,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":true,"voice":"clone_fr","warm_up":false,"wer":252.69}
 ```
+
+## 2026-10-20 — K-47 : décodage Realtime en pipeline (`asyncEval`, jeton en `MLXArray`) — validée
+
+**Protocole.** Trois files. A = commit parent `3ccfc5b0` (worktree `convertvoxtral-k47A`, binaire Release construit et
+lancé depuis lui) ; B = `5b44d5cd` (`perf(K-47)` : jeton gardé en `MLXArray` (`argMax` / `categorical` paresseux), pas
+N+1 construit depuis lui et mis en file par `asyncEval` avant la lecture `.item()` du jeton N ; sur EOS ou budget de
+texte, un pas en file est jeté), binaire Release du dépôt principal, aucun commit pendant une file ; toutes les lignes
+`BENCH`/`EVAL` sont `"dirty":false`. Construits avec `-onlyUsePackageVersionsFromResolvedFile` : mlx-swift
+0.31.6@0bb916c, mlx-swift-lm main@604fae7, swift-mlx-profiler 1.5.1@bfe71d8, macOS 27.0.1, M3 Max 96 Go.
+realtime-4b-4bit, tête par défaut (16 bits ; le défaut de K-46 n'a pas changé), `--delay 480`.
+File 1 `.local-runs/queue-k47.sh` (2026-10-19, 19:48 → 20:50) : (1) `eval realtime` C-court, C-moyen EN, C-moyen FR,
+A puis B ; (2) A/B/B/A sur C-moyen EN (`docs/eval/clips/c_moyen_en.wav`) ; (3) trace xctrace (`--trace
+--metal-trace`, protocole de K-96 : amorçage, `--cooldown 120`, une passe, `c_20s_en`) de A puis de B. File 2
+`.local-runs/queue-k47b.sh` (2026-10-20, 06:32 → 06:39) : A1r, reprise de A1. File 3 `.local-runs/queue-k47c.sh`
+(06:40 → 07:37) : second A/B/B/A complet (A3, B3, B4, A4), même commande. `bench realtime --passes 1 --warmup 1
+--cooldown 120`, un processus par passe ; avant chaque passe : 180 s de repos, Time Machine et simulateurs arrêtés,
+`quiet.sh wait` (machine-check, refroidissement 120 s) ; pendant la passe, `quiet.sh sample`. `--beacon` partout.
+
+**Passes écartées ou reprises.**
+- A1 (file 1) a tourné sur batterie : `"power":"Battery Power"` dans sa ligne `BENCH` (`step_ms_p50` 12,23), son
+  machine-check ne l'a pas vu (débranchement après son passage). Écartée, recopiée ci-dessous pour mémoire ; refaite
+  en A1r sur secteur le lendemain matin (10 h après B1/B2). Pour garder l'ordre A/B/B/A dans une même plage, un second
+  A/B/B/A complet (file 3) a été mesuré : c'est la cellule de la porte.
+- B3, première tentative (06:56) : refusée par `bench` (`REFUSED busy: MLX process yue2 (pid 25796)`), une autre
+  charge MLX ; `quiet.sh` a attendu sa fin, B3 refaite à 07:21. `yue2` n'apparaît dans aucun `.samples.raw` des passes
+  retenues.
+- Machine-check : `KO  indexation/sauvegarde en cours (29 %)` avant A1r et `(75 %)` avant B3, tolérés par la décision
+  de Vincent du 2026-10-05 ; aucune autre ligne `KO`. Les autres passes « ok QUIET » à la première tentative.
+
+**Résultats, C-moyen EN.**
+
+| Mesure | File 3 : A3 / A4 | B3 / B4 | Écart des moyennes | Porte |
+|---|---|---|---|---|
+| `step_ms_p50` | 11,69 / 11,73 | 10,30 / 10,29 | − 12,1 % (A/A 0,3 %, B/B 0,1 %) | − 5 % : tenue |
+| `step_ms_p90` | 12,20 / 12,22 | 10,81 / 10,80 | − 11,5 % | — |
+| `rtf` | 0,1637 / 0,1638 | 0,1464 / 0,1463 | − 10,6 % | — |
+| `peak_mlx_mb` | 4 247,2 / 4 247,2 | 4 247,2 / 4 247,2 | 0 | — |
+
+| Mesure | File 1 (+ A1r) : A1r / A2 | B1 / B2 | Écart des moyennes |
+|---|---|---|---|
+| `step_ms_p50` | 11,68 / 12,04 | 10,61 / 10,61 | − 10,5 % (A/A 3,0 %) ; contre A2 seule (même soir) − 11,9 % |
+| `rtf` | 0,1635 / 0,1704 | 0,1500 / 0,1495 | − 10,4 % |
+
+`out_sha256` `6573ca6a…` identique dans les 9 passes `bench`, A1 comprise.
+
+**Texte (`eval realtime`).** A et B identiques sur les trois clips : `out_sha256` C-court `933a5a2e…`, C-moyen EN
+`6573ca6a…`, C-moyen FR `3b240f87…` ; WER 9,09 / 1,05 / 1,97 des deux côtés (référence de K-46 retrouvée).
+
+**Occupation GPU du décodage** (xctrace, phase « Realtime Generation », `c_20s_en`, passe tracée non retenue comme
+mesure) : A 86,9 % (`ioreg` 91,2 %), B 98,3 % (`ioreg` 98,9 %) ; trace entière 87,0 → 98,4 %. Branche asynchrone
+prouvée : le GPU ne chôme plus entre deux pas. La borne de la porte (92,3 % avant K-38, 93,1 % refaite en K-96) est
+dépassée par B ; A (86,9 %) est sous elle : le pas a raccourci depuis K-96 (K-38 et suivantes), la part fixe du CPU
+entre deux pas pèse davantage (lecture, cause non mesurée).
+
+**Lecture.**
+- Avant K-47, chaque pas faisait `MLX.eval(logits)` puis `argMax(logits).item()` : deux synchronisations, et
+  `embedToken(Int)` exigeait l'entier sur le CPU avant de construire le pas suivant ; le GPU attendait la construction
+  du graphe. Désormais une seule synchronisation par pas, recouverte par le pas suivant en vol : − 12,1 % par pas,
+  dans la fourchette de T15 (− 13 à − 22 %) à peine en dessous, comme prévu après K-46 (pas déjà plus court).
+- Texte identique : l'`argMax` est le même, seul l'ordre des synchronisations change. Le pas jeté sur EOS (ou budget)
+  écrit une position de plus dans le KV, jamais relue. En échantillonnage (`temperature > 0`), un tirage de plus est
+  consommé sur l'état global de `MLXRandom` après un arrêt anticipé : sans effet sur la transcription en cours.
+- Plafond : le plan bornait les leviers de recouvrement à ≈ 7 % (PLAN.md §5, occupation de 93,1 % en K-96) ; A en est
+  à 86,9 % le jour de la mesure, soit un plafond ≈ 13 % : B en prend 12,1 %, et l'occupation de B (98,3 %) laisse
+  ≈ 2 % à gagner par recouvrement.
+- Pas de mémoire en plus (pic MLX identique à l'octet).
+
+**Lignes `BENCH` / `EVAL`, file 1** (ordre de la file ; A1 sur batterie, écartée) :
+
+```
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_court_en","clip_language":"en","commit":"3ccfc5b0b","date":"2026-10-19T17:53:09Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":11,"input":"docs/examples/fluxforge_short_en_6bit.wav","input_s":5.04,"ins":0,"language":"auto","last_sentence_coverage":0.909,"last_sentence_present":false,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"933a5a2ea81bb233076b523c19190c577be130e5d084e6ccc870441c908c6b82","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":11,"reference_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","sub":1,"tag":"K47EVAL-A","top_process":"56,7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer","truncated":false,"wer":9.09}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_en","clip_language":"en","commit":"3ccfc5b0b","date":"2026-10-19T17:53:33Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":382,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"ins":2,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1.005,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":380,"reference_sha256":"99fb83f1e4c43d7c6c12850dcf72dce4cdefdcb9a906c7dac8c687ca01b55263","sub":2,"tag":"K47EVAL-A","top_process":"100,2 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd","truncated":false,"wer":1.05}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_fr","clip_language":"fr","commit":"3ccfc5b0b","date":"2026-10-19T17:53:55Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":406,"input":"docs/eval/clips/c_moyen_fr.wav","input_s":130.88,"ins":0,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"3b240f87d03822bdfe19653435a4e5fa0d6149bfad389d5ac0e0f313f27f3ee0","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":406,"reference_sha256":"82d03278e2cb52a444e2f05ce4ba1e3f2f648d6aa8f345ad6be87fd1740ad5a7","sub":8,"tag":"K47EVAL-A","top_process":"91,5 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd","truncated":false,"wer":1.97}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_court_en","clip_language":"en","commit":"5b44d5cd4","date":"2026-10-19T17:58:57Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":11,"input":"docs/examples/fluxforge_short_en_6bit.wav","input_s":5.04,"ins":0,"language":"auto","last_sentence_coverage":0.909,"last_sentence_present":false,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"933a5a2ea81bb233076b523c19190c577be130e5d084e6ccc870441c908c6b82","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":11,"reference_sha256":"f58ee1c679bc6058734139dcb2bb977111e91b381fa972a3ba1e92785f830930","sub":1,"tag":"K47EVAL-B","top_process":"58,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":9.09}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_en","clip_language":"en","commit":"5b44d5cd4","date":"2026-10-19T17:59:19Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":382,"input":"docs/eval/clips/c_moyen_en.wav","input_s":146.08,"ins":2,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1.005,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":380,"reference_sha256":"99fb83f1e4c43d7c6c12850dcf72dce4cdefdcb9a906c7dac8c687ca01b55263","sub":2,"tag":"K47EVAL-B","top_process":"60,8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer","truncated":false,"wer":1.05}
+EVAL {"build":"Release","chip":"Apple M3 Max","clip":"c_moyen_fr","clip_language":"fr","commit":"5b44d5cd4","date":"2026-10-19T17:59:39Z","del":0,"delay_ms":480,"dirty":false,"hyp_words":406,"input":"docs/eval/clips/c_moyen_fr.wav","input_s":130.88,"ins":0,"language":"auto","last_sentence_coverage":1,"last_sentence_present":true,"length_ratio":1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"3b240f87d03822bdfe19653435a4e5fa0d6149bfad389d5ac0e0f313f27f3ee0","pipeline":"realtime","power":"AC Power","ram_gb":96,"ref_words":406,"reference_sha256":"82d03278e2cb52a444e2f05ce4ba1e3f2f648d6aa8f345ad6be87fd1740ad5a7","sub":8,"tag":"K47EVAL-B","top_process":"44,2 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","truncated":false,"wer":1.97}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-19T18:07:29Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":16.09,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":221,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6399.2,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4247.2,"encode":4247.2,"prefill":3016.3},"phases_ms":{"audio":7.7,"decode":22983.3,"encode":2350,"post":0.1,"prefill":38.2},"pipeline":"realtime","power":"Battery Power","profile":"default","ram_gb":96,"rtf":0.1737,"step_ms_p50":12.23,"step_ms_p90":13.61,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-A","top_process":"53,3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer","total_ms":25380.1,"truncated":false,"ttft_ms":2424.6,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"5b44d5cd4","date":"2026-10-19T18:15:14Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.12,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":250.5,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6400.3,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4245.4,"encode":4245.4,"prefill":3006.5},"phases_ms":{"audio":7.4,"decode":19664.7,"encode":2208.8,"post":0,"prefill":34.6},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.15,"step_ms_p50":10.61,"step_ms_p90":11.26,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-B","top_process":"78,7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer","total_ms":21916.7,"truncated":false,"ttft_ms":2276,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"5b44d5cd4","date":"2026-10-19T18:22:59Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.25,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":245.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6400.7,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4247.2,"encode":4247.2,"prefill":3018.1},"phases_ms":{"audio":8.4,"decode":19562.9,"encode":2227.1,"post":0.1,"prefill":34.4},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1495,"step_ms_p50":10.61,"step_ms_p90":11.21,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-B","top_process":"85,8 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd","total_ms":21834,"truncated":false,"ttft_ms":2293.4,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-19T18:30:50Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.23,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":328.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6400.2,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4243.9,"encode":4243.9,"prefill":3002.6},"phases_ms":{"audio":7.7,"decode":22617.1,"encode":2224.8,"post":0,"prefill":34.5},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1704,"step_ms_p50":12.04,"step_ms_p90":13.13,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-A","top_process":"27,3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer","total_ms":24885.2,"truncated":false,"ttft_ms":2297,"warm":true}
+```
+
+**Ligne `BENCH`, file 2** (A1r) :
+
+```
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-20T04:39:51Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.1,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":216.1,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6398.9,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4245.8,"encode":4245.8},"phases_ms":{"audio":7.9,"decode":21629.5,"encode":2206,"post":0,"prefill":33.8},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1635,"step_ms_p50":11.68,"step_ms_p90":12.21,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-A","top_process":"26,5 /Users/vincent/Developpements/convertvoxtral-k47A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23878.4,"truncated":false,"ttft_ms":2273,"warm":true}
+```
+
+**Lignes `BENCH`, file 3** (cellule de la porte) :
+
+```
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-20T04:48:00Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.11,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":208.8,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6399,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4243.2,"encode":4243.2,"prefill":3000.6},"phases_ms":{"audio":6.8,"decode":21660.6,"encode":2207.9,"post":0,"prefill":34.2},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1637,"step_ms_p50":11.69,"step_ms_p90":12.2,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-A","top_process":"25,9 /Users/vincent/Developpements/convertvoxtral-k47A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23910.7,"truncated":false,"ttft_ms":2273.1,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"5b44d5cd4","date":"2026-10-20T05:21:50Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.15,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":3630,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6399.3,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4247.2,"encode":4247.2,"prefill":3004.4},"phases_ms":{"audio":7.7,"decode":19131.7,"encode":2212.6,"post":0.1,"prefill":34},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1464,"step_ms_p50":10.3,"step_ms_p90":10.81,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-B","top_process":"49,5 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":21387.5,"truncated":false,"ttft_ms":2279.8,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"5b44d5cd4","date":"2026-10-20T05:29:34Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.12,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":212.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6399.1,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4241.4,"encode":4241.4},"phases_ms":{"audio":7.8,"decode":19123.3,"encode":2209.1,"post":0.1,"prefill":33.9},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1463,"step_ms_p50":10.29,"step_ms_p90":10.8,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-B","top_process":"53,4 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":21375.6,"truncated":false,"ttft_ms":2275.9,"warm":true}
+BENCH {"build":"Release","chars":2239,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-20T05:37:23Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.14,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_moyen_en.wav","input_s":146.08,"load_active_mb":2979.4,"load_ms":224.2,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"6573ca6a7a3839086bd9d8ac41a0d38d02acadbb86516d2598745771bf75518d","pad_fraction":0.7599,"pass":1,"peak_footprint_mb":6399.9,"peak_mlx_mb":4247.2,"peak_mlx_mb_by_phase":{"decode":4247.2,"encode":4247.2,"prefill":3018.1},"phases_ms":{"audio":8,"decode":21679.1,"encode":2211.4,"post":0,"prefill":33.9},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1638,"step_ms_p50":11.73,"step_ms_p90":12.22,"steps":1835,"streaming_pad_fraction":0.601,"tag":"K47-A","top_process":"27,0 /Users/vincent/Developpements/convertvoxtral-k47A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":23933.6,"truncated":false,"ttft_ms":2279,"warm":true}
+```
+
+**Traces** (lignes `BENCH` des passes tracées non retenues ; `GPUOCC` par `gpuphase.py`) :
+
+```
+BENCH {"build":"Release","chars":257,"chip":"Apple M3 Max","commit":"3ccfc5b0b","date":"2026-10-19T18:37:58Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.46,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_20s_en.wav","input_s":20.56,"load_active_mb":2979.4,"load_ms":215.4,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"07745ac2939e47801d3b6b6e267a39e9da59909f6c830ba4669169aeb160c8ac","pad_fraction":0.7836,"pass":1,"peak_footprint_mb":4915.5,"peak_mlx_mb":3930,"peak_mlx_mb_by_phase":{"decode":3930,"encode":3930,"prefill":3002.8},"phases_ms":{"audio":1.4,"decode":3108.7,"encode":317.9,"post":0,"prefill":36.3},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1685,"step_ms_p50":11.47,"step_ms_p90":11.75,"steps":266,"streaming_pad_fraction":0.6418,"tag":"TRACE-decode-A","top_process":"32,7 /Users/vincent/Developpements/convertvoxtral-k47A/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3465,"truncated":false,"ttft_ms":385,"warm":true}
+METAL_TRACE /Volumes/Lexar/voxtral-xctrace-k47/decode-A/trace-realtime-2026-10-19T183758Z.trace intervals=3578 busy=87.0%
+GPUOCC {"duration_ms": 1.5, "gap_profiler_xctrace_pts": 69, "ioreg_mean": null, "ioreg_n": 0, "phase": "Mel Spectrogram", "profiler_gpu_mean": 69, "xctrace_busy_pct": 0}
+GPUOCC {"duration_ms": 317.5, "gap_ioreg_xctrace_pts": 2.0, "gap_profiler_xctrace_pts": 1.5, "ioreg_mean": 94.5, "ioreg_n": 2, "phase": "Audio Encoding", "profiler_gpu_mean": 98, "xctrace_busy_pct": 96.5}
+GPUOCC {"duration_ms": 35, "gap_profiler_xctrace_pts": 23.4, "ioreg_mean": null, "ioreg_n": 0, "phase": "Prefill", "profiler_gpu_mean": 94.6, "xctrace_busy_pct": 71.2}
+GPUOCC {"duration_ms": 3532.8, "gap_ioreg_xctrace_pts": 4.3, "gap_profiler_xctrace_pts": 12.2, "ioreg_mean": 91.2, "ioreg_n": 22, "phase": "Realtime Generation", "profiler_gpu_mean": 99.1, "xctrace_busy_pct": 86.9}
+GPUOCC {"duration_ms": 0, "gap_profiler_xctrace_pts": 85, "ioreg_mean": null, "ioreg_n": 0, "phase": "Token Decoding", "profiler_gpu_mean": 85, "xctrace_busy_pct": 0}
+BENCH {"build":"Release","chars":257,"chip":"Apple M3 Max","commit":"5b44d5cd4","date":"2026-10-19T18:47:42Z","delay_ms":480,"dirty":false,"encode_ms_per_audio_s":15.65,"input":"/Users/vincent/Developpements/convertvoxtral/docs/eval/clips/c_20s_en.wav","input_s":20.56,"load_active_mb":2979.4,"load_ms":244.7,"macos":"27.0.1","mlx_profiler":"1.5.1@bfe71d834","mlx_swift":"0.31.6@0bb916c67","mlx_swift_lm":"main@604fae710","model":"realtime-4b-4bit","out_sha256":"07745ac2939e47801d3b6b6e267a39e9da59909f6c830ba4669169aeb160c8ac","pad_fraction":0.7836,"pass":1,"peak_footprint_mb":4914.5,"peak_mlx_mb":3930,"peak_mlx_mb_by_phase":{"decode":3914.9,"encode":3914.9,"prefill":3002.8},"phases_ms":{"audio":1.3,"decode":2746.9,"encode":321.7,"post":0,"prefill":36.3},"pipeline":"realtime","power":"AC Power","profile":"default","ram_gb":96,"rtf":0.1511,"step_ms_p50":10.13,"step_ms_p90":10.41,"steps":266,"streaming_pad_fraction":0.6418,"tag":"TRACE-decode-B","top_process":"27,6 /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI","total_ms":3107.3,"truncated":false,"ttft_ms":387.5,"warm":true}
+METAL_TRACE /Volumes/Lexar/voxtral-xctrace-k47/decode-B/trace-realtime-2026-10-19T184742Z.trace intervals=3566 busy=98.4%
+GPUOCC {"duration_ms": 1.6, "gap_profiler_xctrace_pts": 20, "ioreg_mean": null, "ioreg_n": 0, "phase": "Mel Spectrogram", "profiler_gpu_mean": 20, "xctrace_busy_pct": 0}
+GPUOCC {"duration_ms": 324.8, "gap_ioreg_xctrace_pts": 4.4, "gap_profiler_xctrace_pts": 3.0, "ioreg_mean": 92.5, "ioreg_n": 2, "phase": "Audio Encoding", "profiler_gpu_mean": 99.9, "xctrace_busy_pct": 96.9}
+GPUOCC {"duration_ms": 34.4, "gap_profiler_xctrace_pts": 23.7, "ioreg_mean": null, "ioreg_n": 0, "phase": "Prefill", "profiler_gpu_mean": 95.2, "xctrace_busy_pct": 71.5}
+GPUOCC {"duration_ms": 3128.3, "gap_ioreg_xctrace_pts": 0.6, "gap_profiler_xctrace_pts": 1.2, "ioreg_mean": 98.9, "ioreg_n": 19, "phase": "Realtime Generation", "profiler_gpu_mean": 99.5, "xctrace_busy_pct": 98.3}
+GPUOCC {"duration_ms": 0, "gap_profiler_xctrace_pts": 70, "ioreg_mean": null, "ioreg_n": 0, "phase": "Token Decoding", "profiler_gpu_mean": 30, "xctrace_busy_pct": 100}
+```
+
+Machine-check avant chaque passe (`.local-runs/k47/mc_*.log`, `.local-runs/k47/trace/mc_*.log`) :
+
+```
+# k47/mc_eval-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 37,3 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 60,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_eval-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 47,6 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 59,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_A1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 35,5 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 58,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_B1.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 36,1 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 57,5 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_B2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 44,6 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 57,8 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_A2.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 26,8 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 53,5 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_A1r.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 29,0 corespotlightd
+KO  indexation/sauvegarde en cours (29 %) : refaire plus tard
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 51,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_A3.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,0 claude
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 51,4 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_B3.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 75,4 mediaanalysisd
+KO  indexation/sauvegarde en cours (75 %) : refaire plus tard
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 60,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_B4.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 5,2 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 58,1 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/mc_A4.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 4,9 com.apple.CoreSimulator.CoreSimulatorService
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 58,0 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/trace/mc_decode-A.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 26,4 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 53,6 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+# k47/trace/mc_decode-B.log
+OK  aucun autre process MLX
+INFO process le plus gourmand : 27,6 WindowServer
+OK  binaire Release : /Users/vincent/Developpements/convertvoxtral/.build/xcode/Build/Products/Release/VoxtralCLI
+OK  sur secteur
+INFO  powermode            2
+INFO thermique : Note: No thermal warning level has been recorded
+INFO mémoire libre+inactive ≈ 53,2 Go
+INFO refroidissement 120s…
+OK  refroidissement fait
+```
+
+Charge de fond pendant chaque passe (`quiet.sh sample`, fichiers `.samples.load`, enregistrée, jamais un rejet) :
+
+```
+# k47/eval-A.samples.load
+19:53:32  55,2 /Library/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python (x1/      24)
+19:53:15  75,3 /usr/libexec/syspolicyd (x1/      24)
+19:53:07  55,1 /System/Applications/FindMy.app/Contents/MacOS/FindMy (x1/      24)
+19:53:55  93,0 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x12/      24)
+19:53:26 163,4 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x7/      24)
+19:53:55  81,6 /System/Library/Frameworks/CoreSpotlight.framework/spotlightknowledged (x2/      24)
+19:53:36  53,6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x3/      24)
+19:53:11  58,6 /usr/libexec/spotlightknowledged.updater (x1/      24)
+# k47/eval-B.samples.load
+19:59:31  60,7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x9/      21)
+# k47/A1.samples.load
+20:06:32 118,3 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      82)
+20:05:48  57,2 /sbin/launchd (x1/      82)
+20:07:29  51,6 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x11/      82)
+# k47/B1.samples.load
+20:13:45 111,5 /usr/libexec/PerfPowerServices (x1/      79)
+20:15:14  76,5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x15/      79)
+# k47/B2.samples.load
+20:21:20  75,6 /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer) (x1/      76)
+20:21:45  72,9 /usr/libexec/textunderstandingd (x5/      76)
+20:22:24  95,9 /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend (x6/      76)
+20:22:57  93,5 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x30/      76)
+20:21:33  58,9 /System/Applications/Mail.app/Contents/MacOS/Mail (x1/      76)
+20:21:50 126,5 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x8/      76)
+20:22:28  50,7 /usr/libexec/duetexpertd (x1/      76)
+20:22:22  71,4 /usr/libexec/mobileassetd (x1/      76)
+20:20:48  56,1 /sbin/launchd (x1/      76)
+20:22:07  50,2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x3/      76)
+20:22:30 simulators shut down during the pass (x1/      76)
+20:22:28  86,1 /System/Library/CoreServices/TimeMachine/backupd-helper (x3/      76)
+20:21:41  60,1 /usr/libexec/spotlightknowledged.updater (x1/      76)
+20:22:26 187,2 /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld (x1/      76)
+20:22:53  80,4 /System/Library/CoreServices/TimeMachine/backupd (x2/      76)
+20:22:13 111,1 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd (x1/      76)
+20:22:22  72,5 /System/Library/PrivateFrameworks/CacheDelete.framework/deleted (x1/      76)
+# k47/A2.samples.load
+20:28:03  63,0 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/KaleidoscopePosterApp.app/Extensions/KaleidoscopePoster.appex/KaleidoscopePoster (x2/      80)
+20:28:03  72,9 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/UnityPosterApp.app/Extensions/ExtragalacticPoster.appex/ExtragalacticPoster (x1/      80)
+20:28:15  71,0 /usr/libexec/diskimagesiod (x2/      80)
+20:28:08 simulators shut down during the pass (x1/      80)
+20:27:59  88,0 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/ExtensionKit/Extensions/MercuryPosterExtension.appex/MercuryPosterExtension (x2/      80)
+20:27:59  80,8 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds (x1/      80)
+20:28:06 100,0 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/GradientPoster.app/Extensions/GradientPosterExtension.appex/GradientPosterExtension (x2/      80)
+20:28:01  52,3 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/UnityPosterApp.app/Extensions/RhizomePoster.appex/RhizomePoster (x2/      80)
+20:27:59  85,9 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/WeatherPosterApp.app/Extensions/WeatherPoster.appex/WeatherPoster (x1/      80)
+20:28:06  97,7 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/PridePosterApp.app/Extensions/PridePosterExtension.appex/PridePosterExtension (x3/      80)
+20:30:43 172,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x3/      80)
+20:28:03  56,3 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/usr/libexec/diagnosticd (x1/      80)
+20:28:01  64,4 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/PrivateFrameworks/SiriInference.framework/Support/siriinferenced (x1/      80)
+20:28:06  97,8 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/CoreServices/AegirProxyApp.app/Extensions/AegirPoster.appex/AegirPoster (x1/      80)
+20:28:03 100,0 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/EmojiPoster.app/Extensions/EmojiPosterExtension.appex/EmojiPosterExtension (x3/      80)
+20:27:59  85,6 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/Applications/UnityPosterApp.app/Extensions/Unity2025Poster.appex/Unity2025Poster (x2/      80)
+20:28:03 131,9 /Library/Developer/CoreSimulator/Volumes/iOS_24A94401/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.1.simruntime/Contents/Resources/RuntimeRoot/System/Library/ExtensionKit/Extensions/PhotosPosterProvider.appex/PhotosPosterProvider (x1/      80)
+20:28:17  52,9 /System/Library/PrivateFrameworks/OSAnalyticsPrivate.framework/XPCServices/ReportCrashService.xpc/Contents/MacOS/ReportCrashService (x1/      80)
+# k47/A1r.samples.load (vide)
+# k47/A3.samples.load
+06:46:33 223,9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/      81)
+# k47/B3.samples.load (vide)
+# k47/B4.samples.load
+07:27:45 134,9 /usr/libexec/PerfPowerServices (x1/      78)
+07:28:44 228,6 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x5/      78)
+# k47/A4.samples.load (vide)
+# k47/trace/decode-A.samples.load
+20:40:30  84,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds (x1/     137)
+20:38:56  60,1 /System/Applications/Mail.app/Contents/MacOS/Mail (x2/     137)
+20:40:24  76,1 /System/Library/PrivateFrameworks/WorkflowKit.framework/XPCServices/BackgroundShortcutRunner.xpc/Contents/MacOS/BackgroundShortcutRunner (x1/     137)
+20:40:34 402,1 /Applications/Xcode.app/Contents/Developer/usr/bin/xctrace (x13/     137)
+20:39:54 107,2 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x7/     137)
+20:40:32  50,3 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdbulkimport (x1/     137)
+20:36:14  54,1 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x1/     137)
+# k47/trace/decode-B.samples.load
+20:49:58  71,4 /private/var/db/com.apple.xpc.roleaccountd.staging/exec/16777232.280939907.xpc/Contents/MacOS/com.apple.dt.instruments.dtsecurity (x1/     135)
+20:46:13 246,3 /System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd (x19/     135)
+20:50:15 281,8 /Applications/Xcode.app/Contents/Developer/usr/bin/xctrace (x11/     135)
+20:46:55 158,3 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd (x8/     135)
+20:47:39  54,5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (x1/     135)
+20:46:53  51,0 /usr/libexec/spotlightknowledged.updater (x1/     135)
+```
