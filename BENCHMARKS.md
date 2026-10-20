@@ -7941,7 +7941,10 @@ deux côtés ; A/A 0,5 %.
   − 19 % : les fiches appliquées depuis (K-40 et suivantes) ont accéléré le STT ; la base de K-96 n'est plus la
   référence du jour (dérogation 1). `out_sha256` identique aux quatre passes et à la BASE (`fcec405c…`).
 - Le temps de l'encodeur passe de `decode` à `encode` : `decode` A − B ≈ 1 353 ms ≈ `encode` ; `total_ms` et
-  `ttft_ms` inchangés. Pic MLX de la phase `encode` 4 995,6 / 5 032,2 Mo ; pic total inchangé (5 552,3 Mo).
+  `ttft_ms` inchangés. Pic MLX de la phase `encode` 4 995,6 / 5 032,2 Mo ; `peak_mlx_mb` inchangé (5 552,3 Mo), mais
+  `peak_mlx_mb_by_phase.prefill` et `.decode` passent de 5 505,3 (A) à 5 552,3 Mo (B), + 47 Mo reproduits, et
+  `peak_footprint_mb` de 7 209,6 / 7 209,5 à 7 283,9 / 7 301,4 Mo : le pic de l'encodeur, auparavant dans la remise à
+  zéro de la phase Generation, est maintenant vu par les phases suivantes (aucun calcul changé ; lecture, non mesurée à part).
 
 **Lignes `BENCH`.**
 ```

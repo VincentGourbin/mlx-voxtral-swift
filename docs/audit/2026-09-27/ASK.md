@@ -1421,3 +1421,10 @@ Décisions du planificateur du 2026-10-03 :
     le script corrigé. Deux suites à planifier.
   - (9) Tag unique `K89-A` / `K89-B` par côté pour les deux passes (une passe par processus, `pass` = 1 dans chaque
     ligne ; l'ordre se lit à `date`).
+  - (10) Contradicteur (2026-10-20) : la base de warnings est un compte (`count > baseline`), pas un ensemble, et
+    suit l'Xcode 26 le plus récent du runner : un warning retiré masque un warning ajouté. Liste du jour :
+    `.local-runs/k89/ci-probe2/warnings.txt` (11). Suite : versionner la liste et comparer les ensembles.
+  - (11) Note de K-93 non traitée (`commit` du binaire et non du dossier courant, `BenchCommand.swift:254-255`) :
+    contournée en lançant A depuis son worktree ; reportée en suite.
+  - (12) Les tests couvrent l'arithmétique, pas le câblage (retirer la phase `encode` ou mal appeler `padFractions`
+    n'en rougit aucun) : seul le bench Release, comme la porte le demande, couvre la phase.
