@@ -165,9 +165,11 @@ class VoxtralRealtimeDecoder: Module {
     /// Call once after model loading with the chosen delay.
     func precomputeAdaScales(tCond: MLXArray) {
         // tCond is built in fp32: cast to the Ada MLP's dtype (mlx-audio `voxtral_realtime.py:130-131`), or the scales
-        // would promote the residual stream to fp32 from layer 0 (K-38)
+        // would promote the residual stream to fp32 from layer 0 (K-38). The compute dtype, not `adaDown.weight`'s: a
+        // voxmlx pack quantizes the Ada MLP, whose weight is packed uint32 (K-91)
+        let dtype = realtimeComputeDType(self)
         adaScales = layers.map { layer in
-            layer.adaNorm.map { $0.computeScale(tCond.asType($0.adaDown.weight.dtype)) }
+            layer.adaNorm.map { $0.computeScale(tCond.asType(dtype)) }
         }
         // Evaluate eagerly
         for scale in adaScales {

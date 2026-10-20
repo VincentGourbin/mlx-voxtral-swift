@@ -127,6 +127,28 @@ final class VoxmlxFormatTests: XCTestCase {
         print("[k91] voxmlx fixture: \(own.count) parameters loaded, \(different.count) different")
     }
 
+    /// voxmlx quantizes the Ada MLP: its `weight` is packed uint32, and casting the time conditioning to that dtype
+    /// truncated it to integers. On the real packs the decoder then only emitted streaming pads past a few seconds
+    /// (C-moyen EN and FR empty, K-91 measurement queue)
+    func testQuantizedAdaMLPKeepsTheTimeConditioning() throws {
+        try writePack(quantized: true, name: voxmlxName)
+        let model = try loadVoxtralRealtimeModel(from: directory)
+        let ada = try XCTUnwrap(model.decoder.layers[0].adaNorm)
+        let down = try XCTUnwrap(ada.adaDown as? QuantizedLinear, "fixture: Ada MLP quantized, as in the voxmlx packs")
+        let tCond = computeTimeEmbedding(tValue: 6, dim: model.config.decoder.dim)
+        model.decoder.precomputeAdaScales(tCond: tCond)
+        let scale = try XCTUnwrap(model.decoder.adaScales[0])
+
+        let downWeight = dequantized(
+            down.weight, scales: down.scales, biases: down.biases, groupSize: down.groupSize, bits: down.bits
+        ).asType(.float32)
+        let expected = matmul(gelu(matmul(tCond.asType(.float32), downWeight.T)), ada.adaUp.weight.asType(.float32).T)
+        XCTAssertEqual(scale.dtype, realtimeComputeDType(model), "the compute dtype, not the packed uint32")
+        let error = (abs(scale.asType(.float32) - expected).max() / abs(expected).max()).item(Float.self)
+        XCTAssertLessThan(error, 0.02, "Ada scale of the quantized MLP matches the de-quantized reference")
+        print("[k91] quantized Ada MLP: scale dtype \(scale.dtype), max relative error \(error)")
+    }
+
     func testVoxmlxNamesMapToTheModel() {
         let weights = [
             "adapter.w_in.weight": "encoder.audio_language_projection_0.weight",

@@ -709,7 +709,7 @@ struct Realtime: AsyncParsableCommand {
     @Argument(help: "Path to audio file (MP3, WAV, M4A, etc.)")
     var audioFile: String
 
-    @Option(name: .shortAndLong, help: "Model: realtime-4b-4bit, realtime-4b-fp16, realtime-4b")
+    @Option(name: .shortAndLong, help: "Model: realtime-4b-4bit, realtime-4b-6bit, realtime-4b-8bit, realtime-4b-fp16, realtime-4b")
     var model: String = "realtime-4b-4bit"
 
     @Option(name: .long, help: "Maximum tokens to generate")

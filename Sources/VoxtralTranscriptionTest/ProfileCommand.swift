@@ -50,7 +50,7 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "TTS model: tts-4b-mlx, tts-4b-4bit, tts-4b-6bit")
     var ttsModel: String = "tts-4b-mlx"
 
-    @Option(name: .long, help: "Realtime model: realtime-4b-4bit, realtime-4b-fp16")
+    @Option(name: .long, help: "Realtime model: realtime-4b-4bit, realtime-4b-6bit, realtime-4b-8bit, realtime-4b-fp16")
     var realtimeModel: String = "realtime-4b-4bit"
 
     @Option(name: .long, help: "Voice preset for TTS")
