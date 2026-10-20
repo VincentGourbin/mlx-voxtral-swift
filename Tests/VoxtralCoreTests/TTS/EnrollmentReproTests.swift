@@ -106,7 +106,8 @@ final class EnrollmentReproTests: XCTestCase {
             XCTAssertThrowsError(try run(config(seed: 7, checkpoint: url), stopAt: 6, modelID: "tts-4b-4bit"))
             XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         }
-        func refused(_ what: String, _ key: String, _ resume: () throws -> MLXArray) {
+        func refused(_ what: String, _ key: String, _ resume: () throws -> MLXArray) throws {
+            try stopped()  // each case starts from a fresh checkpoint of the reference run
             XCTAssertThrowsError(try resume(), what) { error in
                 guard let error = error as? VoxtralVoiceEnrollment.EnrollmentCheckpointError else {
                     return XCTFail("\(what): \(error)")
@@ -115,15 +116,15 @@ final class EnrollmentReproTests: XCTestCase {
                 print("[k88] CHECKPOINT \(what) : refused (\(key))")
             }
         }
-        try stopped()
         let louder = reference(frames: 25) * 1.01
-        refused("another reference", "reference") {
+        try refused("another reference", "reference") {
             try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-4bit", reference: louder)
         }
-        refused("another model", "model") { try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-6bit") }
+        try refused("another model", "model") { try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-6bit") }
         var weights = config(seed: 7, checkpoint: url)
         weights.melWeight = 2
-        refused("other loss weights", "melWeight") { try run(weights, modelID: "tts-4b-4bit") }
+        try refused("other loss weights", "melWeight") { try run(weights, modelID: "tts-4b-4bit") }
+        try stopped()
         XCTAssertNoThrow(try run(config(seed: 7, checkpoint: url), modelID: "tts-4b-4bit"), "its own run resumes")
     }
 

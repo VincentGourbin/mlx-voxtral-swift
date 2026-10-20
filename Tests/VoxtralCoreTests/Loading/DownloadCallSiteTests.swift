@@ -125,6 +125,48 @@ final class DownloadCallSiteTests: XCTestCase {
         }
     }
 
+    /// `tts-4b-mlx` ships `model-0000i-of-00002.safetensors` with no index: all of them is complete, one is not, and
+    /// a refused folder keeps no manifest (the next call does not take it for downloaded)
+    func testUnindexedShardsAreCompleteOnlyWhenAllArePresent() async throws {
+        let full = repo("tts-shards")
+        let base: [String: Data] = ["params.json": Data("{\"dim\": 8}".utf8), "tekken.json": Data("{\"vocab\": []}".utf8),
+                                    "voice_embedding/neutral_female.safetensors": blob(4, 256),
+                                    "model-00001-of-00002.safetensors": blob(1), "model-00002-of-00002.safetensors": blob(2)]
+        HubStubProtocol.repoId = full; HubStubProtocol.files = base
+        let model = VoxtralTTSModelInfo(id: "t", repoId: full, name: "t", description: "", size: "", quantization: "",
+                                        parameters: "")
+        _ = try await VoxtralModelDownloader.downloadTTSModel(model)
+
+        let half = repo("tts-half")
+        HubStubProtocol.repoId = half
+        HubStubProtocol.files = base.filter { $0.key != "model-00002-of-00002.safetensors" }
+        let partial = VoxtralTTSModelInfo(id: "t", repoId: half, name: "t", description: "", size: "", quantization: "",
+                                          parameters: "")
+        do {
+            _ = try await VoxtralModelDownloader.downloadTTSModel(partial)
+            XCTFail("one shard of two must not be returned as downloaded")
+        } catch {
+            XCTAssertTrue("\(error)".contains("model-00002-of-00002.safetensors"), "\(error)")
+        }
+        XCTAssertNil(VoxtralModelDownloader.findTTSModelPath(for: partial), "a refused folder must not pass for downloaded")
+    }
+
+    /// Every registry pack on disk has what `requireComplete` asks of a fresh download (real layouts, K-88)
+    func testEveryPackOnDiskPassesTheStructureCheck() throws {
+        VoxtralModelDownloader.customModelsDirectory = previousCustomDir
+        var checked: [String] = []
+        func check(_ id: String, _ folder: URL?, voices: Bool = false) {
+            guard let folder else { return }
+            XCTAssertEqual(VoxtralModelDownloader.missingModelFiles(folder, requiresVoices: voices), [], id)
+            checked.append(id)
+        }
+        for info in VoxtralModelRegistry.models { check(info.id, VoxtralModelDownloader.findModelPath(for: info)) }
+        for info in VoxtralTTSRegistry.models { check(info.id, VoxtralModelDownloader.findTTSModelPath(for: info), voices: true) }
+        for info in VoxtralRealtimeRegistry.models { check(info.id, VoxtralModelDownloader.findRealtimeModelPath(for: info)) }
+        print("[k88] STRUCTURE \(checked.count) packs on disk pass: \(checked)")
+        if checked.isEmpty { throw XCTSkip("no pack is downloaded") }
+    }
+
     func testRealtimeDownloadFollowsTheEntryFileList() async throws {
         let repoId = repo("realtime")
         let model = VoxtralRealtimeModelInfo(id: "t", repoId: repoId, name: "t", description: "", size: "",

@@ -192,17 +192,21 @@ public class VoxtralModelDownloader {
         // Just after a download the manifest lists what was fetched, so it cannot see what the repo lacks (K-88)
         let missing = missingModelFiles(folder, requiresVoices: requiresVoices)
         guard missing.isEmpty else {
+            // No manifest left behind: the next call must not take the folder for complete
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(manifestFileName))
             throw VoxtralError.loadingFailed("\(repoId) lacks \(missing.joined(separator: ", ")) (\(folder.path))")
         }
     }
 
     /// What a model folder needs whatever its manifest says: its weights (every shard of the index, a single
-    /// `model.safetensors`, or Mistral's `consolidated.safetensors`), `tekken.json`, and a voice when `requiresVoices`
+    /// `model.safetensors`, Mistral's `consolidated.safetensors`, or all n `model-<i>-of-<n>.safetensors` without an
+    /// index, as `tts-4b-mlx` ships them), `tekken.json`, and a voice when `requiresVoices`
     static func missingModelFiles(_ folder: URL, requiresVoices: Bool) -> [String] {
         var missing: [String] = []
         let shards = verifyShardedModel(at: folder)
         if !shards.complete && fileSize(at: folder.appendingPathComponent("consolidated.safetensors")) == nil {
-            missing += shards.missing
+            let indexed = FileManager.default.fileExists(atPath: folder.appendingPathComponent("model.safetensors.index.json").path)
+            missing += indexed ? shards.missing : (missingUnindexedShards(folder) ?? shards.missing)
         }
         if fileSize(at: folder.appendingPathComponent("tekken.json")) == nil { missing.append("tekken.json") }
         if requiresVoices {
@@ -212,6 +216,21 @@ public class VoxtralModelDownloader {
             if voices.isEmpty { missing.append("voice_embedding/*") }
         }
         return missing
+    }
+
+    /// Shards named `model-<i>-of-<n>.safetensors` with no index: the missing ones among the n (empty when all are
+    /// there), nil when the folder has none or counts that disagree
+    static func missingUnindexedShards(_ folder: URL) -> [String]? {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        let shards = names.filter { $0.range(of: #"^model-\d+-of-\d+\.safetensors$"#, options: .regularExpression) != nil }
+        let counts = Set(shards.compactMap { $0.dropLast(".safetensors".count).split(separator: "-").last.map(String.init) })
+        guard let first = shards.sorted().first, counts.count == 1, let countText = counts.first, let total = Int(countText),
+              total > 0 else { return nil }
+        let digits = first.split(separator: "-")[1].count
+        let expected = (1 ... total).map { i in
+            "model-\(String(repeating: "0", count: max(0, digits - String(i).count)))\(i)-of-\(countText).safetensors"
+        }
+        return expected.filter { fileSize(at: folder.appendingPathComponent($0)) == nil }
     }
 
     private static func fraction(_ done: Int, _ total: Int) -> Double {
