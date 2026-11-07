@@ -60,10 +60,16 @@ struct BenchCommonOptions: ParsableArguments {
         return config
     }
 
-    /// The `profile` field of the BENCH line
+    /// The `profile` field of a BENCH line, with what it asked for; `cache_limit_mb` says what applied
     var profile: String {
         var parts: [String] = memory == .lean ? ["lean"] : []
         if let cacheLimitMb { parts.append("cacheLimit=\(cacheLimitMb)MB") }
+        return parts.isEmpty ? "default" : parts.joined(separator: ",")
+    }
+
+    /// Same, with the settings only STT has
+    var sttProfile: String {
+        var parts = profile == "default" ? [] : [profile]
         if let kvBits { parts.append("kvBits=\(kvBits)") }
         if let prefillStep { parts.append("prefillStep=\(prefillStep)") }
         return parts.isEmpty ? "default" : parts.joined(separator: ",")
@@ -486,6 +492,7 @@ enum BenchRunner {
             "peak_mlx_mb_by_phase": m.phasePeakMLX.mapValues { BenchJSON.round($0) ?? 0 },
             "peak_footprint_mb": BenchJSON.round(m.peakFootprintMB) ?? 0,
             "steps": m.stepMs.count,
+            "cache_limit_mb": Memory.cacheLimit / 1_048_576,
         ]
         if let p50 = BenchJSON.percentile(m.stepMs, 0.5) { record["step_ms_p50"] = BenchJSON.round(p50, 2) }
         if let p90 = BenchJSON.percentile(m.stepMs, 0.9) { record["step_ms_p90"] = BenchJSON.round(p90, 2) }
@@ -555,7 +562,7 @@ struct BenchSTT: AsyncParsableCommand {
         let base: [String: Any] = [
             "pipeline": "stt", "model": model, "backend": backend, "input": input,
             "input_s": BenchJSON.round(seconds, 2) ?? 0, "language": language ?? "auto",
-            "profile": common.profile, "load_ms": BenchJSON.round(loadMs) ?? 0,
+            "profile": common.sttProfile, "load_ms": BenchJSON.round(loadMs) ?? 0,
         ]
         try await BenchRunner.run(common, base: base) { _, _ in
             var text = ""

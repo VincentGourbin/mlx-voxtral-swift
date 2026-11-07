@@ -31,6 +31,16 @@ extension MemoryOptimizationConfig {
         self.init(limits: VoxtralMemoryLimits(cacheBytes: cacheLimitBytes), maxKVCacheSize: maxKVCacheSize)
     }
 
+    @available(*, deprecated, message: "No flush runs inside the decoding loop any more (K-51): use .fast or .lean")
+    public init(clearCacheOnEval: Bool, resetPeakMemory: Bool = false, maxKVCacheSize: Int? = nil) {
+        self.init(maxKVCacheSize: maxKVCacheSize)
+    }
+
+    @available(*, deprecated, message: "No effect since K-32: a measuring tool resets the peak counter")
+    public init(resetPeakMemory: Bool, maxKVCacheSize: Int? = nil) {
+        self.init(maxKVCacheSize: maxKVCacheSize)
+    }
+
     @available(*, deprecated, renamed: "fast")
     public static var disabled: MemoryOptimizationConfig { .fast }
     @available(*, deprecated, renamed: "fast")

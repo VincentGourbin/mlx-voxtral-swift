@@ -258,6 +258,7 @@ class VoxtralHybridEncoder {
         // Add batch dimension
         let result = expandedDimensions(concatenated, axis: 0)  // [1, numChunks * 375, 3072]
 
+        VoxtralGPUGate.shared.wait()
         eval(result)
         return result
     }

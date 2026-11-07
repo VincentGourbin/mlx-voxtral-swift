@@ -17,7 +17,12 @@ Détail : [`docs/knowledge/log.md`](docs/knowledge/log.md). Rien de cela n'est e
 
 ## Lots
 
-État : lot 1 livré ([PR #51](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/51)) ; prochain : lot 2.
+État : lot 1 livré ([PR #51](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/51)) ; lot 2 en revue
+([PR #52](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/52)) ; prochain : lot 3.
+
+Reste à mesurer pour le lot 2, Lexar monté, A/B/B/A contre `86bb24b2` : `lean` sur audio long (mini-3b-8bit, small-4bit) et en
+TTS, K-51 (`step_ms_p50` sous 32 Go), K-55 (small-4bit, WER), K-59 (1er préfill = préfill à chaud), K-62 (256 à 2 048),
+K-63 (mini-3b-8bit, pic de décodage). Un levier sous sa porte sort du profil `lean`.
 
 | Lot | Contenu | Fini quand | Reprend |
 |---|---|---|---|
@@ -51,6 +56,9 @@ finis. Après la 3.0.0, l'API n'évolue plus que par ajout : tout ce que l'iPhon
 - Catalogue : `verify` ne compare pas la révision du manifeste à celle du catalogue ; le snapshot Hub retenu est le dernier
   par nom, pas le plus récent ; `delete` de l'API efface toutes les copies, dossier Hub partagé compris, sans option de
   portée (`deletionTargets` permet de demander confirmation avant).
+- iPhone : en TTS en flux, la porte GPU bloque deux fils du pool coopératif tant que l'app est en arrière-plan. Realtime et
+  enrôlement ne sont pas couverts par la porte (hors périmètre).
+- Realtime : le vidage du cache tous les 256 pas reste, sans A/B (reste de K-52).
 - Avant la 3.0.0 : `tts-4b-8bit` au registre sans pack publié (K-90), Small `.auto` bimodal avec dernier segment français
   traduit (K-85), tests gardés `PARITY` (référence d'avant K-40) et `TTS_STREAM` (course de `.ready`) en échec depuis K-89.
 
@@ -69,3 +77,6 @@ Proposition de l'agent en gras.
    (`.local-runs/k90/card/README.md`) avant publication.
 6. Voix clonée sur iPhone : le 4 bits la dégrade (K-97) et le pack 6 bits pèse 3,47 Go de poids, peu compatible avec
    4 Go de pic. **A) 6 bits, pic visé ≤ 5 Go avec Increased Memory Limit** ; B) voix prédéfinies seulement sur iPhone.
+7. STT sous 32 Go de RAM : `.aggressive` et `.ultra` vidaient le cache dans la boucle de décodage ; sans ce vidage (K-51),
+   rien ne bornait plus le cache sur ces machines. **A) plafond de 2 Go par défaut, désactivable, comme Small (posé par le
+   lot 2)** ; B) aucun plafond par défaut, et un pic plus haut sur audio long.

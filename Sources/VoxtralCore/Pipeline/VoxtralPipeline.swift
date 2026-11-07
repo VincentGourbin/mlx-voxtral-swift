@@ -394,6 +394,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
+            try VoxtralCancellation.gpuCheckpoint()  // the feature extraction reads MLX arrays
             let session = MLXProfiler.shared.activeSession
             let beacon = VoxtralRuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
             defer { beacon?.end() }
@@ -446,6 +447,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
+            try VoxtralCancellation.gpuCheckpoint()  // the feature extraction reads MLX arrays
             let session = MLXProfiler.shared.activeSession
             let beacon = VoxtralRuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
             defer { beacon?.end() }

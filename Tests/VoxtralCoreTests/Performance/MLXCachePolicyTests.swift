@@ -48,6 +48,33 @@ final class MLXCachePolicyTests: XCTestCase {
         policy.restore()
     }
 
+    func testTheTightestPipelineWinsAndTheHostComesBackWithTheLast() {
+        let host = Memory.cacheLimit
+        defer { Memory.cacheLimit = host }
+        let stt = MLXCachePolicy()
+        let tts = MLXCachePolicy()
+        stt.apply(VoxtralMemoryLimits(cacheBytes: 512 * 1_048_576))
+        tts.apply(VoxtralMemoryLimits(cacheBytes: 256 * 1_048_576))
+        XCTAssertEqual(Memory.cacheLimit, 256 * 1_048_576)
+        stt.enter(.generate)
+        XCTAssertEqual(Memory.cacheLimit, 256 * 1_048_576, "a stage of one pipeline does not lift the other's ceiling")
+
+        tts.restore()
+        XCTAssertEqual(Memory.cacheLimit, 512 * 1_048_576, "the first pipeline keeps its ceiling")
+        stt.restore()
+        XCTAssertEqual(Memory.cacheLimit, host)
+    }
+
+    func testAPipelineDroppedWithoutUnloadGivesItsLimitsBack() {
+        let host = Memory.cacheLimit
+        defer { Memory.cacheLimit = host }
+        var policy: MLXCachePolicy? = MLXCachePolicy()
+        policy?.apply(VoxtralMemoryLimits(cacheBytes: 256 * 1_048_576))
+        XCTAssertEqual(Memory.cacheLimit, 256 * 1_048_576)
+        policy = nil
+        XCTAssertEqual(Memory.cacheLimit, host)
+    }
+
     func testMemoryLimitIsAppliedThenHostValueRestored() {
         let host = Memory.memoryLimit
         defer { Memory.memoryLimit = host }

@@ -337,6 +337,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
+                VoxtralGPUGate.shared.wait()  // the trims read the waveform
 
                 session?.beginPhase("Audio Post-processing", category: .postProcess)
                 let waveform = applyTrims(rawWaveform)
@@ -483,6 +484,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
+                VoxtralGPUGate.shared.wait()  // the trims read the waveform
 
                 session?.beginPhase("Audio Post-processing", category: .postProcess)
                 // Drop the warm-up carrier's audio. When it trims, the carrier trim

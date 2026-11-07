@@ -148,6 +148,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 gate.end(generation, state: .ready)
 
             } catch {
+                cachePolicy.restore()
                 gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
@@ -179,7 +180,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.beginPhase("Mel Spectrogram", category: .melSpectrogram)
                 let mel = try prepareMel(from: audio, config: model.config)
                 session?.endPhase("Mel Spectrogram", category: .melSpectrogram)
-                try VoxtralCancellation.check()
+                try VoxtralCancellation.gpuCheckpoint()
 
                 // Generate transcription
                 session?.beginPhase("Realtime Generation", category: .generation)

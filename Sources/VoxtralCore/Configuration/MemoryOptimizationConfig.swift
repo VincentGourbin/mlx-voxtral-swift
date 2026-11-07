@@ -7,15 +7,16 @@
 
 import Foundation
 
-public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvertible {
+public struct MemoryOptimizationConfig: Sendable, CustomStringConvertible {
 
     /// MLX limits held while the pipeline is loaded
     public var limits: VoxtralMemoryLimits {
-        didSet { hasDefaultLimits = false }
+        didSet { defaultLimitsRAMGB = nil }
     }
 
-    /// Set by `recommended`, until the host sets limits of its own: the pipeline may then tighten them for its model
-    private(set) var hasDefaultLimits = false
+    /// The RAM `recommended` sized `limits` for, until the host sets limits of its own: the pipeline may then tighten
+    /// them for its model
+    private var defaultLimitsRAMGB: Int?
 
     /// Maximum KV cache size (nil = unlimited, the default).
     /// Voxtral's LM has no sliding window: a limit does not evict the beginning of the audio, it makes
@@ -72,20 +73,21 @@ public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvert
     /// (ASK-33: 37 GB of peak on 8 min of audio without it), unless the host sets limits of its own, even `nil`.
     /// - Parameter ramGB: RAM in gigabytes (nil = this machine's)
     public static func recommended(forRAMGB ramGB: Int? = nil) -> MemoryOptimizationConfig {
+        let ram = ramGB ?? Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024))
         var config = MemoryOptimizationConfig.fast
-        if ramGB ?? physicalRAMGB < 32 { config.cacheLimitBytes = defaultCacheLimitBytes }
-        config.hasDefaultLimits = true
+        if ram < 32 { config.cacheLimitBytes = defaultCacheLimitBytes }
+        config.defaultLimitsRAMGB = ram
         return config
     }
 
     /// The limits a pipeline holds for `model`
-    func limits(for model: VoxtralPipeline.Model, ramGB: Int = physicalRAMGB) -> VoxtralMemoryLimits {
+    func limits(for model: VoxtralPipeline.Model) -> VoxtralMemoryLimits {
         var limits = self.limits
-        if hasDefaultLimits, model.rawValue.hasPrefix("small"), ramGB <= 32 { limits.cacheBytes = Self.defaultCacheLimitBytes }
+        if let ram = defaultLimitsRAMGB, ram <= 32, model.rawValue.hasPrefix("small") {
+            limits.cacheBytes = Self.defaultCacheLimitBytes
+        }
         return limits
     }
-
-    static var physicalRAMGB: Int { Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)) }
 
     // MARK: - Description
 
@@ -99,5 +101,13 @@ public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvert
         parts.append("prefillStep=\(prefillStepSize)")
         if releasesAudioTower { parts.append("releaseAudioTower") }
         return "MemoryOptimizationConfig(\(parts.joined(separator: ", ")))"
+    }
+}
+
+// The public settings: where the default limits came from is not one of them
+extension MemoryOptimizationConfig: Equatable {
+    public static func == (lhs: MemoryOptimizationConfig, rhs: MemoryOptimizationConfig) -> Bool {
+        lhs.limits == rhs.limits && lhs.maxKVCacheSize == rhs.maxKVCacheSize && lhs.kvCacheBits == rhs.kvCacheBits
+            && lhs.prefillStepSize == rhs.prefillStepSize && lhs.releasesAudioTower == rhs.releasesAudioTower
     }
 }

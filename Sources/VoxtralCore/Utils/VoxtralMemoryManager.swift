@@ -20,7 +20,8 @@ public struct VoxtralMemoryLimits: Sendable, Equatable {
     /// Ceiling of MLX's buffer cache (`Memory.cacheLimit`). Without one, MLX keeps every freed buffer: 70 GB of process
     /// for 8.6 GB of active memory on 11 min of audio (K-52)
     public var cacheBytes: Int?
-    /// `Memory.memoryLimit`: the threshold where MLX empties its cache, not a hard ceiling
+    /// `Memory.memoryLimit`: above it MLX empties its cache and makes each evaluation wait for the work in progress, so
+    /// keep it above the weights. Not a hard ceiling
     public var memoryBytes: Int?
     /// Empties the cache between two stages of a request (encoder then decoder, decoder then codec)
     public var clearsCacheBetweenStages: Bool
@@ -34,13 +35,20 @@ public struct VoxtralMemoryLimits: Sendable, Equatable {
     /// No limit: the host's settings stay
     public static let none = VoxtralMemoryLimits()
 
-    /// Sized from what the process can still allocate: a cache of `available / 6` between 256 MB and 1 GB, and a memory
-    /// threshold of `available` − 1.25 GB, never below 3 GB. Read it before the weights load.
+    /// Sized from what the process can still allocate: a cache of `available / 6` between 256 MB and 1 GB and, on iOS, a
+    /// memory threshold of `available` − 1.25 GB, never below 3 GB. Not on a Mac: `available` is a fixed figure there, and
+    /// a pack heavier than the threshold would make every evaluation wait. Read it before the weights load.
     public static func lean(availableBytes: Int = VoxtralMemoryManager.availableBytes) -> VoxtralMemoryLimits {
-        VoxtralMemoryLimits(
-            cacheBytes: min(1024 * mebibyte, max(256 * mebibyte, availableBytes / 6)),
-            memoryBytes: max(3072 * mebibyte, availableBytes - 1280 * mebibyte),
-            clearsCacheBetweenStages: true)
+        var limits = VoxtralMemoryLimits(
+            cacheBytes: min(1024 * mebibyte, max(256 * mebibyte, availableBytes / 6)), clearsCacheBetweenStages: true)
+        #if os(iOS)
+        limits.memoryBytes = leanMemoryBytes(availableBytes: availableBytes)
+        #endif
+        return limits
+    }
+
+    static func leanMemoryBytes(availableBytes: Int) -> Int {
+        max(3072 * mebibyte, availableBytes - 1280 * mebibyte)
     }
 
     /// The stages of a pipeline's life that have their own ceiling or start with a boundary
@@ -81,7 +89,7 @@ public struct VoxtralMemoryReport: Sendable, CustomStringConvertible {
 public enum VoxtralMemoryManager {
 
     /// What the process can still allocate: `os_proc_available_memory` on iOS. On a Mac, 6 GB, the figure of an 8 GB
-    /// iPhone, so that a `lean` measured on a Mac runs under the limits it will have on the phone.
+    /// iPhone, so that a `lean` measured on a Mac runs under the cache ceiling it will have on the phone.
     public static var availableBytes: Int {
         #if os(iOS)
         return Int(os_proc_available_memory())

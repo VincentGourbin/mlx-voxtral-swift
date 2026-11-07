@@ -407,9 +407,10 @@ they keep the Apache-2.0 licence of their base model. The Core ML encoder of the
 
 ## Memory
 
-Each pipeline holds its MLX limits from the start of loading and gives the host's values back at `unload()`. `lean` asks
-for the lowest peak, and sizes its limits from what the system leaves the process: `os_proc_available_memory` on iOS, 6 GB
-on a Mac, so that a run on a Mac happens under the limits of an 8 GB iPhone.
+Each pipeline holds its MLX limits from the start of loading and gives them up at `unload()`. The limits are process-wide:
+with several pipelines loaded the tightest applies, and the host's values come back with the last one. `lean` asks for the
+lowest peak, and sizes its limits from what the system leaves the process: `os_proc_available_memory` on iOS, 6 GB on a
+Mac, the figure of an 8 GB iPhone.
 
 ```swift
 let stt = VoxtralPipeline(model: .mini3b4bit, backend: .mlx, configuration: .init(memoryOptimization: .lean))
@@ -422,7 +423,7 @@ print(VoxtralMemoryManager.report())   // active, cache, peak, footprint, availa
 | Setting | Default | `lean` |
 |---|---|---|
 | MLX cache ceiling | TTS: 2 GB. STT: none, 2 GB under 32 GB of RAM, and for Small up to 32 GB. Realtime: none | `available / 6`, between 256 MB and 1 GB |
-| MLX memory threshold | the host's | `available` − 1.25 GB, at least 3 GB |
+| MLX memory threshold | the host's | iOS: `available` − 1.25 GB, at least 3 GB. Mac: the host's |
 | Cache between stages | kept | emptied |
 | KV cache (STT) | the model's dtype | 8 bits |
 | Prefill slice (STT) | 512 positions | 256 positions |
@@ -432,7 +433,8 @@ Remove a ceiling with `configuration.cacheLimitBytes = nil` (TTS, Realtime) or
 `configuration.memoryOptimization.cacheLimitBytes = nil` (STT).
 
 On iOS the GPU goes as soon as the app leaves the foreground, and a GPU call after that terminates the process. Close the
-gate when the scene leaves `.active`: work in progress parks between two units of work and resumes where it stopped.
+gate when the scene leaves `.active`: transcription, chat and synthesis park between two units of work and resume where
+they stopped. Realtime and voice enrollment are not meant for iPhone: the gate does not cover all their GPU work.
 
 ```swift
 .onChange(of: scenePhase) { _, phase in

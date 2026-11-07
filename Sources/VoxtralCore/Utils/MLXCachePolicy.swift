@@ -2,57 +2,78 @@
  * MLXCachePolicy - the MLX limits one pipeline holds while it is loaded (K-52, P-09, P-42, P-67)
  *
  * Without `Memory.cacheLimit`, MLX keeps every freed buffer for reuse: on C-long (11 min) the STT process reached 70 GB
- * for 8.6 GB of active MLX memory, and the machine swapped. The limits are process-wide, so a pipeline sets only what
- * its configuration asks, from the start of loading, and gives the previous values back when it unloads.
+ * for 8.6 GB of active MLX memory, and the machine swapped. The limits are process-wide: with several pipelines loaded,
+ * the tightest applies, and the host's values come back with the last one.
  */
 
 import MLX
 
 final class MLXCachePolicy: Sendable {
-    private struct Slot {
-        var limits = VoxtralMemoryLimits.none
-        /// Values before this pipeline set its own, restored by `restore()`
-        var savedCacheLimit: Int?
-        var savedMemoryLimit: Int?
+    private struct ProcessLimits {
+        var held: [ObjectIdentifier: (cache: Int?, memory: Int?)] = [:]
+        /// Values before the first pipeline set its own
+        var hostCacheLimit: Int?
+        var hostMemoryLimit: Int?
+
+        mutating func update() {
+            if let cache = held.values.compactMap(\.cache).min() {
+                if hostCacheLimit == nil { hostCacheLimit = Memory.cacheLimit }
+                Memory.cacheLimit = cache
+            } else if let host = hostCacheLimit {
+                Memory.cacheLimit = host
+                hostCacheLimit = nil
+            }
+            if let memory = held.values.compactMap(\.memory).min() {
+                if hostMemoryLimit == nil { hostMemoryLimit = Memory.memoryLimit }
+                Memory.memoryLimit = memory
+            } else if let host = hostMemoryLimit {
+                Memory.memoryLimit = host
+                hostMemoryLimit = nil
+            }
+        }
     }
 
-    private let slot = Locked(Slot())
+    private static let process = Locked(ProcessLimits())
 
-    /// Sets `limits` for loading, remembering the host's values once; nil fields leave them alone.
+    private let limits = Locked(VoxtralMemoryLimits.none)
+
+    deinit { restore() }
+
+    /// Sets `limits`, for loading; nil fields leave the host's settings alone.
     func apply(_ limits: VoxtralMemoryLimits) {
-        slot.withLock { slot in
-            if limits.cacheBytes != nil, slot.savedCacheLimit == nil { slot.savedCacheLimit = Memory.cacheLimit }
-            if limits.memoryBytes != nil, slot.savedMemoryLimit == nil { slot.savedMemoryLimit = Memory.memoryLimit }
-            slot.limits = limits
-        }
-        if let bytes = limits.memoryBytes { Memory.memoryLimit = bytes }
-        if let bytes = limits.cacheBytes(for: .load) { Memory.cacheLimit = bytes }
+        self.limits.set(limits)
+        hold(.load)
     }
 
     /// A stage starts: its cache ceiling applies and, if asked, what the previous stage left in the cache goes.
     func enter(_ stage: VoxtralMemoryLimits.Stage) {
-        let limits = slot.withLock { $0.limits }
-        if let bytes = limits.cacheBytes(for: stage) { Memory.cacheLimit = bytes }
-        if limits.clearsCacheBetweenStages { Memory.clearCache() }
+        hold(stage)
+        if limits.get().clearsCacheBetweenStages { Memory.clearCache() }
+    }
+
+    private func hold(_ stage: VoxtralMemoryLimits.Stage) {
+        let limits = limits.get()
+        Self.process.withLock { process in
+            process.held[ObjectIdentifier(self)] = (limits.cacheBytes(for: stage), limits.memoryBytes)
+            process.update()
+        }
     }
 
     /// True while this pipeline holds a cache limit
-    var isActive: Bool { slot.withLock { $0.savedCacheLimit != nil } }
+    var isActive: Bool { Self.process.withLock { $0.held[ObjectIdentifier(self)]?.cache != nil } }
 
     /// Frees the cached buffers after a response when a limit is set.
     func endOfResponse() {
         if isActive { Memory.clearCache() }
     }
 
-    /// Restores the host's limits (if this pipeline changed them) and frees the cache.
+    /// Gives up this pipeline's limits and frees the cache.
     func restore() {
-        let saved = slot.withLock { slot -> Slot in
-            let saved = slot
-            slot = Slot()
-            return saved
+        Self.process.withLock { process in
+            process.held[ObjectIdentifier(self)] = nil
+            process.update()
         }
-        if let cache = saved.savedCacheLimit { Memory.cacheLimit = cache }
-        if let memory = saved.savedMemoryLimit { Memory.memoryLimit = memory }
+        limits.set(.none)
         Memory.clearCache()
     }
 }

@@ -978,6 +978,14 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         guard memory.prefillStepSize > 0 else {
             throw VoxtralError.invalidInput("prefillStepSize must be positive")
         }
+        if let bits = memory.kvCacheBits {
+            guard [4, 8].contains(bits) else {
+                throw VoxtralError.invalidInput("kvCacheBits must be 4 or 8, or nil")
+            }
+            guard textConfig.headDimension.isMultiple(of: 32) else {
+                throw VoxtralError.invalidInput("a quantized KV cache needs a head dimension divisible by 32")
+            }
+        }
 
         // Voxtral's LM has no sliding window: a rotating cache would drop the start of the audio or stop at the prefill
         // (P-03). An explicit limit is honoured by refusing, before any compute (K-2).
@@ -1181,6 +1189,7 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         let dtype = decoderComputeDType ?? embeddings.dtype
         let finalEmbeddings = which(maskExpanded, audioEmbedsGathered.asType(dtype), embeddings.asType(dtype))
 
+        VoxtralGPUGate.shared.wait()
         eval(finalEmbeddings)
 
         return finalEmbeddings

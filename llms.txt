@@ -193,7 +193,7 @@ Backends `.auto` / `.hybrid` also download the Core ML encoder: VincentGOURBIN/v
 - `MemoryOptimizationConfig` — STT memory settings: `.fast`, `.lean`, `.recommended(forRAMGB:)`
 - `VoxtralMemoryLimits` — MLX limits a pipeline holds while loaded: `.none`, `.lean(availableBytes:)`
 - `VoxtralMemoryManager` — `availableBytes`, `report()` (`VoxtralMemoryReport`)
-- `VoxtralGPUGate` — iOS: `shared.suspend()` when the scene leaves `.active`, `shared.resume()` when it comes back
+- `VoxtralGPUGate` — iOS: `shared.suspend()` when the scene leaves `.active`, `shared.resume()` when it comes back (transcription, chat, synthesis)
 - `VoxtralPipelineError` (invalidState, modelNotLoaded, processingFailed, transcriptionFailed), `VoxtralTranscriptionError` (modelNotLoaded, audioRequired, transcriptionFailed)
 - `RuntimeBeacon` — opt-in activity manifest for external monitors (`RuntimeBeacon.isEnabled = true`)
 

@@ -24,14 +24,19 @@ final class MemoryManagerTests: XCTestCase {
     func testLeanLimitsFollowTheAvailableMemory() {
         let phone = VoxtralMemoryLimits.lean(availableBytes: 6144 * mb)
         XCTAssertEqual(phone.cacheBytes, 1024 * mb)
-        XCTAssertEqual(phone.memoryBytes, 4864 * mb)
         XCTAssertTrue(phone.clearsCacheBetweenStages)
-
-        let tight = VoxtralMemoryLimits.lean(availableBytes: 3072 * mb)
-        XCTAssertEqual(tight.cacheBytes, 512 * mb)
-        XCTAssertEqual(tight.memoryBytes, 3072 * mb, "never below 3 GB")
-
+        XCTAssertEqual(VoxtralMemoryLimits.lean(availableBytes: 3072 * mb).cacheBytes, 512 * mb)
         XCTAssertEqual(VoxtralMemoryLimits.lean(availableBytes: 0).cacheBytes, 256 * mb, "never below 256 MB")
+
+        XCTAssertEqual(VoxtralMemoryLimits.leanMemoryBytes(availableBytes: 6144 * mb), 4864 * mb)
+        XCTAssertEqual(VoxtralMemoryLimits.leanMemoryBytes(availableBytes: 3072 * mb), 3072 * mb, "never below 3 GB")
+    }
+
+    func testLeanLeavesTheMemoryThresholdAloneOnAMac() {
+        // Above the threshold every evaluation waits: `available` is a fixed figure here, and a pack can weigh more
+        #if os(macOS)
+        XCTAssertNil(VoxtralMemoryLimits.lean().memoryBytes)
+        #endif
     }
 
     func testLoadingStaysUnderOneGigabyte() {
@@ -76,22 +81,29 @@ final class MemoryManagerTests: XCTestCase {
     func testSmallHasTheCeilingUpTo32GigabytesAndCanGoWithout() {
         let recommended = MemoryOptimizationConfig.recommended(forRAMGB: 32)
         for model in [VoxtralPipeline.Model.small4bit, .small24b8bit, .small24b] {
-            XCTAssertEqual(recommended.limits(for: model, ramGB: 32).cacheBytes, 2048 * mb, model.rawValue)
-            XCTAssertNil(recommended.limits(for: model, ramGB: 33).cacheBytes, model.rawValue)
+            XCTAssertEqual(recommended.limits(for: model).cacheBytes, 2048 * mb, model.rawValue)
+            XCTAssertNil(MemoryOptimizationConfig.recommended(forRAMGB: 33).limits(for: model).cacheBytes, model.rawValue)
         }
-        XCTAssertNil(recommended.limits(for: .mini3b8bit, ramGB: 32).cacheBytes)
+        XCTAssertNil(recommended.limits(for: .mini3b8bit).cacheBytes)
 
         var removed = recommended
         removed.cacheLimitBytes = nil
-        XCTAssertNil(removed.limits(for: .small4bit, ramGB: 32).cacheBytes, "the host said no ceiling")
-        XCTAssertNil(MemoryOptimizationConfig.fast.limits(for: .small4bit, ramGB: 32).cacheBytes)
-        XCTAssertNotNil(MemoryOptimizationConfig.lean.limits(for: .small4bit, ramGB: 96).cacheBytes)
+        XCTAssertNil(removed.limits(for: .small4bit).cacheBytes, "the host said no ceiling")
+        XCTAssertNil(MemoryOptimizationConfig.fast.limits(for: .small4bit).cacheBytes)
+        XCTAssertNotNil(MemoryOptimizationConfig.lean.limits(for: .small4bit).cacheBytes)
     }
 
-    func testTheDefaultConfigurationCarriesTheSmallCeiling() {
+    func testChangingSomethingElseKeepsTheDefaultLimits() {
         var config = VoxtralPipeline.Configuration.default
-        config.maxTokens = 100  // a host that changes something else keeps the default limits
-        XCTAssertEqual(config.memoryOptimization.limits(for: .small4bit, ramGB: 32).cacheBytes, 2048 * mb)
+        config.memoryOptimization = .recommended(forRAMGB: 32)
+        config.maxTokens = 100
+        config.memoryOptimization.maxKVCacheSize = 4_096
+        XCTAssertEqual(config.memoryOptimization.limits(for: .small4bit).cacheBytes, 2048 * mb)
+    }
+
+    func testEqualityComparesThePublicSettings() {
+        XCTAssertEqual(MemoryOptimizationConfig.recommended(forRAMGB: 64), .fast)
+        XCTAssertNotEqual(MemoryOptimizationConfig.recommended(forRAMGB: 16), .fast)
     }
 
     @available(*, deprecated)
@@ -103,6 +115,8 @@ final class MemoryManagerTests: XCTestCase {
         config.evalFrequency = 2
         XCTAssertEqual(config.evalFrequency, 0)
         XCTAssertEqual(config.cacheLimitBytes, 256 * mb)
+        XCTAssertEqual(MemoryOptimizationConfig(clearCacheOnEval: true, maxKVCacheSize: 512).maxKVCacheSize, 512)
+        XCTAssertEqual(MemoryOptimizationConfig(resetPeakMemory: true), .fast)
     }
 
     // MARK: - Report
@@ -202,6 +216,17 @@ final class MemoryManagerTests: XCTestCase {
         var config = MemoryOptimizationConfig.fast
         config.prefillStepSize = 0
         XCTAssertThrowsError(try model.generateStream(inputIds: prompt(8), maxNewTokens: 1, memoryOptimization: config))
+    }
+
+    func testKVCacheSettingsAreRefusedBeforeAnyCompute() throws {
+        var config = MemoryOptimizationConfig.fast
+        config.kvCacheBits = 7
+        let model = try makeReducedVoxtralModel(headDim: 32)
+        XCTAssertThrowsError(try model.generateStream(inputIds: prompt(8), maxNewTokens: 1, memoryOptimization: config))
+
+        config.kvCacheBits = 8
+        let narrow = try makeReducedVoxtralModel(headDim: 16)
+        XCTAssertThrowsError(try narrow.generateStream(inputIds: prompt(8), maxNewTokens: 1, memoryOptimization: config))
     }
 
     func testEightBitKVCacheStaysCloseToTheFullOne() throws {
