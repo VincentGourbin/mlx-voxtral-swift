@@ -509,6 +509,7 @@ public class VoxtralPipeline: @unchecked Sendable {
         let session = MLXProfiler.shared.activeSession
         let memory = configuration.memoryOptimization
         let tokenIds: [Int]
+        try VoxtralCancellation.gpuCheckpoint()
 
         if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
             // Hybrid mode: use Core ML for audio encoding

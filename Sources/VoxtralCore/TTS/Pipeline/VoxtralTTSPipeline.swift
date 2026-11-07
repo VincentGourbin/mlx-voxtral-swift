@@ -166,6 +166,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String) throws
         -> (cache: [any KVCache], len: Int)
     {
+        try VoxtralCancellation.gpuCheckpoint()  // the first GPU work of a synthesis
         // The fingerprint reads the embedding's bytes: evaluate it first, and stop on an MLX error caught so far
         // (a lazy blend whose evaluation failed would leave an empty array)
         voiceEmb.eval()
@@ -333,6 +334,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 cachePolicy.enter(.codec)
                 profiler.startCodecDecode()
                 let rawWaveform = model.decodeToWaveform(codes)
+                VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
 
@@ -478,6 +480,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 cachePolicy.enter(.codec)
                 profiler.startCodecDecode()
                 let rawWaveform = model.decodeToWaveform(codes)
+                VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
 

@@ -652,6 +652,7 @@ class VoxtralForConditionalGeneration: Module, LanguageModel {
         let finalEmbeds = expandedDimensions(audioEmbeds, axis: 0)
 
         // Force evaluation to materialize results
+        VoxtralGPUGate.shared.wait()
         MLX.eval(finalEmbeds)
 
         if VoxtralDebug.enabled {

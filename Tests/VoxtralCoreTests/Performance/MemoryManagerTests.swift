@@ -126,10 +126,26 @@ final class MemoryManagerTests: XCTestCase {
     func testCancelledCallerLeavesAClosedGate() async {
         let gate = VoxtralGPUGate()
         gate.suspend()
-        let task = Task.detached { gate.wait() }
+        let task = Task.detached { gate.waitUnlessCancelled() }
         task.cancel()
         await task.value
         XCTAssertTrue(gate.isSuspended)
+    }
+
+    func testCancellationDoesNotOpenTheGateForWorkThatFollows() async {
+        let gate = VoxtralGPUGate()
+        gate.suspend()
+        let passed = Locked(false)
+        let task = Task.detached {
+            gate.wait()
+            passed.set(true)
+        }
+        task.cancel()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertFalse(passed.get(), "GPU work follows: it waits for the foreground")
+        gate.resume()
+        await task.value
+        XCTAssertTrue(passed.get())
     }
 
     func testDecodingParksAtTheGateAndResumes() throws {

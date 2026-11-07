@@ -876,8 +876,9 @@ class VoxtralStandardEncoder: Module {
         for layer in layers {
             hiddenStates = layer(hiddenStates)
             if interruptible {
+                VoxtralGPUGate.shared.wait()  // what follows evaluates the encoder's output, cancelled or not
                 MLX.eval(hiddenStates)
-                if VoxtralCancellation.cancelledAtGPUCheckpoint { break }
+                if VoxtralCancellation.isCancelled { break }
             }
         }
 

@@ -47,12 +47,21 @@ public final class VoxtralGPUGate: @unchecked Sendable {
         return suspended
     }
 
-    /// Blocks while the gate is closed. A cancelled caller is released, polled every 100 ms: its operation then stops
-    /// without touching the GPU.
+    /// Blocks while the gate is closed, cancelled or not: for GPU work that follows whatever happens
     func wait() {
+        wait(until: { false })
+    }
+
+    /// Blocks while the gate is closed; a cancelled caller is let through, polled every 100 ms. Only for code that then
+    /// stops without touching the GPU.
+    func waitUnlessCancelled() {
+        wait(until: { VoxtralCancellation.isCancelled })
+    }
+
+    private func wait(until released: () -> Bool) {
         condition.lock()
         defer { condition.unlock() }
-        while suspended, !VoxtralCancellation.isCancelled {
+        while suspended, !released() {
             _ = condition.wait(until: Date(timeIntervalSinceNow: 0.1))
         }
     }
@@ -62,13 +71,13 @@ extension VoxtralCancellation {
     /// A point between two units of GPU work: waits while `VoxtralGPUGate` is closed, then throws `CancellationError` if
     /// the caller cancelled
     static func gpuCheckpoint() throws {
-        VoxtralGPUGate.shared.wait()
+        VoxtralGPUGate.shared.waitUnlessCancelled()
         try check()
     }
 
     /// Same as `gpuCheckpoint()`, for the loops that stop by themselves: true when the caller cancelled
     static var cancelledAtGPUCheckpoint: Bool {
-        VoxtralGPUGate.shared.wait()
+        VoxtralGPUGate.shared.waitUnlessCancelled()
         return isCancelled
     }
 }
