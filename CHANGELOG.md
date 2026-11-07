@@ -162,6 +162,18 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **One model catalog for the three families.** `VoxtralModelCatalog` (`all`, `entries(in:)`, `entry(withId:)`,
+  `entry(withRepoId:)`) lists STT, Realtime and TTS models as `VoxtralModelEntry`: id, repository, revision, files, size
+  and licence (`VoxtralModelLicense`; `.unknown` when the repository declares none). It is built from the three
+  registries, which stay.
+- **The same model operations for every family.** `VoxtralModelDownloader` gains `download(_:progress:)`,
+  `verify(_:progress:)`, `listDownloaded(_:)`, `delete(_:)`, `path(for:)`, `isDownloaded(_:)` and `localFolder(for:)`,
+  all taking a `VoxtralModelEntry`. `verify` returns a `VoxtralModelVerification`: it recomputes the SHA-256 recorded in
+  the download manifest, checks sizes and the files a model needs, without network. `delete` also removes a partial
+  download; the former `deleteModel` covered STT only.
+- **CLI: `verify` and `delete`**, refusing an unknown id. `list` shows the three families in one format, with licences;
+  `list --downloaded` no longer reports no model when only Realtime models are on disk. `download` takes the repository
+  of a Realtime or TTS model too (a TTS repository used to lose its voices).
 - **K-90 — 8-bit TTS pack `tts-4b-8bit`** (`VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit`, 4.42 GB, CC BY-NC 4.0):
   LLM and flow-matching transformer in 8-bit, codec bf16, exported by `Scripts/export_tts_8bit.py`. It is 7 % faster per
   step than the 6-bit pack for 0.9 GB more peak memory. It is downloadable once the repository is published; the default is unchanged.

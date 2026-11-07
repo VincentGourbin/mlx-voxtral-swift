@@ -46,11 +46,16 @@ private final class OffPoolWork<R>: @unchecked Sendable {
 /// Runs `body` on the dedicated MLX queue, off Swift's cooperative pool; a cancellation of the calling Task sets
 /// the flag `VoxtralCancellation` reads, and the work stops at its next step (K-15)
 func runOffCooperativePool<R>(_ body: @escaping () throws -> R) async throws -> R {
+    try await runOffCooperativePool(on: mlxWorkQueue, body)
+}
+
+/// Same, on `queue`: long work without MLX (hashing weights) neither waits for a pipeline nor holds one up
+func runOffCooperativePool<R>(on queue: DispatchQueue, _ body: @escaping () throws -> R) async throws -> R {
     let flag = Locked(false)
     let work = OffPoolWork(body)
     return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            mlxWorkQueue.async {
+            queue.async {
                 work.result = Result { try VoxtralCancellation.bind(flag) { try work.body() } }
                 continuation.resume()
             }

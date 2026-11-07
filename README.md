@@ -378,6 +378,32 @@ realtime.unload()
 `maxTokens` (default 4 096) counts 80 ms frames, about 5 min 27 s of audio; longer audio is cut there ([PLAN.md](docs/audit/2026-09-27/PLAN.md) §1,
 fiche K-5).
 
+## Managing Models
+
+The same commands and API cover speech-to-text, Realtime and text-to-speech models:
+
+```bash
+CLI=.build/xcode/Build/Products/Release/VoxtralCLI
+$CLI list                    # every model: repository, size, licence, status (--downloaded: only those on disk)
+$CLI download tts-4b-6bit    # by id or Hugging Face repository
+$CLI verify tts-4b-6bit      # files, sizes and SHA-256 against the download manifest, no network
+$CLI delete tts-4b-6bit      # complete or partial download; --yes skips the confirmation
+```
+
+```swift
+let entry = VoxtralModelCatalog.entry(withId: "tts-4b-6bit")!     // id, repoId, revision, files, size, license
+entry.license.allowsCommercialUse                                 // false: the TTS weights are CC BY-NC 4.0
+
+let folder = try await VoxtralModelDownloader.download(entry)
+let report = try await VoxtralModelDownloader.verify(entry)       // report.isValid, report.problems
+let onDisk = VoxtralModelDownloader.listDownloaded(.tts)
+try VoxtralModelDownloader.delete(entry)
+```
+
+`verify` recomputes the SHA-256 of the files the manifest holds one for (the weights) and checks the others by size; a
+folder downloaded before the manifest existed is checked by size only. A licence the repository does not declare stays
+`.unknown`. The Core ML encoder of the `.auto` and `.hybrid` backends is a separate download, outside this catalog.
+
 ## Hybrid Mode (Core ML + MLX)
 
 The hybrid backend runs the audio encoder on Core ML and keeps the LLM decoder on MLX. In the library,

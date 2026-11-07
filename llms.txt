@@ -148,6 +148,17 @@ VoxtralTTSRegistry.models / defaultModel / model(withId:)                       
 VoxtralRealtimeRegistry.models / defaultModel / model(withId:)                                      // Realtime
 ```
 
+Every family, same calls (3.0): an entry carries id, repoId, revision, files, size and license.
+
+```swift
+VoxtralModelCatalog.all / entries(in: .stt | .realtime | .tts) / entry(withId:) / entry(withRepoId:)
+VoxtralModelDownloader.download(entry, progress:) async throws -> URL
+VoxtralModelDownloader.verify(entry, progress:) async throws -> VoxtralModelVerification   // .isValid, .problems; manifest and SHA-256, no network
+VoxtralModelDownloader.listDownloaded(_ family:) -> [VoxtralModelEntry]
+VoxtralModelDownloader.delete(entry) throws                                                // complete or partial
+VoxtralModelDownloader.path(for: entry) / isDownloaded(entry) / localFolder(for: entry)
+```
+
 ## Available Models
 
 Download = exact bytes of the weight files on the Hub on 2026-09-27, 1 GB = 10⁹ bytes (`docs/Weights.md`). The `size` strings in the registries are approximate.
@@ -215,6 +226,8 @@ The executable is `VoxtralCLI` (`xcodebuild -scheme VoxtralCLI -configuration Re
 ```bash
 ./VoxtralCLI list                                   # models and download status
 ./VoxtralCLI download mini-3b-8bit                  # any registry id (STT, Realtime, TTS)
+./VoxtralCLI verify mini-3b-8bit                    # files, sizes and SHA-256 against the manifest, no network
+./VoxtralCLI delete mini-3b-8bit                    # complete or partial; --yes skips the confirmation
 ./VoxtralCLI transcribe audio.mp3 --model mini-3b-8bit --language en
 ./VoxtralCLI transcribe audio.mp3 --backend hybrid  # CLI backends: mlx (default) or hybrid; no auto mode (VoxtralCLI.swift:187, :210)
 ./VoxtralCLI chat audio.mp3 "Summarize this audio"
@@ -233,6 +246,7 @@ The executable is `VoxtralCLI` (`xcodebuild -scheme VoxtralCLI -configuration Re
 - `Sources/VoxtralCore/TTS/VoiceCloning/VoxtralVoiceEnrollment.swift` — voice cloning
 - `Sources/VoxtralCore/CoreML/` — Core ML encoder (hybrid backend)
 - `Sources/VoxtralCore/Utils/ModelDownloader.swift`, `ModelRegistry.swift` — downloads and STT catalog
+- `Sources/VoxtralCore/Utils/VoxtralModelCatalog.swift` — catalog and model operations for every family
 - `Sources/VoxtralCore/Configuration/MemoryOptimizationConfig.swift` — memory presets
 - `Sources/VoxtralCore/VoxtralModeling.swift`, `VoxtralProcessor.swift`, `Models/VoxtralLlama.swift` — STT model
 - `Sources/VoxtralTranscriptionTest/VoxtralCLI.swift` — CLI
