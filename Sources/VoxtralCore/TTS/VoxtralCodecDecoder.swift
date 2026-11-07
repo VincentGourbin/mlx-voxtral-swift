@@ -358,6 +358,7 @@ class CodecTransformerLayer: Module {
             let y = self(x[0..., lo ..< end, 0...], alibiSlopes: alibiSlopes, windowSize: windowSize)
             let part = y[0..., (start - lo)..., 0...]
             // Evaluated here: left lazy, MLX schedules the slices together and their transients add up.
+            VoxtralGPUGate.shared.wait()
             MLX.eval(part)
             parts.append(part)
             start = end
@@ -408,6 +409,7 @@ class CodecTransformerBlock: Module {
         var h = x
         for layer in layers {
             h = layer(h, alibiSlopes: alibiSlopes, windowSize: windowSize, timeChunk: timeChunk)
+            VoxtralGPUGate.shared.wait()
             MLX.eval(h)
         }
         return h

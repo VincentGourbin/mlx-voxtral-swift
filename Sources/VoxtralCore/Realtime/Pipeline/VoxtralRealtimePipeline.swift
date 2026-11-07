@@ -23,16 +23,27 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
         public var maxTokens: Int
         public var temperature: Float
         public var transcriptionDelayMs: Int
-        /// MLX buffer-cache limit set after loading and restored at `unload()`; nil leaves the host's
-        /// process-wide setting alone (K-52)
-        public var cacheLimitBytes: Int?
+        /// MLX limits held while the model is loaded and given back at `unload()` (K-52)
+        public var memoryLimits: VoxtralMemoryLimits
+        /// `memoryLimits.cacheBytes`; nil leaves the host's process-wide setting alone
+        public var cacheLimitBytes: Int? {
+            get { memoryLimits.cacheBytes }
+            set { memoryLimits.cacheBytes = newValue }
+        }
 
         public static var `default`: Configuration {
             Configuration(maxTokens: 4096, temperature: 0.0, transcriptionDelayMs: 480)
         }
 
+        /// `default` under limits sized from the available memory: the lowest peak. Sized when read: take it before loading.
+        public static var lean: Configuration {
+            var configuration = Configuration.default
+            configuration.memoryLimits = .lean()
+            return configuration
+        }
+
         public init(maxTokens: Int = 4096, temperature: Float = 0.0, transcriptionDelayMs: Int = 480, cacheLimitBytes: Int? = nil) {
-            self.cacheLimitBytes = cacheLimitBytes
+            self.memoryLimits = VoxtralMemoryLimits(cacheBytes: cacheLimitBytes)
             self.maxTokens = maxTokens
             self.temperature = temperature
             self.transcriptionDelayMs = transcriptionDelayMs
@@ -104,6 +115,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
 
             do {
                 let session = MLXProfiler.shared.activeSession
+                cachePolicy.apply(configuration.memoryLimits)
 
                 progress?(0.05, "Resolving Realtime model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
@@ -132,7 +144,7 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                 session?.endPhase("2. Model Loading", category: .modelLoad)
 
                 progress?(1.0, "Realtime model ready")
-                cachePolicy.apply(configuration.cacheLimitBytes)
+                cachePolicy.enter(.generate)
                 gate.end(generation, state: .ready)
 
             } catch {
@@ -176,7 +188,8 @@ public class VoxtralRealtimePipeline: @unchecked Sendable {
                     tokenizer: tokenizer,
                     maxTokens: configuration.maxTokens,
                     temperature: configuration.temperature,
-                    delayMs: configuration.transcriptionDelayMs
+                    delayMs: configuration.transcriptionDelayMs,
+                    onEncoded: { [cachePolicy] in cachePolicy.enter(.generate) }
                 )
                 session?.endPhase("Realtime Generation", category: .generation)
                 try VoxtralCancellation.check()  // generation stopped early for a cancelled caller (K-15)

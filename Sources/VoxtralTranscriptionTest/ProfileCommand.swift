@@ -65,10 +65,13 @@ struct ProfileRun: AsyncParsableCommand {
     @Option(name: .long, help: "STT language code (e.g. en, fr); omit for auto-detection")
     var language: String?
 
-    @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); omit to leave it unset")
+    @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); 0 = no limit; omit for the pipeline's default")
     var cacheLimitMb: Int?
 
-    private var cacheLimitBytes: Int? { cacheLimitMb.map { $0 * 1_048_576 } }
+    /// The cache ceiling under `--cache-limit-mb`, from the pipeline's own
+    private func cacheLimitBytes(default base: Int?) -> Int? {
+        cacheLimitMb.map { $0 == 0 ? nil : $0 * 1_048_576 } ?? base
+    }
 
     @Option(name: [.customShort("t"), .long], help: "Temperature (0.0 = greedy, default 0.7 for chat)")
     var temperature: Float?
@@ -189,7 +192,7 @@ struct ProfileRun: AsyncParsableCommand {
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
         config.temperature = temperature ?? 0.0
-        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes
+        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes(default: config.memoryOptimization.cacheLimitBytes)
 
         let sttBackend: VoxtralPipeline.Backend
         switch backend {
@@ -231,7 +234,7 @@ struct ProfileRun: AsyncParsableCommand {
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
         config.temperature = temperature ?? 0.7
-        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes
+        config.memoryOptimization.cacheLimitBytes = cacheLimitBytes(default: config.memoryOptimization.cacheLimitBytes)
 
         let chatPipeline = VoxtralPipeline(model: pipelineModel, configuration: config)
 
@@ -265,7 +268,7 @@ struct ProfileRun: AsyncParsableCommand {
 
         var config = VoxtralTTSPipeline.Configuration.default
         config.maxFrames = maxTokens ?? 500
-        config.cacheLimitBytes = cacheLimitBytes
+        config.cacheLimitBytes = cacheLimitBytes(default: config.cacheLimitBytes)
 
         let ttsPipeline = VoxtralTTSPipeline(configuration: config)
 
@@ -314,7 +317,7 @@ struct ProfileRun: AsyncParsableCommand {
         var config = VoxtralRealtimePipeline.Configuration.default
         // The loop is bounded by the audio frames; maxTokens only caps text tokens (K-5)
         if let maxTokens { config.maxTokens = maxTokens }
-        config.cacheLimitBytes = cacheLimitBytes
+        config.cacheLimitBytes = cacheLimitBytes(default: config.cacheLimitBytes)
 
         let realtimePipeline = VoxtralRealtimePipeline(configuration: config)
 

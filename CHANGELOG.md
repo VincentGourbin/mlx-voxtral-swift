@@ -26,7 +26,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   `VoxtralRuntimeBeacon`; `MemoryOptimizationConfig`; `VoxtralError`; `VoxtralDebug.enabled`.
 - **Now internal**: the model classes and their configurations (STT, TTS, codec, flow matching, Realtime), the
   loaders (`loadVoxtralStandardModel`, `loadVoxtralTTSModel`, `loadVoxtralRealtimeModel`), the processor, feature
-  extractor and tokenizer, the hybrid/Core ML encoder instances, `VoxtralMemoryManager`, the TTS trimming functions,
+  extractor and tokenizer, the hybrid/Core ML encoder instances, the TTS trimming functions,
   `VoxtralVoicePresetManager`, the `VoxtralVoiceEnrollment` instance (enroll through `VoxtralTTSPipeline.enrollVoice`),
   the TTS pipeline's `ttsModel`/`tokenizer`/`voiceEmbeddings`.
 - **Removed from the public API** (deprecated earlier in this cycle, ASK-23): every symbol listed under *Deprecated*
@@ -35,6 +35,12 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   model still references are kept `internal`.
 
 ### Migration notes for consumers
+- **Memory presets**: `.disabled`, `.light` and `.moderate` become `.fast`; `.aggressive` and `.ultra` become
+  `.recommended(forRAMGB:)`, or `.lean` for the lowest peak. `evalFrequency`, `clearCacheOnEval` and `resetPeakMemory`
+  stay as deprecated fields without effect. `VoxtralMemoryManager` is a new public type: the 2.x singleton was internal
+  since K-31.
+- **`VoxtralTTSPipeline.Configuration` caps the MLX cache at 2 GB by default**: pass `cacheLimitBytes: nil` to go
+  without. `VoxtralPipeline(configuration:)` now takes an optional: omitted, it gets `Configuration.recommended(for:)`.
 - **K-31**: rename the five types above (or keep the deprecated aliases for now); remove calls to
   `ModelDownloader.reconfigureHubApi()`; enroll voices through `VoxtralTTSPipeline.enrollVoice`.
 - **K-10 — `small-24b-8bit` reads `VincentGOURBIN/voxtral-small-8bit`** (≈ 26.5 GB, downloaded at the first load);
@@ -58,6 +64,15 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   product (only `Hub`); a target relying on them transitively must declare them. `Package.resolved` is tracked.
 
 ### Changed
+- **Memory: one manager instead of the `light` to `ultra` presets.** The presets only changed how often the decoding
+  loop evaluated and cleared the cache (K-51); nothing flushes inside that loop any more. Every pipeline now holds
+  `VoxtralMemoryLimits` from the start of loading, the load stage under 1 GB of cache, and gives the host's values back
+  at `unload()` or when a load fails.
+- **Default MLX cache ceilings.** TTS: 2 GB on every machine (ASK-37, K-95: −26 to −33 % of peak for under +1 % of time,
+  same audio). STT: 2 GB for Small up to 32 GB of RAM (ASK-33), and for any model under 32 GB, in place of the flushes of
+  `.aggressive` and `.ultra`. Realtime: none.
+- **Weights are read at load** (K-59): the language model always, the audio tower when the MLX encoder will use it, the
+  whole TTS model. `loadModel` takes longer and the first request no longer pays for the disk.
 - **K-87 — `VoxtralCLI transcribe` and `chat` honour `-b auto`** (it was silently run as `mlx`); an unknown backend is
   refused; `transcribe` prints the `out_sha256` digest used by `bench`. A Realtime `config.json` that cannot be read
   (invalid JSON, or the mlx layout with a field missing) now fails naming the file instead of being replaced by
@@ -162,6 +177,16 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **`lean` for the three pipelines.** `MemoryOptimizationConfig.lean`, `VoxtralTTSPipeline.Configuration.lean` and
+  `VoxtralRealtimePipeline.Configuration.lean` size their limits from the available memory (`os_proc_available_memory` on
+  iOS). In STT, `lean` also uses an 8-bit KV cache (`kvCacheBits`, K-55), prefill slices of 256 positions
+  (`prefillStepSize`, K-62), and frees the audio tower after the encoding (`releasesAudioTower`, K-63).
+- **`VoxtralMemoryManager`**: `availableBytes` and `report()`, with the process footprint.
+- **`VoxtralGPUGate`** (iOS): the pipelines stop between two units of GPU work while the host closes the gate, instead
+  of terminating when the app goes to the background.
+- **CI builds `VoxtralCore` for iOS.**
+- **CLI**: `bench --memory lean`, `--kv-bits`, `--prefill-step`; `--cache-limit-mb 0` runs without a ceiling, and leaving
+  it out now keeps the pipeline's default.
 - **One model catalog for the three families.** `VoxtralModelCatalog` (`all`, `entries(in:)`, `entry(withId:)`,
   `entry(withRepoId:)`) lists STT, Realtime and TTS models as `VoxtralModelEntry`: id, repository, revision, files, size
   and licence (`VoxtralModelLicense`; a pack without a Hub tag keeps its base model's licence). It is built from the three

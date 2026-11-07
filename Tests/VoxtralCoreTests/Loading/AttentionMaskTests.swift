@@ -19,7 +19,7 @@ final class AttentionMaskTests: XCTestCase {
         let model = try makeReducedVoxtralModel()
         model.update(parameters: model.parameters().mapValues { $0.asType(.bfloat16) })
         let inputIds = MLXArray((0 ..< 16).map { Int32(30 + $0) }).reshaped([1, 16])
-        XCTAssertNoThrow(try model.generateStream(inputIds: inputIds, maxNewTokens: 1, memoryOptimization: .disabled))
+        XCTAssertNoThrow(try model.generateStream(inputIds: inputIds, maxNewTokens: 1))
     }
 
     func testMaskIsBooleanAndShapedLikeTheKeys() {

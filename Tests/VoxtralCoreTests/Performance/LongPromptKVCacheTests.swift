@@ -21,17 +21,17 @@ final class LongPromptKVCacheTests: XCTestCase {
         MLXArray((0 ..< n).map { Int32(30 + $0 % 60) }).reshaped([1, n])  // never the audio token (24)
     }
 
-    // (a) the P-03 trigger: 2 600 positions, chunked prefill, `.ultra` preset
-    func testUltraPreset2600Positions() throws {
+    // (a) the P-03 trigger: 2 600 positions, chunked prefill
+    func test2600Positions() throws {
         let model = try makeReducedVoxtralModel()
-        let tokens = try model.generateStream(inputIds: prompt(2_600), maxNewTokens: 1, memoryOptimization: .ultra)
+        let tokens = try model.generateStream(inputIds: prompt(2_600), maxNewTokens: 1)
         XCTAssertEqual(tokens.count, 1)
     }
 
     // (b) an explicit limit is refused up front, with the numbers
     func testExplicitLimitThrowsContextTooLong() throws {
         let model = try makeReducedVoxtralModel()
-        var limited = MemoryOptimizationConfig.ultra
+        var limited = MemoryOptimizationConfig.fast
         limited.maxKVCacheSize = 2_048
         let start = Date()
         XCTAssertThrowsError(try model.generateStream(inputIds: prompt(2_600), maxNewTokens: 8, memoryOptimization: limited)) { error in
@@ -61,7 +61,7 @@ final class LongPromptKVCacheTests: XCTestCase {
         // Reaching the last FR sentence needs a duration-based token budget (K-5): reported, not asserted here
         let lastFR = normalized("Aucune donnee envoyee dans le cloud.")
 
-        for (label, ram) in [("ultra(8GB)", 8), ("aggressive(16GB)", 16)] {
+        for (label, ram) in [("8GB", 8), ("16GB", 16)] {
             let config = VoxtralPipeline.Configuration(maxTokens: 4_096, memoryOptimization: .recommended(forRAMGB: ram))
             let pipeline = VoxtralPipeline(model: .mini3b8bit, backend: .mlx, configuration: config)
             try await pipeline.loadModel()

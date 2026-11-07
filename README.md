@@ -38,7 +38,7 @@ with it. See the [app guide](docs/streaming_demo.md).
 
 ## Requirements
 
-- macOS 15.0 or later, or iOS 17.0 or later (`Package.swift:10-13`; iOS is declared and compiles, but has never been run on a device — audit FA-09)
+- macOS 15.0 or later, or iOS 17.0 or later (`Package.swift:10-13`; `VoxtralCore` is built for iOS in CI, but has never been run on a device — audit FA-09)
 - Apple Silicon Mac (M1/M2/M3/M4)
 - Xcode 26 or later (Swift 6.2 toolchain: `swift-tools-version: 6.2`, `Package.swift:1`)
 
@@ -404,6 +404,42 @@ try VoxtralModelDownloader.delete(entry)
 whole folder from before the manifest has no SHA-256: `verify` then says it cannot vouch for the weights (exit code 2);
 a folder `list` counts as incomplete is reported as such (exit code 1). `delete` removes every copy of the model and lists them first; a legacy Hub cache folder goes whole. A folder that is a symbolic link loses the link and keeps its destination; under an organisation folder that is a link, the real folder goes, and the list says so. The 8-bit and 4-bit Mini packs carry no Hub tag:
 they keep the Apache-2.0 licence of their base model. The Core ML encoder of the `.auto` and `.hybrid` backends is a separate download, outside this catalog.
+
+## Memory
+
+Each pipeline holds its MLX limits from the start of loading and gives the host's values back at `unload()`. `lean` asks
+for the lowest peak, and sizes its limits from what the system leaves the process: `os_proc_available_memory` on iOS, 6 GB
+on a Mac, so that a run on a Mac happens under the limits of an 8 GB iPhone.
+
+```swift
+let stt = VoxtralPipeline(model: .mini3b4bit, backend: .mlx, configuration: .init(memoryOptimization: .lean))
+let tts = VoxtralTTSPipeline(configuration: .lean)
+let realtime = VoxtralRealtimePipeline(configuration: .lean)
+
+print(VoxtralMemoryManager.report())   // active, cache, peak, footprint, available
+```
+
+| Setting | Default | `lean` |
+|---|---|---|
+| MLX cache ceiling | TTS: 2 GB. STT: none, 2 GB under 32 GB of RAM, and for Small up to 32 GB. Realtime: none | `available / 6`, between 256 MB and 1 GB |
+| MLX memory threshold | the host's | `available` − 1.25 GB, at least 3 GB |
+| Cache between stages | kept | emptied |
+| KV cache (STT) | the model's dtype | 8 bits |
+| Prefill slice (STT) | 512 positions | 256 positions |
+| Audio tower (STT, `.mlx`) | resident | freed once the audio is encoded, read again for the next request |
+
+Remove a ceiling with `configuration.cacheLimitBytes = nil` (TTS, Realtime) or
+`configuration.memoryOptimization.cacheLimitBytes = nil` (STT). A configuration you pass to `VoxtralPipeline` stays as it
+is: the Small default only comes with the default configuration.
+
+On iOS the GPU goes as soon as the app leaves the foreground, and a GPU call after that terminates the process. Close the
+gate when the scene leaves `.active`: work in progress parks between two units of work and resumes where it stopped.
+
+```swift
+.onChange(of: scenePhase) { _, phase in
+    if phase == .active { VoxtralGPUGate.shared.resume() } else { VoxtralGPUGate.shared.suspend() }
+}
+```
 
 ## Hybrid Mode (Core ML + MLX)
 

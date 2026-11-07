@@ -190,27 +190,34 @@ Backends `.auto` / `.hybrid` also download the Core ML encoder: VincentGOURBIN/v
 - `VoxtralVoiceEnrollment` (`.Config`, `.Progress`) — voice cloning
 - `TranscriptionResult` — text, duration (tokenCount / tokensPerSecond are always 0 at v2.2.2)
 - `VoxtralModelInfo`, `ModelRegistry`, `ModelDownloader` — STT model catalog and downloads
-- `MemoryOptimizationConfig` — presets `.disabled`, `.light`, `.moderate`, `.aggressive`, `.ultra`, `.recommended(forRAMGB:)`
-- `VoxtralMemoryManager` — process-wide memory settings (singleton `.shared`)
+- `MemoryOptimizationConfig` — STT memory settings: `.fast`, `.lean`, `.recommended(forRAMGB:)`
+- `VoxtralMemoryLimits` — MLX limits a pipeline holds while loaded: `.none`, `.lean(availableBytes:)`
+- `VoxtralMemoryManager` — `availableBytes`, `report()` (`VoxtralMemoryReport`)
+- `VoxtralGPUGate` — iOS: `shared.suspend()` when the scene leaves `.active`, `shared.resume()` when it comes back
 - `VoxtralPipelineError` (invalidState, modelNotLoaded, processingFailed, transcriptionFailed), `VoxtralTranscriptionError` (modelNotLoaded, audioRequired, transcriptionFailed)
 - `RuntimeBeacon` — opt-in activity manifest for external monitors (`RuntimeBeacon.isEnabled = true`)
 
 ## Memory Optimization
 
 ```swift
-MemoryOptimizationConfig.recommended()   // by RAM: <16 GB .ultra, 16-31 .aggressive, 32-63 .moderate, ≥64 .light (MemoryOptimizationConfig.swift:77-90)
-MemoryOptimizationConfig.disabled        // no eval/cache management, no KV cache limit
+MemoryOptimizationConfig.fast            // everything resident, no limit
+MemoryOptimizationConfig.lean            // lowest peak: limits from the available memory, 8-bit KV, slices of 256, tower freed
+MemoryOptimizationConfig.recommended()   // the default: .fast, with a 2 GB cache ceiling under 32 GB of RAM
 
 // Custom (the actual fields)
 let memory = MemoryOptimizationConfig(
-    evalFrequency: 8,        // eval() every N tokens (0 = disabled)
-    clearCacheOnEval: false,
-    resetPeakMemory: true,
-    maxKVCacheSize: nil      // nil = unlimited KV cache
+    limits: VoxtralMemoryLimits(cacheBytes: 2048 * 1_048_576),  // nil fields leave the host's MLX settings alone
+    maxKVCacheSize: nil,      // nil = unlimited KV cache; a limit throws contextTooLong
+    kvCacheBits: 8,           // nil = the model's dtype
+    prefillStepSize: 512,
+    releasesAudioTower: false
 )
+
+VoxtralTTSPipeline.Configuration.lean        // TTS default: 2 GB cache ceiling; cacheLimitBytes = nil removes it
+VoxtralRealtimePipeline.Configuration.lean   // Realtime default: no ceiling
 ```
 
-Presets `.light` / `.moderate` / `.aggressive` / `.ultra` set `maxKVCacheSize` 8192 / 6144 / 4096 / 2048 (`Configuration/MemoryOptimizationConfig.swift:41-69`).
+`.disabled`, `.light`, `.moderate`, `.aggressive`, `.ultra` are deprecated: no flush runs inside the decoding loop any more.
 
 ## Concurrency (v2.2.2)
 

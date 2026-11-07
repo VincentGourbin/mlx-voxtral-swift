@@ -1,146 +1,89 @@
 /**
- * MemoryOptimizationConfig - Memory optimization settings for Voxtral generation
+ * MemoryOptimizationConfig - memory settings of a transcription or chat pipeline
  *
- * Inspired by flux-2-swift-mlx memory management patterns.
- * Provides presets for different RAM configurations and manual control.
+ * `.fast` keeps everything resident; `.lean` trades a little time for the lowest peak. Each field is a setting of its
+ * own, so that a reference profile can fix them one by one.
  */
 
 import Foundation
-import MLX
 
-/// Configuration for memory optimization during token generation
-/// Based on flux-2-swift-mlx patterns for efficient GPU memory management
-public struct MemoryOptimizationConfig: Sendable {
+public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvertible {
 
-    /// Frequency of MLX eval() calls during generation (0 = disabled)
-    /// Lower values = more frequent evaluation = lower memory but slower
-    public var evalFrequency: Int
+    /// MLX limits held while the pipeline is loaded
+    public var limits: VoxtralMemoryLimits
 
-    /// Whether to clear GPU cache after each evaluation cycle
-    public var clearCacheOnEval: Bool
-
-    /// Kept for source compatibility, no effect since K-32: the library no longer resets MLX's
-    /// peak-memory counter (a measuring tool does, at the start of what it measures)
-    public var resetPeakMemory: Bool
-
-    /// Maximum KV cache size (nil = unlimited, the default of every preset).
+    /// Maximum KV cache size (nil = unlimited, the default).
     /// Voxtral's LM has no sliding window: a limit does not evict the beginning of the audio, it makes
     /// generation throw `VoxtralError.contextTooLong` when prompt + `maxTokens` exceed it (K-2).
     public var maxKVCacheSize: Int?
 
-    /// MLX buffer-cache limit (`Memory.cacheLimit`) set by the pipeline after loading, restored at
-    /// `unload()`. `nil` (default, every preset) leaves the host's process-wide setting alone (K-52).
-    public var cacheLimitBytes: Int?
+    /// Bits of the quantized KV cache (group size 64); nil keeps it in the model's dtype (K-55)
+    public var kvCacheBits: Int?
 
-    // MARK: - Presets
+    /// Positions per prefill slice: attention scores grow with it (K-62)
+    public var prefillStepSize: Int
 
-    /// Disabled - no memory optimization (fastest, highest memory)
-    public static let disabled = MemoryOptimizationConfig(
-        evalFrequency: 0,
-        clearCacheOnEval: false,
-        resetPeakMemory: false,
-        maxKVCacheSize: nil
-    )
+    /// Backend `.mlx`: frees the audio tower's weights once the audio is encoded, and reads them again for the next
+    /// request (K-63)
+    public var releasesAudioTower: Bool
 
-    /// Light - minimal optimization for large RAM (64+ GB)
-    public static let light = MemoryOptimizationConfig(
-        evalFrequency: 16,
-        clearCacheOnEval: false,
-        resetPeakMemory: true,
-        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
-    )
-
-    /// Moderate - balanced optimization (recommended for 32-64GB RAM)
-    public static let moderate = MemoryOptimizationConfig(
-        evalFrequency: 8,
-        clearCacheOnEval: false,
-        resetPeakMemory: true,
-        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
-    )
-
-    /// Aggressive - maximum memory savings (for 16-32GB RAM)
-    public static let aggressive = MemoryOptimizationConfig(
-        evalFrequency: 4,
-        clearCacheOnEval: true,
-        resetPeakMemory: true,
-        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
-    )
-
-    /// Ultra - extreme memory savings (for 8-16GB RAM)
-    public static let ultra = MemoryOptimizationConfig(
-        evalFrequency: 2,
-        clearCacheOnEval: true,
-        resetPeakMemory: true,
-        maxKVCacheSize: nil  // no window: the LM has none (sliding_window: null), K-2
-    )
-
-    // MARK: - Auto-detection
-
-    /// Automatically select configuration based on available RAM
-    /// - Parameter ramGB: Available RAM in gigabytes (pass nil to auto-detect)
-    /// - Returns: Recommended configuration for the system
-    public static func recommended(forRAMGB ramGB: Int? = nil) -> MemoryOptimizationConfig {
-        let ram = ramGB ?? Self.detectSystemRAM()
-
-        switch ram {
-        case 0..<16:
-            return .ultra
-        case 16..<32:
-            return .aggressive
-        case 32..<64:
-            return .moderate
-        default:
-            return .light
-        }
+    /// `limits.cacheBytes`
+    public var cacheLimitBytes: Int? {
+        get { limits.cacheBytes }
+        set { limits.cacheBytes = newValue }
     }
 
-    /// Detect system RAM in GB
-    private static func detectSystemRAM() -> Int {
-        let physicalMemory = ProcessInfo.processInfo.physicalMemory
-        return Int(physicalMemory / (1024 * 1024 * 1024))
-    }
+    public static let defaultPrefillStepSize = 512
 
-    // MARK: - Initialization
+    /// The ceiling measured on long audio: 19 013 MB of peak with Small on 8 min, against 37 313 MB without (K-34)
+    public static let defaultCacheLimitBytes = 2048 * 1_048_576
 
     public init(
-        evalFrequency: Int = 0,
-        clearCacheOnEval: Bool = false,
-        resetPeakMemory: Bool = false,
+        limits: VoxtralMemoryLimits = .none,
         maxKVCacheSize: Int? = nil,
-        cacheLimitBytes: Int? = nil
+        kvCacheBits: Int? = nil,
+        prefillStepSize: Int = Self.defaultPrefillStepSize,
+        releasesAudioTower: Bool = false
     ) {
-        self.evalFrequency = evalFrequency
-        self.clearCacheOnEval = clearCacheOnEval
-        self.resetPeakMemory = resetPeakMemory
+        self.limits = limits
         self.maxKVCacheSize = maxKVCacheSize
-        self.cacheLimitBytes = cacheLimitBytes
+        self.kvCacheBits = kvCacheBits
+        self.prefillStepSize = prefillStepSize
+        self.releasesAudioTower = releasesAudioTower
     }
+
+    // MARK: - Profiles
+
+    /// Everything resident, no limit: the host's MLX settings stay
+    public static var fast: MemoryOptimizationConfig { MemoryOptimizationConfig() }
+
+    /// The lowest peak: limits sized from the available memory, 8-bit KV cache, small prefill slices, audio tower freed
+    /// after the encoding. Sized when read: take it before loading.
+    public static var lean: MemoryOptimizationConfig {
+        MemoryOptimizationConfig(limits: .lean(), kvCacheBits: 8, prefillStepSize: 256, releasesAudioTower: true)
+    }
+
+    /// The default for a machine: `.fast`, with a 2 GB cache ceiling under 32 GB of RAM
+    /// - Parameter ramGB: RAM in gigabytes (nil = this machine's)
+    public static func recommended(forRAMGB ramGB: Int? = nil) -> MemoryOptimizationConfig {
+        var config = MemoryOptimizationConfig.fast
+        if ramGB ?? physicalRAMGB < 32 { config.cacheLimitBytes = defaultCacheLimitBytes }
+        return config
+    }
+
+    static var physicalRAMGB: Int { Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)) }
 
     // MARK: - Description
 
     public var description: String {
         var parts: [String] = []
-        parts.append("evalFreq=\(evalFrequency)")
-        if clearCacheOnEval { parts.append("clearCache") }
-        if resetPeakMemory { parts.append("resetPeak") }
+        if let bytes = limits.cacheBytes { parts.append("cacheLimit=\(bytes / 1_048_576)MB") }
+        if let bytes = limits.memoryBytes { parts.append("memoryLimit=\(bytes / 1_048_576)MB") }
+        if limits.clearsCacheBetweenStages { parts.append("clearBetweenStages") }
         if let maxKV = maxKVCacheSize { parts.append("maxKV=\(maxKV)") }
-        if let limit = cacheLimitBytes { parts.append("cacheLimit=\(limit / 1_048_576)MB") }
+        if let bits = kvCacheBits { parts.append("kvBits=\(bits)") }
+        parts.append("prefillStep=\(prefillStepSize)")
+        if releasesAudioTower { parts.append("releaseAudioTower") }
         return "MemoryOptimizationConfig(\(parts.joined(separator: ", ")))"
     }
 }
-
-// MARK: - MemoryOptimizationConfig + Equatable
-
-extension MemoryOptimizationConfig: Equatable {
-    public static func == (lhs: MemoryOptimizationConfig, rhs: MemoryOptimizationConfig) -> Bool {
-        return lhs.evalFrequency == rhs.evalFrequency &&
-               lhs.clearCacheOnEval == rhs.clearCacheOnEval &&
-               lhs.resetPeakMemory == rhs.resetPeakMemory &&
-               lhs.maxKVCacheSize == rhs.maxKVCacheSize &&
-               lhs.cacheLimitBytes == rhs.cacheLimitBytes
-    }
-}
-
-// MARK: - MemoryOptimizationConfig + CustomStringConvertible
-
-extension MemoryOptimizationConfig: CustomStringConvertible {}
