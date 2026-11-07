@@ -320,7 +320,7 @@ class VoxtralRealtimeEncoder: Module {
         let context = 4
         var pieces: [MLXArray] = []
         for start in stride(from: 0, to: frames, by: chunkFrames) {
-            if VoxtralCancellation.isCancelled { return nil }
+            if VoxtralCancellation.cancelledAtGPUCheckpoint { return nil }
             let end = min(start + chunkFrames, frames)
             let from = max(0, start - context)
             var x = mel[0..., from ..< end].transposed(1, 0).expandedDimensions(axis: 0)
@@ -387,7 +387,7 @@ class VoxtralRealtimeEncoder: Module {
         var chunks: [MLXArray] = []
         for start in stride(from: 0, to: seqLen, by: window) {
             // A cancelled caller stops at a chunk boundary (≈ 0,4 s); the pipeline then throws (K-15)
-            if !chunks.isEmpty, VoxtralCancellation.isCancelled { break }
+            if !chunks.isEmpty, VoxtralCancellation.cancelledAtGPUCheckpoint { break }
             let end = min(start + window, seqLen)
             let (ropeCos, ropeSin) = computeRoPEFreqs(
                 positions: MLXArray(Int32(start) ..< Int32(end)), headDim: config.headDim, theta: config.ropeTheta,

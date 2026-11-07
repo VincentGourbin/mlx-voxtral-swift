@@ -63,7 +63,7 @@ final class MLXErrorBoundaryTests: XCTestCase {
         let inputIds = MLXArray((0 ..< 16).map { Int32(30 + $0) }).reshaped([1, 16])
 
         XCTAssertThrowsError(try model.generateStream(
-            inputIds: inputIds, maxNewTokens: 1, memoryOptimization: .disabled)
+            inputIds: inputIds, maxNewTokens: 1)
         ) { error in
             guard case VoxtralError.mlx = error else {
                 return XCTFail("expected VoxtralError.mlx, got \(error)")

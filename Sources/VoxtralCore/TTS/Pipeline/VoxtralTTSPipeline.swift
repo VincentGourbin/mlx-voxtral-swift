@@ -37,9 +37,14 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// boundaries, e.g. lip-sync video generation). Like `trimLeadIn`,
         /// ignored by `synthesizeStreaming`.
         public var trimTail: Bool
-        /// MLX buffer-cache limit set after loading and restored at `unload()`; nil leaves the host's
-        /// process-wide setting alone (K-52)
-        public var cacheLimitBytes: Int?
+        /// MLX limits held while the model is loaded. The default is a 2 GB cache ceiling (ASK-37): −26 to −33 % of peak
+        /// for under +1 % of time, same audio (K-95)
+        public var memoryLimits: VoxtralMemoryLimits
+        /// `memoryLimits.cacheBytes`; nil leaves the host's process-wide setting alone
+        public var cacheLimitBytes: Int? {
+            get { memoryLimits.cacheBytes }
+            set { memoryLimits.cacheBytes = newValue }
+        }
         /// Frames allowed per text token on top of `framesCapBase`: the effective cap is
         /// min(maxFrames, framesCapBase + ⌈framesPerTextToken × text tokens⌉), so a missed end of audio costs about
         /// 3 × the expected duration instead of `maxFrames` (K-14). nil keeps the fixed `maxFrames`.
@@ -51,15 +56,23 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
         /// 7 tokens) stops at 143
         public static let defaultFramesPerTextToken: Float = 10.4
         public static let defaultFramesCapBase = 70
+        public static let defaultCacheLimitBytes = 2048 * 1_048_576
 
         public static var `default`: Configuration {
             Configuration(maxFrames: 2500, temperature: 0.0, cfgAlpha: 1.2, flowSteps: 8, sanitizeText: true, trimLeadIn: true, trimTail: false)
         }
 
-        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false, cacheLimitBytes: Int? = nil,
+        /// `default` under limits sized from the available memory: the lowest peak. Sized when read: take it before loading.
+        public static var lean: Configuration {
+            var configuration = Configuration.default
+            configuration.memoryLimits = .lean()
+            return configuration
+        }
+
+        public init(maxFrames: Int = 2500, temperature: Float = 0.0, cfgAlpha: Float = 1.2, flowSteps: Int = 8, sanitizeText: Bool = true, trimLeadIn: Bool = true, trimTail: Bool = false, cacheLimitBytes: Int? = Self.defaultCacheLimitBytes,
                     framesPerTextToken: Float? = Self.defaultFramesPerTextToken,
                     framesCapBase: Int = Self.defaultFramesCapBase) {
-            self.cacheLimitBytes = cacheLimitBytes
+            self.memoryLimits = VoxtralMemoryLimits(cacheBytes: cacheLimitBytes)
             self.framesPerTextToken = framesPerTextToken
             self.framesCapBase = framesCapBase
             self.maxFrames = maxFrames
@@ -153,6 +166,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
     private func voicePrefix(_ model: VoxtralTTSModel, for voiceEmb: MLXArray, key: String) throws
         -> (cache: [any KVCache], len: Int)
     {
+        try VoxtralCancellation.gpuCheckpoint()  // the first GPU work of a synthesis
         // The fingerprint reads the embedding's bytes: evaluate it first, and stop on an MLX error caught so far
         // (a lazy blend whose evaluation failed would leave an empty array)
         voiceEmb.eval()
@@ -200,6 +214,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
             do {
                 let session = MLXProfiler.shared.activeSession
+                cachePolicy.apply(configuration.memoryLimits)
 
                 progress?(0.05, "Resolving TTS model...")
                 session?.beginPhase("1. Model Download", category: .modelLoad)
@@ -236,10 +251,11 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
 
                 progress?(1.0, "TTS model ready (\(voiceEmbeddings.count) voices loaded)")
                 loadedModelID = resolvedInfo.id
-                cachePolicy.apply(configuration.cacheLimitBytes)
+                cachePolicy.enter(.generate)
                 gate.end(generation, state: .ready)
 
             } catch {
+                cachePolicy.restore()
                 gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
@@ -315,10 +331,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                 }
 
                 // Decode to waveform, optionally trim lead-in silence
+                cachePolicy.enter(.codec)
                 profiler.startCodecDecode()
                 let rawWaveform = model.decodeToWaveform(codes)
+                VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
+                VoxtralGPUGate.shared.wait()  // the trims read the waveform
 
                 session?.beginPhase("Audio Post-processing", category: .postProcess)
                 let waveform = applyTrims(rawWaveform)
@@ -459,10 +478,13 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     throw VoxtralTTSError.synthesisError("No audio frames generated")
                 }
 
+                cachePolicy.enter(.codec)
                 profiler.startCodecDecode()
                 let rawWaveform = model.decodeToWaveform(codes)
+                VoxtralGPUGate.shared.wait()
                 MLX.eval(rawWaveform)
                 profiler.endCodecDecode()
+                VoxtralGPUGate.shared.wait()  // the trims read the waveform
 
                 session?.beginPhase("Audio Post-processing", category: .postProcess)
                 // Drop the warm-up carrier's audio. When it trims, the carrier trim
@@ -724,7 +746,7 @@ public class VoxtralTTSPipeline: @unchecked Sendable {
                     )
 
                     for try await chunk in codeStream {
-                        try Task.checkCancellation()
+                        try VoxtralCancellation.gpuCheckpoint()
                         // Set before the final chunk is yielded, so a consumer that sees `isFinal` reads it (K-86)
                         if chunk.isFinal { ctx.pipeline.lastSynthesisTruncated = chunk.totalFrames >= capturedMaxFrames }
                         // Decode the new frames only, from a bounded left context (K-43)

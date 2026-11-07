@@ -1,166 +1,119 @@
 /**
- * VoxtralMemoryManager - Centralized GPU memory management
+ * VoxtralMemoryManager - MLX memory limits sized for the machine, and what is in use
  *
- * Provides a unified interface for memory operations inspired by flux-2-swift-mlx.
- * Includes monitoring, cleanup, and optimization utilities.
+ * Replaces the `light` to `ultra` presets, which only changed how often the decoding loop flushed (K-51). Same pattern
+ * as YuE2MemoryManager: a ceiling on MLX's buffer cache per stage, and `lean` limits sized from what the system leaves
+ * the process: YuE2's first fixed mobile limits cost +32 % of time in 4 bits and +73 % in bf16.
  */
 
 import Foundation
 import MLX
+#if os(iOS)
+import os
+#endif
 
-/// Centralized memory manager for Voxtral GPU operations
-/// Singleton for managing MLX GPU memory; `config` and the eval counter are guarded by `lock`.
-/// Pipelines pass their own configuration and never write `config` (S-11).
-final class VoxtralMemoryManager: @unchecked Sendable {
+private let mebibyte = 1_048_576
 
-    // MARK: - Singleton
+/// The MLX limits a pipeline holds while it is loaded. They are process-wide: `nil` leaves the host's setting alone, and
+/// the pipeline gives back what it changed at `unload()`.
+public struct VoxtralMemoryLimits: Sendable, Equatable {
+    /// Ceiling of MLX's buffer cache (`Memory.cacheLimit`). Without one, MLX keeps every freed buffer: 70 GB of process
+    /// for 8.6 GB of active memory on 11 min of audio (K-52)
+    public var cacheBytes: Int?
+    /// `Memory.memoryLimit`: above it MLX empties its cache and makes each evaluation wait for the work in progress, so
+    /// keep it above the weights. Not a hard ceiling
+    public var memoryBytes: Int?
+    /// Empties the cache between two stages of a request (encoder then decoder, decoder then codec)
+    public var clearsCacheBetweenStages: Bool
 
-    /// Shared instance for global memory management
-    static let shared = VoxtralMemoryManager()
-
-    // MARK: - Properties
-
-    /// Default memory optimization configuration, used only when a caller passes none
-    var config: MemoryOptimizationConfig {
-        get { lock.lock(); defer { lock.unlock() }; return _config }
-        set { lock.lock(); _config = newValue; lock.unlock() }
-    }
-    private var _config: MemoryOptimizationConfig = .recommended()
-
-    /// Counter for tracking eval cycles (for periodic cleanup)
-    private var evalCounter: Int = 0
-
-    /// Lock for thread-safe operations
-    private let lock = NSLock()
-
-    // MARK: - Initialization
-
-    private init() {}
-
-    // MARK: - Memory Operations
-
-    /// Clear the GPU cache to free unused memory
-    /// Call this after large operations or when memory pressure is detected
-    func clearCache() {
-        Memory.clearCache()
-        VoxtralDebug.log("🧹 GPU cache cleared")
+    public init(cacheBytes: Int? = nil, memoryBytes: Int? = nil, clearsCacheBetweenStages: Bool = false) {
+        self.cacheBytes = cacheBytes
+        self.memoryBytes = memoryBytes
+        self.clearsCacheBetweenStages = clearsCacheBetweenStages
     }
 
-    /// Full cleanup: clear cache and reset the eval counter. The peak-memory counter is left alone:
-    /// resetting it belongs to the measuring tool, not to the library (K-32, P-77)
-    /// Use this between transcription sessions for maximum memory recovery
-    func fullCleanup() {
-        Memory.clearCache()
-        lock.lock()
-        evalCounter = 0
-        lock.unlock()
-        VoxtralDebug.log("🧹 Full GPU cleanup performed")
+    /// No limit: the host's settings stay
+    public static let none = VoxtralMemoryLimits()
+
+    /// Sized from what the process can still allocate: a cache of `available / 6` between 256 MB and 1 GB and, on iOS, a
+    /// memory threshold of `available` − 1.25 GB, never below 3 GB. Not on a Mac: `available` is a fixed figure there, and
+    /// a pack heavier than the threshold would make every evaluation wait. Read it before the weights load.
+    public static func lean(availableBytes: Int = VoxtralMemoryManager.availableBytes) -> VoxtralMemoryLimits {
+        var limits = VoxtralMemoryLimits(
+            cacheBytes: min(1024 * mebibyte, max(256 * mebibyte, availableBytes / 6)), clearsCacheBetweenStages: true)
+        #if os(iOS)
+        limits.memoryBytes = leanMemoryBytes(availableBytes: availableBytes)
+        #endif
+        return limits
     }
 
-    /// Get current memory statistics
-    /// - Returns: Tuple of (active memory bytes, cache memory bytes, peak memory bytes)
-    func memorySummary() -> (active: Int, cache: Int, peak: Int) {
-        return (Memory.activeMemory, Memory.cacheMemory, Memory.peakMemory)
+    static func leanMemoryBytes(availableBytes: Int) -> Int {
+        max(3072 * mebibyte, availableBytes - 1280 * mebibyte)
     }
 
-    /// Get formatted memory summary string
-    func formattedMemorySummary() -> String {
-        let (active, cache, peak) = memorySummary()
-        return "GPU Memory: Active=\(formatBytes(active)), Cache=\(formatBytes(cache)), Peak=\(formatBytes(peak))"
-    }
+    /// The stages of a pipeline's life that have their own ceiling or start with a boundary
+    enum Stage: Sendable { case load, generate, codec }
 
-    /// Log current memory status
-    func logMemoryStatus() {
-        VoxtralDebug.log(formattedMemorySummary())
-    }
-
-    // MARK: - Periodic Optimization
-
-    /// Called during generation to apply memory optimization based on config
-    /// - Parameter tokenIndex: Current token index in generation
-    func optimizeIfNeeded(tokenIndex: Int) {
-        optimizeIfNeeded(tokenIndex: tokenIndex, config: config)
-    }
-
-    /// Same, with the caller's configuration (a pipeline passes its own)
-    func optimizeIfNeeded(tokenIndex: Int, config: MemoryOptimizationConfig) {
-        guard config.evalFrequency > 0 else { return }
-
-        lock.lock()
-        defer { lock.unlock() }
-
-        evalCounter += 1
-
-        if evalCounter >= config.evalFrequency {
-            evalCounter = 0
-
-            // Clear cache if configured
-            if config.clearCacheOnEval {
-                Memory.clearCache()
-            }
-        }
-    }
-
-    /// Reset the eval counter (call at start of new generation)
-    func resetOptimizationCycle() {
-        lock.lock()
-        evalCounter = 0
-        lock.unlock()
-    }
-
-    // MARK: - Memory Warnings
-
-    /// Check if memory usage is approaching critical levels
-    /// - Parameter threshold: Percentage threshold (0.0-1.0) for warning
-    /// - Returns: True if memory usage exceeds threshold
-    func isMemoryPressureHigh(threshold: Double = 0.8) -> Bool {
-        let (active, cache, _) = memorySummary()
-        let totalUsed = active + cache
-
-        // Get system memory as reference
-        let systemMemory = ProcessInfo.processInfo.physicalMemory
-        let usageRatio = Double(totalUsed) / Double(systemMemory)
-
-        return usageRatio > threshold
-    }
-
-    /// Perform emergency cleanup if memory pressure is high
-    /// - Returns: True if cleanup was performed
-    @discardableResult
-    func emergencyCleanupIfNeeded() -> Bool {
-        if isMemoryPressureHigh(threshold: 0.9) {
-            VoxtralDebug.always("⚠️ High memory pressure detected, performing emergency cleanup")
-            fullCleanup()
-            return true
-        }
-        return false
-    }
-
-    // MARK: - Utilities
-
-    /// Format bytes as human-readable string
-    private func formatBytes(_ bytes: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useGB, .useMB]
-        formatter.countStyle = .memory
-        return formatter.string(fromByteCount: Int64(bytes))
+    /// Cache ceiling of `stage`: loading reuses few buffers, so it stays under 1 GB whatever the ceiling
+    func cacheBytes(for stage: Stage) -> Int? {
+        guard let cacheBytes else { return nil }
+        return stage == .load ? min(cacheBytes, 1024 * mebibyte) : cacheBytes
     }
 }
 
-// MARK: - Convenience Extensions
+/// What a process uses at one moment
+public struct VoxtralMemoryReport: Sendable, CustomStringConvertible {
+    /// MLX buffers in use
+    public let activeBytes: Int
+    /// MLX buffers kept for reuse
+    public let cacheBytes: Int
+    /// Highest `activeBytes` since the last reset by a measuring tool
+    public let peakBytes: Int
+    /// `phys_footprint`, what iOS counts against the process's limit; nil if the system refuses to tell
+    public let footprintBytes: Int?
+    /// See `VoxtralMemoryManager.availableBytes`
+    public let availableBytes: Int
 
-extension VoxtralMemoryManager {
-
-    /// Configure memory optimization based on available RAM
-    func autoConfigureForSystem() {
-        config = .recommended()
-        VoxtralDebug.log("Memory optimization auto-configured: \(config.description)")
+    public var description: String {
+        let footprint = footprintBytes.map { ", footprint \(Self.format($0))" } ?? ""
+        return "GPU memory: active \(Self.format(activeBytes)), cache \(Self.format(cacheBytes)), "
+            + "peak \(Self.format(peakBytes))\(footprint), available \(Self.format(availableBytes))"
     }
 
-    /// Set memory optimization preset
-    /// - Parameter preset: One of .disabled, .moderate, .aggressive, .ultra
-    func setPreset(_ preset: MemoryOptimizationConfig) {
-        config = preset
-        VoxtralDebug.log("Memory optimization set to: \(config.description)")
+    private static func format(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
+    }
+}
+
+/// Sizes the limits and reports usage. The limits themselves live in each pipeline's configuration.
+public enum VoxtralMemoryManager {
+
+    /// What the process can still allocate: `os_proc_available_memory` on iOS. On a Mac, 6 GB, the figure of an 8 GB
+    /// iPhone, so that a `lean` measured on a Mac runs under the cache ceiling it will have on the phone.
+    public static var availableBytes: Int {
+        #if os(iOS)
+        return Int(os_proc_available_memory())
+        #else
+        return 6 * 1024 * mebibyte
+        #endif
+    }
+
+    /// Current memory usage
+    public static func report() -> VoxtralMemoryReport {
+        let snapshot = Memory.snapshot()
+        return VoxtralMemoryReport(
+            activeBytes: snapshot.activeMemory, cacheBytes: snapshot.cacheMemory, peakBytes: snapshot.peakMemory,
+            footprintBytes: footprintBytes(), availableBytes: availableBytes)
+    }
+
+    private static func footprintBytes() -> Int? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int(info.phys_footprint) : nil
     }
 }

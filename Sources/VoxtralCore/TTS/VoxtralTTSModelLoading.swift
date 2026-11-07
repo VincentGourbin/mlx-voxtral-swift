@@ -78,6 +78,10 @@ private func loadWithConfig(
     let parameters = ModuleParameters.unflattened(sanitizedWeights)
     try model.updateVerified(parameters: parameters)
 
+    // Read here, not by the first synthesis (K-59). `updateVerified` covered every parameter: nothing random is left
+    try VoxtralCancellation.gpuCheckpoint()
+    MLX.eval(model.parameters())
+
     progressCallback?(1.0, "Model loaded successfully")
     return model
 }

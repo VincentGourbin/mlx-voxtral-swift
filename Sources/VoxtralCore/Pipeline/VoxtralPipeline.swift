@@ -196,11 +196,14 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// State, running operation and generation token, changed atomically
     let gate = PipelineGate<State>(.unloaded)
 
-    /// Opt-in MLX cache limit held while loaded (K-52)
+    /// MLX limits held while loaded (K-52)
     private let cachePolicy = MLXCachePolicy()
 
     /// Loaded Voxtral model
     private(set) var voxtralModel: VoxtralModel?
+
+    /// The checkpoint of the loaded model: a released audio tower is read back from it (K-63)
+    private var loadedModelPath: URL?
 
     /// Loaded processor
     private var processor: VoxtralProcessor?
@@ -229,9 +232,6 @@ public class VoxtralPipeline: @unchecked Sendable {
         self.model = model
         self.backend = backend
         self.configuration = configuration
-
-        // configuration.memoryOptimization is passed to each generation: the shared
-        // VoxtralMemoryManager.config is never overwritten by a pipeline (S-11)
     }
 
     // MARK: - Model Loading
@@ -254,6 +254,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             do {
                 let profiler = MLXProfiler.shared
                 let session = profiler.activeSession
+                cachePolicy.apply(configuration.memoryOptimization.limits(for: model))
 
                 // Download/resolve model path
                 progress?(0.1, "Downloading model...")
@@ -277,6 +278,7 @@ public class VoxtralPipeline: @unchecked Sendable {
                     try withMLXErrors { _ in try loadVoxtralStandardModel(modelPath: modelPath.path) }
                 }
                 self.voxtralModel = VoxtralForConditionalGeneration(standardModel: standardModel)
+                self.loadedModelPath = modelPath
                 session?.endPhase("2. Model Loading", category: .modelLoad)
 
                 // Load tokenizer and setup encoder IN PARALLEL
@@ -305,11 +307,21 @@ public class VoxtralPipeline: @unchecked Sendable {
                 try await encoderTask
                 session?.endPhase("4. Encoder Setup", category: .modelLoad)
 
-                cachePolicy.apply(configuration.memoryOptimization.cacheLimitBytes)
+                // The tower stays on disk when Core ML encodes, or when `lean` would free it after the first request
+                let encodesWithMLX = hybridEncoder?.status.coreMLAvailable != true
+                let keepsAudioTower = encodesWithMLX && !configuration.memoryOptimization.releasesAudioTower
+                try await runOffCooperativePool { [self] in
+                    try withMLXErrors { _ in
+                        try VoxtralCancellation.gpuCheckpoint()
+                        voxtralModel?.materializeWeights(audioTower: keepsAudioTower)
+                    }
+                }
+                cachePolicy.enter(.generate)
                 gate.end(generation, state: .ready)
                 progress?(1.0, "Model ready!")
 
             } catch {
+                cachePolicy.restore()
                 gate.end(generation, state: .error(error.localizedDescription))
                 throw error
             }
@@ -382,13 +394,10 @@ public class VoxtralPipeline: @unchecked Sendable {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
+            try VoxtralCancellation.gpuCheckpoint()  // the feature extraction reads MLX arrays
             let session = MLXProfiler.shared.activeSession
             let beacon = VoxtralRuntimeBeacon.begin(task: "transcribe", model: self.model.rawValue)
-            defer {
-                beacon?.end()
-                // Apply memory optimization
-                VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
-            }
+            defer { beacon?.end() }
 
             // Create transcription request (note: method name has typo in original)
             session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
@@ -400,41 +409,8 @@ public class VoxtralPipeline: @unchecked Sendable {
 
             // Generate transcription within the text-token budget (explicit, or from the duration: K-5)
             let budget = tokenBudget(for: audio)
-            let tokenIds: [Int]
-
-            if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
-                // Hybrid mode: use Core ML for audio encoding
-                session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
-                let audioEmbeds = try hybrid.encode(inputs.inputFeatures)
-                session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
-
-                session?.beginPhase("Generation", category: .generation)
-                tokenIds = try model.generateStreamWithAudioEmbeds(
-                    inputIds: inputs.inputIds,
-                    audioEmbeds: audioEmbeds,
-                    maxNewTokens: budget,
-                    temperature: configuration.temperature,
-                    topP: configuration.topP,
-                    repetitionPenalty: configuration.repetitionPenalty,
-                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                    memoryOptimization: configuration.memoryOptimization
-                )
-                session?.endPhase("Generation", category: .generation)
-            } else {
-                // Pure MLX mode
-                session?.beginPhase("Generation", category: .generation)
-                tokenIds = try model.generateStream(
-                    inputIds: inputs.inputIds,
-                    inputFeatures: inputs.inputFeatures,
-                    maxNewTokens: budget,
-                    temperature: configuration.temperature,
-                    topP: configuration.topP,
-                    repetitionPenalty: configuration.repetitionPenalty,
-                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                    memoryOptimization: configuration.memoryOptimization
-                )
-                session?.endPhase("Generation", category: .generation)
-            }
+            let tokenIds = try generateTokens(
+                model: model, inputIds: inputs.inputIds, inputFeatures: inputs.inputFeatures, budget: budget)
 
             recordTruncation(tokenIds, budget: budget)
 
@@ -471,12 +447,10 @@ public class VoxtralPipeline: @unchecked Sendable {
                 throw VoxtralPipelineError.modelNotLoaded
             }
 
+            try VoxtralCancellation.gpuCheckpoint()  // the feature extraction reads MLX arrays
             let session = MLXProfiler.shared.activeSession
             let beacon = VoxtralRuntimeBeacon.begin(task: "chat", model: self.model.rawValue)
-            defer {
-                beacon?.end()
-                VoxtralMemoryManager.shared.optimizeIfNeeded(tokenIndex: 0, config: configuration.memoryOptimization)
-            }
+            defer { beacon?.end() }
 
             // Create chat conversation with audio
             session?.beginPhase("Audio Feature Extraction", category: .audioFeatureExtract)
@@ -504,39 +478,8 @@ public class VoxtralPipeline: @unchecked Sendable {
 
             // Generate response
             let budget = tokenBudget(for: audio)
-            let tokenIds: [Int]
-
-            if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
-                session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
-                let audioEmbeds = try hybrid.encode(inputFeatures)
-                session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
-
-                session?.beginPhase("Generation", category: .generation)
-                tokenIds = try model.generateStreamWithAudioEmbeds(
-                    inputIds: inputIds,
-                    audioEmbeds: audioEmbeds,
-                    maxNewTokens: budget,
-                    temperature: configuration.temperature,
-                    topP: configuration.topP,
-                    repetitionPenalty: configuration.repetitionPenalty,
-                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                    memoryOptimization: configuration.memoryOptimization
-                )
-                session?.endPhase("Generation", category: .generation)
-            } else {
-                session?.beginPhase("Generation", category: .generation)
-                tokenIds = try model.generateStream(
-                    inputIds: inputIds,
-                    inputFeatures: inputFeatures,
-                    maxNewTokens: budget,
-                    temperature: configuration.temperature,
-                    topP: configuration.topP,
-                    repetitionPenalty: configuration.repetitionPenalty,
-                    contextSize: configuration.memoryOptimization.maxKVCacheSize,
-                    memoryOptimization: configuration.memoryOptimization
-                )
-                session?.endPhase("Generation", category: .generation)
-            }
+            let tokenIds = try generateTokens(
+                model: model, inputIds: inputIds, inputFeatures: inputFeatures, budget: budget)
 
             recordTruncation(tokenIds, budget: budget)
 
@@ -549,6 +492,57 @@ public class VoxtralPipeline: @unchecked Sendable {
         }
     }
 
+    /// The tokens of one request, with the encoder the pipeline has: Core ML when it is available, else MLX
+    private func generateTokens(
+        model: VoxtralModel, inputIds: MLXArray, inputFeatures: MLXArray, budget: Int
+    ) throws -> [Int] {
+        let session = MLXProfiler.shared.activeSession
+        let memory = configuration.memoryOptimization
+        let tokenIds: [Int]
+        try VoxtralCancellation.gpuCheckpoint()
+
+        if let hybrid = hybridEncoder, hybrid.status.coreMLAvailable {
+            // Hybrid mode: use Core ML for audio encoding
+            session?.beginPhase("Audio Encoding (CoreML)", category: .audioEncode)
+            let audioEmbeds = try hybrid.encode(inputFeatures)
+            session?.endPhase("Audio Encoding (CoreML)", category: .audioEncode)
+            cachePolicy.enter(.generate)
+
+            session?.beginPhase("Generation", category: .generation)
+            tokenIds = try model.generateStreamWithAudioEmbeds(
+                inputIds: inputIds,
+                audioEmbeds: audioEmbeds,
+                maxNewTokens: budget,
+                temperature: configuration.temperature,
+                topP: configuration.topP,
+                repetitionPenalty: configuration.repetitionPenalty,
+                contextSize: memory.maxKVCacheSize,
+                memoryOptimization: memory
+            )
+            session?.endPhase("Generation", category: .generation)
+        } else {
+            // Pure MLX mode
+            if let loadedModelPath { try model.reloadAudioTower(from: loadedModelPath) }
+            session?.beginPhase("Generation", category: .generation)
+            tokenIds = try model.generateStream(
+                inputIds: inputIds,
+                inputFeatures: inputFeatures,
+                maxNewTokens: budget,
+                temperature: configuration.temperature,
+                topP: configuration.topP,
+                repetitionPenalty: configuration.repetitionPenalty,
+                contextSize: memory.maxKVCacheSize,
+                memoryOptimization: memory,
+                onEncoded: { [cachePolicy] in
+                    if memory.releasesAudioTower { model.releaseAudioTower() }
+                    cachePolicy.enter(.generate)
+                }
+            )
+            session?.endPhase("Generation", category: .generation)
+        }
+        return tokenIds
+    }
+
     // MARK: - Cleanup
 
     /// Unload the model and free memory
@@ -556,18 +550,16 @@ public class VoxtralPipeline: @unchecked Sendable {
         voxtralModel = nil
         processor = nil
         hybridEncoder = nil
+        loadedModelPath = nil
         gate.reset(.unloaded)
         cachePolicy.restore()
-
-        // Full memory cleanup
-        VoxtralMemoryManager.shared.fullCleanup()
     }
 
     // MARK: - Utility
 
     /// Get current memory usage
     public var memorySummary: String {
-        VoxtralMemoryManager.shared.formattedMemorySummary()
+        VoxtralMemoryManager.report().description
     }
 
     /// Check if model is ready for inference

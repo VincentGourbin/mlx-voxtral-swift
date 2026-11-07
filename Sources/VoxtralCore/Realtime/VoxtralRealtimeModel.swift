@@ -59,7 +59,8 @@ class VoxtralRealtimeModel: Module {
         tokenizer: TekkenTokenizer,
         maxTokens: Int = 4096,
         temperature: Float = 0.0,
-        delayMs: Int = VoxtralRealtimeConfiguration.defaultTranscriptionDelayMs
+        delayMs: Int = VoxtralRealtimeConfiguration.defaultTranscriptionDelayMs,
+        onEncoded: (() -> Void)? = nil
     ) -> (tokens: [Int], audioEmbeddings: MLXArray) {
         let nDelay = config.numDelayTokens(delayMs: delayMs)
         let nLeft = config.nLeftPadTokens
@@ -82,6 +83,7 @@ class VoxtralRealtimeModel: Module {
         let nAudioTotal = adapterOut.dim(0)
         MLX.eval(adapterOut)
         session?.endPhase("Audio Encoding", category: .audioEncode)
+        onEncoded?()
 
         let promptLen = 1 + nLeft + nDelay  // BOS + padding + delay
 
@@ -139,7 +141,7 @@ class VoxtralRealtimeModel: Module {
                 return token.item(Int.self)
             },
             advance: { _, _, count in
-                if VoxtralCancellation.isCancelled { return false }  // the pipeline throws CancellationError (K-15)
+                if VoxtralCancellation.cancelledAtGPUCheckpoint { return false }  // the pipeline throws CancellationError (K-15)
                 if MLXErrorScope.hasError { return false }
 
                 let stepDurationUs = UInt64((CFAbsoluteTimeGetCurrent() - stepStart) * 1_000_000)

@@ -705,6 +705,13 @@ class LlamaStandardAttention: Module {
             finalQueries = rope(queriesTransposed, offset: cache.offset)
             // Python: keys = self.rope(keys, offset=cache.offset)
             let rotatedKeys = rope(keysTransposed, offset: cache.offset)
+            // A quantized cache has no plain keys to hand out: the upstream helper attends on the packed ones (K-55)
+            if cache is QuantizedKVCacheProtocol {
+                let output = attentionWithCacheUpdate(
+                    queries: finalQueries, keys: rotatedKeys, values: valuesTransposed, cache: cache, scale: scale,
+                    mask: attentionMask.map { .array($0) } ?? .none)
+                return oProj(output.transposed(0, 2, 1, 3).reshaped([bsz, qLen, -1]))
+            }
             // Python: keys, values = cache.update_and_fetch(keys, values)
             (finalKeys, finalValues) = cache.update(keys: rotatedKeys, values: valuesTransposed)
         } else {
@@ -859,11 +866,17 @@ class VoxtralStandardEncoder: Module {
         hiddenStates = hiddenStates + embedPos  // Broadcasting: [batch, seqLen, hidden] + [seqLen, hidden]
 
         // Pass through transformer layers. With several 30 s windows (long audio) each layer is evaluated so a
-        // cancelled caller stops within one layer instead of after the whole encoder (K-15; same operations)
+        // cancelled caller stops within one layer instead of after the whole encoder (K-15; same operations). On iOS
+        // always: `VoxtralGPUGate` can only stop between two evals, and the GPU goes as soon as the app leaves
+        #if os(iOS)
+        let interruptible = true
+        #else
         let interruptible = hiddenStates.dim(0) > 1
+        #endif
         for layer in layers {
             hiddenStates = layer(hiddenStates)
             if interruptible {
+                VoxtralGPUGate.shared.wait()  // what follows evaluates the encoder's output, cancelled or not
                 MLX.eval(hiddenStates)
                 if VoxtralCancellation.isCancelled { break }
             }

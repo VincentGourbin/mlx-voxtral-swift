@@ -33,15 +33,51 @@ struct BenchCommonOptions: ParsableArguments {
     @Option(name: .long, help: "Cooldown in seconds before each measured pass") var cooldown: Int = 120
     @Option(name: .long, help: "Tag for A/B/B/A series (A|B)") var tag: String = "A"
     @Option(name: .long, help: "Output directory for bench.jsonl") var out: String = ".local-runs/bench.noindex"
-    @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); omit to leave it unset")
+    @Option(name: .long, help: "MLX buffer-cache limit in MB set by the pipeline (K-52); 0 = no limit; omit for the pipeline's default")
     var cacheLimitMb: Int?
+    @Option(name: .long, help: "Memory settings: default | lean") var memory: BenchMemory = .default
+    @Option(name: .long, help: "STT: bits of the KV cache (K-55); omit for the memory settings' value") var kvBits: Int?
+    @Option(name: .long, help: "STT: positions per prefill slice (K-62); omit for the memory settings' value") var prefillStep: Int?
     @Flag(name: .long, help: "Afterwards, run one separate diagnostic pass (not a BENCH line) and export its Chrome trace to --out")
     var trace: Bool = false
     @Flag(name: .long, help: "With --trace: also record a Metal System Trace of that pass and print GPU occupancy per phase (GPUPHASE lines)")
     var metalTrace: Bool = false
     @Flag(name: .long, help: "Advertise activity to external monitors (SiliconScope)") var beacon: Bool = false
 
-    var cacheLimitBytes: Int? { cacheLimitMb.map { $0 * 1_048_576 } }
+    /// `base`, the pipeline's own limits, under these options
+    func limits(_ base: VoxtralMemoryLimits) -> VoxtralMemoryLimits {
+        var limits = memory == .lean ? VoxtralMemoryLimits.lean() : base
+        if let cacheLimitMb { limits.cacheBytes = cacheLimitMb == 0 ? nil : cacheLimitMb * 1_048_576 }
+        return limits
+    }
+
+    /// `base`, the STT pipeline's own settings, under these options
+    func memoryOptimization(_ base: MemoryOptimizationConfig) -> MemoryOptimizationConfig {
+        var config = memory == .lean ? MemoryOptimizationConfig.lean : base
+        if cacheLimitMb != nil { config.limits = limits(config.limits) }
+        if let kvBits { config.kvCacheBits = kvBits == 0 ? nil : kvBits }
+        if let prefillStep { config.prefillStepSize = prefillStep }
+        return config
+    }
+
+    /// The `profile` field of a BENCH line, with what it asked for; `cache_limit_mb` says what applied
+    var profile: String {
+        var parts: [String] = memory == .lean ? ["lean"] : []
+        if let cacheLimitMb { parts.append("cacheLimit=\(cacheLimitMb)MB") }
+        return parts.isEmpty ? "default" : parts.joined(separator: ",")
+    }
+
+    /// Same, with the settings only STT has
+    var sttProfile: String {
+        var parts = profile == "default" ? [] : [profile]
+        if let kvBits { parts.append("kvBits=\(kvBits)") }
+        if let prefillStep { parts.append("prefillStep=\(prefillStep)") }
+        return parts.isEmpty ? "default" : parts.joined(separator: ",")
+    }
+}
+
+enum BenchMemory: String, ExpressibleByArgument {
+    case `default`, lean
 }
 
 // MARK: - Pass measurement
@@ -456,6 +492,7 @@ enum BenchRunner {
             "peak_mlx_mb_by_phase": m.phasePeakMLX.mapValues { BenchJSON.round($0) ?? 0 },
             "peak_footprint_mb": BenchJSON.round(m.peakFootprintMB) ?? 0,
             "steps": m.stepMs.count,
+            "cache_limit_mb": Memory.cacheLimit / 1_048_576,
         ]
         if let p50 = BenchJSON.percentile(m.stepMs, 0.5) { record["step_ms_p50"] = BenchJSON.round(p50, 2) }
         if let p90 = BenchJSON.percentile(m.stepMs, 0.9) { record["step_ms_p90"] = BenchJSON.round(p90, 2) }
@@ -515,7 +552,7 @@ struct BenchSTT: AsyncParsableCommand {
         guard let pipelineModel = parseSTTModelID(model) else { throw ValidationError("Unknown STT model: \(model)") }
         var config = VoxtralPipeline.Configuration.default
         config.maxTokens = maxTokens
-        config.memoryOptimization.cacheLimitBytes = common.cacheLimitBytes
+        config.memoryOptimization = common.memoryOptimization(config.memoryOptimization)
         let pipeline = VoxtralPipeline(model: pipelineModel, backend: try parseBackend(backend), configuration: config)
         let loadStart = CFAbsoluteTimeGetCurrent()
         try await pipeline.loadModel()
@@ -525,7 +562,7 @@ struct BenchSTT: AsyncParsableCommand {
         let base: [String: Any] = [
             "pipeline": "stt", "model": model, "backend": backend, "input": input,
             "input_s": BenchJSON.round(seconds, 2) ?? 0, "language": language ?? "auto",
-            "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default", "load_ms": BenchJSON.round(loadMs) ?? 0,
+            "profile": common.sttProfile, "load_ms": BenchJSON.round(loadMs) ?? 0,
         ]
         try await BenchRunner.run(common, base: base) { _, _ in
             var text = ""
@@ -554,7 +591,9 @@ struct BenchRealtime: AsyncParsableCommand {
     func run() async throws {
         try BenchRunner.guardBuild()
         try RealtimeHeadOption.apply(headBits)
-        let pipeline = VoxtralRealtimePipeline(configuration: .init(transcriptionDelayMs: delay, cacheLimitBytes: common.cacheLimitBytes))
+        var config = VoxtralRealtimePipeline.Configuration(transcriptionDelayMs: delay)
+        config.memoryLimits = common.limits(config.memoryLimits)
+        let pipeline = VoxtralRealtimePipeline(configuration: config)
         let loadStart = CFAbsoluteTimeGetCurrent()
         try await pipeline.loadModel(modelId: model)
         let loadMs = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
@@ -563,7 +602,7 @@ struct BenchRealtime: AsyncParsableCommand {
         let seconds = BenchRunner.audioSeconds(input)
         let base: [String: Any] = [
             "pipeline": "realtime", "model": model, "input": input, "input_s": BenchJSON.round(seconds, 2) ?? 0,
-            "delay_ms": delay, "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default",
+            "delay_ms": delay, "profile": common.profile,
             "load_ms": BenchJSON.round(loadMs) ?? 0, "load_active_mb": BenchJSON.round(loadActiveMB, 1) ?? 0,
         ].merging(RealtimeHeadOption.fields(headBits)) { $1 }
         try await BenchRunner.run(common, base: base) { _, _ in
@@ -614,7 +653,9 @@ struct BenchTTS: AsyncParsableCommand {
         guard voice != nil || voiceEmbedding != nil else { throw ValidationError("--voice or --voice-embedding is required") }
         guard let info = VoxtralTTSRegistry.model(withId: model) else { throw ValidationError("Unknown TTS model: \(model)") }
         let text = try String(contentsOfFile: textFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        let pipeline = VoxtralTTSPipeline(configuration: .init(maxFrames: maxFrames, cacheLimitBytes: common.cacheLimitBytes))
+        var config = VoxtralTTSPipeline.Configuration(maxFrames: maxFrames)
+        config.memoryLimits = common.limits(config.memoryLimits)
+        let pipeline = VoxtralTTSPipeline(configuration: config)
         let loadStart = CFAbsoluteTimeGetCurrent()
         try await pipeline.loadModel(modelInfo: info)
         let loadMs = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
@@ -635,7 +676,7 @@ struct BenchTTS: AsyncParsableCommand {
             "pipeline": "tts", "model": model, "input": textFile, "voice": voice ?? voiceEmbedding ?? "",
             "seed": Int(seed), "streaming": streaming, "warm_up": warmUp,
             "pack_sha256": BenchJSON.packSHA(folder: VoxtralModelDownloader.findTTSModelPath(for: info)) ?? "",
-            "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default", "load_ms": BenchJSON.round(loadMs) ?? 0,
+            "profile": common.profile, "load_ms": BenchJSON.round(loadMs) ?? 0,
         ]
         try await BenchRunner.run(common, base: base, metrics: ["total_ms", "step_ms_p50"]) { _, _ in
             var sha = ""
@@ -709,13 +750,15 @@ struct BenchEnroll: AsyncParsableCommand {
     func run() async throws {
         try BenchRunner.guardBuild()
         guard let info = VoxtralTTSRegistry.model(withId: model) else { throw ValidationError("Unknown TTS model: \(model)") }
-        let pipeline = VoxtralTTSPipeline(configuration: .init(maxFrames: 200, cacheLimitBytes: common.cacheLimitBytes))
+        var config = VoxtralTTSPipeline.Configuration(maxFrames: 200)
+        config.memoryLimits = common.limits(config.memoryLimits)
+        let pipeline = VoxtralTTSPipeline(configuration: config)
         try await pipeline.loadModel(modelInfo: info)
         if afterSynthesis { _ = try await pipeline.synthesize(text: "Hello there.", voice: .neutralFemale, seed: seed) }
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("voxtral-bench-enroll.safetensors")
         let base: [String: Any] = [
             "pipeline": "enroll", "model": model, "input": input, "epochs": epochs, "seed": Int(seed),
-            "after_synthesis": afterSynthesis, "scenario": afterSynthesis ? "after_synthesis" : "cli", "profile": common.cacheLimitMb.map { "cacheLimit=\($0)MB" } ?? "default",
+            "after_synthesis": afterSynthesis, "scenario": afterSynthesis ? "after_synthesis" : "cli", "profile": common.profile,
         ]
         try await BenchRunner.run(common, base: base, metrics: ["total_ms", "epoch_ms_p50"]) { _, _ in
             var epochTimes: [Double] = []
@@ -769,7 +812,7 @@ struct BenchChat: AsyncParsableCommand {
         var config = VoxtralPipeline.Configuration.default
         config.temperature = temperature
         config.topP = topP
-        config.memoryOptimization.cacheLimitBytes = common.cacheLimitBytes
+        config.memoryOptimization = common.memoryOptimization(config.memoryOptimization)
         let pipeline = VoxtralPipeline(model: pipelineModel, backend: try parseBackend(backend), configuration: config)
         try await pipeline.loadModel()
         let url = URL(fileURLWithPath: input)

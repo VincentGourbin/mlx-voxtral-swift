@@ -13,45 +13,11 @@ final class PerformanceOptimizationTests: XCTestCase {
 
     // MARK: - MemoryOptimizationConfig Tests
 
-    // K-2: Voxtral's LM has no sliding window, so no preset limits the KV cache; presets differ by
-    // their eval / cache-clearing rhythm.
-    func testPresetsHaveNoKVCacheLimit() {
-        for config in [MemoryOptimizationConfig.light, .moderate, .aggressive, .ultra, .disabled] {
+    // K-2: Voxtral's LM has no sliding window, so no profile limits the KV cache
+    func testProfilesHaveNoKVCacheLimit() {
+        for config in [MemoryOptimizationConfig.fast, .lean, .recommended(), .recommended(forRAMGB: 8)] {
             XCTAssertNil(config.maxKVCacheSize, "\(config.description)")
         }
-        XCTAssertEqual(MemoryOptimizationConfig.light.evalFrequency, 16)
-        XCTAssertEqual(MemoryOptimizationConfig.ultra.evalFrequency, 2)
-        XCTAssertTrue(MemoryOptimizationConfig.aggressive.clearCacheOnEval)
-    }
-
-    func testDisabledPresetHasNoKVCacheLimit() {
-        let config = MemoryOptimizationConfig.disabled
-        XCTAssertNil(config.maxKVCacheSize)
-        XCTAssertEqual(config.evalFrequency, 0)
-    }
-
-    func testRecommendedNeverReturnsDisabled() {
-        // For any RAM size, recommended() returns a config that evaluates periodically
-        for ram in [8, 16, 32, 64, 128] {
-            XCTAssertGreaterThan(MemoryOptimizationConfig.recommended(forRAMGB: ram).evalFrequency, 0, "\(ram) GB")
-        }
-    }
-
-    func testRecommendedPresetScaling() {
-        let config8 = MemoryOptimizationConfig.recommended(forRAMGB: 8)
-        let config16 = MemoryOptimizationConfig.recommended(forRAMGB: 16)
-        let config64 = MemoryOptimizationConfig.recommended(forRAMGB: 64)
-
-        // Less RAM → more frequent evaluation
-        XCTAssertLessThan(config8.evalFrequency, config16.evalFrequency)
-        XCTAssertLessThan(config16.evalFrequency, config64.evalFrequency)
-    }
-
-    func testRecommendedAutoDetection() {
-        // Should not crash and return a valid config
-        let config = MemoryOptimizationConfig.recommended()
-        XCTAssertGreaterThan(config.evalFrequency, 0, "Auto-detected config should have eval frequency > 0")
-        XCTAssertNil(config.maxKVCacheSize, "no preset limits the KV cache (K-2)")
     }
 
     // MARK: - Audio Loading Tests
