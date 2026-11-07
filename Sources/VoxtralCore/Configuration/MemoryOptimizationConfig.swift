@@ -10,7 +10,12 @@ import Foundation
 public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvertible {
 
     /// MLX limits held while the pipeline is loaded
-    public var limits: VoxtralMemoryLimits
+    public var limits: VoxtralMemoryLimits {
+        didSet { hasDefaultLimits = false }
+    }
+
+    /// Set by `recommended`, until the host sets limits of its own: the pipeline may then tighten them for its model
+    private(set) var hasDefaultLimits = false
 
     /// Maximum KV cache size (nil = unlimited, the default).
     /// Voxtral's LM has no sliding window: a limit does not evict the beginning of the audio, it makes
@@ -63,12 +68,21 @@ public struct MemoryOptimizationConfig: Sendable, Equatable, CustomStringConvert
         MemoryOptimizationConfig(limits: .lean(), kvCacheBits: 8, prefillStepSize: 256, releasesAudioTower: true)
     }
 
-    /// The default for a machine: `.fast`, with a 2 GB cache ceiling under 32 GB of RAM
+    /// The default for a machine: `.fast`, with a 2 GB cache ceiling under 32 GB of RAM. Small also gets it up to 32 GB
+    /// (ASK-33: 37 GB of peak on 8 min of audio without it), unless the host sets limits of its own, even `nil`.
     /// - Parameter ramGB: RAM in gigabytes (nil = this machine's)
     public static func recommended(forRAMGB ramGB: Int? = nil) -> MemoryOptimizationConfig {
         var config = MemoryOptimizationConfig.fast
         if ramGB ?? physicalRAMGB < 32 { config.cacheLimitBytes = defaultCacheLimitBytes }
+        config.hasDefaultLimits = true
         return config
+    }
+
+    /// The limits a pipeline holds for `model`
+    func limits(for model: VoxtralPipeline.Model, ramGB: Int = physicalRAMGB) -> VoxtralMemoryLimits {
+        var limits = self.limits
+        if hasDefaultLimits, model.rawValue.hasPrefix("small"), ramGB <= 32 { limits.cacheBytes = Self.defaultCacheLimitBytes }
+        return limits
     }
 
     static var physicalRAMGB: Int { Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)) }

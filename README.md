@@ -429,8 +429,7 @@ print(VoxtralMemoryManager.report())   // active, cache, peak, footprint, availa
 | Audio tower (STT, `.mlx`) | resident | freed once the audio is encoded, read again for the next request |
 
 Remove a ceiling with `configuration.cacheLimitBytes = nil` (TTS, Realtime) or
-`configuration.memoryOptimization.cacheLimitBytes = nil` (STT). A configuration you pass to `VoxtralPipeline` stays as it
-is: the Small default only comes with the default configuration.
+`configuration.memoryOptimization.cacheLimitBytes = nil` (STT).
 
 On iOS the GPU goes as soon as the app leaves the foreground, and a GPU call after that terminates the process. Close the
 gate when the scene leaves `.active`: work in progress parks between two units of work and resumes where it stopped.

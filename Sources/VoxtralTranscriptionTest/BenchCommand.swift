@@ -54,7 +54,7 @@ struct BenchCommonOptions: ParsableArguments {
     /// `base`, the STT pipeline's own settings, under these options
     func memoryOptimization(_ base: MemoryOptimizationConfig) -> MemoryOptimizationConfig {
         var config = memory == .lean ? MemoryOptimizationConfig.lean : base
-        config.limits = limits(config.limits)
+        if cacheLimitMb != nil { config.limits = limits(config.limits) }
         if let kvBits { config.kvCacheBits = kvBits == 0 ? nil : kvBits }
         if let prefillStep { config.prefillStepSize = prefillStep }
         return config

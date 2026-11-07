@@ -104,18 +104,6 @@ public class VoxtralPipeline: @unchecked Sendable {
             )
         }
 
-        /// `default`, with the 2 GB cache ceiling Small needs on 32 GB of RAM (ASK-33): 37 GB of peak on 8 min of audio
-        /// without it. Pass `.default`, or set `memoryOptimization`, to go without.
-        /// - Parameter ramGB: RAM in gigabytes (nil = this machine's)
-        public static func recommended(for model: Model, ramGB: Int? = nil) -> Configuration {
-            var configuration = Configuration.default
-            configuration.memoryOptimization = .recommended(forRAMGB: ramGB)
-            if model.rawValue.hasPrefix("small"), ramGB ?? MemoryOptimizationConfig.physicalRAMGB <= 32 {
-                configuration.memoryOptimization.cacheLimitBytes = MemoryOptimizationConfig.defaultCacheLimitBytes
-            }
-            return configuration
-        }
-
         public init(
             maxTokens: Int? = nil,
             temperature: Float = 0.0,
@@ -235,15 +223,15 @@ public class VoxtralPipeline: @unchecked Sendable {
     /// - Parameters:
     ///   - model: Model variant to use (default: .mini3b8bit)
     ///   - backend: Encoder backend (default: .auto)
-    ///   - configuration: Generation configuration (default: `Configuration.recommended(for: model)`)
+    ///   - configuration: Generation configuration (default: .default)
     public init(
         model: Model = .recommended,
         backend: Backend = .auto,
-        configuration: Configuration? = nil
+        configuration: Configuration = .default
     ) {
         self.model = model
         self.backend = backend
-        self.configuration = configuration ?? .recommended(for: model)
+        self.configuration = configuration
     }
 
     // MARK: - Model Loading
@@ -266,7 +254,7 @@ public class VoxtralPipeline: @unchecked Sendable {
             do {
                 let profiler = MLXProfiler.shared
                 let session = profiler.activeSession
-                cachePolicy.apply(configuration.memoryOptimization.limits)
+                cachePolicy.apply(configuration.memoryOptimization.limits(for: model))
 
                 // Download/resolve model path
                 progress?(0.1, "Downloading model...")

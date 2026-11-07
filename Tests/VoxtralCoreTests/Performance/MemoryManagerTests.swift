@@ -74,23 +74,30 @@ final class MemoryManagerTests: XCTestCase {
     }
 
     func testSmallHasTheCeilingUpTo32GigabytesAndCanGoWithout() {
-        typealias Configuration = VoxtralPipeline.Configuration
+        let recommended = MemoryOptimizationConfig.recommended(forRAMGB: 32)
         for model in [VoxtralPipeline.Model.small4bit, .small24b8bit, .small24b] {
-            XCTAssertEqual(
-                Configuration.recommended(for: model, ramGB: 32).memoryOptimization.cacheLimitBytes, 2048 * mb, model.rawValue)
-            XCTAssertNil(Configuration.recommended(for: model, ramGB: 33).memoryOptimization.cacheLimitBytes, model.rawValue)
+            XCTAssertEqual(recommended.limits(for: model, ramGB: 32).cacheBytes, 2048 * mb, model.rawValue)
+            XCTAssertNil(recommended.limits(for: model, ramGB: 33).cacheBytes, model.rawValue)
         }
-        XCTAssertNil(Configuration.recommended(for: .mini3b8bit, ramGB: 32).memoryOptimization.cacheLimitBytes)
+        XCTAssertNil(recommended.limits(for: .mini3b8bit, ramGB: 32).cacheBytes)
 
-        var explicit = Configuration.default
-        explicit.memoryOptimization = .fast
-        let pipeline = VoxtralPipeline(model: .small4bit, configuration: explicit)
-        XCTAssertNil(pipeline.configuration.memoryOptimization.cacheLimitBytes, "a configuration given by the host stays")
+        var removed = recommended
+        removed.cacheLimitBytes = nil
+        XCTAssertNil(removed.limits(for: .small4bit, ramGB: 32).cacheBytes, "the host said no ceiling")
+        XCTAssertNil(MemoryOptimizationConfig.fast.limits(for: .small4bit, ramGB: 32).cacheBytes)
+        XCTAssertNotNil(MemoryOptimizationConfig.lean.limits(for: .small4bit, ramGB: 96).cacheBytes)
+    }
+
+    func testTheDefaultConfigurationCarriesTheSmallCeiling() {
+        var config = VoxtralPipeline.Configuration.default
+        config.maxTokens = 100  // a host that changes something else keeps the default limits
+        XCTAssertEqual(config.memoryOptimization.limits(for: .small4bit, ramGB: 32).cacheBytes, 2048 * mb)
     }
 
     @available(*, deprecated)
     func testDeprecatedPresetsStillCompileAndNameTheNewSettings() {
         XCTAssertEqual(MemoryOptimizationConfig.light, .fast)
+        XCTAssertNil(MemoryOptimizationConfig.light.cacheLimitBytes)
         XCTAssertEqual(MemoryOptimizationConfig.ultra.cacheLimitBytes, 2048 * mb)
         var config = MemoryOptimizationConfig(evalFrequency: 8, clearCacheOnEval: true, cacheLimitBytes: 256 * mb)
         config.evalFrequency = 2

@@ -40,7 +40,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   stay as deprecated fields without effect. `VoxtralMemoryManager` is a new public type: the 2.x singleton was internal
   since K-31.
 - **`VoxtralTTSPipeline.Configuration` caps the MLX cache at 2 GB by default**: pass `cacheLimitBytes: nil` to go
-  without. `VoxtralPipeline(configuration:)` now takes an optional: omitted, it gets `Configuration.recommended(for:)`.
+  without.
 - **K-31**: rename the five types above (or keep the deprecated aliases for now); remove calls to
   `ModelDownloader.reconfigureHubApi()`; enroll voices through `VoxtralTTSPipeline.enrollVoice`.
 - **K-10 — `small-24b-8bit` reads `VincentGOURBIN/voxtral-small-8bit`** (≈ 26.5 GB, downloaded at the first load);
