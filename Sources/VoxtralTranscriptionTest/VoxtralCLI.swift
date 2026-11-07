@@ -160,8 +160,15 @@ struct Verify: AsyncParsableCommand {
         guard result.isValid else {
             print("\n\(entry.id) is damaged or incomplete:")
             for problem in result.problems { print("  \(problem)") }
-            print("Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)'.")
+            print(VoxtralModelDownloader.isDownloaded(entry)
+                ? "Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)'."
+                : "Run 'voxtral download \(entry.id)': it keeps the files already whole.")
             throw ExitCode.failure
+        }
+        guard result.weightsChecksummed else {
+            print("\n\(entry.id): no problem found, but its weights cannot be checked: no SHA-256 was recorded for them.")
+            print("Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)' for a copy that can be checked.")
+            throw ExitCode(2)
         }
         print("\n\(entry.id): OK")
     }
@@ -183,19 +190,25 @@ struct Delete: ParsableCommand {
 
     func run() throws {
         let entry = try catalogEntry(model)
-        guard let folder = VoxtralModelDownloader.localFolder(for: entry) else {
+        let targets = VoxtralModelDownloader.deletionTargets(for: entry)
+        guard !targets.isEmpty else {
             print("\(entry.id) is not on disk.")
             throw ExitCode.failure
         }
         if !yes {
-            print("Delete \(folder.path)? [y/N]")
+            print("This deletes:")
+            for target in targets { print("  \(target.path)") }
+            if targets.contains(where: { $0.lastPathComponent.hasPrefix("models--") }) {
+                print("A Hub cache folder goes whole, with all its revisions; other tools may share it.")
+            }
+            print("Continue? [y/N]")
             guard readLine()?.lowercased() == "y" else {
                 print("Nothing deleted.")
                 return
             }
         }
         try VoxtralModelDownloader.delete(entry)
-        print("Deleted \(folder.path)")
+        for target in targets { print("Deleted \(target.path)") }
     }
 }
 

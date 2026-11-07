@@ -149,7 +149,8 @@ public enum VoxtralModelCatalog {
     }
 
     /// Hub `license:` tag of each repository (docs/Weights.md). `mini-3b-8bit` and `mini-3b-4bit` have no tag: they
-    /// carry the licence of their base model, `mistralai/Voxtral-Mini-3B-2507`.
+    /// carry the licence of their base model, `mistralai/Voxtral-Mini-3B-2507`. `tts-4b-8bit` is our own derivative,
+    /// under the licence of the TTS checkpoint.
     static let licenses: [String: VoxtralModelLicense] = [
         "mini-3b": .apache2,
         "small-24b": .apache2,
@@ -201,12 +202,17 @@ public struct VoxtralModelVerification: Sendable, Equatable {
     public let folder: URL
     /// Files whose SHA-256 was recomputed and matches the manifest
     public let checksummedFiles: [String]
-    /// Files checked by size only: the manifest holds no SHA-256 for them (small Hub files, or a folder downloaded
-    /// before the manifest existed)
+    /// Files checked by size only: small Hub files have no SHA-256. In a folder from before the manifest, every file
+    /// is here, against sizes read from the folder itself: that proves nothing about its content
     public let sizeOnlyFiles: [String]
     public let problems: [Problem]
 
     public var isValid: Bool { problems.isEmpty }
+
+    /// False when a weight file has no SHA-256 to be checked against: `isValid` then says nothing about the weights
+    public var weightsChecksummed: Bool {
+        !sizeOnlyFiles.contains { $0.hasSuffix(".safetensors") && !$0.hasPrefix("voice_embedding/") }
+    }
 }
 
 /// Hashing reads whole models: it gets its own queue, away from the cooperative pool and from MLX work
@@ -230,12 +236,28 @@ extension VoxtralModelDownloader {
         path(for: entry) != nil
     }
 
-    /// The folder holding `entry` on disk, complete or not; nil if there is none
+    /// The folder holding `entry` on disk: the one a pipeline loads, else the first partial copy; nil if there is none
     public static func localFolder(for entry: VoxtralModelEntry) -> URL? {
-        repoFolders(entry.repoId).first { folder in
+        path(for: entry) ?? localFolders(for: entry).first
+    }
+
+    /// Every folder holding `entry` on disk, complete or not, in lookup order
+    static func localFolders(for entry: VoxtralModelEntry) -> [URL] {
+        repoFolders(entry.repoId).filter { folder in
             var isDirectory: ObjCBool = false
             return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory) && isDirectory.boolValue
         }
+    }
+
+    /// What `delete(_:)` removes: every copy of `entry` on disk. A legacy Hub snapshot counts for its whole
+    /// `models--org--repo` folder, with all its revisions.
+    public static func deletionTargets(for entry: VoxtralModelEntry) -> [URL] {
+        var targets: [URL] = []
+        for folder in localFolders(for: entry) {
+            let target = deletionTarget(of: folder, repoId: entry.repoId)
+            if !targets.contains(where: { $0.path == target.path }) { targets.append(target) }
+        }
+        return targets
     }
 
     /// Models completely downloaded, of one family or of all
@@ -255,8 +277,10 @@ extension VoxtralModelDownloader {
         }
     }
 
-    /// Checks a model on disk against its manifest: every file present with its size, SHA-256 recomputed where the
-    /// manifest holds one, and the files any model needs (weights, `tekken.json`, voices for TTS). No network.
+    /// Checks the folder `localFolder(for:)` returns against its manifest: every file present with its size, SHA-256
+    /// recomputed where the manifest holds one, and the files any model needs (configuration, weights, `tekken.json`,
+    /// voices for TTS). No network. A model looked up before its manifest existed gets one with sizes only, so read
+    /// `weightsChecksummed` before trusting its weights.
     /// Throws `VoxtralModelDownloaderError.modelNotFound` if no folder holds the model, `CancellationError` if the
     /// calling Task is cancelled.
     public static func verify(
@@ -276,14 +300,11 @@ extension VoxtralModelDownloader {
         requiresVoices: Bool,
         progress: VoxtralDownloadProgressCallback? = nil
     ) throws -> VoxtralModelVerification {
-        // A whole folder from before the manifest gets one here (sizes only), as at every lookup
-        _ = isComplete(folder: folder, requiresVoices: requiresVoices)
-
         var checksummed: [String] = []
         var sizeOnly: [String] = []
         var problems: [VoxtralModelVerification.Problem] = []
 
-        if let manifest = readManifest(at: folder) {
+        if let manifest = readManifest(at: folder), !manifest.files.isEmpty {
             let totalBytes = manifest.files.reduce(0) { $0 + $1.size }
             var doneBytes = 0
             for file in manifest.files {
@@ -316,8 +337,11 @@ extension VoxtralModelDownloader {
         }
 
         // A manifest proves what was received, not what the repository had to hold
-        for path in missingModelFiles(folder, requiresVoices: requiresVoices)
-        where !problems.contains(.missing(path)) {
+        var needed = missingModelFiles(folder, requiresVoices: requiresVoices)
+        if !["config.json", "params.json"].contains(where: { fileSize(at: folder.appendingPathComponent($0)) != nil }) {
+            needed.append("config.json")
+        }
+        for path in needed where !problems.contains(.missing(path)) {
             problems.append(.missing(path))
         }
 
@@ -325,12 +349,15 @@ extension VoxtralModelDownloader {
         return VoxtralModelVerification(folder: folder, checksummedFiles: checksummed, sizeOnlyFiles: sizeOnly, problems: problems)
     }
 
-    /// Deletes a model of any family, complete or partial: the folder `localFolder(for:)` returns.
-    /// Throws `VoxtralModelDownloaderError.modelNotFound` if there is none.
+    /// Deletes every copy of a model of any family, complete or partial: `deletionTargets(for:)`. A symbolic link
+    /// loses the link, not what it points to. Throws `VoxtralModelDownloaderError.modelNotFound` if there is none.
     public static func delete(_ entry: VoxtralModelEntry) throws {
-        guard let folder = localFolder(for: entry) else {
+        let targets = deletionTargets(for: entry)
+        guard !targets.isEmpty else {
             throw VoxtralModelDownloaderError.modelNotFound
         }
-        try removeModelFolder(folder)
+        for target in targets {
+            try FileManager.default.removeItem(at: target)
+        }
     }
 }

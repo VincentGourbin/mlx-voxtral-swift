@@ -400,8 +400,9 @@ let onDisk = VoxtralModelDownloader.listDownloaded(.tts)
 try VoxtralModelDownloader.delete(entry)
 ```
 
-`verify` recomputes the SHA-256 of the files the manifest holds one for (the weights) and checks the others by size; a
-folder downloaded before the manifest existed is checked by size only. The 8-bit and 4-bit Mini packs carry no Hub tag:
+`verify` recomputes the SHA-256 of the files the manifest holds one for (the weights) and checks the others by size. A
+folder downloaded before the manifest existed has no SHA-256: `verify` then says it cannot vouch for the weights (exit
+code 2). `delete` removes every copy of the model and lists them first; a legacy Hub cache folder goes whole. The 8-bit and 4-bit Mini packs carry no Hub tag:
 they keep the Apache-2.0 licence of their base model. The Core ML encoder of the `.auto` and `.hybrid` backends is a separate download, outside this catalog.
 
 ## Hybrid Mode (Core ML + MLX)

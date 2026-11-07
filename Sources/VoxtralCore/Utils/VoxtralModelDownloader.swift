@@ -152,7 +152,13 @@ public class VoxtralModelDownloader {
             throw VoxtralError.loadingFailed("Size mismatch for \(name): \(size) bytes, expected \(expectedSize)")
         }
         if let expectedSHA256 {
-            let actual = try sha256Hex(of: tmp)
+            let actual: String
+            do {
+                actual = try sha256Hex(of: tmp)
+            } catch {
+                try? fm.removeItem(at: tmp)
+                throw error
+            }
             guard actual == expectedSHA256.lowercased() else {
                 try? fm.removeItem(at: tmp)
                 throw VoxtralError.loadingFailed("SHA-256 mismatch for \(name): \(actual), expected \(expectedSHA256)")
@@ -588,16 +594,17 @@ public class VoxtralModelDownloader {
             throw VoxtralModelDownloaderError.modelNotFound
         }
 
-        try removeModelFolder(path)
+        try FileManager.default.removeItem(at: deletionTarget(of: path, repoId: model.repoId))
     }
 
-    /// Removes a model folder; a legacy Hub snapshot (…/models--org--repo/snapshots/<hash>) takes its whole repo folder
-    static func removeModelFolder(_ path: URL) throws {
-        if path.path.contains("/.cache/huggingface/hub/") {
-            try FileManager.default.removeItem(at: path.deletingLastPathComponent().deletingLastPathComponent())
-        } else {
-            try FileManager.default.removeItem(at: path)
-        }
+    /// What deleting `folder` removes: a snapshot of `repoId` in the Hub cache (…/models--org--repo/snapshots/<hash>)
+    /// takes its whole repo folder, any other folder only itself. Decided on the structure of the path: a custom
+    /// models directory placed under the Hub cache keeps its siblings.
+    static func deletionTarget(of folder: URL, repoId: String) -> URL {
+        let snapshots = folder.deletingLastPathComponent()
+        let repoFolder = snapshots.deletingLastPathComponent()
+        let hubName = "models--\(repoId.replacingOccurrences(of: "/", with: "--"))"
+        return snapshots.lastPathComponent == "snapshots" && repoFolder.lastPathComponent == hubName ? repoFolder : folder
     }
 
     // MARK: - Convenience Methods for Default Model

@@ -68,16 +68,34 @@ final class ModelCatalogTests: XCTestCase {
     }
 
     /// Writes a whole model and its manifest, with a SHA-256 for the weight file, as `downloadRepoDirect` does
-    private func install(_ entry: VoxtralModelEntry) throws {
+    private func install(_ entry: VoxtralModelEntry, at location: URL? = nil) throws {
+        let target = location ?? folder(of: entry)
         let files = modelFiles(entry)
-        try write(files, in: folder(of: entry))
+        try write(files, in: target)
         let listed = files.keys.sorted().map { path in
             VoxtralModelDownloader.DownloadManifest.Entry(
                 path: path, size: files[path]!.count,
                 sha256: path == "model.safetensors" ? HubStubProtocol.sha256(files[path]!) : nil)
         }
         try VoxtralModelDownloader.writeManifest(
-            .init(repoId: entry.repoId, revision: "main", files: listed), to: folder(of: entry))
+            .init(repoId: entry.repoId, revision: "main", files: listed), to: target)
+    }
+
+    /// The real `~/Library/Caches/models` folder of a made-up repo id, removed at the end of the test
+    private func cachesFolder(of entry: VoxtralModelEntry) throws -> URL {
+        let root = try XCTUnwrap(fm.urls(for: .cachesDirectory, in: .userDomainMask).first)
+        let folder = root.appendingPathComponent("models").appendingPathComponent(entry.repoId)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
+        return folder
+    }
+
+    /// The real `~/.cache/huggingface/hub` repo folder of a made-up repo id, removed at the end of the test
+    private func hubFolder(of entry: VoxtralModelEntry) -> URL {
+        let folder = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub")
+            .appendingPathComponent("models--\(entry.repoId.replacingOccurrences(of: "/", with: "--"))")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return folder
     }
 
     private func verify(_ entry: VoxtralModelEntry) async throws -> VoxtralModelVerification {
@@ -121,7 +139,7 @@ final class ModelCatalogTests: XCTestCase {
         XCTAssertEqual(Set(VoxtralModelCatalog.licenses.keys), Set(VoxtralModelCatalog.all.map(\.id)))
     }
 
-    func testLicences() throws {
+    func testLicences() {
         for entry in VoxtralModelCatalog.entries(in: .tts) {
             XCTAssertEqual(entry.license, .ccByNc4, entry.id)
             XCTAssertEqual(entry.license.allowsCommercialUse, false, entry.id)
@@ -129,29 +147,10 @@ final class ModelCatalogTests: XCTestCase {
         for entry in VoxtralModelCatalog.entries(in: .realtime) {
             XCTAssertEqual(entry.license, .apache2, entry.id)
         }
-        // These two repositories have no Hub tag: they carry the licence of mistralai/Voxtral-Mini-3B-2507
-        for id in ["mini-3b-8bit", "mini-3b-4bit"] {
-            let entry = try XCTUnwrap(VoxtralModelCatalog.entry(withId: id))
-            XCTAssertEqual(entry.license, .apache2, id)
+        // mini-3b-8bit and mini-3b-4bit have no Hub tag: they carry the licence of mistralai/Voxtral-Mini-3B-2507
+        for entry in VoxtralModelCatalog.entries(in: .stt) {
+            XCTAssertEqual(entry.license, .apache2, entry.id)
         }
-    }
-
-    func testFilesFollowWhatTheDownloaderFetches() throws {
-        let stt = try XCTUnwrap(VoxtralModelCatalog.entry(withId: "mini-3b"))
-        XCTAssertEqual(stt.files, VoxtralModelDownloader.sttDownloadGlobs)
-        XCTAssertEqual(stt.excludedFiles, VoxtralModelDownloader.unusedConsolidatedWeights)
-
-        let tts = try XCTUnwrap(VoxtralModelCatalog.entry(withId: "tts-4b"))
-        XCTAssertEqual(tts.files, VoxtralModelDownloader.ttsDownloadGlobs)
-        XCTAssertEqual(tts.excludedFiles, [], "consolidated.safetensors is the only weight file of the TTS checkpoint")
-
-        let original = try XCTUnwrap(VoxtralModelCatalog.entry(withId: "realtime-4b"))
-        XCTAssertEqual(original.files, ["consolidated.safetensors", "params.json", "tekken.json"])
-        XCTAssertEqual(original.excludedFiles, [])
-
-        let realtime = try XCTUnwrap(VoxtralModelCatalog.entry(withId: "realtime-4b-4bit"))
-        XCTAssertEqual(realtime.files, VoxtralModelDownloader.realtimeDownloadGlobs)
-        XCTAssertEqual(realtime.excludedFiles, VoxtralModelDownloader.unusedConsolidatedWeights)
     }
 
     // MARK: - Path, list
@@ -292,6 +291,51 @@ final class ModelCatalogTests: XCTestCase {
         XCTAssertTrue(result.isValid, "\(result.problems)")
         XCTAssertEqual(result.checksummedFiles, [])
         XCTAssertEqual(result.sizeOnlyFiles.count, 5)
+        XCTAssertFalse(result.weightsChecksummed, "sizes read from the folder itself prove nothing about the weights")
+    }
+
+    func testVerifyVouchesForChecksummedWeights() async throws {
+        for entry in entries() {
+            try install(entry)
+            let result = try await verify(entry)
+            XCTAssertTrue(result.isValid, "\(entry.id): \(result.problems)")
+            XCTAssertTrue(result.weightsChecksummed, entry.id)
+        }
+    }
+
+    func testVerifyWantsAConfiguration() async throws {
+        let entry = entries()[0]
+        try install(entry)
+        let listed = modelFiles(entry).keys.filter { $0 != "config.json" }.sorted().map {
+            VoxtralModelDownloader.DownloadManifest.Entry(path: $0, size: modelFiles(entry)[$0]!.count, sha256: nil)
+        }
+        try VoxtralModelDownloader.writeManifest(.init(repoId: entry.repoId, revision: nil, files: listed), to: folder(of: entry))
+        try fm.removeItem(at: folder(of: entry).appendingPathComponent("config.json"))
+
+        let result = try await verify(entry)
+        XCTAssertEqual(result.problems, [.missing("config.json")])
+    }
+
+    func testVerifyRefusesAnEmptyManifest() async throws {
+        let entry = entries()[0]
+        try install(entry)
+        try VoxtralModelDownloader.writeManifest(.init(repoId: entry.repoId, revision: nil, files: []), to: folder(of: entry))
+
+        let result = try await verify(entry)
+        XCTAssertEqual(result.problems, [.noManifest])
+    }
+
+    func testVerifyChecksTheCopyAPipelineLoads() async throws {
+        // A partial copy comes first in lookup order, the complete one is what `list` shows and a pipeline loads
+        let entry = entries()[1]
+        try write(["config.json": Data("{}".utf8)], in: folder(of: entry))
+        let complete = try cachesFolder(of: entry)
+        try install(entry, at: complete)
+
+        XCTAssertEqual(VoxtralModelDownloader.localFolder(for: entry)?.path, complete.path)
+        let result = try await verify(entry)
+        XCTAssertEqual(result.folder.path, complete.path)
+        XCTAssertTrue(result.isValid, "\(result.problems)")
     }
 
     func testVerifyOfAnAbsentModelThrows() async throws {
@@ -364,14 +408,82 @@ final class ModelCatalogTests: XCTestCase {
         XCTAssertTrue(VoxtralModelDownloader.isDownloaded(all[2]))
     }
 
-    func testRemovingALegacyHubSnapshotTakesItsRepoFolder() throws {
-        let repoFolder = sandbox.appendingPathComponent(".cache/huggingface/hub/models--voxtral-tests--legacy")
-        let snapshot = repoFolder.appendingPathComponent("snapshots/abc123")
-        try write(["config.json": Data("{}".utf8)], in: snapshot)
+    func testDeleteOfALegacySnapshotTakesItsRepoFolderOnly() throws {
+        let entry = entries()[0]
+        let repoFolder = hubFolder(of: entry)
+        try install(entry, at: repoFolder.appendingPathComponent("snapshots/abc123"))
+        try write(["blob": Data("x".utf8)], in: repoFolder.appendingPathComponent("blobs"))
 
-        try VoxtralModelDownloader.removeModelFolder(snapshot)
+        XCTAssertEqual(VoxtralModelDownloader.deletionTargets(for: entry).map(\.path), [repoFolder.path])
+        try VoxtralModelDownloader.delete(entry)
         XCTAssertFalse(fm.fileExists(atPath: repoFolder.path))
         XCTAssertTrue(fm.fileExists(atPath: repoFolder.deletingLastPathComponent().path), "the Hub cache itself stays")
+    }
+
+    func testDeleteKeepsACustomDirectoryPlacedUnderTheHubCache() throws {
+        for custom in [".cache/huggingface/hub", ".cache/huggingface/hub/voxtral"] {
+            let directory = sandbox.appendingPathComponent(custom)
+            VoxtralModelDownloader.customModelsDirectory = directory
+            let entry = entries()[2]
+            let other = entries()[1]
+            try install(entry, at: directory.appendingPathComponent(entry.repoId))
+            try install(other, at: directory.appendingPathComponent(other.repoId))
+
+            try VoxtralModelDownloader.delete(entry)
+            XCTAssertFalse(VoxtralModelDownloader.isDownloaded(entry), custom)
+            XCTAssertTrue(VoxtralModelDownloader.isDownloaded(other), custom)
+            XCTAssertTrue(fm.fileExists(atPath: directory.path), custom)
+        }
+    }
+
+    func testDeletionTargetOnlyClimbsFromASnapshotOfItsOwnRepo() {
+        let hub = sandbox.appendingPathComponent(".cache/huggingface/hub")
+        let own = hub.appendingPathComponent("models--org--repo/snapshots/abc")
+        XCTAssertEqual(VoxtralModelDownloader.deletionTarget(of: own, repoId: "org/repo").path,
+                       hub.appendingPathComponent("models--org--repo").path)
+        XCTAssertEqual(VoxtralModelDownloader.deletionTarget(of: own, repoId: "org/other").path, own.path)
+        let plain = hub.appendingPathComponent("org/repo")
+        XCTAssertEqual(VoxtralModelDownloader.deletionTarget(of: plain, repoId: "org/repo").path, plain.path)
+    }
+
+    func testDeleteRemovesEveryCopy() throws {
+        let entry = entries()[1]
+        try install(entry)
+        let second = try cachesFolder(of: entry)
+        try install(entry, at: second)
+
+        XCTAssertEqual(VoxtralModelDownloader.deletionTargets(for: entry).count, 2)
+        try VoxtralModelDownloader.delete(entry)
+        XCTAssertFalse(fm.fileExists(atPath: folder(of: entry).path))
+        XCTAssertFalse(fm.fileExists(atPath: second.path))
+        XCTAssertFalse(VoxtralModelDownloader.isDownloaded(entry))
+    }
+
+    func testDeleteLeavesWhatASymbolicLinkPointsTo() throws {
+        let entry = entries()[0]
+        try install(entry)
+        let moved = sandbox.appendingPathComponent("external-disk/model.safetensors")
+        try fm.createDirectory(at: moved.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let weights = folder(of: entry).appendingPathComponent("model.safetensors")
+        try fm.moveItem(at: weights, to: moved)
+        try fm.createSymbolicLink(at: weights, withDestinationURL: moved)
+
+        try VoxtralModelDownloader.delete(entry)
+        XCTAssertFalse(fm.fileExists(atPath: folder(of: entry).path))
+        XCTAssertTrue(fm.fileExists(atPath: moved.path))
+    }
+
+    func testRepoFoldersKeepTheirLookupOrder() throws {
+        let entry = entries()[0]
+        let hub = hubFolder(of: entry)
+        try write(["config.json": Data("{}".utf8)], in: hub.appendingPathComponent("snapshots/abc123"))
+
+        let folders = VoxtralModelDownloader.repoFolders(entry.repoId)
+        XCTAssertEqual(folders.map(\.standardizedFileURL), [
+            folder(of: entry).standardizedFileURL,
+            try cachesFolder(of: entry).standardizedFileURL,
+            hub.appendingPathComponent("snapshots/abc123").standardizedFileURL,
+        ])
     }
 
     // MARK: - Download
@@ -382,12 +494,17 @@ final class ModelCatalogTests: XCTestCase {
 
         for entry in entries() {
             HubStubProtocol.repoId = entry.repoId
-            HubStubProtocol.files = modelFiles(entry)
+            var served = modelFiles(entry)
+            served["consolidated.safetensors"] = Data(repeating: 1, count: 16)
+            HubStubProtocol.files = served
             HubStubProtocol.corruptSHA = []
             HubStubProtocol.requested = []
 
             let path = try await VoxtralModelDownloader.download(entry)
             XCTAssertEqual(path.path, folder(of: entry).path, entry.id)
+            // STT and Realtime leave out what `excludedFiles` announces, the TTS checkpoint needs it
+            XCTAssertEqual(HubStubProtocol.requested.contains { $0.hasSuffix("consolidated.safetensors") },
+                           entry.excludedFiles.isEmpty, entry.id)
             XCTAssertTrue(VoxtralModelDownloader.isDownloaded(entry), entry.id)
 
             let result = try await verify(entry)
