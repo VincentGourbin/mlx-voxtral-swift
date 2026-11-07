@@ -162,7 +162,7 @@ struct Verify: AsyncParsableCommand {
             for problem in result.problems { print("  \(problem)") }
             print(VoxtralModelDownloader.isDownloaded(entry)
                 ? "Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)'."
-                : "Run 'voxtral download \(entry.id)': it keeps the files already whole.")
+                : "Run 'voxtral download \(entry.id)'.")
             throw ExitCode.failure
         }
         guard result.weightsChecksummed else {

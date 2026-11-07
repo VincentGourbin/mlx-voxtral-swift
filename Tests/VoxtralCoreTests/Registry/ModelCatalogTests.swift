@@ -2,7 +2,9 @@
  * ModelCatalogTests - one catalog over the three registries, same operations for every family
  *
  * No network, no GPU. Disk operations run in a temporary `customModelsDirectory`, on entries with made-up repo ids:
- * a real model in the caches can neither be matched nor deleted. Downloads go through `HubStubProtocol`.
+ * a real model in the caches can neither be matched nor deleted. The tests of several locations also write in the real
+ * `~/Library/Caches/models` and `~/.cache/huggingface/hub`, under those ids, removed at the end of each test. Downloads
+ * go through `HubStubProtocol`.
  */
 
 import XCTest
@@ -303,6 +305,16 @@ final class ModelCatalogTests: XCTestCase {
         }
     }
 
+    func testNoWeightHashedMeansNotChecksummed() async throws {
+        let entry = entries()[0]
+        try install(entry)
+        try fm.removeItem(at: folder(of: entry).appendingPathComponent("model.safetensors"))
+
+        let result = try await verify(entry)
+        XCTAssertFalse(result.isValid)
+        XCTAssertFalse(result.weightsChecksummed)
+    }
+
     func testVerifyWantsAConfiguration() async throws {
         let entry = entries()[0]
         try install(entry)
@@ -456,6 +468,18 @@ final class ModelCatalogTests: XCTestCase {
         try VoxtralModelDownloader.delete(entry)
         XCTAssertFalse(fm.fileExists(atPath: folder(of: entry).path))
         XCTAssertFalse(fm.fileExists(atPath: second.path))
+        XCTAssertFalse(VoxtralModelDownloader.isDownloaded(entry))
+    }
+
+    func testDeleteOfAFolderReachedByTwoPathsSucceeds() throws {
+        let entry = entries()[0]
+        try install(entry)
+        let alias = try cachesFolder(of: entry)
+        try fm.createDirectory(at: alias.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: alias, withDestinationURL: folder(of: entry))
+
+        XCTAssertEqual(VoxtralModelDownloader.deletionTargets(for: entry).count, 2)
+        try VoxtralModelDownloader.delete(entry)
         XCTAssertFalse(VoxtralModelDownloader.isDownloaded(entry))
     }
 

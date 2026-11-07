@@ -21,9 +21,9 @@ public enum VoxtralModelFamily: String, CaseIterable, Sendable {
     }
 }
 
-/// Licence of a model repository, as its Hub tag declares it
+/// Licence of a model repository: its Hub tag or, for a pack without one, the licence of its base model
 public struct VoxtralModelLicense: Sendable, Equatable {
-    /// Hub tag (`apache-2.0`, `cc-by-nc-4.0`), or `unknown`
+    /// Licence id (`apache-2.0`, `cc-by-nc-4.0`), or `unknown`
     public let id: String
     public let name: String
     public let url: String?
@@ -209,9 +209,11 @@ public struct VoxtralModelVerification: Sendable, Equatable {
 
     public var isValid: Bool { problems.isEmpty }
 
-    /// False when a weight file has no SHA-256 to be checked against: `isValid` then says nothing about the weights
+    /// True when every weight file in the manifest was hashed, and there was at least one. False: `isValid` says
+    /// nothing about the weights
     public var weightsChecksummed: Bool {
-        !sizeOnlyFiles.contains { $0.hasSuffix(".safetensors") && !$0.hasPrefix("voice_embedding/") }
+        func isWeight(_ path: String) -> Bool { path.hasSuffix(".safetensors") && !path.hasPrefix("voice_embedding/") }
+        return checksummedFiles.contains(where: isWeight) && !sizeOnlyFiles.contains(where: isWeight)
     }
 }
 
@@ -356,7 +358,8 @@ extension VoxtralModelDownloader {
         guard !targets.isEmpty else {
             throw VoxtralModelDownloaderError.modelNotFound
         }
-        for target in targets {
+        // Two paths can reach the same folder through a link: the first removal takes it
+        for target in targets where FileManager.default.fileExists(atPath: target.path) {
             try FileManager.default.removeItem(at: target)
         }
     }
