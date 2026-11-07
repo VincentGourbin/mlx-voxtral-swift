@@ -391,3 +391,13 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   le niveau de livraison de YuE2 et qwen38, avec iPhone pour le TTS, la transcription et la compréhension audio, sans
   serveur. ASK-1, 2, 30, 35 à 40 et K-97 tranchées ; K-39 et K-40 acceptées sans passe de vérificateur séparée, K-68 après la sienne.
   Leçon : un audit donne une liste de défauts, pas un produit ; partir des livrables à atteindre, puis y rattacher les défauts.
+- 2026-11-07 — **Lot 1 : un catalogue pour les trois familles, et `delete` ne suit plus une sous-chaîne** : `delete` remontait de
+  deux niveaux dès que le chemin contenait le cache Hub, donc un dossier de modèles placé dessous pouvait tout perdre ; il
+  décide maintenant sur la structure du chemin. Licences : `mini-3b-8bit` et `mini-3b-4bit`, sans tag sur le Hub, portent
+  l'Apache-2.0 de `mistralai/Voxtral-Mini-3B-2507` (décision de Vincent). Leçon : un manifeste écrit à la lecture d'un
+  dossier compare les tailles à elles-mêmes et ne prouve rien ; `verify` doit le dire au lieu d'afficher OK.
+- 2026-11-07 — **Relecture de la PR #51 : `delete` dépend de la place du lien** : un dossier de dépôt qui est un lien perd le lien
+  et garde ses données, mais sous un dossier d'organisation qui est un lien (`mistralai` sur ce Mac), le vrai dossier part.
+  Comportement gardé, doc et invite corrigées. Avec un manifeste, `isComplete` ne regarde pas les voix : un dépôt TTS passé
+  par la liste de fichiers STT comptait pour complet, `resolveModel` passe donc par le catalogue. Leçon : tester `delete`
+  sur la disposition réelle des disques, pas seulement sur un lien de fichier.

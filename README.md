@@ -378,6 +378,33 @@ realtime.unload()
 `maxTokens` (default 4 096) counts 80 ms frames, about 5 min 27 s of audio; longer audio is cut there ([PLAN.md](docs/audit/2026-09-27/PLAN.md) §1,
 fiche K-5).
 
+## Managing Models
+
+The same commands and API cover speech-to-text, Realtime and text-to-speech models:
+
+```bash
+CLI=.build/xcode/Build/Products/Release/VoxtralCLI
+$CLI list                    # every model: repository, size, licence, status (--downloaded: only those on disk)
+$CLI download tts-4b-6bit    # by id or Hugging Face repository
+$CLI verify tts-4b-6bit      # files, sizes and SHA-256 against the download manifest, no network
+$CLI delete tts-4b-6bit      # complete or partial download; --yes skips the confirmation
+```
+
+```swift
+let entry = VoxtralModelCatalog.entry(withId: "tts-4b-6bit")!     // id, repoId, revision, files, size, license
+entry.license.allowsCommercialUse                                 // false: the TTS weights are CC BY-NC 4.0
+
+let folder = try await VoxtralModelDownloader.download(entry)
+let report = try await VoxtralModelDownloader.verify(entry)       // report.isValid, report.problems
+let onDisk = VoxtralModelDownloader.listDownloaded(.tts)
+try VoxtralModelDownloader.delete(entry)
+```
+
+`verify` recomputes the SHA-256 of the files the manifest holds one for (the weights) and checks the others by size. A
+whole folder from before the manifest has no SHA-256: `verify` then says it cannot vouch for the weights (exit code 2);
+a folder `list` counts as incomplete is reported as such (exit code 1). `delete` removes every copy of the model and lists them first; a legacy Hub cache folder goes whole. A folder that is a symbolic link loses the link and keeps its destination; under an organisation folder that is a link, the real folder goes, and the list says so. The 8-bit and 4-bit Mini packs carry no Hub tag:
+they keep the Apache-2.0 licence of their base model. The Core ML encoder of the `.auto` and `.hybrid` backends is a separate download, outside this catalog.
+
 ## Hybrid Mode (Core ML + MLX)
 
 The hybrid backend runs the audio encoder on Core ML and keeps the LLM decoder on MLX. In the library,

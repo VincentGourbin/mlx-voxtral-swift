@@ -6,7 +6,7 @@
  *
  * Features:
  * - List available models
- * - Download models from HuggingFace
+ * - Download, verify and delete models
  * - Transcribe audio files
  * - Chat mode (ask questions about audio)
  */
@@ -26,6 +26,8 @@ struct VoxtralCLI: AsyncParsableCommand {
         subcommands: [
             ListModels.self,
             Download.self,
+            Verify.self,
+            Delete.self,
             Transcribe.self,
             Chat.self,
             TTS.self,
@@ -51,66 +53,43 @@ struct ListModels: ParsableCommand {
     var downloaded = false
 
     func run() throws {
-        if downloaded {
-            let downloadedModels = VoxtralModelDownloader.listDownloadedModels()
-            let hasSttModels = !downloadedModels.isEmpty
-            let hasTtsModels = VoxtralTTSRegistry.models.contains { VoxtralModelDownloader.isTTSModelDownloaded($0) }
+        let entries = downloaded ? VoxtralModelDownloader.listDownloaded() : VoxtralModelCatalog.all
+        if entries.isEmpty {
+            print("\nNo models downloaded yet.")
+            print("Use 'voxtral download <model-id>' to download a model.")
+            print("Use 'voxtral list' to see available models.")
+            return
+        }
 
-            if !hasSttModels && !hasTtsModels {
-                print("\nNo models downloaded yet.")
-                print("Use 'voxtral download <model-id>' to download a model.")
-                print("Use 'voxtral list' to see available models.")
-            } else {
-                print("\n" + String(repeating: "=", count: 60))
-                print("DOWNLOADED MODELS")
-                print(String(repeating: "=", count: 60))
-                for model in downloadedModels {
-                    if let path = VoxtralModelDownloader.findModelPath(for: model) {
-                        print("\n  [STT] \(model.id): \(model.name)")
-                        print("    Path: \(path.path)")
-                    }
-                }
-                for model in VoxtralTTSRegistry.models {
-                    if let path = VoxtralModelDownloader.findTTSModelPath(for: model) {
-                        print("\n  [TTS] \(model.id): \(model.name)")
-                        print("    Path: \(path.path)")
-                    }
-                }
-                for model in VoxtralRealtimeRegistry.models {
-                    if let path = VoxtralModelDownloader.findRealtimeModelPath(for: model) {
-                        print("\n  [REALTIME] \(model.id): \(model.name)")
-                        print("    Path: \(path.path)")
-                    }
-                }
-            }
-        } else {
-            // STT models
-            VoxtralModelRegistry.printAvailableModels()
-            print("\nSTT download status:")
-            for model in VoxtralModelRegistry.models {
-                let status = VoxtralModelDownloader.findModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
-                print("  \(model.id): \(status)")
-            }
-
-            // TTS models
-            print("\n" + String(repeating: "-", count: 40))
-            VoxtralTTSRegistry.printAvailableModels()
-            print("\nTTS download status:")
-            for model in VoxtralTTSRegistry.models {
-                let status = VoxtralModelDownloader.findTTSModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
-                print("  \(model.id): \(status)")
-            }
-
-            // Realtime models
-            print("\n" + String(repeating: "-", count: 40))
-            VoxtralRealtimeRegistry.printAvailableModels()
-            print("\nRealtime download status:")
-            for model in VoxtralRealtimeRegistry.models {
-                let status = VoxtralModelDownloader.findRealtimeModelPath(for: model) != nil ? "[downloaded]" : "[not downloaded]"
-                print("  \(model.id): \(status)")
+        for family in VoxtralModelFamily.allCases {
+            let rows = entries.filter { $0.family == family }
+            guard !rows.isEmpty else { continue }
+            print("\n" + String(repeating: "=", count: 60))
+            print(family.displayName.uppercased())
+            print(String(repeating: "=", count: 60))
+            for entry in rows {
+                let marker = entry.recommended ? " [recommended]" : ""
+                let path = VoxtralModelDownloader.path(for: entry)
+                print("\n  \(entry.id)\(marker): \(entry.name)")
+                print("    Repo: \(entry.repoId)")
+                print("    Size: \(entry.size) | Quantization: \(entry.quantization) | Licence: \(entry.license.id)")
+                print("    \(entry.description)")
+                print("    Status: \(path.map { "downloaded (\($0.path))" } ?? "not downloaded")")
             }
         }
+
+        if !downloaded {
+            print("\nTTS voices: " + VoxtralVoice.allCases.map(\.rawValue).joined(separator: ", "))
+        }
     }
+}
+
+/// The catalog entry for a model id or repository, or a usage error naming the way to the valid ids
+private func catalogEntry(_ model: String) throws -> VoxtralModelEntry {
+    guard let entry = VoxtralModelCatalog.entry(withId: model) ?? VoxtralModelCatalog.entry(withRepoId: model) else {
+        throw ValidationError("Unknown model '\(model)'. Run 'voxtral list' to see the model ids.")
+    }
+    return entry
 }
 
 // MARK: - Download Command
@@ -129,39 +108,115 @@ struct Download: AsyncParsableCommand {
         print("VOXTRAL MODEL DOWNLOAD")
         print(String(repeating: "=", count: 60))
 
-        // Check if it's a Realtime model
-        if let realtimeModel = VoxtralRealtimeRegistry.model(withId: model) {
-            let modelPath = try await VoxtralModelDownloader.downloadRealtimeModel(realtimeModel) { progress, message in
-                print("[\(Int(progress * 100))%] \(message)")
-            }
-            print("\n" + String(repeating: "=", count: 60))
-            print("Download complete!")
-            print("Model path: \(modelPath.path)")
-            print("\nTo transcribe audio:")
-            print("  voxtral realtime <audio-file>")
-            print(String(repeating: "=", count: 60))
-        // Check if it's a TTS model
-        } else if let ttsModel = VoxtralTTSRegistry.model(withId: model) {
-            let modelPath = try await VoxtralModelDownloader.downloadTTSModel(ttsModel) { progress, message in
-                print("[\(Int(progress * 100))%] \(message)")
-            }
-            print("\n" + String(repeating: "=", count: 60))
-            print("Download complete!")
-            print("Model path: \(modelPath.path)")
-            print("\nTo synthesize speech:")
-            print("  voxtral tts \"Hello world\" -o output.wav")
-            print(String(repeating: "=", count: 60))
-        } else {
-            let modelPath = try await VoxtralModelDownloader.resolveModel(model) { progress, message in
-                print("[\(Int(progress * 100))%] \(message)")
-            }
-            print("\n" + String(repeating: "=", count: 60))
-            print("Download complete!")
-            print("Model path: \(modelPath.path)")
+        let report: VoxtralDownloadProgressCallback = { progress, message in
+            print("[\(Int(progress * 100))%] \(message)")
+        }
+        let entry = VoxtralModelCatalog.entry(withId: model) ?? VoxtralModelCatalog.entry(withRepoId: model)
+        // Outside the catalog: a local path or any other Hugging Face repository
+        let modelPath = try await VoxtralModelDownloader.resolveModel(model, progress: report)
+
+        print("\n" + String(repeating: "=", count: 60))
+        print("Download complete!")
+        print("Model path: \(modelPath.path)")
+        switch entry?.family ?? .stt {
+        case .stt:
             print("\nTo transcribe audio:")
             print("  voxtral transcribe --model \(model) <audio-file>")
-            print(String(repeating: "=", count: 60))
+        case .realtime:
+            print("\nTo transcribe audio:")
+            print("  voxtral realtime <audio-file>")
+        case .tts:
+            print("\nTo synthesize speech:")
+            print("  voxtral tts \"Hello world\" -o output.wav")
         }
+        print(String(repeating: "=", count: 60))
+    }
+}
+
+// MARK: - Verify Command
+
+struct Verify: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "verify",
+        abstract: "Check a downloaded model: files, sizes and SHA-256 against its manifest (no network)"
+    )
+
+    @Argument(help: "Model ID (e.g., 'tts-4b-6bit') or its HuggingFace repo")
+    var model: String
+
+    func run() async throws {
+        let entry = try catalogEntry(model)
+        let result = try await VoxtralModelDownloader.verify(entry) { progress, message in
+            print("[\(Int(progress * 100))%] \(message)")
+        }
+
+        print("\nFolder: \(result.folder.path)")
+        print("SHA-256 checked: \(result.checksummedFiles.count) files; size only: \(result.sizeOnlyFiles.count) files")
+        guard result.isValid else {
+            print("\n\(entry.id) is damaged or incomplete:")
+            for problem in result.problems { print("  \(problem)") }
+            print(VoxtralModelDownloader.isDownloaded(entry)
+                ? "Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)'."
+                : "Run 'voxtral download \(entry.id)'.")
+            throw ExitCode.failure
+        }
+        guard result.weightsChecksummed else {
+            print("\n\(entry.id): no problem found, but its weights cannot be checked: no SHA-256 was recorded for them.")
+            print("Run 'voxtral delete \(entry.id)', then 'voxtral download \(entry.id)' for a copy that can be checked.")
+            throw ExitCode(2)
+        }
+        print("\n\(entry.id): OK")
+    }
+}
+
+// MARK: - Delete Command
+
+/// A deletion target and, when a symbolic link makes it differ from its path, what really goes
+private func describeDeletion(of target: URL) -> String {
+    let fm = FileManager.default
+    if let destination = try? fm.destinationOfSymbolicLink(atPath: target.path) {
+        return "\(target.path) (the link only: \(destination) stays)"
+    }
+    if let destination = try? fm.destinationOfSymbolicLink(atPath: target.deletingLastPathComponent().path) {
+        return "\(target.path) (behind a link: the real folder in \(destination) goes)"
+    }
+    return target.path
+}
+
+struct Delete: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "delete",
+        abstract: "Delete a downloaded model, complete or partial"
+    )
+
+    @Argument(help: "Model ID (e.g., 'tts-4b-6bit') or its HuggingFace repo")
+    var model: String
+
+    @Flag(name: .shortAndLong, help: "Do not ask for confirmation")
+    var yes = false
+
+    func run() throws {
+        let entry = try catalogEntry(model)
+        let targets = VoxtralModelDownloader.deletionTargets(for: entry)
+        guard !targets.isEmpty else {
+            print("\(entry.id) is not on disk.")
+            throw ExitCode.failure
+        }
+        let described = targets.map(describeDeletion(of:))
+        if !yes {
+            print("This deletes:")
+            for line in described { print("  \(line)") }
+            if targets.contains(where: { $0.lastPathComponent.hasPrefix("models--") }) {
+                print("A Hub cache folder goes whole, with all its revisions; other tools may share it.")
+            }
+            print("Continue? [y/N]")
+            guard readLine()?.lowercased() == "y" else {
+                print("Nothing deleted.")
+                return
+            }
+        }
+        try VoxtralModelDownloader.delete(entry)
+        for line in described { print("Deleted \(line)") }
     }
 }
 

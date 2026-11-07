@@ -17,6 +17,8 @@ Détail : [`docs/knowledge/log.md`](docs/knowledge/log.md). Rien de cela n'est e
 
 ## Lots
 
+État : lot 1 livré ([PR #51](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/51)) ; prochain : lot 2.
+
 | Lot | Contenu | Fini quand | Reprend |
 |---|---|---|---|
 | 1. Catalogue et téléchargement | Un catalogue pour STT, Realtime et TTS : id, dépôt, révision, fichiers, taille, licence. | `download`, `verify`, `list` et `delete` marchent à l'identique pour les trois familles, en API et en CLI ; ajout sans retrait d'API. | — |
@@ -46,6 +48,9 @@ finis. Après la 3.0.0, l'API n'évolue plus que par ajout : tout ce que l'iPhon
 - TTS, texte long : la voix perd 13 à 25 dB entre le premier et le dernier quart (constat du 2026-10-12).
 - TTS, porteur de warm-up : coupe trop tôt sur 2 prises sur 10 et mots perdus sur une ; défaut antérieur à K-68 (ASK-39).
 - TTS, 4 bits avec voix clonée : qualité dégradée, limite documentée dans le README (K-97).
+- Catalogue : `verify` ne compare pas la révision du manifeste à celle du catalogue ; le snapshot Hub retenu est le dernier
+  par nom, pas le plus récent ; `delete` de l'API efface toutes les copies, dossier Hub partagé compris, sans option de
+  portée (`deletionTargets` permet de demander confirmation avant).
 - Avant la 3.0.0 : `tts-4b-8bit` au registre sans pack publié (K-90), Small `.auto` bimodal avec dernier segment français
   traduit (K-85), tests gardés `PARITY` (référence d'avant K-40) et `TTS_STREAM` (course de `.ready`) en échec depuis K-89.
 

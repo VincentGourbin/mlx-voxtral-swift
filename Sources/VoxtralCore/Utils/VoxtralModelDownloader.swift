@@ -152,7 +152,13 @@ public class VoxtralModelDownloader {
             throw VoxtralError.loadingFailed("Size mismatch for \(name): \(size) bytes, expected \(expectedSize)")
         }
         if let expectedSHA256 {
-            let actual = try sha256Hex(of: tmp)
+            let actual: String
+            do {
+                actual = try sha256Hex(of: tmp)
+            } catch {
+                try? fm.removeItem(at: tmp)
+                throw error
+            }
             guard actual == expectedSHA256.lowercased() else {
                 try? fm.removeItem(at: tmp)
                 throw VoxtralError.loadingFailed("SHA-256 mismatch for \(name): \(actual), expected \(expectedSHA256)")
@@ -170,6 +176,7 @@ public class VoxtralModelDownloader {
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
+            try VoxtralCancellation.check()
             let chunk: Data? = try autoreleasepool { try handle.read(upToCount: 8 << 20) }
             guard let chunk, !chunk.isEmpty else { break }
             hasher.update(data: chunk)
@@ -314,44 +321,26 @@ public class VoxtralModelDownloader {
         }
     }
 
-    /// Get the HuggingFace Hub cache path for a model
-    /// Checks both the new Library/Caches location and the legacy ~/.cache/huggingface location
-    static func hubCachePath(for model: VoxtralModelInfo) -> URL? {
-        // First check the new location: ~/Library/Caches/models/{org}/{repo}
+    /// Where a repository may sit on disk, in lookup order: custom models directory, ~/Library/Caches/models, then one
+    /// snapshot of the legacy ~/.cache/huggingface location: the last by name, and names are commit hashes, not dates.
+    /// Same order for STT, TTS and Realtime.
+    static func repoFolders(_ repoId: String) -> [URL] {
+        var folders: [URL] = []
+        if let customDir = customModelsDirectory {
+            folders.append(customDir.appendingPathComponent(repoId))
+        }
         if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let newPath = cacheDir
-                .appendingPathComponent("models")
-                .appendingPathComponent(model.repoId)
-
-            if FileManager.default.fileExists(atPath: newPath.appendingPathComponent("config.json").path) {
-                return newPath
-            }
+            folders.append(cacheDir.appendingPathComponent("models").appendingPathComponent(repoId))
         }
-
-        // Then check the legacy location: ~/.cache/huggingface/hub/models--{org}--{repo}/snapshots/...
-        let homeDir = platformHomeDirectory()
-        let hubCache = homeDir
-            .appendingPathComponent(".cache")
-            .appendingPathComponent("huggingface")
-            .appendingPathComponent("hub")
-
-        let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
-        let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
-
-        // Find the latest snapshot
-        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
-              let latestSnapshot = contents.sorted().last else {
-            return nil
+        let snapshotsDir = platformHomeDirectory()
+            .appendingPathComponent(".cache/huggingface/hub")
+            .appendingPathComponent("models--\(repoId.replacingOccurrences(of: "/", with: "--"))")
+            .appendingPathComponent("snapshots")
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
+           let snapshot = contents.sorted().last {
+            folders.append(snapshotsDir.appendingPathComponent(snapshot))
         }
-
-        let modelPath = snapshotsDir.appendingPathComponent(latestSnapshot)
-        let configPath = modelPath.appendingPathComponent("config.json")
-
-        if FileManager.default.fileExists(atPath: configPath.path) {
-            return modelPath
-        }
-
-        return nil
+        return folders
     }
 
     /// Find a model path (checks custom directory first, then Hub cache, then local directory)
@@ -360,24 +349,16 @@ public class VoxtralModelDownloader {
         candidateFolders(for: model).first { isComplete(folder: $0) }
     }
 
-    /// The folder holding a model on disk, complete or not (size, deletion of a partial download).
+    /// The folder holding a model on disk: the one `findModelPath` returns, else the first partial copy (size, deletion
+    /// of a partial download).
     static func locateModelFolder(for model: VoxtralModelInfo) -> URL? {
-        candidateFolders(for: model).first
+        findModelPath(for: model) ?? candidateFolders(for: model).first
     }
 
-    /// Folders with a `config.json`, in lookup order: custom models directory (HubApi
-    /// downloads to customDir/{org}/{repo}), Hub cache, then ~/Library/Caches/models.
+    /// Folders with a `config.json`, in lookup order
     private static func candidateFolders(for model: VoxtralModelInfo) -> [URL] {
-        var folders: [URL] = []
-        if let customDir = customModelsDirectory {
-            folders.append(customDir.appendingPathComponent(model.repoId))
-        }
-        if let hubPath = hubCachePath(for: model) {
-            folders.append(hubPath)
-        }
-        folders.append(localPath(for: model))
         // No lookup in the current directory: the result depended on where the host was launched (K-23)
-        return folders.filter {
+        repoFolders(model.repoId).filter {
             FileManager.default.fileExists(atPath: $0.appendingPathComponent("config.json").path)
         }
     }
@@ -533,20 +514,9 @@ public class VoxtralModelDownloader {
         _ identifier: String,
         progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
-        // Try to find by ID first
-        if let model = VoxtralModelRegistry.model(withId: identifier) {
-            if let existingPath = findModelPath(for: model) {
-                return existingPath
-            }
-            return try await download(model, progress: progress)
-        }
-
-        // Try to find by repo ID
-        if let model = VoxtralModelRegistry.model(withRepoId: identifier) {
-            if let existingPath = findModelPath(for: model) {
-                return existingPath
-            }
-            return try await download(model, progress: progress)
+        // A catalog model goes through its family: a TTS repository needs its voices
+        if let entry = VoxtralModelCatalog.entry(withId: identifier) ?? VoxtralModelCatalog.entry(withRepoId: identifier) {
+            return try await download(entry, progress: progress)
         }
 
         // Check if it's a local path
@@ -615,21 +585,17 @@ public class VoxtralModelDownloader {
             throw VoxtralModelDownloaderError.modelNotFound
         }
 
-        // Determine if it's in Hub cache (need to delete parent folder) or local directory
-        let pathString = path.path
+        try FileManager.default.removeItem(at: deletionTarget(of: path, repoId: model.repoId))
+    }
 
-        if pathString.contains("/.cache/huggingface/hub/") {
-            // Legacy Hub cache: delete the models--org--repo folder
-            // path is .../snapshots/hash, so go up 2 levels
-            let modelFolder = path.deletingLastPathComponent().deletingLastPathComponent()
-            try FileManager.default.removeItem(at: modelFolder)
-        } else if pathString.contains("/Library/Caches/models/") {
-            // New Hub cache: delete the repo folder
-            try FileManager.default.removeItem(at: path)
-        } else {
-            // Local directory
-            try FileManager.default.removeItem(at: path)
-        }
+    /// What deleting `folder` removes: a snapshot of `repoId` in the Hub cache (…/models--org--repo/snapshots/<hash>)
+    /// takes its whole repo folder, any other folder only itself. Decided on the structure of the path: a custom
+    /// models directory placed under the Hub cache keeps its siblings.
+    static func deletionTarget(of folder: URL, repoId: String) -> URL {
+        let snapshots = folder.deletingLastPathComponent()
+        let repoFolder = snapshots.deletingLastPathComponent()
+        let hubName = "models--\(repoId.replacingOccurrences(of: "/", with: "--"))"
+        return snapshots.lastPathComponent == "snapshots" && repoFolder.lastPathComponent == hubName ? repoFolder : folder
     }
 
     // MARK: - Convenience Methods for Default Model
@@ -667,53 +633,10 @@ public class VoxtralModelDownloader {
     /// TTS models use params.json instead of config.json; only complete folders
     /// (`isComplete(folder:requiresVoices:)`) are returned
     public static func findTTSModelPath(for model: VoxtralTTSModelInfo) -> URL? {
-        let configFile = "params.json"
-        func complete(_ folder: URL) -> Bool {
-            FileManager.default.fileExists(atPath: folder.appendingPathComponent(configFile).path)
-                && isComplete(folder: folder, requiresVoices: true)
+        repoFolders(model.repoId).first {
+            FileManager.default.fileExists(atPath: $0.appendingPathComponent("params.json").path)
+                && isComplete(folder: $0, requiresVoices: true)
         }
-
-        // Check custom models directory
-        if let customDir = customModelsDirectory {
-            let customModelPath = customDir.appendingPathComponent(model.repoId)
-            if complete(customModelPath) {
-                return customModelPath
-            }
-        }
-
-        // Check Hub cache (new location)
-        if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let newPath = cacheDir
-                .appendingPathComponent("models")
-                .appendingPathComponent(model.repoId)
-            if complete(newPath) {
-                return newPath
-            }
-        }
-
-        // Check legacy Hub cache
-        let homeDir = platformHomeDirectory()
-        let hubCache = homeDir
-            .appendingPathComponent(".cache")
-            .appendingPathComponent("huggingface")
-            .appendingPathComponent("hub")
-        let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
-        let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
-        if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
-           let latestSnapshot = contents.sorted().last {
-            let modelPath = snapshotsDir.appendingPathComponent(latestSnapshot)
-            if complete(modelPath) {
-                return modelPath
-            }
-        }
-
-        // Check local models directory
-        let localDir = modelsDirectory.appendingPathComponent(model.repoId)
-        if complete(localDir) {
-            return localDir
-        }
-
-        return nil
     }
 
     /// Download a TTS model (includes voice embeddings)
@@ -780,52 +703,11 @@ public class VoxtralModelDownloader {
     /// Find a Realtime model path (checks Hub cache, then local directories)
     public static func findRealtimeModelPath(for model: VoxtralRealtimeModelInfo) -> URL? {
         // Realtime models may have config.json (mlx-community) or params.json (Mistral)
-        let configFiles = ["config.json", "params.json"]
-
-        // Check custom models directory
-        if let customDir = customModelsDirectory {
-            let customModelPath = customDir.appendingPathComponent(model.repoId)
-            for configFile in configFiles {
-                if FileManager.default.fileExists(atPath: customModelPath.appendingPathComponent(configFile).path), isComplete(folder: customModelPath) {
-                    return customModelPath
-                }
-            }
+        repoFolders(model.repoId).first { folder in
+            ["config.json", "params.json"].contains {
+                FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+            } && isComplete(folder: folder)
         }
-
-        // Check Hub cache (new location)
-        if let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let newPath = cacheDir.appendingPathComponent("models").appendingPathComponent(model.repoId)
-            for configFile in configFiles {
-                if FileManager.default.fileExists(atPath: newPath.appendingPathComponent(configFile).path), isComplete(folder: newPath) {
-                    return newPath
-                }
-            }
-        }
-
-        // Check legacy Hub cache
-        let homeDir = platformHomeDirectory()
-        let hubCache = homeDir.appendingPathComponent(".cache/huggingface/hub")
-        let modelFolder = "models--\(model.repoId.replacingOccurrences(of: "/", with: "--"))"
-        let snapshotsDir = hubCache.appendingPathComponent(modelFolder).appendingPathComponent("snapshots")
-        if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
-           let latestSnapshot = contents.sorted().last {
-            let modelPath = snapshotsDir.appendingPathComponent(latestSnapshot)
-            for configFile in configFiles {
-                if FileManager.default.fileExists(atPath: modelPath.appendingPathComponent(configFile).path), isComplete(folder: modelPath) {
-                    return modelPath
-                }
-            }
-        }
-
-        // Check local models directory
-        let localDir = modelsDirectory.appendingPathComponent(model.repoId)
-        for configFile in configFiles {
-            if FileManager.default.fileExists(atPath: localDir.appendingPathComponent(configFile).path), isComplete(folder: localDir) {
-                return localDir
-            }
-        }
-
-        return nil
     }
 
     /// Download a Realtime model

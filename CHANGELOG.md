@@ -162,6 +162,25 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   first prediction waiting forever for a Metal command buffer (the default backend hung).
 
 ### Added
+- **One model catalog for the three families.** `VoxtralModelCatalog` (`all`, `entries(in:)`, `entry(withId:)`,
+  `entry(withRepoId:)`) lists STT, Realtime and TTS models as `VoxtralModelEntry`: id, repository, revision, files, size
+  and licence (`VoxtralModelLicense`; a pack without a Hub tag keeps its base model's licence). It is built from the three
+  registries, which stay.
+- **The same model operations for every family.** `VoxtralModelDownloader` gains `download(_:progress:)`,
+  `verify(_:progress:)`, `listDownloaded(_:)`, `delete(_:)`, `deletionTargets(for:)`, `path(for:)`, `isDownloaded(_:)`
+  and `localFolder(for:)`, all taking a `VoxtralModelEntry`. `verify` returns a `VoxtralModelVerification`: it recomputes
+  the SHA-256 recorded in the download manifest, checks sizes and the files a model needs, without network;
+  `weightsChecksummed` is false for a folder from before the manifest. `delete` removes every copy of a model, partial
+  ones included, in any family; `deleteModel` stays, for STT. A folder that is a symbolic link loses the link and keeps
+  its destination; under an organisation folder that is a link, the real folder goes.
+- **Changed: model lookup.** A complete legacy Hub snapshot is now found even when an incomplete copy sits in
+  `~/Library/Caches/models`. Deleting a model no longer takes a whole folder because its path contains
+  `/.cache/huggingface/hub/`: only a real snapshot of that repository does, so a custom models directory placed under
+  the Hub cache is safe.
+- **CLI: `verify` and `delete`**, refusing an unknown id; `delete` lists what it removes, `verify` exits with 2 when it
+  cannot check the weights. `list` shows the three families in one format, with licences;
+  `list --downloaded` no longer reports no model when only Realtime models are on disk. `download` takes the repository
+  of a Realtime or TTS model too (a TTS repository used to lose its voices).
 - **K-90 — 8-bit TTS pack `tts-4b-8bit`** (`VincentGOURBIN/Voxtral-4B-TTS-2603-mlx-8bit`, 4.42 GB, CC BY-NC 4.0):
   LLM and flow-matching transformer in 8-bit, codec bf16, exported by `Scripts/export_tts_8bit.py`. It is 7 % faster per
   step than the 6-bit pack for 0.9 GB more peak memory. It is downloadable once the repository is published; the default is unchanged.
