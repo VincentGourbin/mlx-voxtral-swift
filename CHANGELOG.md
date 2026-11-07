@@ -171,7 +171,8 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
   and `localFolder(for:)`, all taking a `VoxtralModelEntry`. `verify` returns a `VoxtralModelVerification`: it recomputes
   the SHA-256 recorded in the download manifest, checks sizes and the files a model needs, without network;
   `weightsChecksummed` is false for a folder from before the manifest. `delete` removes every copy of a model, partial
-  ones included, in any family; `deleteModel` stays, for STT.
+  ones included, in any family; `deleteModel` stays, for STT. A folder that is a symbolic link loses the link and keeps
+  its destination; under an organisation folder that is a link, the real folder goes.
 - **Changed: model lookup.** A complete legacy Hub snapshot is now found even when an incomplete copy sits in
   `~/Library/Caches/models`. Deleting a model no longer takes a whole folder because its path contains
   `/.cache/huggingface/hub/`: only a real snapshot of that repository does, so a custom models directory placed under

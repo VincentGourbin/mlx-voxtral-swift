@@ -328,6 +328,74 @@ final class ModelCatalogTests: XCTestCase {
         XCTAssertEqual(result.problems, [.missing("config.json")])
     }
 
+    /// Replaces the configuration file of an installed model, in the folder and in its manifest
+    private func swapConfiguration(of entry: VoxtralModelEntry, from old: String, to new: String) throws {
+        let target = folder(of: entry)
+        try fm.removeItem(at: target.appendingPathComponent(old))
+        try Data("{}".utf8).write(to: target.appendingPathComponent(new))
+        let files = modelFiles(entry)
+        let listed = files.keys.filter { $0 != old }.sorted().map {
+            VoxtralModelDownloader.DownloadManifest.Entry(path: $0, size: files[$0]!.count, sha256: nil)
+        }
+        try VoxtralModelDownloader.writeManifest(.init(repoId: entry.repoId, revision: nil, files: listed), to: target)
+    }
+
+    func testVerifyWantsTheConfigurationOfItsFamily() async throws {
+        let stt = entries()[0], tts = entries()[2]
+        try install(stt)
+        try swapConfiguration(of: stt, from: "config.json", to: "params.json")
+        try install(tts)
+        try swapConfiguration(of: tts, from: "params.json", to: "config.json")
+
+        // `path(for:)` refuses these folders: `verify` must not pass them
+        for (entry, wanted) in [(stt, "config.json"), (tts, "params.json")] {
+            XCTAssertNil(VoxtralModelDownloader.path(for: entry), entry.id)
+            let result = try await verify(entry)
+            XCTAssertEqual(result.problems, [.missing(wanted)], entry.id)
+        }
+    }
+
+    func testVerifyTakesEitherConfigurationForRealtime() async throws {
+        let entry = entries()[1]
+        try install(entry)
+        try swapConfiguration(of: entry, from: "config.json", to: "params.json")
+
+        XCTAssertNotNil(VoxtralModelDownloader.path(for: entry))
+        let result = try await verify(entry)
+        XCTAssertTrue(result.isValid, "\(result.problems)")
+    }
+
+    func testVerifyReportsAFileItCannotRead() async throws {
+        let entry = entries()[0]
+        try install(entry)
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: folder(of: entry).appendingPathComponent("model.safetensors").path)
+
+        let result = try await verify(entry)
+        XCTAssertEqual(result.problems, [.unreadable("model.safetensors")])
+        XCTAssertFalse(result.weightsChecksummed)
+    }
+
+    func testOneBadShardMeansNotChecksummed() async throws {
+        let entry = entries()[0]
+        let target = folder(of: entry)
+        var files = modelFiles(entry)
+        files["model.safetensors"] = nil
+        files["model-00001-of-00002.safetensors"] = Data(repeating: 1, count: 64)
+        files["model-00002-of-00002.safetensors"] = Data(repeating: 2, count: 64)
+        try write(files, in: target)
+        let listed = files.keys.sorted().map {
+            VoxtralModelDownloader.DownloadManifest.Entry(
+                path: $0, size: files[$0]!.count, sha256: $0.hasSuffix(".safetensors") ? HubStubProtocol.sha256(files[$0]!) : nil)
+        }
+        try VoxtralModelDownloader.writeManifest(.init(repoId: entry.repoId, revision: "main", files: listed), to: target)
+        try Data(repeating: 2, count: 8).write(to: target.appendingPathComponent("model-00002-of-00002.safetensors"))
+
+        let result = try await verify(entry)
+        XCTAssertEqual(result.checksummedFiles, ["model-00001-of-00002.safetensors"])
+        XCTAssertFalse(result.isValid)
+        XCTAssertFalse(result.weightsChecksummed)
+    }
+
     func testVerifyRefusesAnEmptyManifest() async throws {
         let entry = entries()[0]
         try install(entry)
@@ -481,6 +549,43 @@ final class ModelCatalogTests: XCTestCase {
         XCTAssertEqual(VoxtralModelDownloader.deletionTargets(for: entry).count, 2)
         try VoxtralModelDownloader.delete(entry)
         XCTAssertFalse(VoxtralModelDownloader.isDownloaded(entry))
+        XCTAssertNil(try? fm.attributesOfItem(atPath: alias.path), "a broken link would stop the next download")
+    }
+
+    func testDeleteOfALinkedFolderKeepsItsDestination() throws {
+        let entry = entries()[0]
+        let external = sandbox.appendingPathComponent("external-disk/repo")
+        try install(entry, at: external)
+        try fm.createDirectory(at: folder(of: entry).deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: folder(of: entry), withDestinationURL: external)
+
+        try VoxtralModelDownloader.delete(entry)
+        XCTAssertNil(try? fm.attributesOfItem(atPath: folder(of: entry).path))
+        XCTAssertTrue(fm.fileExists(atPath: external.appendingPathComponent("model.safetensors").path))
+    }
+
+    func testDeleteUnderALinkedOrganisationRemovesTheRealFolder() throws {
+        let entry = entries()[0]
+        let organisation = folder(of: entry).deletingLastPathComponent()
+        let external = sandbox.appendingPathComponent("external-disk/org")
+        try write(["other-model/config.json": Data("{}".utf8)], in: external)
+        try fm.createSymbolicLink(at: organisation, withDestinationURL: external)
+        try install(entry)
+
+        try VoxtralModelDownloader.delete(entry)
+        XCTAssertFalse(fm.fileExists(atPath: external.appendingPathComponent(folder(of: entry).lastPathComponent).path))
+        XCTAssertTrue(fm.fileExists(atPath: external.appendingPathComponent("other-model/config.json").path))
+        XCTAssertNotNil(try? fm.destinationOfSymbolicLink(atPath: organisation.path), "other models of the organisation use it")
+    }
+
+    func testLocateModelFolderPrefersTheCompleteCopy() throws {
+        let entry = entries()[0]
+        guard case .stt(let model) = entry.source else { return XCTFail("not an STT entry") }
+        try write(["config.json": Data("{}".utf8)], in: folder(of: entry))
+        let complete = try cachesFolder(of: entry)
+        try install(entry, at: complete)
+
+        XCTAssertEqual(VoxtralModelDownloader.locateModelFolder(for: model)?.path, complete.path)
     }
 
     func testDeleteLeavesWhatASymbolicLinkPointsTo() throws {
@@ -511,6 +616,22 @@ final class ModelCatalogTests: XCTestCase {
     }
 
     // MARK: - Download
+
+    func testResolveModelSendsACatalogRepoThroughItsFamily() async throws {
+        // The STT file list would leave out the voices, and the pack would still count as complete
+        let entry = try XCTUnwrap(VoxtralModelCatalog.entries(in: .tts).first)
+        URLProtocol.registerClass(HubStubProtocol.self)
+        defer { URLProtocol.unregisterClass(HubStubProtocol.self) }
+        HubStubProtocol.repoId = entry.repoId
+        HubStubProtocol.files = modelFiles(entry)
+        HubStubProtocol.corruptSHA = []
+        HubStubProtocol.requested = []
+        try install(entry)
+
+        let path = try await VoxtralModelDownloader.resolveModel(entry.repoId)
+        XCTAssertEqual(path.path, folder(of: entry).path)
+        XCTAssertEqual(HubStubProtocol.requested, [])
+    }
 
     func testDownloadGoesThroughTheFamilyAndVerifies() async throws {
         URLProtocol.registerClass(HubStubProtocol.self)

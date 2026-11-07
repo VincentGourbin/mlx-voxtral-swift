@@ -19,6 +19,15 @@ public enum VoxtralModelFamily: String, CaseIterable, Sendable {
         case .tts: return "Text-to-speech"
         }
     }
+
+    /// Configuration files of a complete folder, any one of which is enough: the rule of `path(for:)`
+    var configFiles: [String] {
+        switch self {
+        case .stt: return ["config.json"]
+        case .realtime: return ["config.json", "params.json"]
+        case .tts: return ["params.json"]
+        }
+    }
 }
 
 /// Licence of a model repository: its Hub tag or, for a pack without one, the licence of its base model
@@ -183,6 +192,17 @@ public struct VoxtralModelVerification: Sendable, Equatable {
         case missing(String)
         case sizeMismatch(path: String, actual: Int, expected: Int)
         case checksumMismatch(path: String, actual: String, expected: String)
+        /// Present with its size, but reading it failed: a failing disk, or no permission
+        case unreadable(String)
+
+        /// The file at fault; nil when the problem is the folder's
+        var path: String? {
+            switch self {
+            case .noManifest: return nil
+            case .missing(let path), .unreadable(let path): return path
+            case .sizeMismatch(let path, _, _), .checksumMismatch(let path, _, _): return path
+            }
+        }
 
         public var description: String {
             switch self {
@@ -194,6 +214,8 @@ public struct VoxtralModelVerification: Sendable, Equatable {
                 return "\(path): \(actual) bytes, expected \(expected)"
             case .checksumMismatch(let path, let actual, let expected):
                 return "\(path): SHA-256 \(actual), expected \(expected)"
+            case .unreadable(let path):
+                return "\(path): cannot be read"
             }
         }
     }
@@ -209,11 +231,12 @@ public struct VoxtralModelVerification: Sendable, Equatable {
 
     public var isValid: Bool { problems.isEmpty }
 
-    /// True when every weight file in the manifest was hashed, and there was at least one. False: `isValid` says
-    /// nothing about the weights
+    /// True when every weight file in the manifest was hashed and matches, and there was at least one. False: `isValid`
+    /// says nothing about the weights
     public var weightsChecksummed: Bool {
         func isWeight(_ path: String) -> Bool { path.hasSuffix(".safetensors") && !path.hasPrefix("voice_embedding/") }
         return checksummedFiles.contains(where: isWeight) && !sizeOnlyFiles.contains(where: isWeight)
+            && !problems.contains { $0.path.map(isWeight) ?? false }
     }
 }
 
@@ -252,7 +275,7 @@ extension VoxtralModelDownloader {
     }
 
     /// What `delete(_:)` removes: every copy of `entry` on disk. A legacy Hub snapshot counts for its whole
-    /// `models--org--repo` folder, with all its revisions.
+    /// `models--org--repo` folder, with all its revisions. Paths as looked up: `delete(_:)` says where a link leads.
     public static func deletionTargets(for entry: VoxtralModelEntry) -> [URL] {
         var targets: [URL] = []
         for folder in localFolders(for: entry) {
@@ -282,7 +305,8 @@ extension VoxtralModelDownloader {
     /// Checks the folder `localFolder(for:)` returns against its manifest: every file present with its size, SHA-256
     /// recomputed where the manifest holds one, and the files any model needs (configuration, weights, `tekken.json`,
     /// voices for TTS). No network. A model looked up before its manifest existed gets one with sizes only, so read
-    /// `weightsChecksummed` before trusting its weights.
+    /// `weightsChecksummed` before trusting its weights. The manifest's revision is not compared with the entry's: a copy
+    /// of another revision passes if it matches its own manifest.
     /// Throws `VoxtralModelDownloaderError.modelNotFound` if no folder holds the model, `CancellationError` if the
     /// calling Task is cancelled.
     public static func verify(
@@ -293,13 +317,13 @@ extension VoxtralModelDownloader {
             throw VoxtralModelDownloaderError.modelNotFound
         }
         return try await runOffCooperativePool(on: modelVerificationQueue) {
-            try verifyFolder(folder, requiresVoices: entry.family == .tts, progress: progress)
+            try verifyFolder(folder, family: entry.family, progress: progress)
         }
     }
 
     static func verifyFolder(
         _ folder: URL,
-        requiresVoices: Bool,
+        family: VoxtralModelFamily,
         progress: VoxtralDownloadProgressCallback? = nil
     ) throws -> VoxtralModelVerification {
         var checksummed: [String] = []
@@ -327,11 +351,18 @@ extension VoxtralModelDownloader {
                     sizeOnly.append(file.path)
                     continue
                 }
-                let actual = try sha256Hex(of: url)
-                if actual == expected {
-                    checksummed.append(file.path)
-                } else {
-                    problems.append(.checksumMismatch(path: file.path, actual: actual, expected: expected))
+                do {
+                    let actual = try sha256Hex(of: url)
+                    if actual == expected {
+                        checksummed.append(file.path)
+                    } else {
+                        problems.append(.checksumMismatch(path: file.path, actual: actual, expected: expected))
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // A failing disk is what `verify` is there to report: the other files still get checked
+                    problems.append(.unreadable(file.path))
                 }
             }
         } else {
@@ -339,9 +370,9 @@ extension VoxtralModelDownloader {
         }
 
         // A manifest proves what was received, not what the repository had to hold
-        var needed = missingModelFiles(folder, requiresVoices: requiresVoices)
-        if !["config.json", "params.json"].contains(where: { fileSize(at: folder.appendingPathComponent($0)) != nil }) {
-            needed.append("config.json")
+        var needed = missingModelFiles(folder, requiresVoices: family == .tts)
+        if !family.configFiles.contains(where: { fileSize(at: folder.appendingPathComponent($0)) != nil }) {
+            needed.append(family.configFiles[0])
         }
         for path in needed where !problems.contains(.missing(path)) {
             problems.append(.missing(path))
@@ -351,15 +382,17 @@ extension VoxtralModelDownloader {
         return VoxtralModelVerification(folder: folder, checksummedFiles: checksummed, sizeOnlyFiles: sizeOnly, problems: problems)
     }
 
-    /// Deletes every copy of a model of any family, complete or partial: `deletionTargets(for:)`. A symbolic link
-    /// loses the link, not what it points to. Throws `VoxtralModelDownloaderError.modelNotFound` if there is none.
+    /// Deletes every copy of a model of any family, complete or partial: `deletionTargets(for:)`. A folder that is itself
+    /// a symbolic link loses the link, not what it points to. A link above it is followed: under an organisation folder
+    /// moved to another disk, the real folder goes. Throws `VoxtralModelDownloaderError.modelNotFound` if there is none.
     public static func delete(_ entry: VoxtralModelEntry) throws {
         let targets = deletionTargets(for: entry)
         guard !targets.isEmpty else {
             throw VoxtralModelDownloaderError.modelNotFound
         }
-        // Two paths can reach the same folder through a link: the first removal takes it
-        for target in targets where FileManager.default.fileExists(atPath: target.path) {
+        // Two paths can reach the same folder through a link: the first removal takes the folder and breaks the link,
+        // which `fileExists` no longer sees. Left there, it would stop the next download.
+        for target in targets where (try? FileManager.default.attributesOfItem(atPath: target.path)) != nil {
             try FileManager.default.removeItem(at: target)
         }
     }

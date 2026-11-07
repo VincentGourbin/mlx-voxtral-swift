@@ -321,8 +321,9 @@ public class VoxtralModelDownloader {
         }
     }
 
-    /// Where a repository may sit on disk, in lookup order: custom models directory, ~/Library/Caches/models, then
-    /// the latest snapshot of the legacy ~/.cache/huggingface location. Same order for STT, TTS and Realtime.
+    /// Where a repository may sit on disk, in lookup order: custom models directory, ~/Library/Caches/models, then one
+    /// snapshot of the legacy ~/.cache/huggingface location: the last by name, and names are commit hashes, not dates.
+    /// Same order for STT, TTS and Realtime.
     static func repoFolders(_ repoId: String) -> [URL] {
         var folders: [URL] = []
         if let customDir = customModelsDirectory {
@@ -336,8 +337,8 @@ public class VoxtralModelDownloader {
             .appendingPathComponent("models--\(repoId.replacingOccurrences(of: "/", with: "--"))")
             .appendingPathComponent("snapshots")
         if let contents = try? FileManager.default.contentsOfDirectory(atPath: snapshotsDir.path),
-           let latestSnapshot = contents.sorted().last {
-            folders.append(snapshotsDir.appendingPathComponent(latestSnapshot))
+           let snapshot = contents.sorted().last {
+            folders.append(snapshotsDir.appendingPathComponent(snapshot))
         }
         return folders
     }
@@ -348,9 +349,10 @@ public class VoxtralModelDownloader {
         candidateFolders(for: model).first { isComplete(folder: $0) }
     }
 
-    /// The folder holding a model on disk, complete or not (size, deletion of a partial download).
+    /// The folder holding a model on disk: the one `findModelPath` returns, else the first partial copy (size, deletion
+    /// of a partial download).
     static func locateModelFolder(for model: VoxtralModelInfo) -> URL? {
-        candidateFolders(for: model).first
+        findModelPath(for: model) ?? candidateFolders(for: model).first
     }
 
     /// Folders with a `config.json`, in lookup order
@@ -512,20 +514,9 @@ public class VoxtralModelDownloader {
         _ identifier: String,
         progress: VoxtralDownloadProgressCallback? = nil
     ) async throws -> URL {
-        // Try to find by ID first
-        if let model = VoxtralModelRegistry.model(withId: identifier) {
-            if let existingPath = findModelPath(for: model) {
-                return existingPath
-            }
-            return try await download(model, progress: progress)
-        }
-
-        // Try to find by repo ID
-        if let model = VoxtralModelRegistry.model(withRepoId: identifier) {
-            if let existingPath = findModelPath(for: model) {
-                return existingPath
-            }
-            return try await download(model, progress: progress)
+        // A catalog model goes through its family: a TTS repository needs its voices
+        if let entry = VoxtralModelCatalog.entry(withId: identifier) ?? VoxtralModelCatalog.entry(withRepoId: identifier) {
+            return try await download(entry, progress: progress)
         }
 
         // Check if it's a local path

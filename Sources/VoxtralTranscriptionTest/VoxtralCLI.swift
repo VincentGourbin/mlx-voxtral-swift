@@ -113,12 +113,7 @@ struct Download: AsyncParsableCommand {
         }
         let entry = VoxtralModelCatalog.entry(withId: model) ?? VoxtralModelCatalog.entry(withRepoId: model)
         // Outside the catalog: a local path or any other Hugging Face repository
-        let modelPath: URL
-        if let entry {
-            modelPath = try await VoxtralModelDownloader.download(entry, progress: report)
-        } else {
-            modelPath = try await VoxtralModelDownloader.resolveModel(model, progress: report)
-        }
+        let modelPath = try await VoxtralModelDownloader.resolveModel(model, progress: report)
 
         print("\n" + String(repeating: "=", count: 60))
         print("Download complete!")
@@ -176,6 +171,18 @@ struct Verify: AsyncParsableCommand {
 
 // MARK: - Delete Command
 
+/// A deletion target and, when a symbolic link makes it differ from its path, what really goes
+private func describeDeletion(of target: URL) -> String {
+    let fm = FileManager.default
+    if let destination = try? fm.destinationOfSymbolicLink(atPath: target.path) {
+        return "\(target.path) (the link only: \(destination) stays)"
+    }
+    if let destination = try? fm.destinationOfSymbolicLink(atPath: target.deletingLastPathComponent().path) {
+        return "\(target.path) (behind a link: the real folder in \(destination) goes)"
+    }
+    return target.path
+}
+
 struct Delete: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "delete",
@@ -195,9 +202,10 @@ struct Delete: ParsableCommand {
             print("\(entry.id) is not on disk.")
             throw ExitCode.failure
         }
+        let described = targets.map(describeDeletion(of:))
         if !yes {
             print("This deletes:")
-            for target in targets { print("  \(target.path)") }
+            for line in described { print("  \(line)") }
             if targets.contains(where: { $0.lastPathComponent.hasPrefix("models--") }) {
                 print("A Hub cache folder goes whole, with all its revisions; other tools may share it.")
             }
@@ -208,7 +216,7 @@ struct Delete: ParsableCommand {
             }
         }
         try VoxtralModelDownloader.delete(entry)
-        for target in targets { print("Deleted \(target.path)") }
+        for line in described { print("Deleted \(line)") }
     }
 }
 
