@@ -20,15 +20,16 @@ Détail : [`docs/knowledge/log.md`](docs/knowledge/log.md). Rien de cela n'est e
 | Lot | Contenu | Fini quand | Reprend |
 |---|---|---|---|
 | 1. Catalogue et téléchargement | Un catalogue pour STT, Realtime et TTS : id, dépôt, révision, fichiers, taille, licence. | `download`, `verify`, `list` et `delete` marchent à l'identique pour les trois familles, en API et en CLI ; ajout sans retrait d'API. | — |
-| 2. Mémoire | Un gestionnaire remplace les préréglages `light` à `ultra` : plafond par étape, limites `lean` calées sur la mémoire disponible (`os_proc_available_memory` sur iOS), rapport mémoire, résidence des poids, KV 8 bits, tranche de préfill. Plafond TTS de 2 Go par défaut, désactivable (ASK-37 = B). | Un `lean` borne son pic sur un audio long ; le plafond TTS est actif par défaut. | K-51, K-52, K-55, K-59, K-62, K-63, K-95 |
+| 2. Mémoire et socle iOS | Un gestionnaire remplace les préréglages `light` à `ultra` : plafond par étape, limites `lean` calées sur la mémoire disponible (`os_proc_available_memory` sur iOS), rapport mémoire, résidence des poids, KV 8 bits, tranche de préfill. Plafond TTS de 2 Go par défaut, désactivable (ASK-37 = B). Porte GPU en arrière-plan et build iOS en CI. | Un `lean` borne son pic sur un audio long ; le plafond TTS est actif par défaut ; le build iOS passe en CI. | K-51, K-52, K-55, K-59, K-62, K-63, K-95 |
 | 3. Vitesse | `asyncEval` en TTS et STT, pas de flow matching réglables, dernier logit seul au préfill, session de chat audio réutilisable. | Chaque levier gagne au moins 5 % en A/B/B/A, sinon il est retiré. | K-44, K-45, K-48, K-49, K-54 |
-| 4. Profils | Un type par pipeline, `all`, `named`, `applyGlobalPolicy`, `VoxtralCLI references`, `--reference`, chargement par profil. Toute la matrice 4 / 6 / 8 / 16 bits × fast / lean (ASK-4 = A). | Un profil fixe tous les réglages ; chaque champ est un bouton existant. | K-76 |
+| 4. Profils | Un type par pipeline, `all`, `named`, `applyGlobalPolicy`, `VoxtralCLI references`, `--reference`, chargement par profil. Toute la matrice 4 / 6 / 8 / 16 bits × fast / lean (ASK-4 = A). La tête Realtime quantifiée passe de `VOXTRAL_REALTIME_HEAD_BITS` à un champ de profil (K-46) ; le défaut public ne change pas. | Un profil fixe tous les réglages ; chaque champ est un bouton existant. | K-76 |
 | 5. Mesure et docs | Un script à la `bench-references.sh`, une passe par profil. `docs/References.md` sans « à mesurer », `docs/Weights.md` avec SHA-256 et révisions, `docs/API.md`, `docs/CLI.md` ; `docs/Profiles.md` retiré. | La table de référence est remplie et citée par le README. | K-77, K-78, K-79, K-82 |
-| 3.0.0 | Fusion sur `main` et tag, par Vincent. | Tag publié. | — |
-| 6. iPhone | TTS, transcription et compréhension audio sur iPhone : porte GPU en arrière-plan, build iOS en CI, `docs/iOS.md`. Hors périmètre : Realtime et enrôlement. | Essai sur appareil avec le profil `lean`, pic visé ≤ 4 Go sans jetsam (ASK-2 = A). | — |
+| 3.0.0 | Corriger K-85 et les tests gardés `PARITY` et `TTS_STREAM` ; publier ou retirer `tts-4b-8bit`. Fusion sur `main` et tag, par Vincent. | Suite et tests gardés verts ; tag publié. | K-85 |
+| 6. iPhone | Essai sur appareil du TTS, de la transcription et de la compréhension audio ; `docs/iOS.md`. Hors périmètre : Realtime et enrôlement. | Les trois fonctions tournent avec le profil `lean`, sans jetsam ; pic visé ≤ 4 Go (ASK-2 = A), voix clonée : question 6 ci-dessous. | — |
 
 Les lots 1 à 5 se font dans l'ordre : un profil fige des réglages qui doivent exister, et la table mesure des profils
-finis. `lean` est dimensionné pour l'iPhone dès le lot 2 ; seul l'essai sur appareil attend le lot 6.
+finis. Après la 3.0.0, l'API n'évolue plus que par ajout : tout ce que l'iPhone exige de public arrive donc avant le tag
+(lot 2), et seul l'essai sur appareil attend le lot 6.
 
 ## Règles
 
@@ -45,16 +46,21 @@ finis. `lean` est dimensionné pour l'iPhone dès le lot 2 ; seul l'essai sur ap
 - TTS, texte long : la voix perd 13 à 25 dB entre le premier et le dernier quart (constat du 2026-10-12).
 - TTS, porteur de warm-up : coupe trop tôt sur 2 prises sur 10 et mots perdus sur une ; défaut antérieur à K-68 (ASK-39).
 - TTS, 4 bits avec voix clonée : qualité dégradée, limite documentée dans le README (K-97).
-- `tts-4b-8bit` est au registre mais son pack n'est pas publié : à publier ou à retirer avant la 3.0.0 (K-90).
-- Small `.auto` : décodage bimodal et dernier segment français traduit (K-85).
-- Tests gardés `PARITY` (référence d'avant K-40) et `TTS_STREAM` (course de `.ready`) en échec depuis K-89.
+- Avant la 3.0.0 : `tts-4b-8bit` au registre sans pack publié (K-90), Small `.auto` bimodal avec dernier segment français
+  traduit (K-85), tests gardés `PARITY` (référence d'avant K-40) et `TTS_STREAM` (course de `.ready`) en échec depuis K-89.
 
 ## En attente de Vincent
 
-1. Dépendances (ASK-28, ASK-29) : mlx-swift-lm 3.32.3 et mlx-swift 0.32.3, avant le lot 5 pour ne pas mesurer deux fois ?
-   La conformance `LanguageModel` (K-75, ASK-24 = A) part avec ce passage.
-2. Flux Realtime micro → texte (ASK-3) : A) dans le plan ; B) Realtime reste une transcription de fichier.
-3. Enregistrement réel de 12 min pour le WER (ASK-14) : B) tu en fournis un, hors dépôt ; C) corpus synthétique seul.
-4. Volume qui baisse sur les textes longs : A) mesure et découpage du texte ; B) limite documentée.
+Proposition de l'agent en gras.
+
+1. Dépendances (ASK-28 = « premier tag ensuite », ASK-29) : passer à mlx-swift-lm 3.32.3, qui tire mlx-swift 0.32.x et le
+   correctif du deadlock, avant le lot 5 pour ne pas mesurer deux fois ? **Oui.** La conformance `LanguageModel` (K-75,
+   ASK-24 = A) part avec ce passage.
+2. Flux Realtime micro → texte (ASK-3) : A) dans le plan ; **B) Realtime reste une transcription de fichier.**
+3. Enregistrement réel de 12 min pour le WER (ASK-14) : B) tu en fournis un, hors dépôt ; **C) corpus synthétique seul, biais
+   noté.**
+4. Volume qui baisse sur les textes longs : **A) mesure et découpage du texte en option** ; B) limite documentée.
 5. K-90 : écoute des 8 paires (`.local-runs/listen/k90-vs-bf16/`, `k90-vs-6bit/`) et relecture de la carte
    (`.local-runs/k90/card/README.md`) avant publication.
+6. Voix clonée sur iPhone : le 4 bits la dégrade (K-97) et le pack 6 bits pèse 3,47 Go de poids, peu compatible avec
+   4 Go de pic. **A) 6 bits, pic visé ≤ 5 Go avec Increased Memory Limit** ; B) voix prédéfinies seulement sur iPhone.
