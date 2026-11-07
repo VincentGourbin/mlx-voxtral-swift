@@ -694,13 +694,15 @@ mesuré ; une suppression ou un renommage public est **cassant** ; un changement
 
 ## Réponses
 
+> K-97, question sans numéro d'ASK : A (2026-11-07, Vincent) : limite du 4 bits en voix clonée documentée, sans code.
+
 À remplir par Vincent (une ligne par ASK ; « A », « B », « C » ou texte libre). Une fiche ⛔ ne démarre qu'avec une
 réponse datée ici.
 
 | ASK | Réponse | Date | Remarque |
 |---|---|---|---|
-| ASK-1 | | | |
-| ASK-2 | | | |
+| ASK-1 | A | 2026-11-07 | Vincent, session Mac : pas de serveur d'inférence. |
+| ASK-2 | A, limitée | 2026-11-07 | Vincent, session Mac : iPhone pour le TTS, la transcription et la compréhension audio ; Realtime et enrôlement hors périmètre (lot 6 de `PLAN.md` à la racine). |
 | ASK-3 | | | |
 | ASK-4 | A | 2026-10-06 | Vincent, session Mac : matrice complète. |
 | ASK-5 | A | 2026-10-06 | Vincent, session Mac : le défaut TTS passe au 6 bits si la porte de K-79 le justifie. |
@@ -728,17 +730,17 @@ réponse datée ici.
 | ASK-27 | A | 2026-10-02 | Donnée par Vincent dans la session Mac : `VoxtralEncoderFull.mlmodelc` n'est plus embarqué ; VoxtralApp le télécharge à l'exécution (ligne `.copy` retirée, K-28). |
 | ASK-28 | A | 2026-09-30 | Donnée par Vincent dans la session Mac : rester sur `main` de mlx-swift-lm, `Package.resolved` suivi dans git (K-22) ; premier tag ensuite (plan `upstream-blocker`). |
 | ASK-29 | | | |
-| ASK-30 | | | |
+| ASK-30 | A | 2026-11-07 | Vincent, session Mac (« fais le ménage dans le repo ») : les 8 WAV non référencés sont retirés de l'arbre, sans réécriture d'historique. |
 | ASK-31 | A (déduite) | 2026-09-28 | Déduite par la session cloud de la demande initiale de Vincent (« ne perds pas les actions sur Voxtral », tester le concept du tracker) ; écritures faites : #71, #307, #349 fermés `verified`, #556 et #557 créés (PLAN §7, K-21). À confirmer ou infirmer par Vincent. |
 | ASK-32 | A | 2026-10-06 | Vincent, session Mac (« À » en réponse à la question fermée) : la cellule small-4bit `.auto` × C-moyen EN entre dans la baseline K-34 sans A/A, régime bimodal consigné, référence = médiane des passes rapides (75,13 ms), fiche de suivi K-85. |
 | ASK-33 | A, désactivable | 2026-10-06 | Vincent, session Mac : plafond par défaut pour Small sur ≤ 32 Go, que l'hôte peut désactiver. |
 | ASK-34 | A | 2026-10-07 | Vincent, session Mac : les cellules streaming moyen et long sans A/A restent dans la baseline K-35, cause consignée (re-décodage complet), référence « avant » de K-43. |
-| ASK-35 | | | |
-| ASK-36 | | | |
-| ASK-37 | | | |
-| ASK-38 | | | |
-| ASK-39 | | | |
-| ASK-40 | | | |
+| ASK-35 | A | 2026-11-07 | Vincent, session Mac : B ≥ A − 0,5 pt sur 5 graines, A du même jour. K-39 acceptée. |
+| ASK-36 | A | 2026-11-07 | Vincent, session Mac : clause « 4 bits − 5 % » retirée avec la mesure. |
+| ASK-37 | B | 2026-11-07 | Vincent, session Mac : 2048 Mo par défaut partout en TTS, désactivable (lot 2). |
+| ASK-38 | A | 2026-11-07 | Vincent, session Mac : K-40 acceptée telle quelle, exception écrite ici. |
+| ASK-39 | A | 2026-11-07 | Vincent, session Mac : fuites jugées contre la référence ; K-68 validée, défaut de coupe noté dans `PLAN.md`. |
+| ASK-40 | A | 2026-11-07 | Vincent, session Mac : « ≥ 99 % » retiré, clause 6 bits jugée sur la moyenne des textes. Écoute et carte toujours à faire. |
 
 ### Dérogations
 

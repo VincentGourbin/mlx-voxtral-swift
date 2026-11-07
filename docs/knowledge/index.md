@@ -6,12 +6,11 @@ okf_version: "0.1"
 
 Conclusions durables du projet (bundle OKF, structure du skill `mlx-swift-audit`, `references/knowledge-structure.md`
 §5.1). [`log.md`](log.md) porte l'historique horodaté et fait foi pour les chiffres cités ailleurs. Consignes de
-build, de test et de mesure : [`CLAUDE.md`](../../CLAUDE.md). Plan d'action en cours :
-[`PLAN.md`](../audit/2026-09-27/PLAN.md) de l'audit du 2026-09-27.
+build, de test et de mesure : [`CLAUDE.md`](../../CLAUDE.md). Plan en cours : [`PLAN.md`](../../PLAN.md) ; l'audit du
+2026-09-27 est une [archive gelée](../audit/2026-09-27/README.md).
 
 ## Benchmarks
-- [`BENCHMARKS.md`](../../BENCHMARKS.md) — lignes brutes `BENCH`/`EVAL`, jamais éditées ; aucune ligne à ce jour
-  (baseline À MESURER, fiches K-32 à K-37).
+- [`BENCHMARKS.md`](../../BENCHMARKS.md) — lignes brutes `BENCH`/`EVAL`, jamais éditées.
 - [`docs/Benchmarks.md`](../Benchmarks.md) — protocole (A/B/B/A, refroidissement 120 s, seuil 5 %), corpus
   C-court à C-30min, glossaire des métriques (RTF = génération ÷ audio ; TTFT-frame ≠ TTFA).
 

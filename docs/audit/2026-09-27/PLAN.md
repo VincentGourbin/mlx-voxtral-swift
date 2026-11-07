@@ -1,5 +1,8 @@
 # Plan — mlx-voxtral-swift : stabilité, performance et profils de référence — 2026-09-27
 
+> **Archive gelée le 2026-11-07.** Ce plan d'audit est remplacé par [`PLAN.md`](../../../PLAN.md) à la racine ; plus aucune mise à
+> jour ici. Le tableau d'état des fiches et `tasks.yaml` (retiré) ne sont plus suivis.
+
 > Produit par le skill `mlx-swift-audit` (bêta, phases 3 et 4). Révision auditée : `9392ed1` (= tag `v2.2.2`),
 > branche `claude/action-plan-skills-beta-wifgmu`. Rapports d'audit : `docs/audit/2026-09-27/` (index :
 > [`README.md`](README.md)). Profils : [`profils.md`](profils.md). Décisions : [`ASK.md`](ASK.md). Fiches :

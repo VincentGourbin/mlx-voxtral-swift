@@ -386,3 +386,8 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   `transcribe` et `chat` passaient toute valeur autre que `hybrid` en `.mlx`. Hors ligne en `.auto` prouvé sans couper
   le réseau du Mac : `sandbox-exec` interdit le réseau au seul processus (encodeur Core ML du cache, même texte). Leçon :
   une option CLI analysée par un ternaire avale les valeurs inconnues ; passer par l'analyseur commun qui refuse. PLAN.md §7.
+- 2026-11-07 — **Le plan d'audit est remplacé par six lots** ([`PLAN.md`](../../PLAN.md), décision de Vincent) : 97 fiches suivaient
+  une liste de défauts, sans catalogue unifié, sans mémoire calée sur la machine, et rien n'avait atteint `main`. But :
+  le niveau de livraison de YuE2 et qwen38, avec iPhone pour le TTS, la transcription et la compréhension audio, sans
+  serveur. ASK-1, 2, 30, 35 à 40 et K-97 tranchées ; K-39 et K-40 acceptées sans passe de vérificateur séparée, K-68 après la sienne.
+  Leçon : un audit donne une liste de défauts, pas un produit ; partir des livrables à atteindre, puis y rattacher les défauts.

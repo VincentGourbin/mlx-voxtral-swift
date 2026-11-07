@@ -53,6 +53,7 @@ Scripts/CoreMLConversion/output/
 *.wav
 # Evaluation clips referenced by docs/eval/corpus.json (K-33): versioned, their SHA-256 is checked by `voxtral eval`
 !docs/eval/clips/*.wav
+!docs/examples/*.wav
 *.m4a
 *.flac
 *.ogg
@@ -124,3 +125,6 @@ voxtral_tts_trace.json
 
 # Corpus lists and bench outputs (never versioned)
 .local-runs/
+
+# Codex local config
+.codex/

@@ -244,6 +244,9 @@ voice once (offline), then reuse it like any preset.
   -o hello.wav --model tts-4b --voice-embedding my_voice.safetensors
 ```
 
+For a cloned voice, use the 6-bit or bf16 pack: the 4-bit pack degraded the cloned voice we measured (omissions,
+invented text, longer pauses).
+
 Reference guidance: aim for **10–16 s** of clean speech, one speaker, no
 background music. Any format (wav/mp3/m4a) works. Before optimization the
 reference is prepared in this order (`VoxtralVoiceEnrollment.swift:151-162`):
@@ -452,7 +455,8 @@ mlx-voxtral-swift/
 - [docs/References.md](docs/References.md) — reference configurations per pipeline (sourced skeleton, to measure)
 - [docs/Benchmarks.md](docs/Benchmarks.md) — measurement protocol, corpus and metric glossary (RTF, TTFT-frame, TTFA…); raw lines in [BENCHMARKS.md](BENCHMARKS.md)
 - [CLAUDE.md](CLAUDE.md) — build, test and measurement rules for contributors and coding agents
-- [docs/audit/2026-09-27/](docs/audit/2026-09-27/README.md) — audit of `9392ed1` (v2.2.2) and action plan; the "audit" references above (S-, P-, FA-, FV-, M- numbers) and fiches (K-n) point there
+- [PLAN.md](PLAN.md) — current plan (French)
+- [docs/audit/2026-09-27/](docs/audit/2026-09-27/README.md) — frozen archive of the audit of `9392ed1` (v2.2.2); the "audit" references above (S-, P-, FA-, FV-, M- numbers) and fiches (K-n) point there
 
 ## Acknowledgments
 

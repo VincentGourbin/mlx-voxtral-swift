@@ -1,5 +1,8 @@
 # Audit mlx-voxtral-swift — 2026-09-27
 
+> **Archive gelée le 2026-11-07.** Ce plan d'audit est remplacé par [`PLAN.md`](../../../PLAN.md) à la racine ; plus aucune mise à
+> jour ici. Le tableau d'état des fiches et `tasks.yaml` (retiré) ne sont plus suivis.
+
 > Premier essai en conditions réelles du skill **`mlx-swift-audit`** (bêta, dépôt `claude-skills`). Il s'appuie sur
 > `mlx-swift-patterns` (motifs MLX-0xx), `task-dispatch` et `task-runner` (tracker `VincentGourbin/action-plans`).
 > Objectif : des modèles Voxtral optimisés au standard de septembre 2026 (profils `<bits>bit-fast|lean`), sans
