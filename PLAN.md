@@ -20,8 +20,9 @@ Détail : [`docs/knowledge/log.md`](docs/knowledge/log.md). Rien de cela n'est e
 État : lot 1 livré ([PR #51](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/51)) ; lot 2 en revue
 ([PR #52](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/52)) ; prochain : lot 3.
 
-Reste à mesurer pour le lot 2, Lexar monté, A/B/B/A contre `86bb24b2` : `lean` sur audio long (mini-3b-8bit, small-4bit) et en
-TTS, K-51 (`step_ms_p50` sous 32 Go), K-55 (small-4bit, WER), K-59 (1er préfill = préfill à chaud), K-62 (256 à 2 048),
+Lot 2 mesuré en Realtime : sur 17 min, `lean` baisse le pic de 20 à 23 % et l'écart au pic MLX reste sous 1 Go
+(`BENCHMARKS.md` §« 2026-11-07 — Lot 2 »). Reste à mesurer, Lexar monté, A/B/B/A contre `86bb24b2` : `lean` sur audio
+long en STT (mini-3b-8bit, small-4bit) et en TTS, K-51 (`step_ms_p50` sous 32 Go), K-55 (small-4bit, WER), K-59 (1er préfill = préfill à chaud), K-62 (256 à 2 048),
 K-63 (mini-3b-8bit, pic de décodage). Un levier sous sa porte sort du profil `lean`.
 
 | Lot | Contenu | Fini quand | Reprend |
