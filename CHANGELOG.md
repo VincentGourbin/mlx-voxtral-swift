@@ -164,7 +164,7 @@ The public surface goes from 1,110 `public` lines to 338: the facades stay publi
 ### Added
 - **One model catalog for the three families.** `VoxtralModelCatalog` (`all`, `entries(in:)`, `entry(withId:)`,
   `entry(withRepoId:)`) lists STT, Realtime and TTS models as `VoxtralModelEntry`: id, repository, revision, files, size
-  and licence (`VoxtralModelLicense`; `.unknown` when the repository declares none). It is built from the three
+  and licence (`VoxtralModelLicense`; a pack without a Hub tag keeps its base model's licence). It is built from the three
   registries, which stay.
 - **The same model operations for every family.** `VoxtralModelDownloader` gains `download(_:progress:)`,
   `verify(_:progress:)`, `listDownloaded(_:)`, `delete(_:)`, `path(for:)`, `isDownloaded(_:)` and `localFolder(for:)`,

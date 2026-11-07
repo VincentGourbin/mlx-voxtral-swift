@@ -129,11 +129,10 @@ final class ModelCatalogTests: XCTestCase {
         for entry in VoxtralModelCatalog.entries(in: .realtime) {
             XCTAssertEqual(entry.license, .apache2, entry.id)
         }
-        // These two repositories declare no licence: nothing is inferred from their base model
+        // These two repositories have no Hub tag: they carry the licence of mistralai/Voxtral-Mini-3B-2507
         for id in ["mini-3b-8bit", "mini-3b-4bit"] {
             let entry = try XCTUnwrap(VoxtralModelCatalog.entry(withId: id))
-            XCTAssertEqual(entry.license, .unknown, id)
-            XCTAssertNil(entry.license.allowsCommercialUse, id)
+            XCTAssertEqual(entry.license, .apache2, id)
         }
     }
 

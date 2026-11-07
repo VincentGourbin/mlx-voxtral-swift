@@ -47,7 +47,7 @@ public struct VoxtralModelLicense: Sendable, Equatable {
         summary: "Free to use, share and adapt with attribution; commercial use is not permitted."
     )
 
-    /// The repository declares no licence: nothing is assumed from its base model
+    /// Neither the repository nor a known base model gives a licence
     public static let unknown = VoxtralModelLicense(
         id: "unknown",
         name: "Unknown",
@@ -148,12 +148,13 @@ public enum VoxtralModelCatalog {
         all.first { $0.repoId == repoId }
     }
 
-    /// Hub `license:` tag of each repository (docs/Weights.md). `mini-3b-8bit` and `mini-3b-4bit` declare none.
+    /// Hub `license:` tag of each repository (docs/Weights.md). `mini-3b-8bit` and `mini-3b-4bit` have no tag: they
+    /// carry the licence of their base model, `mistralai/Voxtral-Mini-3B-2507`.
     static let licenses: [String: VoxtralModelLicense] = [
         "mini-3b": .apache2,
         "small-24b": .apache2,
-        "mini-3b-8bit": .unknown,
-        "mini-3b-4bit": .unknown,
+        "mini-3b-8bit": .apache2,
+        "mini-3b-4bit": .apache2,
         "small-24b-8bit": .apache2,
         "small-4bit": .apache2,
         "realtime-4b-4bit": .apache2,
