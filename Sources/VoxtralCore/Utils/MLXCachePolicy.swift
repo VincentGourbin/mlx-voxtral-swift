@@ -1,41 +1,79 @@
 /**
- * MLXCachePolicy - opt-in bound on MLX's buffer cache for one pipeline (K-52, P-09, P-42, P-67)
+ * MLXCachePolicy - the MLX limits one pipeline holds while it is loaded (K-52, P-09, P-42, P-67)
  *
- * Without `Memory.cacheLimit`, MLX keeps every freed buffer for reuse: on C-long (11 min) the STT
- * process reached 70 GB for 8.6 GB of active MLX memory, and the machine swapped. The limit is
- * process-wide, so it is opt-in (`nil` leaves the host's setting alone) and the previous value is
- * restored when the pipeline unloads.
+ * Without `Memory.cacheLimit`, MLX keeps every freed buffer for reuse: on C-long (11 min) the STT process reached 70 GB
+ * for 8.6 GB of active MLX memory, and the machine swapped. The limits are process-wide: with several pipelines loaded,
+ * the tightest applies, and the host's values come back with the last one.
  */
 
 import MLX
 
 final class MLXCachePolicy: Sendable {
-    /// `Memory.cacheLimit` before this pipeline set its own, restored by `restore()`
-    private let previous = Locked<Int?>(nil)
+    private struct ProcessLimits {
+        var held: [ObjectIdentifier: (cache: Int?, memory: Int?)] = [:]
+        /// Values before the first pipeline set its own
+        var hostCacheLimit: Int?
+        var hostMemoryLimit: Int?
 
-    /// Sets the cache limit to `bytes` (no-op when nil), remembering the host's value once.
-    func apply(_ bytes: Int?) {
-        guard let bytes else { return }
-        previous.withLock { if $0 == nil { $0 = Memory.cacheLimit } }
-        Memory.cacheLimit = bytes
+        mutating func update() {
+            if let cache = held.values.compactMap(\.cache).min() {
+                if hostCacheLimit == nil { hostCacheLimit = Memory.cacheLimit }
+                Memory.cacheLimit = cache
+            } else if let host = hostCacheLimit {
+                Memory.cacheLimit = host
+                hostCacheLimit = nil
+            }
+            if let memory = held.values.compactMap(\.memory).min() {
+                if hostMemoryLimit == nil { hostMemoryLimit = Memory.memoryLimit }
+                Memory.memoryLimit = memory
+            } else if let host = hostMemoryLimit {
+                Memory.memoryLimit = host
+                hostMemoryLimit = nil
+            }
+        }
     }
 
-    /// True while this pipeline holds a limit
-    var isActive: Bool { previous.get() != nil }
+    private static let process = Locked(ProcessLimits())
+
+    private let limits = Locked(VoxtralMemoryLimits.none)
+
+    deinit { restore() }
+
+    /// Sets `limits`, for loading; nil fields leave the host's settings alone.
+    func apply(_ limits: VoxtralMemoryLimits) {
+        self.limits.set(limits)
+        hold(.load)
+    }
+
+    /// A stage starts: its cache ceiling applies and, if asked, what the previous stage left in the cache goes.
+    func enter(_ stage: VoxtralMemoryLimits.Stage) {
+        hold(stage)
+        if limits.get().clearsCacheBetweenStages { Memory.clearCache() }
+    }
+
+    private func hold(_ stage: VoxtralMemoryLimits.Stage) {
+        let limits = limits.get()
+        Self.process.withLock { process in
+            process.held[ObjectIdentifier(self)] = (limits.cacheBytes(for: stage), limits.memoryBytes)
+            process.update()
+        }
+    }
+
+    /// True while this pipeline holds a cache limit
+    var isActive: Bool { Self.process.withLock { $0.held[ObjectIdentifier(self)]?.cache != nil } }
 
     /// Frees the cached buffers after a response when a limit is set.
     func endOfResponse() {
         if isActive { Memory.clearCache() }
     }
 
-    /// Restores the host's limit (if this pipeline changed it) and frees the cache.
+    /// Gives up this pipeline's limits and frees the cache.
     func restore() {
-        let saved = previous.withLock { value -> Int? in
-            let saved = value
-            value = nil
-            return saved
+        Self.process.withLock { process in
+            process.held[ObjectIdentifier(self)] = nil
+            process.update()
         }
-        if let saved { Memory.cacheLimit = saved }
+        limits.set(.none)
         Memory.clearCache()
     }
 }

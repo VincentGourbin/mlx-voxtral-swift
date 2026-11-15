@@ -401,3 +401,10 @@ de mlx-swift, mlx-swift-lm et swift-mlx-profiler notées ; une ligne `BENCH` rec
   Comportement gardé, doc et invite corrigées. Avec un manifeste, `isComplete` ne regarde pas les voix : un dépôt TTS passé
   par la liste de fichiers STT comptait pour complet, `resolveModel` passe donc par le catalogue. Leçon : tester `delete`
   sur la disposition réelle des disques, pas seulement sur un lien de fichier.
+- 2026-11-07 — **Lot 2 : un gestionnaire de mémoire à la place des préréglages, `lean` borne le cache** ([PR #52](https://github.com/VincentGourbin/mlx-voxtral-swift/pull/52)) :
+  les limites MLX se posent dès le chargement et se partagent entre pipelines (la plus serrée s'applique, l'hôte retrouve
+  les siennes avec le dernier). Realtime sur 17 min : pic − 20 à − 23 % sous `lean`, sortie identique ; l'écart entre
+  l'empreinte et le pic MLX reste sous 1 Go, alors qu'il grandit avec l'audio par défaut (`BENCHMARKS.md` §« 2026-11-07 —
+  Lot 2 »). STT et TTS non mesurés : le Lexar n'était pas monté. Leçon : `Memory.memoryLimit` sous le poids des poids fait
+  attendre chaque évaluation (`transforms.cpp`, `eval_impl`) ; `lean` ne le pose donc que sur iOS, où la mémoire
+  disponible est réelle.

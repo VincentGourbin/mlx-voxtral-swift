@@ -2,7 +2,7 @@
  * SharedStateTests - K-16 (S-11)
  *
  * No global state mutated without a lock: each pipeline keeps its own memory
- * configuration (creating one no longer overwrites VoxtralMemoryManager.config), and the
+ * configuration, and the
  * shared globals (mel filter cache, memory manager, models directory, Hub API, debug flags)
  * survive concurrent access. Run under TSan:
  *   xcodebuild test … -enableThreadSanitizer YES -only-testing:VoxtralCoreTests/SharedStateTests
@@ -20,18 +20,14 @@ final class SharedStateTests: XCTestCase {
     // MARK: - Memory configuration is carried by the pipeline
 
     func testTwoPipelinesKeepTheirOwnMemoryConfiguration() {
-        let manager = VoxtralMemoryManager.shared
-        let saved = manager.config
-        defer { manager.config = saved }
-        manager.config = .moderate
+        var limited = MemoryOptimizationConfig.fast
+        limited.maxKVCacheSize = 4_096
 
-        let ultra = VoxtralPipeline(configuration: .init(memoryOptimization: .ultra))
-        let disabled = VoxtralPipeline(configuration: .init(memoryOptimization: .disabled))
+        let first = VoxtralPipeline(configuration: .init(memoryOptimization: limited))
+        let second = VoxtralPipeline(configuration: .init(memoryOptimization: .fast))
 
-        XCTAssertEqual(ultra.configuration.memoryOptimization, .ultra)
-        XCTAssertEqual(disabled.configuration.memoryOptimization, .disabled)
-        XCTAssertEqual(manager.config, .moderate,
-                       "creating a pipeline must not overwrite the shared configuration the other pipelines read")
+        XCTAssertEqual(first.configuration.memoryOptimization, limited)
+        XCTAssertEqual(second.configuration.memoryOptimization, .fast)
     }
 
     // MARK: - Concurrent access to shared globals
@@ -57,28 +53,19 @@ final class SharedStateTests: XCTestCase {
     }
 
     func testConcurrentSharedSettings() {
-        let manager = VoxtralMemoryManager.shared
-        let savedConfig = manager.config
         let savedDir = VoxtralModelDownloader.customModelsDirectory
         let savedDebug = VoxtralDebug.enabled
         defer {
-            manager.config = savedConfig
             VoxtralModelDownloader.customModelsDirectory = savedDir
             VoxtralDebug.enabled = savedDebug
         }
-        let presets: [MemoryOptimizationConfig] = [.disabled, .light, .moderate, .ultra]
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voxtral-shared-state")
 
         DispatchQueue.concurrentPerform(iterations: 64) { i in
-            manager.config = presets[i % presets.count]
-            _ = manager.config.evalFrequency
-            manager.optimizeIfNeeded(tokenIndex: i)
-            manager.resetOptimizationCycle()
             VoxtralModelDownloader.customModelsDirectory = i.isMultiple(of: 2) ? dir : savedDir
             _ = VoxtralModelDownloader.customModelsDirectory
             VoxtralDebug.enabled = false
             VoxtralDebug.log("concurrent \(i)")
         }
-        XCTAssertTrue(presets.contains(manager.config))
     }
 }

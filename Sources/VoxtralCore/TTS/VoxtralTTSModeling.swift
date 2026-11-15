@@ -518,7 +518,7 @@ class VoxtralTTSModel: Module {
 
         for i in 0..<maxTokens {
             // A cancelled caller stops within one frame; the pipeline then throws CancellationError (K-15)
-            if VoxtralCancellation.isCancelled { break }
+            if VoxtralCancellation.cancelledAtGPUCheckpoint { break }
             let stepStart = CFAbsoluteTimeGetCurrent()
             let h = hidden[0..., -1, 0...]  // (1, dim) — last position
 
@@ -751,7 +751,7 @@ class VoxtralTTSModel: Module {
             var firstChunkYielded = false
 
             for i in 0..<maxTokens {
-                try Task.checkCancellation()
+                try VoxtralCancellation.gpuCheckpoint()
 
                 let h = hidden[0..., -1, 0...]
                 let codes = acousticTransformer.decodeOneFrame(h)
